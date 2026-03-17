@@ -65,7 +65,7 @@ Open `about:config` in Zen and set both of these:
 
 ### 2. Install the extension
 
-1. Download `zen-tabs-panel.xpi` from the [latest release](https://github.com/cfilipov/zen-tabs-panel/releases)
+1. Download `zen-tabs-panel.xpi` from this repo.
 2. Open `about:addons` in Zen
 3. Click the gear icon (⚙) › **Install Add-on From File...**
 4. Select the downloaded `.xpi` file
