@@ -53,7 +53,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "zen-tabs-panel-corner-fix": {
         name: "Corner Bleed Fix",
         description: "Fixes white corners bleeding through on pages with light backgrounds. May have a minor performance impact on lower-end hardware.",
-        version: "1.0.1",
+        version: "1.0.2",
         css: `
 .browserStack,
 .browserStack > browser {
@@ -400,11 +400,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const installedMods = (w && w.gZenMods) ? await w.gZenMods.getMods() : {};
           const result = [];
           for (const [id, def] of Object.entries(COMPANION_MODS)) {
+            const installed = installedMods[id];
             result.push({
               id,
               name: def.name,
               description: def.description,
-              installed: !!installedMods[id],
+              installed: !!installed,
+              installedVersion: installed?.version || null,
+              latestVersion: def.version,
             });
           }
           return result;

@@ -111,8 +111,7 @@ The Browser Toolbox is essential for inspecting Zen's chrome DOM, testing CSS se
 ### Building from source
 
 ```bash
-cd extension/
-zip -r ../zen-tabs-panel.xpi *
+zip -r zen-tabs-panel.xpi *
 ```
 
 Then install the `.xpi` from `about:addons` as described above.

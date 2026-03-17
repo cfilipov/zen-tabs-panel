@@ -62,29 +62,61 @@ async function loadCompanionMods() {
       const info = document.createElement("div");
       info.className = "mod-info";
 
-      const name = document.createElement("div");
+      const nameRow = document.createElement("div");
+      nameRow.className = "mod-name-row";
+
+      const name = document.createElement("span");
       name.className = "mod-name";
       name.textContent = mod.name;
+      nameRow.appendChild(name);
+
+      if (mod.installed && mod.installedVersion !== mod.latestVersion) {
+        const badge = document.createElement("span");
+        badge.className = "mod-update-badge";
+        badge.textContent = "Update available";
+        nameRow.appendChild(badge);
+      }
 
       const desc = document.createElement("div");
       desc.className = "mod-description";
       desc.textContent = mod.description;
 
-      info.appendChild(name);
+      info.appendChild(nameRow);
       info.appendChild(desc);
 
+      const actions = document.createElement("div");
+      actions.className = "mod-actions";
+
+      if (mod.installed && mod.installedVersion !== mod.latestVersion) {
+        const updateBtn = document.createElement("button");
+        updateBtn.className = "btn";
+        updateBtn.textContent = "Update";
+        updateBtn.addEventListener("click", async () => {
+          updateBtn.disabled = true;
+          await browser.runtime.sendMessage({ type: "install-companion-mod", modId: mod.id });
+          await loadCompanionMods();
+        });
+        actions.appendChild(updateBtn);
+      }
+
       const btn = document.createElement("button");
-      btn.className = mod.installed ? "btn btn-danger" : "btn";
-      btn.textContent = mod.installed ? "Remove" : "Install";
+      if (mod.installed) {
+        btn.className = "btn btn-danger";
+        btn.textContent = "Remove";
+      } else {
+        btn.className = "btn";
+        btn.textContent = "Install";
+      }
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         const type = mod.installed ? "remove-companion-mod" : "install-companion-mod";
         await browser.runtime.sendMessage({ type, modId: mod.id });
         await loadCompanionMods();
       });
+      actions.appendChild(btn);
 
       row.appendChild(info);
-      row.appendChild(btn);
+      row.appendChild(actions);
       els.companionMods.appendChild(row);
     }
   } catch (e) {
