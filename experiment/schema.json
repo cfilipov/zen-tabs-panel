@@ -1,0 +1,118 @@
+[
+  {
+    "namespace": "zenWorkspaces",
+    "description": "Bridge to Zen Browser's internal workspace APIs and palette UI",
+    "functions": [
+      {
+        "name": "getAll",
+        "type": "function",
+        "async": true,
+        "description": "Get all workspaces",
+        "parameters": []
+      },
+      {
+        "name": "getActiveWorkspaceId",
+        "type": "function",
+        "async": true,
+        "description": "Get the UUID of the currently active workspace",
+        "parameters": []
+      },
+      {
+        "name": "getTabWorkspaceId",
+        "type": "function",
+        "async": true,
+        "description": "Get the workspace UUID for a given extension tab ID",
+        "parameters": [
+          { "name": "tabId", "type": "integer" }
+        ]
+      },
+      {
+        "name": "switchTo",
+        "type": "function",
+        "async": true,
+        "description": "Switch to a workspace by UUID",
+        "parameters": [
+          { "name": "uuid", "type": "string" }
+        ]
+      },
+      {
+        "name": "activateTabByDomId",
+        "type": "function",
+        "async": true,
+        "description": "Activate a tab by its DOM id, switching workspaces if needed",
+        "parameters": [
+          { "name": "domId", "type": "string" }
+        ]
+      },
+      {
+        "name": "goToPreviousTab",
+        "type": "function",
+        "async": true,
+        "description": "Go to the previously activated tab (cross-workspace)",
+        "parameters": []
+      },
+      {
+        "name": "goToParentTab",
+        "type": "function",
+        "async": true,
+        "description": "Go to the opener tab, switching workspaces if needed",
+        "parameters": []
+      },
+      {
+        "name": "closeTabByDomId",
+        "type": "function",
+        "async": true,
+        "description": "Close a tab by its DOM id. Refuses to close pinned tabs.",
+        "parameters": [
+          { "name": "domId", "type": "string" }
+        ]
+      },
+      {
+        "name": "getAllTabs",
+        "type": "function",
+        "async": true,
+        "description": "Get all tabs across all workspaces via DOM query",
+        "parameters": []
+      },
+      {
+        "name": "getCompanionMods",
+        "type": "function",
+        "async": true,
+        "description": "Get all companion mods with install status",
+        "parameters": []
+      },
+      {
+        "name": "installCompanionMod",
+        "type": "function",
+        "async": true,
+        "description": "Install a companion Zen Mod by ID",
+        "parameters": [
+          { "name": "modId", "type": "string" }
+        ]
+      },
+      {
+        "name": "removeCompanionMod",
+        "type": "function",
+        "async": true,
+        "description": "Remove a companion Zen Mod by ID",
+        "parameters": [
+          { "name": "modId", "type": "string" }
+        ]
+      },
+      {
+        "name": "showPalette",
+        "type": "function",
+        "async": true,
+        "description": "Toggle the command palette overlay. Returns true if opened, false if closed.",
+        "parameters": []
+      },
+      {
+        "name": "hidePalette",
+        "type": "function",
+        "async": true,
+        "description": "Close the command palette overlay",
+        "parameters": []
+      }
+    ]
+  }
+]

@@ -1,0 +1,84 @@
+{
+  "manifest_version": 2,
+  "name": "Zen Tabs Panel",
+  "version": "0.1.0",
+  "description": "Tab management command palette and utilities for Zen Browser",
+  "author": "c13v",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "zen-tabs-panel@c13v.com",
+      "strict_min_version": "128.0"
+    }
+  },
+
+  "permissions": [
+    "tabs",
+    "alarms",
+    "storage",
+    "sessions"
+  ],
+
+  "experiment_apis": {
+    "zenWorkspaces": {
+      "schema": "experiment/schema.json",
+      "parent": {
+        "scopes": ["addon_parent"],
+        "paths": [["zenWorkspaces"]],
+        "script": "experiment/api.js"
+      }
+    }
+  },
+
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+
+  "browser_action": {
+    "default_title": "Zen Tabs Panel"
+  },
+
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+
+  "commands": {
+    "open-palette": {
+      "suggested_key": {
+        "default": "Command+Alt+Period"
+      },
+      "description": "Open tab actions palette"
+    },
+    "go-to-parent-tab": {
+      "suggested_key": {
+        "default": "Alt+Up"
+      },
+      "description": "Switch to the tab that opened the current one"
+    },
+    "go-to-previous-tab": {
+      "suggested_key": {
+        "default": "Command+Alt+P"
+      },
+      "description": "Toggle between the last two visited tabs"
+    },
+    "move-tab-to-start": {
+      "suggested_key": {
+        "default": "Command+Up"
+      },
+      "description": "Move current tab to the start of the tab bar"
+    },
+    "move-tab-to-end": {
+      "suggested_key": {
+        "default": "Command+Down"
+      },
+      "description": "Move current tab to the end of the tab bar"
+    }
+  },
+
+  "icons": {
+    "48": "icons/icon-48.svg",
+    "96": "icons/icon-96.svg"
+  }
+}
