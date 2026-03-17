@@ -53,10 +53,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "zen-tabs-panel-corner-fix": {
         name: "Corner Bleed Fix",
         description: "Fixes white corners bleeding through on pages with light backgrounds. May have a minor performance impact on lower-end hardware.",
-        version: "1.0.0",
+        version: "1.0.1",
         css: `
-html:not([sizemode="fullscreen"]) .browserStack,
-html:not([sizemode="fullscreen"]) .browserStack > browser {
+.browserStack,
+.browserStack > browser {
   clip-path: inset(0 round var(--zen-native-inner-radius)) !important;
 }`,
       },
