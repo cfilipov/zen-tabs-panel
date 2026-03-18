@@ -10,6 +10,8 @@ let items = [];
 let currentTabHasParent = false;
 let childTabCount = 0;
 let unvisitedTabCount = 0;
+let parentTabPreview = null;  // { title, favIconUrl }
+let previousTabPreview = null; // { title, favIconUrl }
 
 const listEl = document.getElementById("list");
 const headerEl = document.getElementById("header");
@@ -34,16 +36,17 @@ function activateTab(domId) {
 
 function getActions() {
   return [
-    { id: "go-to-previous-tab", label: "Go to previous tab", hotkey: "P", icon: "↔" },
-    { id: "go-to-parent-tab", label: "Go to parent tab", hotkey: "U", icon: "↑", needsParent: true },
-    { id: "child-tabs", label: "Child tabs", hotkey: "C", icon: "↓", isView: true, needsChildren: true },
-    { id: "unvisited-tabs", label: "Unvisited tabs", hotkey: "N", icon: "●", isView: true, needsUnvisited: true },
-    { id: "last-visited", label: "Tabs by last visited", hotkey: "L", icon: "◷", isView: true },
+    { id: "go-to-previous-tab", label: "Previous", hotkey: "P", icon: "↔", preview: previousTabPreview },
+    { id: "go-to-parent-tab", label: "Parent", hotkey: "U", icon: "↑", needsParent: true, preview: parentTabPreview },
+    { id: "child-tabs", label: "Children", hotkey: "C", icon: "↓", isView: true, needsChildren: true, count: childTabCount },
+    { id: "unvisited-tabs", label: "New tabs", hotkey: "N", icon: "●", isView: true, needsUnvisited: true, count: unvisitedTabCount },
+    { id: "last-visited", label: "Recent", hotkey: "L", icon: "◷", isView: true },
     { type: "separator" },
-    { id: "move-tab-to-start", label: "Move tab to start", hotkey: "S", icon: "⤒" },
-    { id: "move-tab-to-end", label: "Move tab to end", hotkey: "E", icon: "⤓" },
-    { id: "sort-tabs", label: "Sort tabs by last used", hotkey: "O", icon: "⇅" },
-    { id: "unload-tab", label: "Unload tab", hotkey: "D", icon: "⏻" },
+    { id: "move-tab-to-start", label: "Move to start", hotkey: "S", icon: "⤒" },
+    { id: "move-tab-to-end", label: "Move to end", hotkey: "E", icon: "⤓" },
+    { id: "sort-tabs", label: "Sort by recent", hotkey: "O", icon: "⇅" },
+    { id: "sort-tabs-domain", label: "Sort by domain", hotkey: "G", icon: "⇅" },
+    { id: "unload-tab", label: "Unload", hotkey: "D", icon: "⏻" },
     { type: "separator" },
     { id: "settings", label: "Settings", hotkey: "," , icon: "svg:gear" },
   ];
@@ -94,7 +97,26 @@ function renderActions(actions, title) {
     el.className = "list-item" + (disabled ? " disabled" : "");
     el.dataset.id = action.id;
 
+    // Build preview HTML for Previous/Parent
+    let previewHtml = "";
+    if (action.preview && !disabled) {
+      const canLoad = action.preview.favIconUrl && !action.preview.favIconUrl.startsWith("chrome://");
+      const iconHtml = canLoad
+        ? `<img class="preview-icon" src="${escapeAttr(action.preview.favIconUrl)}">`
+        : `<span class="preview-icon-placeholder">○</span>`;
+      const previewTitle = escapeHtml(action.preview.title || "Untitled");
+      previewHtml = `<span class="action-preview">${iconHtml}<span class="preview-title">${previewTitle}</span></span>`;
+    }
+
+    // Build count badge
+    let countHtml = "";
+    if (typeof action.count === "number" && action.count > 0) {
+      countHtml = `<span class="item-count">${action.count}</span>`;
+    }
+
     const rightContent = `
+      ${previewHtml}
+      ${countHtml}
       ${action.hotkey ? `<span class="item-badge">${action.hotkey}</span>` : ""}
       <span class="item-arrow">${action.isView ? "›" : ""}</span>
     `;
@@ -106,6 +128,12 @@ function renderActions(actions, title) {
       </span>
       <span class="item-right">${rightContent}</span>
     `;
+
+    // Handle preview icon errors
+    const img = el.querySelector("img.preview-icon");
+    if (img) {
+      img.addEventListener("error", () => { img.style.display = "none"; });
+    }
 
     if (!disabled) {
       el.addEventListener("click", () => activateAction(action));
@@ -131,11 +159,13 @@ function renderTabList(tabs, title) {
   // Build render order: group split siblings together
   const rendered = new Set();
   const orderedItems = [];
+  let slotIndex = 0; // tracks the 0-9 keybinding slot
 
   for (let i = 0; i < tabs.length; i++) {
     if (rendered.has(i)) continue;
 
     const tab = tabs[i];
+    const badge = slotIndex < 10 ? String(slotIndex) : null;
 
     if (tab.splitGroupId) {
       const siblings = [];
@@ -146,6 +176,9 @@ function renderTabList(tabs, title) {
       }
 
       if (siblings.length > 1) {
+        const rowEl = document.createElement("div");
+        rowEl.className = "split-row";
+
         const pairEl = document.createElement("div");
         pairEl.className = "split-pair";
 
@@ -161,17 +194,28 @@ function renderTabList(tabs, title) {
             pairEl.appendChild(sep);
           }
 
-          pairEl.appendChild(createTabElement(sib.tab));
+          pairEl.appendChild(createTabElement(sib.tab, null));
         }
 
-        listEl.appendChild(pairEl);
+        rowEl.appendChild(pairEl);
+
+        if (badge !== null) {
+          const badgeEl = document.createElement("span");
+          badgeEl.className = "split-row-badge";
+          badgeEl.innerHTML = `<span class="item-badge">${badge}</span>`;
+          rowEl.appendChild(badgeEl);
+        }
+
+        listEl.appendChild(rowEl);
+        slotIndex++;
         continue;
       }
     }
 
     rendered.add(i);
     orderedItems.push(tab);
-    listEl.appendChild(createTabElement(tab));
+    listEl.appendChild(createTabElement(tab, badge));
+    slotIndex++;
   }
 
   items = orderedItems;
@@ -179,7 +223,7 @@ function renderTabList(tabs, title) {
   updateHeader(title);
 }
 
-function createTabElement(tab) {
+function createTabElement(tab, badge) {
   const el = document.createElement("div");
   el.className = "list-item";
   el.dataset.domId = tab.domId;
@@ -201,6 +245,7 @@ function createTabElement(tab) {
       <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
       ${domain ? `<span class="item-subtitle">${escapeHtml(domain)}</span>` : ""}
     </span>
+    ${badge !== null ? `<span class="item-right"><span class="item-badge">${badge}</span></span>` : ""}
   `;
 
   // Attach error handler via JS instead of inline onerror (CSP blocks inline handlers)
@@ -304,6 +349,10 @@ function activateAction(action) {
       ext.runtime.sendMessage({ type: "sort-tabs-by-recent" }).catch(() => {});
       break;
 
+    case "sort-tabs-domain":
+      ext.runtime.sendMessage({ type: "sort-tabs-by-domain" }).catch(() => {});
+      break;
+
     case "settings":
       ext.runtime.sendMessage({ type: "open-options" }).catch(() => {});
       break;
@@ -329,17 +378,40 @@ function activateAction(action) {
 async function showActionsMenu() {
   currentView = "actions";
 
-  // Fetch tab info for disabling unavailable actions
+  // Fetch tab info for disabling unavailable actions and previews
   try {
     const allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
     const activeTab = allTabs.find((t) => t.active);
     currentTabHasParent = !!(activeTab && activeTab.openerTabDomId);
     childTabCount = activeTab ? allTabs.filter((t) => t.openerTabDomId === activeTab.domId).length : 0;
     unvisitedTabCount = allTabs.filter((t) => t.unread).length;
+
+    // Parent tab preview
+    if (currentTabHasParent) {
+      const parent = allTabs.find((t) => t.domId === activeTab.openerTabDomId);
+      parentTabPreview = parent ? { title: parent.title, favIconUrl: parent.favIconUrl } : null;
+    } else {
+      parentTabPreview = null;
+    }
+
+    // Previous tab preview — most recently accessed tab excluding current and split siblings
+    const visibleDomIds = new Set();
+    if (activeTab) visibleDomIds.add(activeTab.domId);
+    if (activeTab?.splitGroupId) {
+      allTabs.filter((t) => t.splitGroupId === activeTab.splitGroupId).forEach((t) => visibleDomIds.add(t.domId));
+    }
+    const candidates = allTabs
+      .filter((t) => !visibleDomIds.has(t.domId))
+      .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+    previousTabPreview = candidates.length > 0
+      ? { title: candidates[0].title, favIconUrl: candidates[0].favIconUrl }
+      : null;
   } catch (e) {
     currentTabHasParent = false;
     childTabCount = 0;
     unvisitedTabCount = 0;
+    parentTabPreview = null;
+    previousTabPreview = null;
   }
 
   renderActions(getActions(), null);
@@ -352,18 +424,18 @@ async function showChildTabs() {
   try {
     allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
   } catch (e) {
-    renderTabList([], "Child tabs");
+    renderTabList([], "Children");
     return;
   }
 
   const activeTab = allTabs.find((t) => t.active);
   if (!activeTab) {
-    renderTabList([], "Child tabs");
+    renderTabList([], "Children");
     return;
   }
 
   const children = allTabs.filter((t) => t.openerTabDomId === activeTab.domId);
-  renderTabList(children, "Child tabs");
+  renderTabList(children, "Children");
   animateList("forward");
 }
 
@@ -374,12 +446,12 @@ async function showUnvisitedTabs() {
   try {
     allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
   } catch (e) {
-    renderTabList([], "Unvisited tabs");
+    renderTabList([], "New tabs");
     return;
   }
 
   const unvisited = allTabs.filter((t) => t.unread);
-  renderTabList(unvisited, "Unvisited tabs");
+  renderTabList(unvisited, "New tabs");
   animateList("forward");
 }
 
@@ -390,7 +462,7 @@ async function showLastVisited() {
   try {
     allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
   } catch (e) {
-    renderTabList([], "Tabs by last visited");
+    renderTabList([], "Recent");
     return;
   }
 
@@ -406,7 +478,7 @@ async function showLastVisited() {
     if (activeSplitGroupId && t.splitGroupId === activeSplitGroupId) return false;
     return true;
   });
-  renderTabList(filtered, "Tabs by last visited");
+  renderTabList(filtered, "Recent");
   animateList("forward");
 }
 
@@ -477,6 +549,34 @@ document.addEventListener("keydown", (e) => {
           if (!listItems[idx]?.classList.contains("disabled")) {
             e.preventDefault();
             activateAction(items[idx]);
+          }
+        }
+      } else {
+        // Number keys 0-9 activate tabs in list views
+        const num = parseInt(e.key, 10);
+        if (!isNaN(num) && num >= 0 && num <= 9) {
+          // Check split rows first
+          const splitRows = listEl.querySelectorAll(".split-row");
+          for (const row of splitRows) {
+            const badge = row.querySelector(".split-row-badge .item-badge");
+            if (badge && badge.textContent === String(num)) {
+              e.preventDefault();
+              // Activate the first tab in the split pair
+              const firstItem = row.querySelector(".list-item[data-dom-id]");
+              if (firstItem) activateTab(firstItem.dataset.domId);
+              return;
+            }
+          }
+          // Then check regular items
+          const listItems = listEl.querySelectorAll(".list-item");
+          for (let i = 0; i < listItems.length; i++) {
+            const badge = listItems[i].querySelector(".item-badge");
+            if (badge && badge.textContent === String(num)) {
+              e.preventDefault();
+              const domId = listItems[i].dataset.domId;
+              if (domId) activateTab(domId);
+              break;
+            }
           }
         }
       }

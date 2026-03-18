@@ -52,8 +52,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       },
       "zen-tabs-panel-corner-fix": {
         name: "Corner Bleed Fix",
-        description: "Fixes white corners bleeding through on pages with light backgrounds. May have a minor performance impact on lower-end hardware.",
-        version: "1.0.2",
+        description: "Fixes white corners bleeding through rounded edges using clip-path. Trades corner bleed for slightly blurry text on large or high-DPI displays — a Gecko compositor limitation with no perfect CSS fix (see zen-browser/desktop#8421).",
+        version: "1.0.4",
         css: `
 .browserStack,
 .browserStack > browser {
@@ -192,7 +192,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       panel.id = PANEL_ID;
       panel.style.cssText = [
         "width: 600px",
-        "max-height: 506px",
+        "max-height: 554px",
         "background: #1a1b2e",
         "border-radius: 16px",
         "border: 1px solid rgba(255, 255, 255, 0.08)",
@@ -212,7 +212,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       br.setAttribute("messagemanagergroup", "webext-browsers");
       br.setAttribute("webextension-view-type", "popup");
       br.setAttribute("src", getPaletteURL());
-      br.style.cssText = "width:600px;height:506px;border:none";
+      br.style.cssText = "width:600px;height:554px;border:none";
 
       panel.appendChild(br);
       overlay.appendChild(panel);
