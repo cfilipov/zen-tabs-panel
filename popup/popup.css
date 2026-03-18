@@ -1,17 +1,23 @@
 /* ---------------------------------------------------------------------------
  * Zen Tabs Panel — Popup base styles
+ *
+ * Background is transparent — the chrome-level panel container (api.js)
+ * provides the background using Zen's native CSS variables.
+ * Text/hover colors use light-dark() to adapt to Zen's theme.
  * --------------------------------------------------------------------------- */
 
 :root {
-  --ztt-bg: #1a1b2e;
-  --ztt-bg-hover: rgba(99, 102, 241, 0.18);
-  --ztt-bg-selected: rgba(99, 102, 241, 0.25);
-  --ztt-text: #e2e2e8;
-  --ztt-text-muted: #8b8b9e;
-  --ztt-text-disabled: rgba(139, 139, 158, 0.4);
-  --ztt-border: rgba(255, 255, 255, 0.06);
-  --ztt-badge-bg: rgba(255, 255, 255, 0.08);
-  --ztt-badge-text: #9d9db5;
+  color-scheme: light dark;
+
+  --ztt-bg: transparent;
+  --ztt-bg-hover: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
+  --ztt-bg-selected: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
+  --ztt-text: light-dark(#1a1a2e, #e2e2e8);
+  --ztt-text-muted: light-dark(#6b6b80, #8b8b9e);
+  --ztt-text-disabled: light-dark(rgba(107, 107, 128, 0.4), rgba(139, 139, 158, 0.4));
+  --ztt-border: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.06));
+  --ztt-badge-bg: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
+  --ztt-badge-text: light-dark(#6b6b80, #9d9db5);
   --ztt-radius: 12px;
   --ztt-item-radius: 8px;
   --ztt-item-height: 48px;
@@ -27,7 +33,7 @@ html, body {
   width: 600px;
   margin: 0;
   overflow: hidden;
-  background: var(--ztt-bg);
+  background: light-dark(rgb(244, 244, 244), rgb(31, 31, 31));
   color: var(--ztt-text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
@@ -158,6 +164,8 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
 }
 
 .item-subtitle {
@@ -168,14 +176,12 @@ html, body {
   text-overflow: ellipsis;
 }
 
-/* Right-aligned badge + arrow area — fixed width so all items align */
+/* Right-aligned badge + arrow area */
 .item-right {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 6px;
-  /* Badge (~28px) + gap (6px) + arrow (12px) = ~46px */
-  min-width: 46px;
   justify-content: flex-end;
 }
 
@@ -224,7 +230,7 @@ html, body {
 
 .split-row-badge {
   flex-shrink: 0;
-  padding: 0 10px 0 4px;
+  padding: 0 12px 0 6px;
 }
 
 .split-pair {
@@ -296,11 +302,12 @@ html, body {
 .item-count {
   font-size: 11px;
   color: var(--ztt-text-muted);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--ztt-badge-bg);
   padding: 1px 6px;
   border-radius: 8px;
   min-width: 16px;
   text-align: center;
+  margin-left: 6px;
 }
 
 /* View transition animations */

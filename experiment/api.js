@@ -138,7 +138,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     const PANEL_ID = "zen-tabs-panel-panel";
 
     function getPaletteURL() {
-      return context.extension.getURL("popup/popup.html");
+      const isDark = getWin()?.document?.documentElement?.getAttribute("zen-should-be-dark-mode") === "true";
+      return context.extension.getURL("popup/popup.html") + "?theme=" + (isDark ? "dark" : "light");
     }
 
     function createOverlay() {
@@ -193,10 +194,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       panel.style.cssText = [
         "width: 600px",
         "max-height: 554px",
-        "background: #1a1b2e",
-        "border-radius: 16px",
-        "border: 1px solid rgba(255, 255, 255, 0.08)",
-        "box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04)",
+        "background: var(--arrowpanel-background, light-dark(rgb(244, 244, 244), rgb(31, 31, 31)))",
+        "border-radius: 12px",
+        "border: 1px solid var(--zen-colors-border, light-dark(rgba(0,0,0,0.15), rgba(255,255,255,0.08)))",
+        "box-shadow: 0 0 9.73px rgba(0, 0, 0, 0.25), 0 24px 60px rgba(0, 0, 0, 0.4)",
         "overflow: hidden",
         "display: flex",
         "flex-direction: column",
@@ -211,6 +212,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       br.setAttribute("disableglobalhistory", "true");
       br.setAttribute("messagemanagergroup", "webext-browsers");
       br.setAttribute("webextension-view-type", "popup");
+      br.setAttribute("transparent", "true");
       br.setAttribute("src", getPaletteURL());
       br.style.cssText = "width:600px;height:554px;border:none";
 

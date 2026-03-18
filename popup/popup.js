@@ -116,7 +116,6 @@ function renderActions(actions, title) {
 
     const rightContent = `
       ${previewHtml}
-      ${countHtml}
       ${action.hotkey ? `<span class="item-badge">${action.hotkey}</span>` : ""}
       <span class="item-arrow">${action.isView ? "›" : ""}</span>
     `;
@@ -124,7 +123,7 @@ function renderActions(actions, title) {
     el.innerHTML = `
       <span class="item-icon-placeholder">${getIcon(action.icon)}</span>
       <span class="item-text">
-        <span class="item-title">${action.label}</span>
+        <span class="item-title">${action.label}${countHtml}</span>
       </span>
       <span class="item-right">${rightContent}</span>
     `;
@@ -604,6 +603,14 @@ function escapeAttr(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
+
+// ---------------------------------------------------------------------------
+// Theme — sync with Zen's dark/light mode
+// ---------------------------------------------------------------------------
+
+const urlParams = new URLSearchParams(window.location.search);
+const theme = urlParams.get("theme") || "dark";
+document.documentElement.style.colorScheme = theme;
 
 // ---------------------------------------------------------------------------
 // Init
