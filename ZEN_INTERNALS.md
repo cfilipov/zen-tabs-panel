@@ -147,6 +147,16 @@ gZenWorkspaces.addChangeListeners(() => console.log("workspace changed!"));
 
 **`removeChangeListeners(func)`** — Unregister a change listener.
 
+### Moving Tabs Between Workspaces
+
+**`moveTabsToWorkspace(tabs, workspaceId)`** — Moves an array of native tab elements to the specified workspace. Handles split view cleanup, glance tabs, container reassignment, and cached tab invalidation internally. Does NOT switch to the target workspace — the context menu's "Move to workspace" action does that as a separate step.
+
+Placement behavior: uses `container.insertBefore(tab, container.lastChild)` — tabs are placed near the end of the target workspace's tab list. To place at the top instead, call `container.insertBefore(tab, container.firstChild)` on the tab's `parentNode` after the move.
+
+The tab container uses separate sections for pinned and unpinned tabs, so `insertBefore(tab, firstChild)` on the unpinned container correctly places at the top without mixing into the pinned/essentials range.
+
+**`gBrowser.selectedTabs`** — Returns an array of all multiselected tabs (Ctrl+click). When only one tab is selected, returns `[activeTab]`. Useful for batch operations on user-selected tabs.
+
 ### Workspace Behavior
 
 - **Tab isolation:** Zen removes tabs from `gBrowser.tabs` when their workspace is inactive. They are NOT hidden (`.hidden` is false) — they are completely absent from the `gBrowser.tabs` collection.
@@ -687,6 +697,15 @@ if (workspace !== gZenWorkspaces.activeWorkspace) {
   await gZenWorkspaces.changeWorkspaceWithID(workspace);
 }
 gBrowser.selectedTab = tab;
+```
+
+### Get workspace icons as inline SVG
+Workspace `icon` field is a `chrome://` URL (e.g., `chrome://browser/skin/zen-icons/selectable/egg.svg`). Extension content pages cannot load `chrome://` URLs. Fetch the SVG content in chrome context and pass it inline:
+```js
+const w = Services.wm.getMostRecentWindow("navigator:browser");
+const resp = await w.fetch(workspace.icon);
+const svgContent = await resp.text();
+// Pass svgContent to popup, render with innerHTML
 ```
 
 ### Find tabs in the current split view

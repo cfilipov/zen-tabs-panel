@@ -310,6 +310,23 @@ html, body {
   margin-left: 6px;
 }
 
+/* Workspace icon */
+.workspace-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ztt-text-muted);
+}
+
+.workspace-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
 /* View transition animations */
 @keyframes ztt-slide-in-right {
   from { opacity: 0; transform: translateX(30px); }

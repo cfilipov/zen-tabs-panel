@@ -293,6 +293,19 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
     }
 
+    case "get-selected-tab-dom-ids":
+      return browser.zenWorkspaces.getSelectedTabDomIds();
+
+    case "get-workspaces-with-icons":
+      return browser.zenWorkspaces.getWorkspacesWithIcons();
+
+    case "move-selected-tabs-to-workspace":
+      (async () => {
+        await browser.zenWorkspaces.hidePalette();
+        await browser.zenWorkspaces.moveSelectedTabsToWorkspace(message.workspaceId);
+      })();
+      break;
+
     case "check-companion-mod":
       return browser.zenWorkspaces.getCompanionMods();
 

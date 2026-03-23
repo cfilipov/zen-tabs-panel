@@ -12,6 +12,7 @@ let childTabCount = 0;
 let unvisitedTabCount = 0;
 let parentTabPreview = null;  // { title, favIconUrl }
 let previousTabPreview = null; // { title, favIconUrl }
+let selectedTabCount = 0;
 
 const listEl = document.getElementById("list");
 const headerEl = document.getElementById("header");
@@ -42,6 +43,7 @@ function getActions() {
     { id: "unvisited-tabs", label: "New tabs", hotkey: "N", icon: "●", isView: true, needsUnvisited: true, count: unvisitedTabCount },
     { id: "last-visited", label: "Recent", hotkey: "L", icon: "◷", isView: true },
     { type: "separator" },
+    { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "⇥", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0 },
     { id: "move-tab-to-start", label: "Move to start", hotkey: "S", icon: "⤒" },
     { id: "move-tab-to-end", label: "Move to end", hotkey: "E", icon: "⤓" },
     { id: "sort-tabs", label: "Sort by recent", hotkey: "O", icon: "⇅" },
@@ -328,6 +330,8 @@ function activateSelected() {
 
   if (item.id && typeof item.hotkey !== "undefined") {
     activateAction(item);
+  } else if (item.uuid) {
+    moveToWorkspace(item.uuid);
   } else if (item.domId) {
     activateTab(item.domId);
   }
@@ -354,6 +358,10 @@ function activateAction(action) {
 
     case "settings":
       ext.runtime.sendMessage({ type: "open-options" }).catch(() => {});
+      break;
+
+    case "move-to-workspace":
+      showMoveToWorkspace();
       break;
 
     case "child-tabs":
@@ -405,12 +413,21 @@ async function showActionsMenu() {
     previousTabPreview = candidates.length > 0
       ? { title: candidates[0].title, favIconUrl: candidates[0].favIconUrl }
       : null;
+
+    // Fetch selected tab count for "Move to workspace" badge
+    try {
+      const selectedDomIds = await ext.runtime.sendMessage({ type: "get-selected-tab-dom-ids" });
+      selectedTabCount = selectedDomIds.length;
+    } catch (e) {
+      selectedTabCount = 0;
+    }
   } catch (e) {
     currentTabHasParent = false;
     childTabCount = 0;
     unvisitedTabCount = 0;
     parentTabPreview = null;
     previousTabPreview = null;
+    selectedTabCount = 0;
   }
 
   renderActions(getActions(), null);
@@ -479,6 +496,62 @@ async function showLastVisited() {
   });
   renderTabList(filtered, "Recent");
   animateList("forward");
+}
+
+async function showMoveToWorkspace() {
+  currentView = "move-to-workspace";
+  let workspaces;
+  try {
+    workspaces = await ext.runtime.sendMessage({ type: "get-workspaces-with-icons" });
+  } catch (e) { workspaces = []; }
+  const otherWorkspaces = workspaces.filter(ws => !ws.isActive);
+  renderWorkspaceList(otherWorkspaces, "Move to workspace");
+  animateList("forward");
+}
+
+function renderWorkspaceList(workspaces, title) {
+  selectedIndex = -1;
+  listEl.innerHTML = "";
+
+  if (workspaces.length === 0) {
+    items = [];
+    listEl.innerHTML = `<div class="empty-state">No other workspaces</div>`;
+    updateHeader(title);
+    return;
+  }
+
+  items = workspaces;
+
+  for (let i = 0; i < workspaces.length; i++) {
+    const ws = workspaces[i];
+    const badge = i < 10 ? String(i) : null;
+
+    const el = document.createElement("div");
+    el.className = "list-item";
+    el.dataset.workspaceId = ws.uuid;
+
+    const iconHtml = ws.svgContent
+      ? `<span class="workspace-icon">${ws.svgContent}</span>`
+      : `<span class="item-icon-placeholder">○</span>`;
+
+    el.innerHTML = `
+      ${iconHtml}
+      <span class="item-text">
+        <span class="item-title">${escapeHtml(ws.name)}</span>
+      </span>
+      ${badge !== null ? `<span class="item-right"><span class="item-badge">${badge}</span></span>` : ""}
+    `;
+
+    el.addEventListener("click", () => moveToWorkspace(ws.uuid));
+    listEl.appendChild(el);
+  }
+
+  updateSelection();
+  updateHeader(title);
+}
+
+function moveToWorkspace(workspaceId) {
+  ext.runtime.sendMessage({ type: "move-selected-tabs-to-workspace", workspaceId }).catch(() => {});
 }
 
 function goBack() {
@@ -572,6 +645,8 @@ document.addEventListener("keydown", (e) => {
             const badge = listItems[i].querySelector(".item-badge");
             if (badge && badge.textContent === String(num)) {
               e.preventDefault();
+              const wsId = listItems[i].dataset.workspaceId;
+              if (wsId) { moveToWorkspace(wsId); break; }
               const domId = listItems[i].dataset.domId;
               if (domId) activateTab(domId);
               break;

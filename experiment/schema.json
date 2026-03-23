@@ -100,6 +100,29 @@
         ]
       },
       {
+        "name": "getSelectedTabDomIds",
+        "type": "function",
+        "async": true,
+        "description": "Get DOM IDs of multiselected tabs (excludes essentials)",
+        "parameters": []
+      },
+      {
+        "name": "getWorkspacesWithIcons",
+        "type": "function",
+        "async": true,
+        "description": "Get all workspaces with inline SVG icon content",
+        "parameters": []
+      },
+      {
+        "name": "moveSelectedTabsToWorkspace",
+        "type": "function",
+        "async": true,
+        "description": "Move selected tabs to a workspace, placed at top position",
+        "parameters": [
+          { "name": "workspaceId", "type": "string" }
+        ]
+      },
+      {
         "name": "showPalette",
         "type": "function",
         "async": true,

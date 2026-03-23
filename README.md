@@ -13,6 +13,7 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 - Child tabs - list all tabs spawned from the current tab
 - Unvisited tabs - list tabs opened in the background you haven't looked at
 - Tabs by last visited - all tabs sorted by recency
+- Move to workspace - move tabs to another workspace without switching away (placed at top of target workspace's tab list). Supports multiselected tabs (Cmd+click).
 - Move tab to start / end of tab bar
 - Sort tabs by last used
 - Unload tab - discard from memory

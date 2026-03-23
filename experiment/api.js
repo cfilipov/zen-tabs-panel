@@ -471,6 +471,97 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         },
 
+        // Get DOM IDs of multiselected tabs (excludes essentials)
+        async getSelectedTabDomIds() {
+          const w = getWin();
+          if (!w || !w.gBrowser) return [];
+          return w.gBrowser.selectedTabs
+            .filter(t => !t.hasAttribute("zen-essential"))
+            .map(t => t.id);
+        },
+
+        // Get workspaces with inline SVG icon content
+        async getWorkspacesWithIcons() {
+          const w = getWin();
+          if (!w || !w.gZenWorkspaces) return [];
+          const workspaces = w.gZenWorkspaces.getWorkspaces();
+          const activeId = w.gZenWorkspaces.activeWorkspace;
+          const results = [];
+          for (const ws of workspaces) {
+            let svgContent = "";
+            if (ws.icon) {
+              try {
+                const resp = await w.fetch(ws.icon);
+                svgContent = await resp.text();
+              } catch (e) {}
+            }
+            results.push({ uuid: ws.uuid, name: ws.name, svgContent, isActive: ws.uuid === activeId });
+          }
+          return results;
+        },
+
+        // Move gBrowser.selectedTabs to the given workspace, placed at top
+        async moveSelectedTabsToWorkspace(workspaceId) {
+          const w = getWin();
+          if (!w || !w.gBrowser || !w.gZenWorkspaces) return;
+
+          const tabs = w.gBrowser.selectedTabs.filter(t => !t.hasAttribute("zen-essential"));
+          if (tabs.length === 0) return;
+
+          // If the active tab is being moved, activate the previous tab first
+          const activeTab = w.gBrowser.selectedTab;
+          const movingActive = tabs.some(t => t === activeTab);
+
+          if (movingActive) {
+            // Reuse goToPreviousTab logic: find the most recently accessed non-visible tab
+            const allTabs = getAllTabElements();
+            const visibleDomIds = new Set();
+            visibleDomIds.add(activeTab.id);
+            if (w.gZenViewSplitter?._data) {
+              const currentGroup = w.gZenViewSplitter._data.find(
+                (g) => g.tabs && g.tabs.some((t) => t.id === activeTab.id)
+              );
+              if (currentGroup) {
+                for (const tab of currentGroup.tabs) {
+                  visibleDomIds.add(tab.id);
+                }
+              }
+            }
+            // Also exclude all tabs being moved
+            for (const t of tabs) visibleDomIds.add(t.id);
+
+            const candidates = allTabs
+              .filter((t) => !visibleDomIds.has(t.id))
+              .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+            if (candidates.length > 0) {
+              await activateNativeTab(candidates[0]);
+            }
+          }
+
+          // Use Zen's built-in moveTabsToWorkspace to handle all the
+          // internal bookkeeping (split views, glance tabs, containers,
+          // cached tab invalidation, etc.), then reorder to top.
+          await w.gZenWorkspaces.moveTabsToWorkspace(tabs, workspaceId);
+
+          // Move each tab to the top of its container (unpinned section).
+          // moveTabsToWorkspace places them at the end — we want the top.
+          // The tabs are now in the target workspace's DOM area. Access
+          // the container from the tab element's parentNode.
+          // Reverse iterate so the original order is preserved at the top.
+          for (let i = tabs.length - 1; i >= 0; i--) {
+            const tab = tabs[i];
+            const container = tab.parentNode;
+            if (!container) continue;
+            // Find the first unpinned tab in this container as insertion point
+            const firstUnpinned = Array.from(container.children).find(
+              t => t.matches && t.matches(".tabbrowser-tab") && !t.pinned
+            );
+            if (firstUnpinned && firstUnpinned !== tab) {
+              container.insertBefore(tab, firstUnpinned);
+            }
+          }
+        },
+
         // Palette management
         async showPalette() {
           if (isOverlayOpen()) {
