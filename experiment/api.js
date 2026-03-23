@@ -193,7 +193,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       panel.id = PANEL_ID;
       panel.style.cssText = [
         "width: 600px",
-        "max-height: 554px",
+        "max-height: 604px",
         "background: var(--arrowpanel-background, light-dark(rgb(244, 244, 244), rgb(31, 31, 31)))",
         "border-radius: 12px",
         "border: 1px solid var(--zen-colors-border, light-dark(rgba(0,0,0,0.15), rgba(255,255,255,0.08)))",
@@ -214,7 +214,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       br.setAttribute("webextension-view-type", "popup");
       br.setAttribute("transparent", "true");
       br.setAttribute("src", getPaletteURL());
-      br.style.cssText = "width:600px;height:554px;border:none";
+      br.style.cssText = "width:600px;height:604px;border:none";
 
       panel.appendChild(br);
       overlay.appendChild(panel);
