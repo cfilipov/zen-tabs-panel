@@ -2,6 +2,9 @@
 
 A keyboard-driven tab management extension for [Zen Browser](https://zen-browser.app/) with a command palette UI and optional companion Zen Mods.
 
+> [!CAUTION]
+> This extension uses internal Zen APIs which could change and break with any Zen update. Use at your own risk.
+
 ![Screenshot](screenshot.png)
 
 ## Features
