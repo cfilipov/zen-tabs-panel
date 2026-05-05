@@ -16,7 +16,9 @@
     "tabs",
     "alarms",
     "storage",
-    "sessions"
+    "sessions",
+    "menus",
+    "clipboardWrite"
   ],
 
   "experiment_apis": {

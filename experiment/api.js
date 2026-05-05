@@ -480,6 +480,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
             .map(t => t.id);
         },
 
+        async getSelectedTabUrls() {
+          const w = getWin();
+          if (!w || !w.gBrowser) return [];
+          return w.gBrowser.selectedTabs
+            .filter(t => !t.hasAttribute("zen-essential"))
+            .map(t => t.linkedBrowser?.currentURI?.spec || "")
+            .filter(url => url !== "");
+        },
+
         // Get workspaces with inline SVG icon content
         async getWorkspacesWithIcons() {
           const w = getWin();

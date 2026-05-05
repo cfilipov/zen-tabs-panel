@@ -107,6 +107,13 @@
         "parameters": []
       },
       {
+        "name": "getSelectedTabUrls",
+        "type": "function",
+        "async": true,
+        "description": "Get URLs of multiselected tabs (excludes essentials)",
+        "parameters": []
+      },
+      {
         "name": "getWorkspacesWithIcons",
         "type": "function",
         "async": true,

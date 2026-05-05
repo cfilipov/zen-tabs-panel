@@ -296,6 +296,9 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "get-selected-tab-dom-ids":
       return browser.zenWorkspaces.getSelectedTabDomIds();
 
+    case "get-selected-tab-urls":
+      return browser.zenWorkspaces.getSelectedTabUrls();
+
     case "get-workspaces-with-icons":
       return browser.zenWorkspaces.getWorkspacesWithIcons();
 
@@ -314,6 +317,32 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "remove-companion-mod":
       return browser.zenWorkspaces.removeCompanionMod(message.modId);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Tab context menu
+// ---------------------------------------------------------------------------
+
+browser.menus.create({
+  id: "copy-selected-urls",
+  title: "Copy Selected Tab URLs",
+  contexts: ["tab"],
+  visible: false,
+});
+
+browser.menus.onShown.addListener(async (info) => {
+  if (!info.contexts.includes("tab")) return;
+  const urls = await browser.zenWorkspaces.getSelectedTabUrls();
+  browser.menus.update("copy-selected-urls", { visible: urls.length > 1 });
+  browser.menus.refresh();
+});
+
+browser.menus.onClicked.addListener(async (info) => {
+  if (info.menuItemId !== "copy-selected-urls") return;
+  const urls = await browser.zenWorkspaces.getSelectedTabUrls();
+  if (urls.length > 0) {
+    navigator.clipboard.writeText(urls.join("\n"));
   }
 });
 
