@@ -14,6 +14,7 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 - Go to previous tab - jump to the last tab you were on, even across workspaces. Shows workspace indicator when the tab is in a different workspace. Hovering or selecting highlights the tab in the sidebar.
 - Go to parent tab - jump to the tab that opened the current one. Shows workspace indicator and sidebar preview on hover/select.
 - Child tabs - list all tabs spawned from the current tab
+- Sibling tabs - list all tabs that share the same parent as the current tab
 - Unvisited tabs - list tabs opened in the background you haven't looked at
 - Tabs by last visited - all tabs sorted by recency, with workspace filter toggle (`W` key). Hovering or arrow-keying through any tab list highlights and scrolls to the tab in the sidebar.
 - Tab info - detailed view of the current tab: age, memory/CPU usage, visit history (grouped by date, collapsible), and duplicate tab detection with close buttons

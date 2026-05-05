@@ -16,6 +16,7 @@ let selectedTabCount = 0;
 let workspaceMap = {};     // uuid → { name, svgContent }
 let activeWorkspaceId = null;
 let duplicateGroupCount = 0;
+let siblingTabCount = 0;
 
 const listEl = document.getElementById("list");
 const headerEl = document.getElementById("header");
@@ -47,6 +48,7 @@ function getActions() {
     { id: "go-to-previous-tab", label: "Previous", hotkey: "P", icon: "↔", preview: previousTabPreview },
     { id: "go-to-parent-tab", label: "Parent", hotkey: "⇧P", icon: "↑", needsParent: true, preview: parentTabPreview },
     { id: "child-tabs", label: "Children", hotkey: "C", icon: "↓", isView: true, needsChildren: true, count: childTabCount },
+    { id: "sibling-tabs", label: "Siblings", hotkey: "⇧C", icon: "↔", isView: true, needsSiblings: true, count: siblingTabCount },
     { id: "unvisited-tabs", label: "New tabs", hotkey: "N", icon: "●", isView: true, needsUnvisited: true, count: unvisitedTabCount },
     { id: "last-visited", label: "Recent", hotkey: "R", icon: "◷", isView: true },
     { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "⊜", isView: true, needsDuplicates: true, count: duplicateGroupCount },
@@ -86,6 +88,7 @@ function isActionDisabled(action) {
   if (action.needsParent && !currentTabHasParent) return true;
   if (action.needsChildren && childTabCount === 0) return true;
   if (action.needsUnvisited && unvisitedTabCount === 0) return true;
+  if (action.needsSiblings && siblingTabCount === 0) return true;
   if (action.needsDuplicates && duplicateGroupCount === 0) return true;
   return false;
 }
@@ -514,6 +517,10 @@ function activateAction(action) {
       showChildTabs();
       break;
 
+    case "sibling-tabs":
+      showSiblingTabs();
+      break;
+
     case "unvisited-tabs":
       showUnvisitedTabs();
       break;
@@ -560,6 +567,9 @@ async function showActionsMenu() {
     const activeTab = allTabs.find((t) => t.active);
     currentTabHasParent = !!(activeTab && activeTab.openerTabDomId);
     childTabCount = activeTab ? allTabs.filter((t) => t.openerTabDomId === activeTab.domId).length : 0;
+    siblingTabCount = (activeTab && activeTab.openerTabDomId)
+      ? allTabs.filter((t) => t.openerTabDomId === activeTab.openerTabDomId && t.domId !== activeTab.domId).length
+      : 0;
     unvisitedTabCount = allTabs.filter((t) => t.unread).length;
 
     // Duplicate groups count
@@ -605,6 +615,7 @@ async function showActionsMenu() {
   } catch (e) {
     currentTabHasParent = false;
     childTabCount = 0;
+    siblingTabCount = 0;
     unvisitedTabCount = 0;
     duplicateGroupCount = 0;
     parentTabPreview = null;
@@ -634,6 +645,28 @@ async function showChildTabs() {
 
   const children = allTabs.filter((t) => t.openerTabDomId === activeTab.domId);
   renderTabList(children, "Children");
+  animateList("forward");
+}
+
+async function showSiblingTabs() {
+  currentView = "sibling-tabs";
+
+  let allTabs;
+  try {
+    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+  } catch (e) {
+    renderTabList([], "Siblings");
+    return;
+  }
+
+  const activeTab = allTabs.find((t) => t.active);
+  if (!activeTab || !activeTab.openerTabDomId) {
+    renderTabList([], "Siblings");
+    return;
+  }
+
+  const siblings = allTabs.filter((t) => t.openerTabDomId === activeTab.openerTabDomId && t.domId !== activeTab.domId);
+  renderTabList(siblings, "Siblings");
   animateList("forward");
 }
 
