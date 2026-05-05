@@ -119,7 +119,15 @@ function renderActions(actions, title) {
         ? `<img class="preview-icon" src="${escapeAttr(prevFav)}">`
         : `<span class="preview-icon-placeholder">○</span>`;
       const previewTitle = escapeHtml(action.preview.title || "Untitled");
-      previewHtml = `<span class="action-preview">${iconHtml}<span class="preview-title">${previewTitle}</span></span>`;
+      let wsLabel = "";
+      if (action.preview.workspaceId && action.preview.workspaceId !== activeWorkspaceId) {
+        const ws = workspaceMap[action.preview.workspaceId];
+        if (ws) {
+          const wsIcon = ws.svgContent ? `<span class="preview-ws-icon">${ws.svgContent}</span>` : "";
+          wsLabel = `<span class="preview-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+        }
+      }
+      previewHtml = `<span class="action-preview">${iconHtml}<span class="preview-title">${previewTitle}</span>${wsLabel}</span>`;
     }
 
     // Build count badge
@@ -150,6 +158,14 @@ function renderActions(actions, title) {
 
     if (!disabled) {
       el.addEventListener("click", () => activateAction(action));
+      if (action.preview?.domId) {
+        el.addEventListener("mouseenter", () => {
+          ext.runtime.sendMessage({ type: "preview-tab", domId: action.preview.domId }).catch(() => {});
+        });
+        el.addEventListener("mouseleave", () => {
+          ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+        });
+      }
     }
     listEl.appendChild(el);
   }
@@ -287,6 +303,12 @@ function createTabElement(tab, badge) {
   }
 
   el.addEventListener("click", () => activateTab(tab.domId));
+  el.addEventListener("mouseenter", () => {
+    ext.runtime.sendMessage({ type: "preview-tab", domId: tab.domId }).catch(() => {});
+  });
+  el.addEventListener("mouseleave", () => {
+    ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+  });
   return el;
 }
 
@@ -391,9 +413,18 @@ function updateSelection() {
     }
   }
 
-  const isTabView = currentView !== "actions" && currentView !== "move-to-workspace";
-  if (isTabView && selectedIndex >= 0 && items[selectedIndex]?.domId) {
-    ext.runtime.sendMessage({ type: "preview-tab", domId: items[selectedIndex].domId }).catch(() => {});
+  if (selectedIndex >= 0) {
+    const item = items[selectedIndex];
+    const isTabView = currentView !== "actions" && currentView !== "move-to-workspace";
+    if (isTabView && item?.domId) {
+      ext.runtime.sendMessage({ type: "preview-tab", domId: item.domId }).catch(() => {});
+    } else if (currentView === "actions" && item?.preview?.domId) {
+      ext.runtime.sendMessage({ type: "preview-tab", domId: item.preview.domId }).catch(() => {});
+    } else if (currentView === "actions") {
+      ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+    }
+  } else if (currentView === "actions") {
+    ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
   }
 }
 
@@ -527,7 +558,7 @@ async function showActionsMenu() {
     // Parent tab preview
     if (currentTabHasParent) {
       const parent = allTabs.find((t) => t.domId === activeTab.openerTabDomId);
-      parentTabPreview = parent ? { title: parent.title, favIconUrl: parent.favIconUrl } : null;
+      parentTabPreview = parent ? { title: parent.title, favIconUrl: parent.favIconUrl, domId: parent.domId, workspaceId: parent.workspaceId } : null;
     } else {
       parentTabPreview = null;
     }
@@ -542,7 +573,7 @@ async function showActionsMenu() {
       .filter((t) => !visibleDomIds.has(t.domId) && !t.unread)
       .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
     previousTabPreview = candidates.length > 0
-      ? { title: candidates[0].title, favIconUrl: candidates[0].favIconUrl }
+      ? { title: candidates[0].title, favIconUrl: candidates[0].favIconUrl, domId: candidates[0].domId, workspaceId: candidates[0].workspaceId }
       : null;
 
     // Fetch selected tab count and workspace map in parallel
@@ -625,6 +656,7 @@ async function showLastVisited(animate) {
     if (t.active) return false;
     if (activeSplitGroupId && t.splitGroupId === activeSplitGroupId) return false;
     if (recentWorkspaceOnly && t.workspaceId !== activeWorkspaceId) return false;
+    if (!t.url || t.url === "about:newtab" || t.url === "about:blank") return false;
     return true;
   });
 

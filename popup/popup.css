@@ -372,6 +372,31 @@ html, body {
   text-overflow: ellipsis;
 }
 
+.preview-workspace {
+  font-size: 10px;
+  color: var(--ztt-text-muted);
+  opacity: 0.7;
+  flex-shrink: 0;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.preview-ws-icon {
+  width: 10px;
+  height: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-ws-icon svg {
+  width: 9px;
+  height: 9px;
+  fill: currentColor;
+}
+
 /* Count badge for Children / New tabs */
 .item-count {
   font-size: 11px;
