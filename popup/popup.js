@@ -15,6 +15,7 @@ let previousTabPreview = null; // { title, favIconUrl }
 let selectedTabCount = 0;
 let workspaceMap = {};     // uuid → { name, svgContent }
 let activeWorkspaceId = null;
+let duplicateGroupCount = 0;
 
 const listEl = document.getElementById("list");
 const headerEl = document.getElementById("header");
@@ -44,11 +45,12 @@ function activateTab(domId) {
 function getActions() {
   return [
     { id: "go-to-previous-tab", label: "Previous", hotkey: "P", icon: "↔", preview: previousTabPreview },
-    { id: "go-to-parent-tab", label: "Parent", hotkey: "U", icon: "↑", needsParent: true, preview: parentTabPreview },
+    { id: "go-to-parent-tab", label: "Parent", hotkey: "⇧P", icon: "↑", needsParent: true, preview: parentTabPreview },
     { id: "child-tabs", label: "Children", hotkey: "C", icon: "↓", isView: true, needsChildren: true, count: childTabCount },
     { id: "unvisited-tabs", label: "New tabs", hotkey: "N", icon: "●", isView: true, needsUnvisited: true, count: unvisitedTabCount },
     { id: "last-visited", label: "Recent", hotkey: "L", icon: "◷", isView: true },
     { id: "tab-info", label: "Tab info", hotkey: "I", icon: "ⓘ", isView: true },
+    { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "⊜", isView: true, needsDuplicates: true, count: duplicateGroupCount },
     { type: "separator" },
     { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "⇥", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0 },
     { id: "move-tab-to-start", label: "Move to start", hotkey: "S", icon: "⤒" },
@@ -56,7 +58,7 @@ function getActions() {
     { id: "sort-tabs", label: "Sort by recent", hotkey: "O", icon: "⇅" },
     { id: "sort-tabs-domain", label: "Sort by domain", hotkey: "G", icon: "⇅" },
     { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "F", icon: "◎" },
-    { id: "unload-tab", label: "Unload", hotkey: "D", icon: "⏻" },
+    { id: "unload-tab", label: "Unload", hotkey: "U", icon: "⏻" },
     { type: "separator" },
     { id: "settings", label: "Settings", hotkey: "," , icon: "svg:gear" },
   ];
@@ -84,6 +86,7 @@ function isActionDisabled(action) {
   if (action.needsParent && !currentTabHasParent) return true;
   if (action.needsChildren && childTabCount === 0) return true;
   if (action.needsUnvisited && unvisitedTabCount === 0) return true;
+  if (action.needsDuplicates && duplicateGroupCount === 0) return true;
   return false;
 }
 
@@ -522,6 +525,10 @@ function activateAction(action) {
     case "tab-info":
       showTabInfo();
       break;
+
+    case "duplicates":
+      showDuplicates();
+      break;
   }
 }
 
@@ -554,6 +561,15 @@ async function showActionsMenu() {
     currentTabHasParent = !!(activeTab && activeTab.openerTabDomId);
     childTabCount = activeTab ? allTabs.filter((t) => t.openerTabDomId === activeTab.domId).length : 0;
     unvisitedTabCount = allTabs.filter((t) => t.unread).length;
+
+    // Duplicate groups count
+    const urlCounts = {};
+    for (const t of allTabs) {
+      if (t.url && t.url !== "about:newtab" && t.url !== "about:blank") {
+        urlCounts[t.url] = (urlCounts[t.url] || 0) + 1;
+      }
+    }
+    duplicateGroupCount = Object.values(urlCounts).filter((c) => c > 1).length;
 
     // Parent tab preview
     if (currentTabHasParent) {
@@ -590,6 +606,7 @@ async function showActionsMenu() {
     currentTabHasParent = false;
     childTabCount = 0;
     unvisitedTabCount = 0;
+    duplicateGroupCount = 0;
     parentTabPreview = null;
     previousTabPreview = null;
     selectedTabCount = 0;
@@ -945,17 +962,38 @@ function renderTabInfo(info, visits, duplicates) {
     html += `<div class="info-cell"><span class="info-label">Total visits</span><span class="info-value">${visits.length}</span></div>`;
   }
 
-  if (info.duplicateDomIds.length > 0) {
-    html += `<div class="info-cell"><span class="info-label">Duplicates</span><span class="info-value">${info.duplicateDomIds.length}</span></div>`;
+  if (duplicates && duplicates.length > 1) {
+    html += `<div class="info-cell"><span class="info-label">Duplicates</span><span class="info-value">${duplicates.length}</span></div>`;
   }
 
   html += `</div>`;
 
-  // Duplicates (before history)
-  if (duplicates && duplicates.length > 0) {
+  // Duplicates (before history) — includes self
+  if (duplicates && duplicates.length > 1) {
     html += `<div class="info-section info-duplicates-section">`;
-    html += `<div class="info-section-title">Duplicate tabs (${duplicates.length})</div>`;
-    html += `</div>`;
+    html += `<div class="info-section-header"><span class="info-section-title">Duplicate tabs (${duplicates.length})</span> <span class="info-close-others">Close others</span></div>`;
+    html += `<div class="info-duplicates-grid">`;
+    for (let i = 0; i < duplicates.length; i++) {
+      const dup = duplicates[i];
+      const isSelf = dup.domId === info.domId;
+      const dupAge = formatDuration(now - parseInt(dup.domId.split("-")[0]));
+      const ws = dup.workspaceId ? workspaceMap[dup.workspaceId] : null;
+      const wsIcon = ws?.svgContent ? `<span class="dup-ws-icon">${ws.svgContent}</span>` : "";
+      const wsName = ws ? escapeHtml(ws.name) : "";
+      const wsNote = isSelf ? `<span class="dup-ws-note">(this tab)</span>`
+        : (dup.workspaceId === activeWorkspaceId) ? `<span class="dup-ws-note">(this workspace)</span>` : "";
+      html += `<div class="info-duplicate-row${isSelf ? " dup-self" : ""}" data-dom-id="${escapeAttr(dup.domId)}">`;
+      html += `<span class="dup-index">${i + 1}</span>`;
+      html += `<span class="dup-workspace">${wsIcon}${wsName}${wsNote}</span>`;
+      html += `<span class="dup-age">open for ${dupAge}</span>`;
+      if (!isSelf) {
+        html += `<span class="dup-close" title="Close tab">✕</span>`;
+      } else {
+        html += `<span></span>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div></div>`;
   }
 
   // Combined visit history grouped by date
@@ -984,10 +1022,36 @@ function renderTabInfo(info, visits, duplicates) {
 
   listEl.innerHTML = html;
 
-  if (duplicates && duplicates.length > 0) {
-    const section = listEl.querySelector(".info-duplicates-section");
-    for (const tab of duplicates) {
-      section.appendChild(createDuplicateTabElement(tab));
+  // Wire up duplicate row interactions
+  if (duplicates && duplicates.length > 1) {
+    for (const row of listEl.querySelectorAll(".info-duplicate-row:not(.dup-self)")) {
+      const domId = row.dataset.domId;
+      row.addEventListener("click", (e) => {
+        if (e.target.classList.contains("dup-close")) return;
+        activateTab(domId);
+      });
+      row.querySelector(".dup-close").addEventListener("click", (e) => {
+        e.stopPropagation();
+        ext.runtime.sendMessage({ type: "close-tab", domId }).catch(() => {});
+        row.remove();
+      });
+      row.addEventListener("mouseenter", () => {
+        ext.runtime.sendMessage({ type: "preview-tab", domId }).catch(() => {});
+      });
+      row.addEventListener("mouseleave", () => {
+        ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+      });
+    }
+    const closeOthers = listEl.querySelector(".info-close-others");
+    if (closeOthers) {
+      closeOthers.addEventListener("click", () => {
+        for (const dup of duplicates) {
+          if (dup.domId === info.domId) continue;
+          ext.runtime.sendMessage({ type: "close-tab", domId: dup.domId }).catch(() => {});
+        }
+        listEl.querySelectorAll(".info-duplicate-row:not(.dup-self)").forEach((r) => r.remove());
+        closeOthers.remove();
+      });
     }
   }
 
@@ -997,6 +1061,125 @@ function renderTabInfo(info, visits, duplicates) {
   }
 
   updateHeader("Tab info");
+}
+
+async function showDuplicates() {
+  currentView = "duplicates";
+  items = [];
+  selectedIndex = -1;
+
+  let allTabs;
+  try {
+    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+  } catch (e) {
+    listEl.innerHTML = `<div class="empty-state">No duplicates</div>`;
+    updateHeader("Duplicates");
+    return;
+  }
+
+  // Group tabs by URL
+  const urlGroups = {};
+  for (const tab of allTabs) {
+    if (!tab.url || tab.url === "about:newtab" || tab.url === "about:blank") continue;
+    if (!urlGroups[tab.url]) urlGroups[tab.url] = [];
+    urlGroups[tab.url].push(tab);
+  }
+
+  // Filter to only groups with duplicates, sort by group size descending
+  const groups = Object.values(urlGroups)
+    .filter((g) => g.length > 1)
+    .sort((a, b) => b.length - a.length);
+
+  if (groups.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">No duplicates</div>`;
+    updateHeader("Duplicates");
+    animateList("forward");
+    return;
+  }
+
+  renderDuplicateGroups(groups);
+  animateList("forward");
+}
+
+function renderDuplicateGroups(groups) {
+  const now = Date.now();
+  let html = "";
+
+  for (const group of groups) {
+    const sample = group[0];
+    let domain = "";
+    try { domain = new URL(sample.url).hostname; } catch (e) {}
+
+    let favicon = sample.favIconUrl || "";
+    if (favicon.startsWith("moz-remote-image://")) {
+      try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
+    }
+    const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
+
+    html += `<div class="dup-group">`;
+    html += `<div class="dup-group-header">`;
+    html += canLoadFavicon
+      ? `<img class="dup-group-favicon" src="${escapeAttr(favicon)}">`
+      : `<span class="dup-group-favicon-placeholder">○</span>`;
+    html += `<div class="dup-group-text">`;
+    html += `<div class="dup-group-title">${escapeHtml(sample.title || "Untitled")}</div>`;
+    if (domain) html += `<div class="dup-group-domain">${escapeHtml(domain)}</div>`;
+    html += `</div>`;
+    html += `<span class="dup-group-count">${group.length}</span>`;
+    html += `</div>`;
+
+    html += `<div class="info-duplicates-grid">`;
+    for (let i = 0; i < group.length; i++) {
+      const tab = group[i];
+      const age = formatDuration(now - parseInt(tab.domId.split("-")[0]));
+      const ws = tab.workspaceId ? workspaceMap[tab.workspaceId] : null;
+      const wsIcon = ws?.svgContent ? `<span class="dup-ws-icon">${ws.svgContent}</span>` : "";
+      const wsName = ws ? escapeHtml(ws.name) : "";
+      const isActive = tab.active;
+      const wsNote = isActive ? `<span class="dup-ws-note">(this tab)</span>`
+        : (tab.workspaceId === activeWorkspaceId) ? `<span class="dup-ws-note">(this workspace)</span>` : "";
+      html += `<div class="info-duplicate-row${isActive ? " dup-self" : ""}" data-dom-id="${escapeAttr(tab.domId)}">`;
+      html += `<span class="dup-index">${i + 1}</span>`;
+      html += `<span class="dup-workspace">${wsIcon}${wsName}${wsNote}</span>`;
+      html += `<span class="dup-age">open for ${age}</span>`;
+      if (!isActive) {
+        html += `<span class="dup-close" title="Close tab">✕</span>`;
+      } else {
+        html += `<span></span>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  listEl.innerHTML = html;
+
+  // Wire up interactions
+  for (const row of listEl.querySelectorAll(".info-duplicate-row:not(.dup-self)")) {
+    const domId = row.dataset.domId;
+    row.addEventListener("click", (e) => {
+      if (e.target.classList.contains("dup-close")) return;
+      activateTab(domId);
+    });
+    row.querySelector(".dup-close").addEventListener("click", (e) => {
+      e.stopPropagation();
+      ext.runtime.sendMessage({ type: "close-tab", domId }).catch(() => {});
+      row.remove();
+    });
+    row.addEventListener("mouseenter", () => {
+      ext.runtime.sendMessage({ type: "preview-tab", domId }).catch(() => {});
+    });
+    row.addEventListener("mouseleave", () => {
+      ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+    });
+  }
+
+  // Handle favicon errors
+  for (const img of listEl.querySelectorAll("img.dup-group-favicon")) {
+    img.addEventListener("error", () => { img.style.display = "none"; });
+  }
+
+  updateHeader("Duplicates");
 }
 
 function moveToWorkspace(workspaceId) {
@@ -1065,7 +1248,7 @@ document.addEventListener("keydown", (e) => {
 
     default:
       if (currentView === "actions") {
-        const key = e.key.toUpperCase();
+        const key = (e.shiftKey ? "⇧" : "") + e.key.toUpperCase();
         const idx = items.findIndex((item) => item.hotkey === key);
         if (idx >= 0) {
           const listItems = listEl.querySelectorAll(".list-item");

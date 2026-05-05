@@ -147,8 +147,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     let previewedTab = null;
     let savedScrollPositions = null; // Map<scrollbox, scrollTop>
+    let restoreRAF = null;
 
     function applyPreview(tab) {
+      if (restoreRAF) {
+        const w = getWin();
+        if (w) w.cancelAnimationFrame(restoreRAF);
+        restoreRAF = null;
+      }
       if (previewedTab && previewedTab !== tab) {
         previewedTab.removeAttribute("zen-tabs-panel-preview");
       }
@@ -184,7 +190,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         restore();
         const w = getWin();
         if (w) {
-          w.requestAnimationFrame(() => w.requestAnimationFrame(restore));
+          restoreRAF = w.requestAnimationFrame(() => {
+            restoreRAF = w.requestAnimationFrame(() => {
+              restore();
+              restoreRAF = null;
+            });
+          });
         }
       }
     }
@@ -600,10 +611,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
             }
           } catch (e) {}
 
-          // Duplicates
+          // Duplicates (includes self)
           const allTabs = getAllTabElements();
           const duplicateDomIds = allTabs
-            .filter(t => t.id !== domId && (t.linkedBrowser?.currentURI?.spec || "") === url)
+            .filter(t => (t.linkedBrowser?.currentURI?.spec || "") === url)
             .map(t => t.id);
 
           return {
