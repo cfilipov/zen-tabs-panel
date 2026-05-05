@@ -121,6 +121,22 @@
         "parameters": []
       },
       {
+        "name": "previewTab",
+        "type": "function",
+        "async": true,
+        "description": "Highlight a tab in the sidebar and scroll it into view without activating it",
+        "parameters": [
+          { "name": "domId", "type": "string" }
+        ]
+      },
+      {
+        "name": "clearPreview",
+        "type": "function",
+        "async": true,
+        "description": "Clear the preview highlight and restore sidebar scroll position",
+        "parameters": []
+      },
+      {
         "name": "getWorkspacesWithIcons",
         "type": "function",
         "async": true,

@@ -13,16 +13,22 @@ let unvisitedTabCount = 0;
 let parentTabPreview = null;  // { title, favIconUrl }
 let previousTabPreview = null; // { title, favIconUrl }
 let selectedTabCount = 0;
+let workspaceMap = {};     // uuid → { name, svgContent }
+let activeWorkspaceId = null;
 
 const listEl = document.getElementById("list");
 const headerEl = document.getElementById("header");
 const backButton = document.getElementById("back-button");
 const viewTitle = document.getElementById("view-title");
+const headerHint = document.getElementById("header-hint");
+
+let recentWorkspaceOnly = false;
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
 // Fire-and-forget — don't await since the overlay destruction kills our context
 function closePalette() {
+  ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
   ext.runtime.sendMessage({ type: "hide-palette" }).catch(() => {});
 }
 
@@ -147,14 +153,14 @@ function renderActions(actions, title) {
   updateHeader(title);
 }
 
-function renderTabList(tabs, title) {
+function renderTabList(tabs, title, hint) {
   selectedIndex = -1;
   listEl.innerHTML = "";
 
   if (tabs.length === 0) {
     items = [];
     listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
-    updateHeader(title);
+    updateHeader(title, hint);
     return;
   }
 
@@ -222,7 +228,7 @@ function renderTabList(tabs, title) {
 
   items = orderedItems;
   updateSelection();
-  updateHeader(title);
+  updateHeader(title, hint);
 }
 
 function createTabElement(tab, badge) {
@@ -239,13 +245,29 @@ function createTabElement(tab, badge) {
   const canLoadFavicon = tab.favIconUrl &&
     !tab.favIconUrl.startsWith("chrome://");
 
+  let wsHtml = "";
+  if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
+    const ws = workspaceMap[tab.workspaceId];
+    if (ws) {
+      const wsIcon = ws.svgContent
+        ? `<span class="subtitle-ws-icon">${ws.svgContent}</span>`
+        : "";
+      wsHtml = `<span class="subtitle-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+    }
+  }
+
+  const subtitleParts = [
+    domain ? `<span class="subtitle-domain">${escapeHtml(domain)}</span>` : "",
+    wsHtml,
+  ].filter(Boolean).join("");
+
   el.innerHTML = `
     ${canLoadFavicon
       ? `<img class="item-icon" src="${escapeAttr(tab.favIconUrl)}">`
       : `<span class="item-icon-placeholder">○</span>`}
     <span class="item-text">
       <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
-      ${domain ? `<span class="item-subtitle">${escapeHtml(domain)}</span>` : ""}
+      ${subtitleParts ? `<span class="item-subtitle">${subtitleParts}</span>` : ""}
     </span>
     ${badge !== null ? `<span class="item-right"><span class="item-badge">${badge}</span></span>` : ""}
   `;
@@ -260,17 +282,25 @@ function createTabElement(tab, badge) {
   return el;
 }
 
-function updateHeader(title) {
+function updateHeader(title, hint) {
   if (!title) {
     headerEl.classList.add("hidden");
     backButton.classList.add("hidden");
     viewTitle.textContent = "";
+    headerHint.classList.add("hidden");
     return;
   }
 
   headerEl.classList.remove("hidden");
   backButton.classList.remove("hidden");
   viewTitle.textContent = title;
+
+  if (hint) {
+    headerHint.innerHTML = hint;
+    headerHint.classList.remove("hidden");
+  } else {
+    headerHint.classList.add("hidden");
+  }
 }
 
 function updateSelection() {
@@ -284,6 +314,11 @@ function updateSelection() {
     if (selected) {
       selected.scrollIntoView({ block: "nearest" });
     }
+  }
+
+  const isTabView = currentView !== "actions" && currentView !== "move-to-workspace";
+  if (isTabView && selectedIndex >= 0 && items[selectedIndex]?.domId) {
+    ext.runtime.sendMessage({ type: "preview-tab", domId: items[selectedIndex].domId }).catch(() => {});
   }
 }
 
@@ -384,6 +419,21 @@ function activateAction(action) {
 // Views
 // ---------------------------------------------------------------------------
 
+async function fetchWorkspaceMap() {
+  try {
+    const workspaces = await ext.runtime.sendMessage({ type: "get-workspaces-with-icons" });
+    workspaceMap = {};
+    activeWorkspaceId = null;
+    for (const ws of workspaces) {
+      workspaceMap[ws.uuid] = { name: ws.name, svgContent: ws.svgContent };
+      if (ws.isActive) activeWorkspaceId = ws.uuid;
+    }
+  } catch (e) {
+    workspaceMap = {};
+    activeWorkspaceId = null;
+  }
+}
+
 async function showActionsMenu() {
   currentView = "actions";
 
@@ -416,9 +466,12 @@ async function showActionsMenu() {
       ? { title: candidates[0].title, favIconUrl: candidates[0].favIconUrl }
       : null;
 
-    // Fetch selected tab count for "Move to workspace" badge
+    // Fetch selected tab count and workspace map in parallel
     try {
-      const selectedDomIds = await ext.runtime.sendMessage({ type: "get-selected-tab-dom-ids" });
+      const [selectedDomIds] = await Promise.all([
+        ext.runtime.sendMessage({ type: "get-selected-tab-dom-ids" }),
+        fetchWorkspaceMap(),
+      ]);
       selectedTabCount = selectedDomIds.length;
     } catch (e) {
       selectedTabCount = 0;
@@ -473,7 +526,7 @@ async function showUnvisitedTabs() {
   animateList("forward");
 }
 
-async function showLastVisited() {
+async function showLastVisited(animate) {
   currentView = "last-visited";
 
   let allTabs;
@@ -486,18 +539,20 @@ async function showLastVisited() {
 
   allTabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
 
-  // Find the current tab to determine if we're in a split view
   const activeTab = allTabs.find((t) => t.active);
   const activeSplitGroupId = activeTab?.splitGroupId;
 
   const filtered = allTabs.filter((t) => {
     if (t.active) return false;
-    // Only filter tabs in the same split group as the current tab
     if (activeSplitGroupId && t.splitGroupId === activeSplitGroupId) return false;
+    if (recentWorkspaceOnly && t.workspaceId !== activeWorkspaceId) return false;
     return true;
   });
-  renderTabList(filtered, "Recent");
-  animateList("forward");
+
+  const hintLabel = recentWorkspaceOnly ? "all" : "workspace";
+  const hint = `<span class="header-hint-badge">W</span> ${hintLabel}`;
+  renderTabList(filtered, "Recent", hint);
+  if (animate !== false) animateList("forward");
 }
 
 async function showMoveToWorkspace() {
@@ -558,6 +613,8 @@ function moveToWorkspace(workspaceId) {
 
 function goBack() {
   if (currentView !== "actions") {
+    ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+    recentWorkspaceOnly = false;
     showActionsMenu();
     animateList("back");
   }
@@ -626,6 +683,13 @@ document.addEventListener("keydown", (e) => {
           }
         }
       } else {
+        if (e.key.toUpperCase() === "W" && currentView === "last-visited") {
+          e.preventDefault();
+          recentWorkspaceOnly = !recentWorkspaceOnly;
+          ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+          showLastVisited(false);
+          break;
+        }
         // Number keys 0-9 activate tabs in list views
         const num = parseInt(e.key, 10);
         if (!isNaN(num) && num >= 0 && num <= 9) {

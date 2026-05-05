@@ -300,6 +300,14 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
     }
 
+    case "preview-tab":
+      browser.zenWorkspaces.previewTab(message.domId);
+      break;
+
+    case "clear-preview":
+      browser.zenWorkspaces.clearPreview();
+      break;
+
     case "get-selected-tab-dom-ids":
       return browser.zenWorkspaces.getSelectedTabDomIds();
 

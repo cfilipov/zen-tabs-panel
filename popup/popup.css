@@ -84,6 +84,29 @@ html, body {
   letter-spacing: 0.02em;
 }
 
+#header-hint {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ztt-text-muted);
+  opacity: 0.7;
+}
+
+#header-hint.hidden {
+  display: none;
+}
+
+.header-hint-badge {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ztt-badge-text);
+  background: var(--ztt-badge-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
 /* Scrollable list */
 #list {
   overflow-y: auto;
@@ -175,7 +198,37 @@ html, body {
   color: var(--ztt-text-muted);
   white-space: nowrap;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subtitle-domain {
+  overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.subtitle-workspace {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  opacity: 0.6;
+}
+
+.subtitle-ws-icon {
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.subtitle-ws-icon svg {
+  width: 10px;
+  height: 10px;
+  fill: currentColor;
 }
 
 /* Right-aligned badge + arrow area */

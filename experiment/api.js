@@ -131,6 +131,54 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     // -----------------------------------------------------------------------
+    // Tab preview highlight
+    // -----------------------------------------------------------------------
+
+    let previewedTab = null;
+    let savedScrollPositions = null; // Map<scrollbox, scrollTop>
+
+    function applyPreview(tab) {
+      if (previewedTab && previewedTab !== tab) {
+        previewedTab.removeAttribute("zen-tabs-panel-preview");
+      }
+      if (!savedScrollPositions) {
+        savedScrollPositions = new Map();
+        const w = getWin();
+        if (w) {
+          for (const asb of w.document.querySelectorAll(".workspace-arrowscrollbox")) {
+            if (asb.scrollbox) {
+              savedScrollPositions.set(asb.scrollbox, asb.scrollbox.scrollTop);
+            }
+          }
+        }
+      }
+      tab.setAttribute("zen-tabs-panel-preview", "true");
+      previewedTab = tab;
+      tab.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+
+    function clearPreviewState() {
+      if (previewedTab) {
+        previewedTab.removeAttribute("zen-tabs-panel-preview");
+        previewedTab = null;
+      }
+      if (savedScrollPositions) {
+        const positions = savedScrollPositions;
+        savedScrollPositions = null;
+        const restore = () => {
+          for (const [scrollbox, scrollTop] of positions) {
+            scrollbox.scrollTo({ top: scrollTop, behavior: "instant" });
+          }
+        };
+        restore();
+        const w = getWin();
+        if (w) {
+          w.requestAnimationFrame(() => w.requestAnimationFrame(restore));
+        }
+      }
+    }
+
+    // -----------------------------------------------------------------------
     // Palette overlay
     // -----------------------------------------------------------------------
 
@@ -171,6 +219,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         `;
         w.document.documentElement.appendChild(animStyle);
+      }
+
+      if (!w.document.getElementById("zen-tabs-panel-preview-styles")) {
+        const previewStyle = w.document.createElement("style");
+        previewStyle.id = "zen-tabs-panel-preview-styles";
+        previewStyle.textContent = `
+          .tabbrowser-tab[zen-tabs-panel-preview] .tab-stack {
+            outline: 3px solid color-mix(in srgb, var(--zen-primary-color, AccentColor), white 60%) !important;
+            outline-offset: -3px;
+            border-radius: 10px;
+          }
+        `;
+        w.document.documentElement.appendChild(previewStyle);
       }
 
       const overlay = w.document.createElement("div");
@@ -235,6 +296,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function destroyOverlay() {
+      clearPreviewState();
       const w = getWin();
       if (!w) return;
       const overlay = w.document.getElementById(OVERLAY_ID);
@@ -496,6 +558,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!tab) return false;
           tab.scrollIntoView({ block: "center", behavior: "smooth" });
           return true;
+        },
+
+        async previewTab(domId) {
+          const tab = findTabByDomId(domId);
+          if (!tab) return false;
+          applyPreview(tab);
+          return true;
+        },
+
+        async clearPreview() {
+          clearPreviewState();
         },
 
         // Get workspaces with inline SVG icon content
