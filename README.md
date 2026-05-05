@@ -21,6 +21,7 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 - Sort tabs by last used
 - Unload tab - discard from memory
 - Settings
+- "Copy selected tab URLs" right click menu item when multiple tabs are selected
 
 **Cross-workspace tab switching** - Zen's workspace system isolates tabs at the API level. `browser.tabs.query()` only returns tabs in the current workspace, and `browser.tabs.update()` silently fails for tabs in other workspaces. Every other Firefox tab-switching extension is broken by this. Zen Tabs Panel uses a privileged Experiment API to access Zen's internal workspace APIs directly, making it the only extension that can reliably switch to any tab regardless of which workspace it's in.
 
