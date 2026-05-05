@@ -150,6 +150,27 @@ html, body {
   background: none;
 }
 
+/* Two-column grid for compact action items */
+.actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.compact-item {
+  height: 40px;
+  gap: 8px;
+  padding: 0 10px;
+}
+
+.compact-item .item-right {
+  gap: 4px;
+}
+
+.compact-item .action-preview {
+  display: none;
+}
+
 /* Icon */
 .item-icon {
   width: 20px;
@@ -245,9 +266,16 @@ html, body {
   font-weight: 500;
   color: var(--ztt-badge-text);
   background: var(--ztt-badge-bg);
-  padding: 3px 8px;
+  padding: 3px 0;
   border-radius: 4px;
   letter-spacing: 0.03em;
+  min-width: 22px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.item-badge.badge-wide {
+  min-width: 32px;
 }
 
 /* Duplicate tabs in tab info */

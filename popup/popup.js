@@ -47,22 +47,22 @@ function getActions() {
   return [
     { id: "go-to-previous-tab", label: "Previous", hotkey: "P", icon: "↔", preview: previousTabPreview },
     { id: "go-to-parent-tab", label: "Parent", hotkey: "⇧P", icon: "↑", needsParent: true, preview: parentTabPreview },
-    { id: "child-tabs", label: "Children", hotkey: "C", icon: "↓", isView: true, needsChildren: true, count: childTabCount },
-    { id: "sibling-tabs", label: "Siblings", hotkey: "⇧C", icon: "↔", isView: true, needsSiblings: true, count: siblingTabCount },
-    { id: "unvisited-tabs", label: "New tabs", hotkey: "N", icon: "●", isView: true, needsUnvisited: true, count: unvisitedTabCount },
-    { id: "last-visited", label: "Recent", hotkey: "R", icon: "◷", isView: true },
-    { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "⊜", isView: true, needsDuplicates: true, count: duplicateGroupCount },
-    { id: "tab-info", label: "Tab info", hotkey: "I", icon: "ⓘ", isView: true },
     { type: "separator" },
-    { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "⇥", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0 },
-    { id: "move-tab-to-start", label: "Move to start", hotkey: "S", icon: "⤒" },
-    { id: "move-tab-to-end", label: "Move to end", hotkey: "E", icon: "⤓" },
-    { id: "sort-tabs", label: "Sort by recent", hotkey: "O", icon: "⇅" },
-    { id: "sort-tabs-domain", label: "Sort by domain", hotkey: "G", icon: "⇅" },
-    { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "F", icon: "◎" },
-    { id: "unload-tab", label: "Unload", hotkey: "U", icon: "⏻" },
+    { id: "child-tabs", label: "Children", hotkey: "C", icon: "↓", isView: true, needsChildren: true, count: childTabCount, compact: true },
+    { id: "sibling-tabs", label: "Siblings", hotkey: "⇧C", icon: "↔", isView: true, needsSiblings: true, count: siblingTabCount, compact: true },
+    { id: "unvisited-tabs", label: "New tabs", hotkey: "N", icon: "●", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
+    { id: "last-visited", label: "Recent", hotkey: "R", icon: "◷", isView: true, compact: true },
+    { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "⊜", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
+    { id: "tab-info", label: "Tab info", hotkey: "I", icon: "ⓘ", isView: true, compact: true },
     { type: "separator" },
-    { id: "settings", label: "Settings", hotkey: "," , icon: "svg:gear" },
+    { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "⇥", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0, compact: true },
+    { id: "move-tab-to-start", label: "To start", hotkey: "S", icon: "⤒", compact: true },
+    { id: "move-tab-to-end", label: "To end", hotkey: "E", icon: "⤓", compact: true },
+    { id: "sort-tabs", label: "Sort recent", hotkey: "O", icon: "⇅", compact: true },
+    { id: "sort-tabs-domain", label: "Sort domain", hotkey: "G", icon: "⇅", compact: true },
+    { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "F", icon: "◎", compact: true },
+    { id: "unload-tab", label: "Unload", hotkey: "U", icon: "⏻", compact: true },
+    { id: "settings", label: "Settings", hotkey: "," , icon: "svg:gear", compact: true },
   ];
 }
 
@@ -98,9 +98,11 @@ function renderActions(actions, title) {
   selectedIndex = -1;
 
   listEl.innerHTML = "";
+  let gridContainer = null;
 
   for (const action of actions) {
     if (action.type === "separator") {
+      gridContainer = null;
       const sep = document.createElement("div");
       sep.className = "list-separator";
       listEl.appendChild(sep);
@@ -110,7 +112,7 @@ function renderActions(actions, title) {
     const disabled = isActionDisabled(action);
 
     const el = document.createElement("div");
-    el.className = "list-item" + (disabled ? " disabled" : "");
+    el.className = "list-item" + (disabled ? " disabled" : "") + (action.compact ? " compact-item" : "");
     el.dataset.id = action.id;
 
     // Build preview HTML for Previous/Parent
@@ -144,7 +146,7 @@ function renderActions(actions, title) {
 
     const rightContent = `
       ${previewHtml}
-      ${action.hotkey ? `<span class="item-badge">${action.hotkey}</span>` : ""}
+      ${action.hotkey ? `<span class="item-badge${action.hotkey.length > 1 ? " badge-wide" : ""}">${action.hotkey}</span>` : ""}
       <span class="item-arrow">${action.isView ? "›" : ""}</span>
     `;
 
@@ -173,7 +175,18 @@ function renderActions(actions, title) {
         });
       }
     }
-    listEl.appendChild(el);
+
+    if (action.compact) {
+      if (!gridContainer) {
+        gridContainer = document.createElement("div");
+        gridContainer.className = "actions-grid";
+        listEl.appendChild(gridContainer);
+      }
+      gridContainer.appendChild(el);
+    } else {
+      gridContainer = null;
+      listEl.appendChild(el);
+    }
   }
 
   updateSelection();
