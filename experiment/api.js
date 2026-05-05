@@ -21,7 +21,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
   content: "" !important;
   position: absolute !important;
   top: 50% !important;
-  right: 4px !important;
+  right: 8px !important;
   transform: translateY(-50%) !important;
   width: 8px !important;
   height: 8px !important;
@@ -31,6 +31,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
   z-index: 9999 !important;
   pointer-events: none !important;
+}
+.tabbrowser-tab[unread="true"] .tab-label-container {
+  margin-right: 22px !important;
 }
 .tabbrowser-tab[unread="true"]:hover .tab-content::after {
   display: none !important;
@@ -123,6 +126,76 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       if (!w || !w.document) return [];
       return Array.from(w.document.querySelectorAll(".tabbrowser-tab"));
+    }
+
+    const DUP_INDICATOR_CSS = `
+        .tabbrowser-tab[zen-tabs-panel-duplicate] .tab-content {
+          position: relative !important;
+        }
+        .tabbrowser-tab[zen-tabs-panel-duplicate] .tab-content::before {
+          content: "" !important;
+          position: absolute !important;
+          top: 50% !important;
+          right: 5px !important;
+          transform: translateY(-50%) rotate(45deg) !important;
+          width: 7px !important;
+          height: 7px !important;
+          background: #f59e0b !important;
+          border: 1.5px solid rgba(0, 0, 0, 0.3) !important;
+          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+          z-index: 9999 !important;
+          pointer-events: none !important;
+        }
+        .tabbrowser-tab[zen-tabs-panel-duplicate][unread="true"] .tab-content::before {
+          right: 22px !important;
+        }
+        .tabbrowser-tab[unread="true"] .tab-content::after {
+          right: 8px !important;
+        }
+        .tabbrowser-tab[unread="true"] .tab-label-container {
+          margin-right: 22px !important;
+        }
+        .tabbrowser-tab[zen-tabs-panel-duplicate]:hover .tab-content::before {
+          display: none !important;
+        }
+        .tabbrowser-tab[zen-tabs-panel-duplicate] .tab-label-container {
+          margin-right: 22px !important;
+        }
+        .tabbrowser-tab[zen-tabs-panel-duplicate][unread="true"] .tab-label-container {
+          margin-right: 34px !important;
+        }
+    `;
+
+    function ensureDuplicateStyles() {
+      const w = getWin();
+      if (!w) return;
+      let el = w.document.getElementById("zen-tabs-panel-dup-indicator-styles");
+      if (!el) {
+        el = w.document.createElement("style");
+        el.id = "zen-tabs-panel-dup-indicator-styles";
+        w.document.documentElement.appendChild(el);
+      }
+      el.textContent = DUP_INDICATOR_CSS;
+    }
+
+    function syncDuplicateAttributes() {
+      ensureDuplicateStyles();
+      const tabs = getAllTabElements();
+      const urlCounts = {};
+      for (const tab of tabs) {
+        const url = tab.linkedBrowser?.currentURI?.spec || "";
+        if (url && url !== "about:newtab" && url !== "about:blank") {
+          urlCounts[url] = (urlCounts[url] || 0) + 1;
+        }
+      }
+      for (const tab of tabs) {
+        const url = tab.linkedBrowser?.currentURI?.spec || "";
+        if (urlCounts[url] > 1) {
+          tab.setAttribute("zen-tabs-panel-duplicate", "true");
+        } else {
+          tab.removeAttribute("zen-tabs-panel-duplicate");
+        }
+      }
     }
 
     // Activate a native tab, switching workspaces if needed
@@ -571,6 +644,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
             .filter(t => !t.hasAttribute("zen-essential"))
             .map(t => t.linkedBrowser?.currentURI?.spec || "")
             .filter(url => url !== "");
+        },
+
+        async syncDuplicates() {
+          syncDuplicateAttributes();
         },
 
         async getTabInfo(domId) {

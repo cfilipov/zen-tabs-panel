@@ -121,6 +121,24 @@ browser.tabs.onActivated.addListener(async (activeInfo) => {
 });
 
 // ---------------------------------------------------------------------------
+// Duplicate indicator sync
+// ---------------------------------------------------------------------------
+
+browser.tabs.onCreated.addListener(() => {
+  browser.zenWorkspaces.syncDuplicates();
+});
+
+browser.tabs.onRemoved.addListener(() => {
+  browser.zenWorkspaces.syncDuplicates();
+});
+
+browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.url) {
+    browser.zenWorkspaces.syncDuplicates();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Command handlers
 //
 // goToPreviousTab and goToParentTab are handled by the experiment API
@@ -376,3 +394,4 @@ browser.menus.onClicked.addListener(async (info) => {
 // ---------------------------------------------------------------------------
 
 browser.zenWorkspaces.getActiveWorkspaceId().catch(() => {});
+browser.zenWorkspaces.syncDuplicates().catch(() => {});
