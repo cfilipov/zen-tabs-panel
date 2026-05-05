@@ -489,6 +489,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
             .filter(url => url !== "");
         },
 
+        async scrollCurrentTabIntoView() {
+          const w = getWin();
+          if (!w || !w.gBrowser) return false;
+          const tab = w.gBrowser.selectedTab;
+          if (!tab) return false;
+          tab.scrollIntoView({ block: "center", behavior: "smooth" });
+          return true;
+        },
+
         // Get workspaces with inline SVG icon content
         async getWorkspacesWithIcons() {
           const w = getWin();

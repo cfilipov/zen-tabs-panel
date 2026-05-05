@@ -48,6 +48,7 @@ function getActions() {
     { id: "move-tab-to-end", label: "Move to end", hotkey: "E", icon: "⤓" },
     { id: "sort-tabs", label: "Sort by recent", hotkey: "O", icon: "⇅" },
     { id: "sort-tabs-domain", label: "Sort by domain", hotkey: "G", icon: "⇅" },
+    { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "F", icon: "◎" },
     { id: "unload-tab", label: "Unload", hotkey: "D", icon: "⏻" },
     { type: "separator" },
     { id: "settings", label: "Settings", hotkey: "," , icon: "svg:gear" },
@@ -343,6 +344,7 @@ function activateAction(action) {
     case "go-to-parent-tab":
     case "move-tab-to-start":
     case "move-tab-to-end":
+    case "scroll-to-current-tab":
     case "unload-tab":
       // Background handlers close the palette themselves
       ext.runtime.sendMessage({ type: action.id }).catch(() => {});

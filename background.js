@@ -236,6 +236,13 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })();
       break;
 
+    case "scroll-to-current-tab":
+      (async () => {
+        await browser.zenWorkspaces.hidePalette();
+        await browser.zenWorkspaces.scrollCurrentTabIntoView();
+      })();
+      break;
+
     case "unload-tab": {
       (async () => {
         await browser.zenWorkspaces.hidePalette();

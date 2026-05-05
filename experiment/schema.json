@@ -114,6 +114,13 @@
         "parameters": []
       },
       {
+        "name": "scrollCurrentTabIntoView",
+        "type": "function",
+        "async": true,
+        "description": "Scroll the current tab into view in the native tab sidebar",
+        "parameters": []
+      },
+      {
         "name": "getWorkspacesWithIcons",
         "type": "function",
         "async": true,

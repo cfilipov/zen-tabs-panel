@@ -19,6 +19,7 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 - Move to workspace - move tabs to another workspace without switching away (placed at top of target workspace's tab list). Supports multiselected tabs (Cmd+click).
 - Move tab to start / end of tab bar
 - Sort tabs by last used
+- Scroll to current tab - scroll the sidebar to center the active tab
 - Unload tab - discard from memory
 - Settings
 - "Copy selected tab URLs" right click menu item when multiple tabs are selected
