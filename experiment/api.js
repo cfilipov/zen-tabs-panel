@@ -107,6 +107,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
     }
 
+    function unwrapFavicon(url) {
+      if (!url) return "";
+      if (url.startsWith("moz-remote-image://")) {
+        try {
+          const parsed = new URL(url);
+          return parsed.searchParams.get("url") || url;
+        } catch (e) {}
+      }
+      return url;
+    }
+
     // Get all tab elements across all workspaces from the DOM
     function getAllTabElements() {
       const w = getWin();
@@ -445,7 +456,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
               pinned: tab.pinned || false,
               active: tab.selected || false,
               lastAccessed: tab.lastAccessed || 0,
-              favIconUrl: tab.image || "",
+              favIconUrl: unwrapFavicon(tab.image),
               unread: tab.hasAttribute("unread"),
               openerTabDomId: tab.openerTab?.id || null,
               splitView: tab.hasAttribute("split-view"),
@@ -549,6 +560,66 @@ this.zenWorkspaces = class extends ExtensionAPI {
             .filter(t => !t.hasAttribute("zen-essential"))
             .map(t => t.linkedBrowser?.currentURI?.spec || "")
             .filter(url => url !== "");
+        },
+
+        async getTabInfo(domId) {
+          const w = getWin();
+          if (!w || !w.gBrowser) return null;
+          const tab = findTabByDomId(domId);
+          if (!tab) return null;
+
+          const url = tab.linkedBrowser?.currentURI?.spec || "";
+
+          // Session history
+          let sessionEntries = [];
+          try {
+            const state = JSON.parse(w.SessionStore.getTabState(tab));
+            sessionEntries = (state.entries || []).map(e => ({
+              url: e.url || "",
+              title: e.title || "",
+            }));
+          } catch (e) {}
+
+          // Memory and CPU via ChromeUtils.requestProcInfo
+          let memory = null;
+          let cpuTime = null;
+          try {
+            const outerWindowID = tab.linkedBrowser?.outerWindowID;
+            if (outerWindowID) {
+              const info = await ChromeUtils.requestProcInfo();
+              for (const child of info.children) {
+                for (const win of (child.windows || [])) {
+                  if (win.outerWindowId === outerWindowID) {
+                    memory = child.memory;
+                    cpuTime = child.cpuTime;
+                    break;
+                  }
+                }
+                if (memory !== null) break;
+              }
+            }
+          } catch (e) {}
+
+          // Duplicates
+          const allTabs = getAllTabElements();
+          const duplicateDomIds = allTabs
+            .filter(t => t.id !== domId && (t.linkedBrowser?.currentURI?.spec || "") === url)
+            .map(t => t.id);
+
+          return {
+            domId,
+            title: tab.label || "",
+            url,
+            favIconUrl: unwrapFavicon(tab.image),
+            pinned: tab.pinned || false,
+            workspaceId: tab.getAttribute("zen-workspace-id") || null,
+            lastAccessed: tab.lastAccessed || 0,
+            status: tab.hasAttribute("pending") ? "unloaded" : "loaded",
+            sessionEntries,
+            memory,
+            cpuTime,
+            duplicateDomIds,
+          };
         },
 
         async scrollCurrentTabIntoView() {

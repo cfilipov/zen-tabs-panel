@@ -308,6 +308,16 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       browser.zenWorkspaces.clearPreview();
       break;
 
+    case "close-tab":
+      browser.zenWorkspaces.closeTabByDomId(message.domId);
+      break;
+
+    case "get-tab-info":
+      return browser.zenWorkspaces.getTabInfo(message.domId);
+
+    case "get-history-visits":
+      return browser.history.getVisits({ url: message.url });
+
     case "get-selected-tab-dom-ids":
       return browser.zenWorkspaces.getSelectedTabDomIds();
 

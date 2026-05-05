@@ -12,13 +12,16 @@
     }
   },
 
+  "content_security_policy": "script-src 'self'; object-src 'self'; img-src 'self' data:;",
+
   "permissions": [
     "tabs",
     "alarms",
     "storage",
     "sessions",
     "menus",
-    "clipboardWrite"
+    "clipboardWrite",
+    "history"
   ],
 
   "experiment_apis": {

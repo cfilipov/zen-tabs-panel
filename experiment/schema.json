@@ -121,6 +121,15 @@
         "parameters": []
       },
       {
+        "name": "getTabInfo",
+        "type": "function",
+        "async": true,
+        "description": "Get detailed info about a tab including session history and memory usage",
+        "parameters": [
+          { "name": "domId", "type": "string" }
+        ]
+      },
+      {
         "name": "previewTab",
         "type": "function",
         "async": true,

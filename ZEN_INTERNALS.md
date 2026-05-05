@@ -256,15 +256,18 @@ Native tab elements (`gBrowser.selectedTab`, items from `gBrowser.tabs`, or `doc
 
 | Attribute | Example | Notes |
 |---|---|---|
-| `id` | `"1773377568372-76"` | Stable DOM ID, survives workspace swaps |
+| `id` | `"1773377568372-76"` | Stable DOM ID, survives workspace swaps. The prefix before `-` is the creation timestamp (ms since epoch). |
 | `label` | `"Page Title"` | Tab title |
-| `image` | `"data:image/png;base64,..."` | Favicon URL |
+| `image` | `"data:image/png;base64,..."` or `"moz-remote-image://?url=...&width=32&height=32"` | Favicon URL (see note below) |
 | `pinned` | `"true"` | Present on pinned tabs (includes Zen Essentials) |
 | `fadein` | `"true"` | Tab has finished loading animation |
 | `unread` | `"true"` | Tab opened in background, never activated. Removed on first activation |
 | `pending` | `"true"` | Tab has been unloaded/discarded from memory |
 | `selected` | (attribute presence) | Currently active tab |
 | `context` | `"tabContextMenu"` | Context menu ID |
+
+> **Favicon gotcha:** `tab.image` may be a raw `data:` URI OR wrapped in `moz-remote-image://?url=<encoded>&width=32&height=32`. The `moz-remote-image://` scheme is Firefox's internal image proxy for cross-process contexts. Extension popups (remote browser elements) cannot load `moz-remote-image://` URLs directly. To use the favicon in an extension popup, unwrap it: `new URL(tab.image).searchParams.get("url")` extracts the actual `data:` URI. Also note: `data:` URIs only load asynchronously in extension popups — check `img.complete` after a tick, not synchronously.
+
 | `linkedpanel` | `"panel-3-4"` | Associated panel ID |
 | `aria-posinset` | `"3"` | Position in tab set |
 | `aria-setsize` | `"8"` | Total tabs in set |

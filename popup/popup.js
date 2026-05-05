@@ -48,6 +48,7 @@ function getActions() {
     { id: "child-tabs", label: "Children", hotkey: "C", icon: "↓", isView: true, needsChildren: true, count: childTabCount },
     { id: "unvisited-tabs", label: "New tabs", hotkey: "N", icon: "●", isView: true, needsUnvisited: true, count: unvisitedTabCount },
     { id: "last-visited", label: "Recent", hotkey: "L", icon: "◷", isView: true },
+    { id: "tab-info", label: "Tab info", hotkey: "I", icon: "ⓘ", isView: true },
     { type: "separator" },
     { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "⇥", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0 },
     { id: "move-tab-to-start", label: "Move to start", hotkey: "S", icon: "⤒" },
@@ -109,9 +110,13 @@ function renderActions(actions, title) {
     // Build preview HTML for Previous/Parent
     let previewHtml = "";
     if (action.preview && !disabled) {
-      const canLoad = action.preview.favIconUrl && !action.preview.favIconUrl.startsWith("chrome://");
+      let prevFav = action.preview.favIconUrl || "";
+      if (prevFav.startsWith("moz-remote-image://")) {
+        try { prevFav = new URL(prevFav).searchParams.get("url") || ""; } catch (e) { prevFav = ""; }
+      }
+      const canLoad = prevFav && !prevFav.startsWith("chrome://");
       const iconHtml = canLoad
-        ? `<img class="preview-icon" src="${escapeAttr(action.preview.favIconUrl)}">`
+        ? `<img class="preview-icon" src="${escapeAttr(prevFav)}">`
         : `<span class="preview-icon-placeholder">○</span>`;
       const previewTitle = escapeHtml(action.preview.title || "Untitled");
       previewHtml = `<span class="action-preview">${iconHtml}<span class="preview-title">${previewTitle}</span></span>`;
@@ -241,9 +246,12 @@ function createTabElement(tab, badge) {
     domain = new URL(tab.url).hostname;
   } catch (e) {}
 
-  // Filter out chrome:// favicon URLs (not loadable from extension context)
-  const canLoadFavicon = tab.favIconUrl &&
-    !tab.favIconUrl.startsWith("chrome://");
+  // Unwrap moz-remote-image:// and filter chrome:// URLs
+  let favicon = tab.favIconUrl || "";
+  if (favicon.startsWith("moz-remote-image://")) {
+    try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
+  }
+  const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
 
   let wsHtml = "";
   if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
@@ -263,7 +271,7 @@ function createTabElement(tab, badge) {
 
   el.innerHTML = `
     ${canLoadFavicon
-      ? `<img class="item-icon" src="${escapeAttr(tab.favIconUrl)}">`
+      ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
       : `<span class="item-icon-placeholder">○</span>`}
     <span class="item-text">
       <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
@@ -279,6 +287,73 @@ function createTabElement(tab, badge) {
   }
 
   el.addEventListener("click", () => activateTab(tab.domId));
+  return el;
+}
+
+function createDuplicateTabElement(tab) {
+  const el = document.createElement("div");
+  el.className = "list-item duplicate-item";
+  el.dataset.domId = tab.domId;
+
+  let domain = "";
+  try { domain = new URL(tab.url).hostname; } catch (e) {}
+
+  let dupFavicon = tab.favIconUrl || "";
+  if (dupFavicon.startsWith("moz-remote-image://")) {
+    try { dupFavicon = new URL(dupFavicon).searchParams.get("url") || ""; } catch (e) { dupFavicon = ""; }
+  }
+  const canLoadFavicon = dupFavicon && !dupFavicon.startsWith("chrome://");
+
+  let wsHtml = "";
+  if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
+    const ws = workspaceMap[tab.workspaceId];
+    if (ws) {
+      const wsIcon = ws.svgContent
+        ? `<span class="subtitle-ws-icon">${ws.svgContent}</span>`
+        : "";
+      wsHtml = `<span class="subtitle-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+    }
+  }
+
+  const subtitleParts = [
+    domain ? `<span class="subtitle-domain">${escapeHtml(domain)}</span>` : "",
+    wsHtml,
+  ].filter(Boolean).join("");
+
+  el.innerHTML = `
+    ${canLoadFavicon
+      ? `<img class="item-icon" src="${escapeAttr(dupFavicon)}">`
+      : `<span class="item-icon-placeholder">○</span>`}
+    <span class="item-text">
+      <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
+      ${subtitleParts ? `<span class="item-subtitle">${subtitleParts}</span>` : ""}
+    </span>
+    <span class="item-right">
+      <span class="duplicate-close" title="Close tab">✕</span>
+    </span>
+  `;
+
+  const img = el.querySelector("img.item-icon");
+  if (img) {
+    img.addEventListener("error", () => { img.style.display = "none"; });
+  }
+
+  el.querySelector(".duplicate-close").addEventListener("click", (e) => {
+    e.stopPropagation();
+    ext.runtime.sendMessage({ type: "close-tab", domId: tab.domId }).catch(() => {});
+    el.remove();
+  });
+
+  el.addEventListener("click", () => activateTab(tab.domId));
+
+  el.addEventListener("mouseenter", () => {
+    ext.runtime.sendMessage({ type: "preview-tab", domId: tab.domId }).catch(() => {});
+  });
+
+  el.addEventListener("mouseleave", () => {
+    ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+  });
+
   return el;
 }
 
@@ -411,6 +486,10 @@ function activateAction(action) {
 
     case "last-visited":
       showLastVisited();
+      break;
+
+    case "tab-info":
+      showTabInfo();
       break;
   }
 }
@@ -605,6 +684,287 @@ function renderWorkspaceList(workspaces, title) {
 
   updateSelection();
   updateHeader(title);
+}
+
+function formatDuration(ms) {
+  if (ms < 0) return "unknown";
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+function formatBytes(bytes) {
+  if (bytes == null) return "N/A";
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function showTabInfo() {
+  currentView = "tab-info";
+  items = [];
+  selectedIndex = -1;
+
+  let allTabs, info;
+  try {
+    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    const activeTab = allTabs.find((t) => t.active);
+    if (!activeTab) { renderTabInfo(null); return; }
+    info = await ext.runtime.sendMessage({ type: "get-tab-info", domId: activeTab.domId });
+  } catch (e) {
+    renderTabInfo(null);
+    return;
+  }
+  if (!info) { renderTabInfo(null); return; }
+
+  // Gather visits for all unique URLs in session history + current URL
+  const urlSet = new Set();
+  if (info.url && !info.url.startsWith("about:")) urlSet.add(info.url);
+  for (const entry of info.sessionEntries) {
+    if (entry.url && !entry.url.startsWith("about:")) urlSet.add(entry.url);
+  }
+
+  const titleByUrl = {};
+  for (const entry of info.sessionEntries) {
+    if (!titleByUrl[entry.url]) titleByUrl[entry.url] = entry.title;
+  }
+  if (!titleByUrl[info.url]) titleByUrl[info.url] = info.title;
+
+  let allVisits = [];
+  try {
+    const results = await Promise.all(
+      [...urlSet].map((url) => ext.runtime.sendMessage({ type: "get-history-visits", url }).then(
+        (visits) => visits.map((v) => ({ ...v, url, title: titleByUrl[url] || url })),
+        () => []
+      ))
+    );
+    allVisits = results.flat();
+  } catch (e) {}
+
+  const duplicates = allTabs.filter((t) => info.duplicateDomIds.includes(t.domId));
+  renderTabInfo(info, allVisits, duplicates);
+  animateList("forward");
+}
+
+function formatTransition(t) {
+  const map = {
+    link: "link",
+    typed: "typed",
+    auto_bookmark: "bookmark",
+    auto_subframe: "frame",
+    manual_subframe: "frame",
+    generated: "generated",
+    auto_toplevel: "auto",
+    form_submit: "form",
+    reload: "reload",
+    keyword: "search",
+    keyword_generated: "search",
+  };
+  return map[t] || t || "";
+}
+
+function groupVisitsByDate(visits) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const dateFmt = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
+  const dayFmt = { weekday: "long", month: "long", day: "numeric" };
+  const groups = [];
+  const map = new Map();
+
+  for (const visit of visits) {
+    const d = new Date(visit.visitTime);
+    const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    let key, label;
+    let isMonth = false;
+    if (day >= today) {
+      key = "today";
+      label = "Today - " + d.toLocaleDateString(undefined, dateFmt);
+    } else if (day >= yesterday) {
+      key = "yesterday";
+      label = "Yesterday - " + d.toLocaleDateString(undefined, dateFmt);
+    } else if (day >= thisMonthStart) {
+      key = day.toISOString().slice(0, 10);
+      label = d.toLocaleDateString(undefined, dateFmt);
+    } else {
+      key = `${d.getFullYear()}-${d.getMonth()}`;
+      label = d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      isMonth = true;
+    }
+
+    if (!map.has(key)) {
+      const group = { label, isMonth, visits: [], subgroups: null };
+      map.set(key, group);
+      groups.push(group);
+    }
+    map.get(key).visits.push(visit);
+  }
+
+  // Build subgroups for month groups
+  for (const group of groups) {
+    if (!group.isMonth) continue;
+    const dayMap = new Map();
+    group.subgroups = [];
+    for (const visit of group.visits) {
+      const d = new Date(visit.visitTime);
+      const dayKey = d.toISOString().slice(0, 10);
+      if (!dayMap.has(dayKey)) {
+        const sub = { label: d.toLocaleDateString(undefined, dayFmt), visits: [] };
+        dayMap.set(dayKey, sub);
+        group.subgroups.push(sub);
+      }
+      dayMap.get(dayKey).visits.push(visit);
+    }
+  }
+
+  return groups;
+}
+
+function renderVisitRows(visits) {
+  let html = `<div class="info-history-table">`;
+  for (const visit of visits) {
+    const d = new Date(visit.visitTime);
+    const datePart = d.toLocaleDateString([], { month: "short", day: "numeric" });
+    const timePart = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const transition = formatTransition(visit.transition);
+    html += `<div class="info-history-row">`;
+    html += `<span class="info-history-date">${datePart}</span>`;
+    html += `<span class="info-history-time">${timePart}</span>`;
+    html += `<span class="info-history-event">${escapeHtml(transition)}</span>`;
+    html += `</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = d.toDateString() === yesterday.toDateString();
+  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (isToday) return time;
+  if (isYesterday) return `Yesterday ${time}`;
+  return d.toLocaleDateString([], { month: "short", day: "numeric" }) + ` ${time}`;
+}
+
+function renderTabInfo(info, visits, duplicates) {
+  listEl.innerHTML = "";
+
+  if (!info) {
+    listEl.innerHTML = `<div class="empty-state">No tab info available</div>`;
+    updateHeader("Tab info");
+    return;
+  }
+
+  const now = Date.now();
+
+  let domain = "";
+  try { domain = new URL(info.url).hostname; } catch (e) {}
+
+  let infoFavicon = info.favIconUrl || "";
+  if (infoFavicon.startsWith("moz-remote-image://")) {
+    try { infoFavicon = new URL(infoFavicon).searchParams.get("url") || ""; } catch (e) { infoFavicon = ""; }
+  }
+  const canLoadFavicon = infoFavicon && !infoFavicon.startsWith("chrome://");
+  const faviconHtml = canLoadFavicon
+    ? `<img class="info-favicon" src="${escapeAttr(infoFavicon)}">`
+    : `<span class="info-favicon-placeholder">○</span>`;
+
+  let html = "";
+
+  // Header
+  html += `<div class="info-header">
+    ${faviconHtml}
+    <div class="info-header-text">
+      <div class="info-header-title">${escapeHtml(info.title || "Untitled")}</div>
+      <div class="info-header-url">${escapeHtml(domain)}</div>
+    </div>
+  </div>`;
+
+  // Stats grid (two columns)
+  html += `<div class="info-grid">`;
+
+  // Tab age from domId timestamp
+  const createdTs = parseInt(info.domId.split("-")[0]);
+  if (createdTs > 1e12) {
+    html += `<div class="info-cell"><span class="info-label">Tab age</span><span class="info-value">${formatDuration(now - createdTs)}</span></div>`;
+  }
+
+  if (visits && visits.length > 0) {
+    const firstVisit = Math.min(...visits.map((v) => v.visitTime));
+    html += `<div class="info-cell"><span class="info-label">First visited</span><span class="info-value">${formatDuration(now - firstVisit)} ago</span></div>`;
+  }
+
+  html += `<div class="info-cell"><span class="info-label">Memory</span><span class="info-value">${formatBytes(info.memory)}</span></div>`;
+
+  if (info.cpuTime != null) {
+    html += `<div class="info-cell"><span class="info-label">CPU time</span><span class="info-value">${(info.cpuTime / 1e6).toFixed(0)} ms</span></div>`;
+  }
+
+  if (visits && visits.length > 0) {
+    html += `<div class="info-cell"><span class="info-label">Total visits</span><span class="info-value">${visits.length}</span></div>`;
+  }
+
+  if (info.duplicateDomIds.length > 0) {
+    html += `<div class="info-cell"><span class="info-label">Duplicates</span><span class="info-value">${info.duplicateDomIds.length}</span></div>`;
+  }
+
+  html += `</div>`;
+
+  // Duplicates (before history)
+  if (duplicates && duplicates.length > 0) {
+    html += `<div class="info-section info-duplicates-section">`;
+    html += `<div class="info-section-title">Duplicate tabs (${duplicates.length})</div>`;
+    html += `</div>`;
+  }
+
+  // Combined visit history grouped by date
+  if (visits && visits.length > 0) {
+    const sorted = [...visits].sort((a, b) => b.visitTime - a.visitTime);
+    const groups = groupVisitsByDate(sorted);
+    html += `<div class="info-section">`;
+    html += `<div class="info-section-title">History</div>`;
+    for (const group of groups) {
+      html += `<details class="info-date-details" open>`;
+      html += `<summary class="info-date-group">${escapeHtml(group.label)}</summary>`;
+      if (group.subgroups) {
+        for (const sub of group.subgroups) {
+          html += `<details class="info-date-details info-date-sub" open>`;
+          html += `<summary class="info-date-subgroup">${escapeHtml(sub.label)}</summary>`;
+          html += renderVisitRows(sub.visits);
+          html += `</details>`;
+        }
+      } else {
+        html += renderVisitRows(group.visits);
+      }
+      html += `</details>`;
+    }
+    html += `</div>`;
+  }
+
+  listEl.innerHTML = html;
+
+  if (duplicates && duplicates.length > 0) {
+    const section = listEl.querySelector(".info-duplicates-section");
+    for (const tab of duplicates) {
+      section.appendChild(createDuplicateTabElement(tab));
+    }
+  }
+
+  const img = listEl.querySelector("img.info-favicon");
+  if (img) {
+    img.addEventListener("error", () => { img.style.display = "none"; });
+  }
+
+  updateHeader("Tab info");
 }
 
 function moveToWorkspace(workspaceId) {
