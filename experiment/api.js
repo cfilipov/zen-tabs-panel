@@ -318,9 +318,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
             }
           }
 
-          // Sort by lastAccessed descending, filter out visible tabs
+          // Sort by lastAccessed descending, filter out visible and unread tabs
           const candidates = allTabs
-            .filter((t) => !visibleDomIds.has(t.id))
+            .filter((t) => !visibleDomIds.has(t.id) && !t.hasAttribute("unread"))
             .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
 
           if (candidates.length === 0) return false;

@@ -408,7 +408,7 @@ async function showActionsMenu() {
       allTabs.filter((t) => t.splitGroupId === activeTab.splitGroupId).forEach((t) => visibleDomIds.add(t.domId));
     }
     const candidates = allTabs
-      .filter((t) => !visibleDomIds.has(t.domId))
+      .filter((t) => !visibleDomIds.has(t.domId) && !t.unread)
       .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
     previousTabPreview = candidates.length > 0
       ? { title: candidates[0].title, favIconUrl: candidates[0].favIconUrl }
