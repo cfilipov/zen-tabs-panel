@@ -52,24 +52,24 @@ function activateTab(domId) {
 function getActions() {
   return [
     { id: "go-to-previous-tab", label: "Previous", hotkey: "P", icon: "svg:arrow-left-right", preview: previousTabPreview },
-    { id: "go-to-parent-tab", label: "Parent", hotkey: "⇧P", icon: "svg:move-up", needsParent: true, preview: parentTabPreview },
+    { id: "go-to-parent-tab", label: "Parent", hotkey: "T", icon: "svg:move-up", needsParent: true, preview: parentTabPreview },
     { type: "separator" },
     { id: "child-tabs", label: "Children", hotkey: "C", icon: "svg:move-down", isView: true, needsChildren: true, count: childTabCount, compact: true },
-    { id: "sibling-tabs", label: "Siblings", hotkey: "⇧C", icon: "svg:git-branch", isView: true, needsSiblings: true, count: siblingTabCount, compact: true },
-    { id: "unvisited-tabs", label: "New tabs", hotkey: "A", icon: "svg:circle-dot", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
+    { id: "sibling-tabs", label: "Siblings", hotkey: "B", icon: "svg:git-branch", isView: true, needsSiblings: true, count: siblingTabCount, compact: true },
+    { id: "unvisited-tabs", label: "New tabs", hotkey: "N", icon: "svg:circle-dot", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
     { id: "last-visited", label: "Recent", hotkey: "R", icon: "svg:clock", isView: true, compact: true },
-    { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "svg:copy", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
-    { id: "tab-info", label: "Tab info", hotkey: "T", icon: "svg:info", isView: true, compact: true },
-    { id: "domains", label: "Domains", hotkey: "Q", icon: "svg:globe", isView: true, compact: true },
+    { id: "duplicates", label: "Duplicates", hotkey: "K", icon: "svg:copy", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
+    { id: "tab-info", label: "Tab info", hotkey: "I", icon: "svg:info", isView: true, compact: true },
+    { id: "domains", label: "Domains", hotkey: "H", icon: "svg:globe", isView: true, compact: true },
     { id: "tabs-by-age", label: "Tabs by age", hotkey: "J", icon: "svg:calendar-clock", isView: true, compact: true },
     { id: "most-visited", label: "Most visited", hotkey: "V", icon: "svg:star", isView: true, compact: true },
     { type: "separator" },
     { id: "move-tab-to-start", label: "Move to start", hotkey: "S", icon: "svg:arrow-up-to-line", compact: true },
-    { id: "move-tab-to-end", label: "Move to end", hotkey: "B", icon: "svg:arrow-down-to-line", compact: true },
+    { id: "move-tab-to-end", label: "Move to end", hotkey: "E", icon: "svg:arrow-down-to-line", compact: true },
     { id: "reorder-tabs", label: "Reorder tabs", hotkey: "O", icon: "svg:arrow-up-down", isView: true, compact: true },
     { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "svg:arrow-right-to-line", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0, compact: true },
-    { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "F", icon: "svg:locate", compact: true },
-    { id: "unload-tab", label: "Unload", hotkey: "X", icon: "svg:moon", compact: true },
+    { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "L", icon: "svg:locate", compact: true },
+    { id: "unload-tab", label: "Unload", hotkey: "U", icon: "svg:moon", compact: true },
     { id: "settings", label: "Settings", hotkey: "," , icon: "svg:gear", compact: true },
   ];
 }
@@ -1973,6 +1973,10 @@ async function init() {
       case "last-visited": await showLastVisited(); break;
       case "duplicates": await showDuplicates(); break;
       case "tab-info": await showTabInfo(); break;
+      case "domains": await showDomains(); break;
+      case "tabs-by-age": await showTabsByAge(); break;
+      case "most-visited": await showMostVisited(); break;
+      case "reorder-tabs": showReorderTabs(); break;
       case "move-to-workspace": await showMoveToWorkspace(); break;
     }
   } else {

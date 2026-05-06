@@ -37,28 +37,28 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 
 **Keyboard shortcuts** (configurable via `about:addons` › Manage Extension Shortcuts):
 
-All global shortcuts use `Ctrl+Option` as the modifier. The letter key matches the in-panel hotkey, so you only need to learn one set of keys. Some keys are reassigned from their natural mnemonic to avoid conflicts with Firefox/Zen built-in shortcuts (see `KEYBINDING_CONFLICTS.md`).
+All global shortcuts use `Ctrl+Cmd` as the modifier. The letter key matches the in-panel hotkey, so you only need to learn one set of keys. Some keys are reassigned to avoid macOS system shortcut conflicts (see `KEYBINDING_CONFLICTS.md`).
 
 | Action | Global shortcut | Panel key |
 |---|---|---|
-| Open palette | `Ctrl+Option+Space` | — |
-| Previous tab | `Ctrl+Option+P` | `P` |
-| Parent tab | — | `⇧P` |
-| Children | `Ctrl+Option+C` | `C` |
-| Siblings | — | `⇧C` |
-| New tabs | `Ctrl+Option+A` | `A` |
-| Recent | `Ctrl+Option+R` | `R` |
-| Duplicates | `Ctrl+Option+D` | `D` |
-| Tab info | `Ctrl+Option+T` | `T` |
-| Domains | — | `Q` |
-| Tabs by age | — | `J` |
-| Most visited | — | `V` |
-| Move to workspace | `Ctrl+Option+M` | `M` |
-| Move to start | `Ctrl+Option+S` | `S` |
-| Move to end | `Ctrl+Option+B` | `B` |
-| Reorder tabs | — | `O` |
-| Scroll to tab | `Ctrl+Option+F` | `F` |
-| Unload tab | `Ctrl+Option+X` | `X` |
+| Open palette | `Ctrl+Cmd+.` | — |
+| Previous tab | `Ctrl+Cmd+P` | `P` |
+| Parent tab | `Ctrl+Cmd+T` | `T` |
+| Children | `Ctrl+Cmd+C` | `C` |
+| Siblings | `Ctrl+Cmd+B` | `B` |
+| New tabs | `Ctrl+Cmd+N` | `N` |
+| Recent | `Ctrl+Cmd+R` | `R` |
+| Duplicates | `Ctrl+Cmd+K` | `K` |
+| Tab info | `Ctrl+Cmd+I` | `I` |
+| Domains | `Ctrl+Cmd+H` | `H` |
+| Tabs by age | `Ctrl+Cmd+J` | `J` |
+| Most visited | `Ctrl+Cmd+V` | `V` |
+| Move to start | `Ctrl+Cmd+S` | `S` |
+| Move to end | `Ctrl+Cmd+E` | `E` |
+| Reorder tabs | `Ctrl+Cmd+O` | `O` |
+| Move to workspace | `Ctrl+Cmd+M` | `M` |
+| Scroll to tab | `Ctrl+Cmd+L` | `L` |
+| Unload tab | `Ctrl+Cmd+U` | `U` |
 | Settings | — | `,` |
 
 **Settings** (accessible from the palette or `about:addons` › Extensions › Zen Tabs Panel › Preferences):

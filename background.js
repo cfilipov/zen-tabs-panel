@@ -202,6 +202,10 @@ browser.commands.onCommand.addListener((command) => {
     case "last-visited":
     case "duplicates":
     case "tab-info":
+    case "domains":
+    case "tabs-by-age":
+    case "most-visited":
+    case "reorder-tabs":
     case "move-to-workspace":
       browser.zenWorkspaces.showPalette(command);
       break;

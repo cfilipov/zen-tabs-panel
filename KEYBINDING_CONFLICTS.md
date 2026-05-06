@@ -2,45 +2,35 @@
 
 ## Background
 
-This extension uses `Ctrl+Option` (`MacCtrl+Alt` in Firefox manifest syntax) as the modifier for all global keyboard shortcuts. Some `Ctrl+Option+letter` combinations conflict with Firefox/Zen built-in shortcuts and cannot be used.
+This extension uses `Ctrl+Cmd` (`MacCtrl+Command` in Firefox manifest syntax) as the modifier for all global keyboard shortcuts. Some `Ctrl+Cmd+letter` combinations conflict with macOS system shortcuts and cannot be used.
 
-## How conflicts work
+Firefox's `commands` API limits shortcuts to two modifiers + a key, so `Ctrl+Cmd+Shift+key` combinations are not possible.
 
-Firefox registers browser shortcuts via `<key>` elements in `<keyset>` with `accel,alt` modifiers. On macOS, `accel` maps to `Cmd`, but Firefox's key matching also intercepts `Ctrl+Option` combinations for these same keys — consuming the event before the extension command fires.
+## Why Ctrl+Cmd?
 
-Additionally, Firefox's `commands` API limits shortcuts to two modifiers + a key, so `Ctrl+Option+Shift+key` combinations are not possible.
+Previous iterations used `Ctrl+Option` (`MacCtrl+Alt`), but this had two problems:
 
-## Conflicting keys (cannot use with Ctrl+Option)
+1. **Firefox keyset conflicts** - Firefox registers browser shortcuts via `<key>` elements with `accel,alt` modifiers. On macOS, Firefox's key matching intercepts `Ctrl+Option` combinations for these keys, consuming the event before the extension command fires. Affected keys: I, E, U, N, and many others.
 
-| Key | Firefox/Zen binding | ID |
-|-----|--------------------|----|
-| `I` | Toggle DevTools Toolbox | `key_toggleToolbox` |
-| `E` | Network Monitor | `key_netmonitor` |
-| `U` | View Page Source / Zen Split Unsplit | `key_viewSourceSafari` / `zen-split-view-unsplit` |
-| `N` | (macOS-level conflict) | — |
-| `M` | Responsive Design Mode | `key_responsiveDesignMode` |
-| `R` | Reader View | `key_toggleReaderMode` |
-| `F` | Search / Find | `key_search2` |
-| `G` | Zen Split View Grid | `zen-split-view-grid` |
-| `H` | Hide Other Apps (macOS) | `key_hideOtherAppsCmdMac` |
-| `K` | Web Console | `key_webconsole` |
-| `L` | Inspector | `key_inspector` |
-| `V` | Zen Split View Vertical | `zen-split-view-vertical` |
-| `W` | DOM Inspector | `key_dom` |
-| `Z` | JS Debugger | `key_jsdebugger` |
+2. **Terminal emulator conflicts** - Browser-based terminal emulators (xterm.js, ttyd) consume all `Ctrl+Option` key combinations as terminal escape sequences, making the extension shortcuts unusable when a terminal tab has focus.
 
-## Working keys (confirmed free)
+`Ctrl+Cmd` avoids both issues - Firefox has no built-in `Ctrl+Cmd` shortcuts, and terminal emulators don't intercept Cmd-based combinations.
 
-`A`, `B`, `C`, `D`, `J`, `O`, `P`, `Q`, `S`, `T`, `X`, `Y`, `Space`
+## macOS system conflicts (cannot use with Ctrl+Cmd)
 
-## Keys that conflict but still work via manifest commands
-
-Some keys appear in the conflict list but work anyway because the extension command takes priority in practice: `C`, `D`, `M`, `R`, `F`, `S`. This is inconsistent — some `accel,alt` keyset entries block extension commands while others don't (possibly depending on whether they have an active `command` attribute).
+| Key | macOS action |
+|-----|-------------|
+| `D` | Dictionary lookup |
+| `F` | Toggle fullscreen |
+| `Q` | Lock Screen |
 
 ## Workaround
 
-Actions whose natural mnemonic key conflicts are reassigned to a free letter:
-- New tabs: `N` → `A`
-- Tab info: `I` → `T`
-- Move to end: `E` → `B` (bottom)
-- Unload: `U` → `X`
+Actions whose natural mnemonic key conflicts with macOS are reassigned:
+- Duplicates: `D` -> `K`
+- Scroll to tab: `F` -> `L` (locate)
+- Domains: `Q` -> `H` (hosts)
+
+## All confirmed working keys with Ctrl+Cmd
+
+`B`, `C`, `E`, `H`, `I`, `J`, `K`, `L`, `M`, `N`, `O`, `P`, `R`, `S`, `T`, `U`, `V`, `Period`
