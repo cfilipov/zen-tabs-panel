@@ -96,12 +96,6 @@
       "suggested_key": { "default": "MacCtrl+Alt+B" },
       "description": "Move tab to end"
     },
-    "sort-tabs-by-recent": {
-      "description": "Sort tabs by recent"
-    },
-    "sort-tabs-by-domain": {
-      "description": "Sort tabs by domain"
-    },
     "scroll-to-current-tab": {
       "suggested_key": { "default": "MacCtrl+Alt+F" },
       "description": "Scroll to current tab"

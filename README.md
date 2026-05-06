@@ -19,9 +19,11 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 - Tabs by last visited - all tabs sorted by recency, with workspace filter toggle (`W` key). Hovering or arrow-keying through any tab list highlights and scrolls to the tab in the sidebar.
 - Tab info - detailed view of the current tab: age, memory/CPU usage, visit history (grouped by date, collapsible), and duplicate tab detection with close buttons
 - Duplicates - view all duplicate tabs across all workspaces, grouped by URL, with workspace indicators, tab age, hover preview, and close buttons. Duplicate tabs are marked with an amber diamond indicator in the sidebar (aligned with the unread dot indicator).
+- Domains - browse tabs grouped by domain with drill-down. Supports workspace filter (`W` key).
+- Tabs by age - list all tabs oldest first, grouped by age (today, yesterday, this week, etc.) with close buttons for cleaning up old tabs. Supports workspace filter (`W` key).
 - Move to workspace - move tabs to another workspace without switching away (placed at top of target workspace's tab list). Supports multiselected tabs (Cmd+click).
 - Move tab to start / end of tab bar
-- Sort tabs by last used
+- Reorder tabs - submenu with sort options: by recent, by domain (alphabetical or popularity), by age, inactive at bottom, group duplicates
 - Scroll to current tab - scroll the sidebar to center the active tab
 - Unload tab - discard from memory
 - Settings
@@ -44,11 +46,12 @@ All global shortcuts use `Ctrl+Option` as the modifier. The letter key matches t
 | Recent | `Ctrl+Option+R` | `R` |
 | Duplicates | `Ctrl+Option+D` | `D` |
 | Tab info | `Ctrl+Option+T` | `T` |
+| Domains | — | `Q` |
+| Tabs by age | — | `J` |
 | Move to workspace | `Ctrl+Option+M` | `M` |
 | Move to start | `Ctrl+Option+S` | `S` |
 | Move to end | `Ctrl+Option+B` | `B` |
-| Sort by recent | — | `O` |
-| Sort by domain | — | `G` |
+| Reorder tabs | — | `O` |
 | Scroll to tab | `Ctrl+Option+F` | `F` |
 | Unload tab | `Ctrl+Option+X` | `X` |
 | Settings | — | `,` |

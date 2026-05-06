@@ -182,32 +182,6 @@ browser.commands.onCommand.addListener((command) => {
     case "move-tab-to-end":
       moveTabToEnd();
       break;
-    case "sort-tabs-by-recent": {
-      (async () => {
-        const allTabs = await browser.tabs.query({ currentWindow: true });
-        const pinnedCount = allTabs.filter((t) => t.pinned).length;
-        const tabs = allTabs.filter((t) => !t.pinned);
-        tabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
-        await browser.tabs.move(tabs.map((t) => t.id), { index: pinnedCount });
-      })();
-      break;
-    }
-    case "sort-tabs-by-domain": {
-      (async () => {
-        const allTabs = await browser.tabs.query({ currentWindow: true });
-        const pinnedCount = allTabs.filter((t) => t.pinned).length;
-        const tabs = allTabs.filter((t) => !t.pinned);
-        tabs.sort((a, b) => {
-          try {
-            return new URL(a.url).hostname.localeCompare(new URL(b.url).hostname);
-          } catch (e) { return 0; }
-        });
-        for (let i = 0; i < tabs.length; i++) {
-          await browser.tabs.move(tabs[i].id, { index: pinnedCount + i });
-        }
-      })();
-      break;
-    }
     case "scroll-to-current-tab":
       browser.zenWorkspaces.scrollCurrentTabIntoView();
       break;
@@ -329,19 +303,83 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
     }
 
+    case "sort-tabs-recent-desc":
+    case "sort-tabs-recent-asc":
+    case "sort-tabs-domain-alpha":
+    case "sort-tabs-domain-pop":
+    case "sort-tabs-age-asc":
+    case "sort-tabs-age-desc":
+    case "sort-tabs-inactive-bottom":
+    case "sort-tabs-group-dups": {
+      (async () => {
+        await browser.zenWorkspaces.hidePalette();
+        const allTabs = await browser.tabs.query({ currentWindow: true });
+        const pinnedCount = allTabs.filter((t) => t.pinned).length;
+        const tabs = allTabs.filter((t) => !t.pinned);
+
+        const getDomain = (url) => { try { return new URL(url).hostname; } catch (e) { return ""; } };
+
+        switch (message.type) {
+          case "sort-tabs-recent-desc":
+            tabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
+            break;
+          case "sort-tabs-recent-asc":
+            tabs.sort((a, b) => a.lastAccessed - b.lastAccessed);
+            break;
+          case "sort-tabs-domain-alpha":
+            tabs.sort((a, b) => getDomain(a.url).localeCompare(getDomain(b.url)) || b.lastAccessed - a.lastAccessed);
+            break;
+          case "sort-tabs-domain-pop": {
+            const domainCounts = {};
+            for (const t of tabs) {
+              const d = getDomain(t.url);
+              domainCounts[d] = (domainCounts[d] || 0) + 1;
+            }
+            tabs.sort((a, b) => (domainCounts[getDomain(b.url)] || 0) - (domainCounts[getDomain(a.url)] || 0) || b.lastAccessed - a.lastAccessed);
+            break;
+          }
+          case "sort-tabs-age-asc":
+            tabs.sort((a, b) => a.id - b.id);
+            break;
+          case "sort-tabs-age-desc":
+            tabs.sort((a, b) => b.id - a.id);
+            break;
+          case "sort-tabs-inactive-bottom":
+            tabs.sort((a, b) => (a.discarded ? 1 : 0) - (b.discarded ? 1 : 0));
+            break;
+          case "sort-tabs-group-dups": {
+            const urlCount = {};
+            for (const t of tabs) urlCount[t.url] = (urlCount[t.url] || 0) + 1;
+            const dups = [];
+            const nonDups = [];
+            const seen = new Set();
+            for (const t of tabs) {
+              if (urlCount[t.url] > 1) {
+                dups.push(t);
+              } else {
+                nonDups.push(t);
+              }
+            }
+            dups.sort((a, b) => a.url.localeCompare(b.url));
+            tabs.length = 0;
+            tabs.push(...dups, ...nonDups);
+            break;
+          }
+        }
+
+        await browser.tabs.move(tabs.map((t) => t.id), { index: pinnedCount });
+      })();
+      break;
+    }
+
     case "sort-tabs-by-recent": {
       (async () => {
         await browser.zenWorkspaces.hidePalette();
         const allTabs = await browser.tabs.query({ currentWindow: true });
         const pinnedCount = allTabs.filter((t) => t.pinned).length;
         const tabs = allTabs.filter((t) => !t.pinned);
-        // Most recently accessed first → top of tab bar
         tabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
-        // Batch move preserves the array order
-        await browser.tabs.move(
-          tabs.map((t) => t.id),
-          { index: pinnedCount }
-        );
+        await browser.tabs.move(tabs.map((t) => t.id), { index: pinnedCount });
       })();
       break;
     }
@@ -353,17 +391,10 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const pinnedCount = allTabs.filter((t) => t.pinned).length;
         const tabs = allTabs.filter((t) => !t.pinned);
         tabs.sort((a, b) => {
-          try {
-            const domainA = new URL(a.url).hostname;
-            const domainB = new URL(b.url).hostname;
-            return domainA.localeCompare(domainB);
-          } catch (e) {
-            return 0;
-          }
+          try { return new URL(a.url).hostname.localeCompare(new URL(b.url).hostname); }
+          catch (e) { return 0; }
         });
-        for (let i = 0; i < tabs.length; i++) {
-          await browser.tabs.move(tabs[i].id, { index: pinnedCount + i });
-        }
+        await browser.tabs.move(tabs.map((t) => t.id), { index: pinnedCount });
       })();
       break;
     }

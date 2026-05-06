@@ -55,6 +55,9 @@ html, body {
   font-size: 12px;
   color: var(--ztt-text-muted);
   user-select: none;
+  background: light-dark(rgb(244, 244, 244), rgb(31, 31, 31));
+  z-index: 20;
+  position: relative;
 }
 
 #header.hidden,
@@ -88,14 +91,29 @@ html, body {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   font-size: 11px;
   color: var(--ztt-text-muted);
-  opacity: 0.7;
 }
 
 #header-hint.hidden {
   display: none;
+}
+
+.header-hint-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: opacity 0.1s ease, background 0.1s ease;
+}
+
+.header-hint-item:hover {
+  opacity: 1;
+  background: var(--ztt-bg-hover);
 }
 
 .header-hint-badge {
@@ -791,6 +809,45 @@ html, body {
   font-size: 14px;
   color: var(--ztt-text);
   padding: 2px 0;
+}
+
+/* Age tab close button */
+.age-close {
+  font-size: 14px;
+  color: var(--ztt-text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.1s ease, background 0.1s ease, color 0.1s ease;
+}
+
+.age-tab-item:hover .age-close {
+  opacity: 1;
+}
+
+.age-close:hover {
+  color: var(--ztt-text);
+  background: var(--ztt-bg-hover);
+}
+
+.subtitle-age {
+  color: var(--ztt-text-muted);
+  flex-shrink: 0;
+}
+
+/* Tabs by age group headers in list context */
+#list > .info-date-details {
+  padding: 0 6px;
+}
+
+#list > .info-date-details > .info-date-group {
+  position: sticky;
+  top: -6px;
+  z-index: 10;
+  background: light-dark(rgb(244, 244, 244), rgb(31, 31, 31));
+  padding-top: 14px;
+  margin-top: -6px;
 }
 
 /* View transition animations */

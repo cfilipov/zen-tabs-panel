@@ -25,6 +25,10 @@ const viewTitle = document.getElementById("view-title");
 const headerHint = document.getElementById("header-hint");
 
 let recentWorkspaceOnly = false;
+let domainsWorkspaceOnly = false;
+let tabsByAgeWorkspaceOnly = false;
+let currentDomain = null;
+let tabsByAgeNewestFirst = false;
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
@@ -54,11 +58,12 @@ function getActions() {
     { id: "last-visited", label: "Recent", hotkey: "R", icon: "◷", isView: true, compact: true },
     { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "⊜", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
     { id: "tab-info", label: "Tab info", hotkey: "T", icon: "ⓘ", isView: true, compact: true },
+    { id: "domains", label: "Domains", hotkey: "Q", icon: "◉", isView: true, compact: true },
+    { id: "tabs-by-age", label: "Tabs by age", hotkey: "J", icon: "▤", isView: true, compact: true },
     { type: "separator" },
     { id: "move-tab-to-start", label: "Move to start", hotkey: "S", icon: "⤒", compact: true },
     { id: "move-tab-to-end", label: "Move to end", hotkey: "B", icon: "⤓", compact: true },
-    { id: "sort-tabs", label: "Sort by recent", hotkey: "O", icon: "⇅", compact: true },
-    { id: "sort-tabs-domain", label: "Sort by domain", hotkey: "G", icon: "⇅", compact: true },
+    { id: "reorder-tabs", label: "Reorder tabs", hotkey: "O", icon: "⇅", isView: true, compact: true },
     { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "⇥", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0, compact: true },
     { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "F", icon: "◎", compact: true },
     { id: "unload-tab", label: "Unload", hotkey: "X", icon: "⏻", compact: true },
@@ -411,8 +416,19 @@ function updateHeader(title, hint) {
   backButton.classList.remove("hidden");
   viewTitle.textContent = title;
 
+  headerHint.innerHTML = "";
   if (hint) {
-    headerHint.innerHTML = hint;
+    if (typeof hint === "string") {
+      headerHint.innerHTML = hint;
+    } else if (Array.isArray(hint)) {
+      for (const h of hint) {
+        const el = document.createElement("span");
+        el.className = "header-hint-item";
+        el.innerHTML = `<span class="header-hint-badge">${h.key}</span> ${escapeHtml(h.label)}`;
+        if (h.onClick) el.addEventListener("click", h.onClick);
+        headerHint.appendChild(el);
+      }
+    }
     headerHint.classList.remove("hidden");
   } else {
     headerHint.classList.add("hidden");
@@ -491,6 +507,11 @@ function activateSelected() {
 
   if (item.id && typeof item.hotkey !== "undefined") {
     activateAction(item);
+  } else if (item.reorderAction) {
+    ext.runtime.sendMessage({ type: item.reorderAction }).catch(() => {});
+  } else if (item.domain) {
+    currentDomain = item.domain;
+    showDomainTabs(item.domain);
   } else if (item.uuid) {
     moveToWorkspace(item.uuid);
   } else if (item.domId) {
@@ -510,12 +531,8 @@ function activateAction(action) {
       ext.runtime.sendMessage({ type: action.id }).catch(() => {});
       break;
 
-    case "sort-tabs":
-      ext.runtime.sendMessage({ type: "sort-tabs-by-recent" }).catch(() => {});
-      break;
-
-    case "sort-tabs-domain":
-      ext.runtime.sendMessage({ type: "sort-tabs-by-domain" }).catch(() => {});
+    case "reorder-tabs":
+      showReorderTabs();
       break;
 
     case "settings":
@@ -544,6 +561,14 @@ function activateAction(action) {
 
     case "tab-info":
       showTabInfo();
+      break;
+
+    case "domains":
+      showDomains();
+      break;
+
+    case "tabs-by-age":
+      showTabsByAge();
       break;
 
     case "duplicates":
@@ -725,8 +750,7 @@ async function showLastVisited(animate) {
     return true;
   });
 
-  const hintLabel = recentWorkspaceOnly ? "all" : "workspace";
-  const hint = `<span class="header-hint-badge">W</span> ${hintLabel}`;
+  const hint = [{ key: "W", label: recentWorkspaceOnly ? "all" : "workspace", onClick: () => { recentWorkspaceOnly = !recentWorkspaceOnly; ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {}); showLastVisited(false); } }];
   renderTabList(filtered, "Recent", hint);
   if (animate !== false) animateList("forward");
 }
@@ -1230,14 +1254,372 @@ function renderDuplicateGroups(groups) {
   updateHeader("Duplicates");
 }
 
+// ---------------------------------------------------------------------------
+// Domains submenu
+// ---------------------------------------------------------------------------
+
+async function showDomains(animate) {
+  currentView = "domains";
+  items = [];
+  selectedIndex = -1;
+
+  let allTabs;
+  try {
+    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+  } catch (e) {
+    listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
+    updateHeader("Domains");
+    return;
+  }
+
+  const filtered = domainsWorkspaceOnly
+    ? allTabs.filter((t) => t.workspaceId === activeWorkspaceId)
+    : allTabs;
+
+  const domainMap = {};
+  for (const tab of filtered) {
+    let hostname = "";
+    try { hostname = new URL(tab.url).hostname; } catch (e) {}
+    if (!hostname) continue;
+    if (!domainMap[hostname]) domainMap[hostname] = { tabs: [], favicon: "" };
+    domainMap[hostname].tabs.push(tab);
+    if (!domainMap[hostname].favicon && tab.favIconUrl) {
+      domainMap[hostname].favicon = tab.favIconUrl;
+    }
+  }
+
+  const domains = Object.entries(domainMap)
+    .map(([domain, data]) => ({ domain, count: data.tabs.length, favicon: data.favicon }))
+    .sort((a, b) => b.count - a.count);
+
+  const hint = [{ key: "W", label: domainsWorkspaceOnly ? "all" : "workspace", onClick: () => { domainsWorkspaceOnly = !domainsWorkspaceOnly; ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {}); showDomains(false); } }];
+  renderDomainList(domains, "Domains", hint);
+  if (animate !== false) animateList("forward");
+}
+
+function renderDomainList(domains, title, hint) {
+  selectedIndex = -1;
+  listEl.innerHTML = "";
+
+  if (domains.length === 0) {
+    items = [];
+    listEl.innerHTML = `<div class="empty-state">No domains</div>`;
+    updateHeader(title, hint);
+    return;
+  }
+
+  items = domains;
+
+  for (let i = 0; i < domains.length; i++) {
+    const d = domains[i];
+    const badge = i < 10 ? String(i) : null;
+
+    const el = document.createElement("div");
+    el.className = "list-item";
+    el.dataset.domain = d.domain;
+
+    let favicon = d.favicon || "";
+    if (favicon.startsWith("moz-remote-image://")) {
+      try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
+    }
+    const canLoad = favicon && !favicon.startsWith("chrome://");
+
+    el.innerHTML = `
+      ${canLoad
+        ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
+        : `<span class="item-icon-placeholder">○</span>`}
+      <span class="item-text">
+        <span class="item-title">${escapeHtml(d.domain)}</span>
+      </span>
+      <span class="item-right">
+        <span class="item-count">${d.count}</span>
+        ${badge !== null ? `<span class="item-badge">${badge}</span>` : ""}
+        <span class="item-arrow">›</span>
+      </span>
+    `;
+
+    const img = el.querySelector("img.item-icon");
+    if (img) img.addEventListener("error", () => { img.style.display = "none"; });
+
+    el.addEventListener("click", () => {
+      currentDomain = d.domain;
+      showDomainTabs(d.domain);
+    });
+    listEl.appendChild(el);
+  }
+
+  updateSelection();
+  updateHeader(title, hint);
+}
+
+async function showDomainTabs(domain, animate) {
+  currentView = "domain-tabs";
+  currentDomain = domain;
+
+  let allTabs;
+  try {
+    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+  } catch (e) {
+    renderTabList([], domain);
+    return;
+  }
+
+  const filtered = allTabs.filter((t) => {
+    try { return new URL(t.url).hostname === domain; } catch (e) { return false; }
+  });
+
+  const wsFiltered = domainsWorkspaceOnly
+    ? filtered.filter((t) => t.workspaceId === activeWorkspaceId)
+    : filtered;
+
+  const hint = [{ key: "W", label: domainsWorkspaceOnly ? "all" : "workspace", onClick: () => { domainsWorkspaceOnly = !domainsWorkspaceOnly; ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {}); showDomainTabs(domain, false); } }];
+  renderTabList(wsFiltered, domain, hint);
+  if (animate !== false) animateList("forward");
+}
+
+// ---------------------------------------------------------------------------
+// Tabs by age submenu
+// ---------------------------------------------------------------------------
+
+function getAgeGroup(ageMs) {
+  const hours = ageMs / (1000 * 60 * 60);
+  const days = hours / 24;
+  if (days < 1) return "Today";
+  if (days < 2) return "Yesterday";
+  if (days < 3) return "2-3 days";
+  if (days < 7) return "This week";
+  if (days < 14) return "1-2 weeks";
+  if (days < 28) return "2-4 weeks";
+  if (days < 90) return "1-3 months";
+  if (days < 180) return "3-6 months";
+  if (days < 365) return "6-12 months";
+  return "Over a year";
+}
+
+async function showTabsByAge(animate) {
+  currentView = "tabs-by-age";
+  items = [];
+  selectedIndex = -1;
+
+  let allTabs;
+  try {
+    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+  } catch (e) {
+    listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
+    updateHeader("Tabs by age");
+    return;
+  }
+
+  let filtered = allTabs.filter((t) => t.url && t.url !== "about:newtab" && t.url !== "about:blank");
+  if (tabsByAgeWorkspaceOnly) {
+    filtered = filtered.filter((t) => t.workspaceId === activeWorkspaceId);
+  }
+
+  const now = Date.now();
+  filtered.sort((a, b) => {
+    const ageA = parseInt(a.domId.split("-")[0]) || now;
+    const ageB = parseInt(b.domId.split("-")[0]) || now;
+    return tabsByAgeNewestFirst ? ageB - ageA : ageA - ageB;
+  });
+
+  // Group by age
+  const groups = [];
+  const groupMap = new Map();
+  for (const tab of filtered) {
+    const created = parseInt(tab.domId.split("-")[0]) || now;
+    const age = now - created;
+    const label = getAgeGroup(age);
+    if (!groupMap.has(label)) {
+      const group = { label, tabs: [] };
+      groupMap.set(label, group);
+      groups.push(group);
+    }
+    groupMap.get(label).tabs.push(tab);
+  }
+
+  const hint = [
+    { key: "W", label: tabsByAgeWorkspaceOnly ? "all" : "workspace", onClick: () => { tabsByAgeWorkspaceOnly = !tabsByAgeWorkspaceOnly; ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {}); showTabsByAge(false); } },
+    { key: "S", label: tabsByAgeNewestFirst ? "oldest" : "newest", onClick: () => { tabsByAgeNewestFirst = !tabsByAgeNewestFirst; ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {}); showTabsByAge(false); } },
+  ];
+  renderTabsByAge(groups, hint);
+  if (animate !== false) animateList("forward");
+}
+
+function renderTabsByAge(groups, hint) {
+  selectedIndex = -1;
+  listEl.innerHTML = "";
+  const allItems = [];
+
+  if (groups.length === 0) {
+    items = [];
+    listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
+    updateHeader("Tabs by age", hint);
+    return;
+  }
+
+  const now = Date.now();
+
+  for (const group of groups) {
+    const details = document.createElement("details");
+    details.className = "info-date-details";
+    details.open = true;
+
+    const summary = document.createElement("summary");
+    summary.className = "info-date-group";
+    summary.textContent = `${group.label} (${group.tabs.length})`;
+    details.appendChild(summary);
+
+    const container = document.createElement("div");
+    container.style.padding = "0 0 4px";
+
+    for (const tab of group.tabs) {
+      const created = parseInt(tab.domId.split("-")[0]) || now;
+      const age = formatDuration(now - created);
+
+      const el = document.createElement("div");
+      el.className = "list-item age-tab-item";
+      el.dataset.domId = tab.domId;
+
+      let domain = "";
+      try { domain = new URL(tab.url).hostname; } catch (e) {}
+
+      let favicon = tab.favIconUrl || "";
+      if (favicon.startsWith("moz-remote-image://")) {
+        try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
+      }
+      const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
+
+      let wsHtml = "";
+      if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
+        const ws = workspaceMap[tab.workspaceId];
+        if (ws) {
+          const wsIcon = ws.svgContent ? `<span class="subtitle-ws-icon">${ws.svgContent}</span>` : "";
+          wsHtml = `<span class="subtitle-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+        }
+      }
+
+      const subtitleParts = [
+        domain ? `<span class="subtitle-domain">${escapeHtml(domain)}</span>` : "",
+        `<span class="subtitle-age">${age}</span>`,
+        wsHtml,
+      ].filter(Boolean).join("");
+
+      el.innerHTML = `
+        ${canLoadFavicon
+          ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
+          : `<span class="item-icon-placeholder">○</span>`}
+        <span class="item-text">
+          <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
+          <span class="item-subtitle">${subtitleParts}</span>
+        </span>
+        <span class="item-right">
+          <span class="age-close" title="Close tab">✕</span>
+        </span>
+      `;
+
+      const img = el.querySelector("img.item-icon");
+      if (img) img.addEventListener("error", () => { img.style.display = "none"; });
+
+      el.addEventListener("click", (e) => {
+        if (e.target.classList.contains("age-close")) return;
+        activateTab(tab.domId);
+      });
+
+      el.querySelector(".age-close").addEventListener("click", (e) => {
+        e.stopPropagation();
+        ext.runtime.sendMessage({ type: "close-tab", domId: tab.domId }).catch(() => {});
+        el.remove();
+      });
+
+      el.addEventListener("mouseenter", () => {
+        ext.runtime.sendMessage({ type: "preview-tab", domId: tab.domId }).catch(() => {});
+      });
+      el.addEventListener("mouseleave", () => {
+        ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+      });
+
+      allItems.push(tab);
+      container.appendChild(el);
+    }
+
+    details.appendChild(container);
+    listEl.appendChild(details);
+  }
+
+  items = allItems;
+  updateHeader("Tabs by age", hint);
+}
+
+// ---------------------------------------------------------------------------
+// Reorder tabs submenu
+// ---------------------------------------------------------------------------
+
+function showReorderTabs() {
+  currentView = "reorder-tabs";
+
+  const reorderOptions = [
+    { label: "Recent (newest)", hotkey: "1", icon: "⇅", reorderAction: "sort-tabs-recent-desc" },
+    { label: "Recent (oldest)", hotkey: "2", icon: "⇅", reorderAction: "sort-tabs-recent-asc" },
+    { label: "Domain (A-Z)", hotkey: "3", icon: "⇅", reorderAction: "sort-tabs-domain-alpha" },
+    { label: "Domain (pop)", hotkey: "4", icon: "⇅", reorderAction: "sort-tabs-domain-pop" },
+    { label: "Age (oldest)", hotkey: "5", icon: "⇅", reorderAction: "sort-tabs-age-asc" },
+    { label: "Age (newest)", hotkey: "6", icon: "⇅", reorderAction: "sort-tabs-age-desc" },
+    { label: "Inactive at bottom", hotkey: "7", icon: "⏻", reorderAction: "sort-tabs-inactive-bottom" },
+    { label: "Group duplicates", hotkey: "8", icon: "⊜", reorderAction: "sort-tabs-group-dups" },
+  ];
+
+  items = reorderOptions;
+  selectedIndex = -1;
+  listEl.innerHTML = "";
+
+  const grid = document.createElement("div");
+  grid.className = "actions-grid";
+
+  for (const opt of reorderOptions) {
+    const el = document.createElement("div");
+    el.className = "list-item compact-item";
+
+    el.innerHTML = `
+      <span class="item-icon-placeholder">${getIcon(opt.icon)}</span>
+      <span class="item-text">
+        <span class="item-title">${escapeHtml(opt.label)}</span>
+      </span>
+      <span class="item-right">
+        <span class="item-badge">${opt.hotkey}</span>
+      </span>
+    `;
+
+    el.addEventListener("click", () => {
+      ext.runtime.sendMessage({ type: opt.reorderAction }).catch(() => {});
+    });
+
+    grid.appendChild(el);
+  }
+
+  listEl.appendChild(grid);
+  updateSelection();
+  updateHeader("Reorder tabs");
+  animateList("forward");
+}
+
 function moveToWorkspace(workspaceId) {
   ext.runtime.sendMessage({ type: "move-selected-tabs-to-workspace", workspaceId }).catch(() => {});
 }
 
 function goBack() {
+  if (currentView === "domain-tabs") {
+    ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+    showDomains(false);
+    animateList("back");
+    return;
+  }
   if (currentView !== "actions") {
     ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
     recentWorkspaceOnly = false;
+    domainsWorkspaceOnly = false;
+    tabsByAgeWorkspaceOnly = false;
+    tabsByAgeNewestFirst = false;
+    currentDomain = null;
     if (initialView) {
       closePalette();
     } else {
@@ -1299,22 +1681,50 @@ document.addEventListener("keydown", (e) => {
       break;
 
     default:
-      if (currentView === "actions") {
+      if (currentView === "actions" || currentView === "reorder-tabs") {
         const key = (e.shiftKey ? "⇧" : "") + e.key.toUpperCase();
         const idx = items.findIndex((item) => item.hotkey === key);
         if (idx >= 0) {
           const listItems = listEl.querySelectorAll(".list-item");
           if (!listItems[idx]?.classList.contains("disabled")) {
             e.preventDefault();
-            activateAction(items[idx]);
+            if (items[idx].reorderAction) {
+              ext.runtime.sendMessage({ type: items[idx].reorderAction }).catch(() => {});
+            } else {
+              activateAction(items[idx]);
+            }
           }
         }
       } else {
-        if (e.key.toUpperCase() === "W" && currentView === "last-visited") {
+        if (e.key.toUpperCase() === "W") {
+          if (currentView === "last-visited") {
+            e.preventDefault();
+            recentWorkspaceOnly = !recentWorkspaceOnly;
+            ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+            showLastVisited(false);
+            break;
+          }
+          if (currentView === "domains" || currentView === "domain-tabs") {
+            e.preventDefault();
+            domainsWorkspaceOnly = !domainsWorkspaceOnly;
+            ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+            if (currentView === "domain-tabs") showDomainTabs(currentDomain, false);
+            else showDomains(false);
+            break;
+          }
+          if (currentView === "tabs-by-age") {
+            e.preventDefault();
+            tabsByAgeWorkspaceOnly = !tabsByAgeWorkspaceOnly;
+            ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+            showTabsByAge(false);
+            break;
+          }
+        }
+        if (e.key.toUpperCase() === "S" && currentView === "tabs-by-age") {
           e.preventDefault();
-          recentWorkspaceOnly = !recentWorkspaceOnly;
+          tabsByAgeNewestFirst = !tabsByAgeNewestFirst;
           ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
-          showLastVisited(false);
+          showTabsByAge(false);
           break;
         }
         // Number keys 0-9 activate tabs in list views
