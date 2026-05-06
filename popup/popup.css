@@ -181,6 +181,9 @@ html, body {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 0;
+  background:
+    linear-gradient(var(--ztt-border), var(--ztt-border)) calc(100% / 3) 50% / 1px calc(100% - 16px) no-repeat,
+    linear-gradient(var(--ztt-border), var(--ztt-border)) calc(200% / 3) 50% / 1px calc(100% - 16px) no-repeat;
 }
 
 .compact-item {
