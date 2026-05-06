@@ -58,7 +58,7 @@ function getActions() {
     { id: "sibling-tabs", label: "Siblings", hotkey: "B", icon: "svg:git-branch", isView: true, needsSiblings: true, count: siblingTabCount, compact: true },
     { id: "unvisited-tabs", label: "New tabs", hotkey: "N", icon: "svg:circle-dot", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
     { id: "last-visited", label: "Recent", hotkey: "R", icon: "svg:clock", isView: true, compact: true },
-    { id: "duplicates", label: "Duplicates", hotkey: "K", icon: "svg:copy", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
+    { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "svg:copy", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
     { id: "tab-info", label: "Tab info", hotkey: "I", icon: "svg:info", isView: true, compact: true },
     { id: "domains", label: "Domains", hotkey: "H", icon: "svg:globe", isView: true, compact: true },
     { id: "tabs-by-age", label: "Tabs by age", hotkey: "J", icon: "svg:calendar-clock", isView: true, compact: true },

@@ -47,7 +47,7 @@ Press `Ctrl+Cmd+.` to open the palette (configurable via `about:addons` > Manage
 | `B` | Siblings |
 | `N` | New tabs |
 | `R` | Recent |
-| `K` | Duplicates |
+| `D` | Duplicates |
 | `I` | Tab info |
 | `H` | Domains |
 | `J` | Tabs by age |
