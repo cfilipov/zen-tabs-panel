@@ -279,14 +279,61 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     const OVERLAY_ID = "zen-tabs-panel-overlay";
     const PANEL_ID = "zen-tabs-panel-panel";
+    const BROWSER_ID = "zen-tabs-panel-browser";
+
+    const VIEW_SIZES = {
+      actions:              { width: 780, height: 604 },
+      "child-tabs":         { width: 600, height: 604 },
+      "sibling-tabs":       { width: 600, height: 604 },
+      "parent-tabs":        { width: 600, height: 604 },
+      navigation:           { width: 600, height: 604 },
+      "unvisited-tabs":     { width: 600, height: 604 },
+      "last-visited":       { width: 600, height: 604 },
+      duplicates:           { width: 600, height: 604 },
+      "tab-info":           { width: 600, height: 604 },
+      domains:              { width: 600, height: 604 },
+      "domain-tabs":        { width: 600, height: 604 },
+      "tabs-by-age":        { width: 600, height: 604 },
+      "most-visited":       { width: 600, height: 604 },
+      "reorder-tabs":       { width: 600, height: 604 },
+      "move-to-workspace":  { width: 600, height: 604 },
+    };
 
     let pendingView = null;
+    let pendingParams = {};
+    let navStack = [];
+    let currentViewName = null;
+    let morphGeneration = 0;
 
     function getPaletteURL() {
       const isDark = getWin()?.document?.documentElement?.getAttribute("zen-should-be-dark-mode") === "true";
       let url = context.extension.getURL("popup/popup.html") + "?theme=" + (isDark ? "dark" : "light");
       if (pendingView) url += "&view=" + encodeURIComponent(pendingView);
+      if (pendingParams) {
+        for (const [k, v] of Object.entries(pendingParams)) {
+          url += "&" + encodeURIComponent(k) + "=" + encodeURIComponent(v);
+        }
+      }
       return url;
+    }
+
+    function getViewSize(view) {
+      return VIEW_SIZES[view] || VIEW_SIZES["actions"];
+    }
+
+    function createBrowserElement(w, size) {
+      const br = w.document.createXULElement("browser");
+      br.id = BROWSER_ID;
+      br.setAttribute("type", "content");
+      br.setAttribute("remote", "true");
+      br.setAttribute("maychangeremoteness", "true");
+      br.setAttribute("disableglobalhistory", "true");
+      br.setAttribute("messagemanagergroup", "webext-browsers");
+      br.setAttribute("webextension-view-type", "popup");
+      br.setAttribute("transparent", "true");
+      br.setAttribute("src", getPaletteURL());
+      br.style.cssText = "width:" + size.width + "px;height:" + size.height + "px;border:none;opacity:1";
+      return br;
     }
 
     function createOverlay() {
@@ -295,7 +342,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       if (w.document.getElementById(OVERLAY_ID)) return null;
 
-      // Inject animation styles into chrome if not already present
       if (!w.document.getElementById("zen-tabs-panel-anim-styles")) {
         const animStyle = w.document.createElement("style");
         animStyle.id = "zen-tabs-panel-anim-styles";
@@ -333,6 +379,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         w.document.documentElement.appendChild(previewStyle);
       }
 
+      const viewName = pendingView || "actions";
+      const size = getViewSize(viewName);
+
+      navStack = [];
+      currentViewName = viewName;
+
       const overlay = w.document.createElement("div");
       overlay.id = OVERLAY_ID;
       overlay.style.cssText = [
@@ -352,8 +404,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const panel = w.document.createElement("div");
       panel.id = PANEL_ID;
       panel.style.cssText = [
-        "width: 600px",
-        "max-height: 604px",
+        "width: " + size.width + "px",
+        "max-height: " + size.height + "px",
         "background: var(--arrowpanel-background, light-dark(rgb(244, 244, 244), rgb(31, 31, 31)))",
         "border-radius: 12px",
         "border: 1px solid var(--zen-colors-border, light-dark(rgba(0,0,0,0.15), rgba(255,255,255,0.08)))",
@@ -362,20 +414,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "display: flex",
         "flex-direction: column",
         "animation: ztt-panel-in 0.15s ease-out",
+        "transition: width 0.15s ease-out, max-height 0.15s ease-out",
       ].join(";");
 
-      const br = w.document.createXULElement("browser");
-      br.id = "zen-tabs-panel-browser";
-      br.setAttribute("type", "content");
-      br.setAttribute("remote", "true");
-      br.setAttribute("maychangeremoteness", "true");
-      br.setAttribute("disableglobalhistory", "true");
-      br.setAttribute("messagemanagergroup", "webext-browsers");
-      br.setAttribute("webextension-view-type", "popup");
-      br.setAttribute("transparent", "true");
-      br.setAttribute("src", getPaletteURL());
-      br.style.cssText = "width:600px;height:604px;border:none";
-
+      const br = createBrowserElement(w, size);
       panel.appendChild(br);
       overlay.appendChild(panel);
 
@@ -394,6 +436,47 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return overlay;
     }
 
+    function morphToView(view, params) {
+      const w = getWin();
+      if (!w) return;
+      const panel = w.document.getElementById(PANEL_ID);
+      const oldBrowser = w.document.getElementById(BROWSER_ID);
+      if (!panel || !oldBrowser) return;
+
+      const gen = ++morphGeneration;
+      const targetSize = getViewSize(view);
+
+      oldBrowser.style.transition = "opacity 0.08s ease-out";
+      oldBrowser.style.opacity = "0";
+
+      w.setTimeout(() => {
+        if (gen !== morphGeneration) return;
+
+        panel.style.width = targetSize.width + "px";
+        panel.style.maxHeight = targetSize.height + "px";
+
+        pendingView = view === "actions" ? null : view;
+        pendingParams = params || {};
+        const newBr = createBrowserElement(w, targetSize);
+        newBr.style.opacity = "0";
+        pendingView = null;
+        pendingParams = {};
+
+        oldBrowser.remove();
+        panel.appendChild(newBr);
+
+        w.setTimeout(() => {
+          if (gen !== morphGeneration) return;
+          newBr.style.transition = "opacity 0.08s ease-out";
+          newBr.style.opacity = "1";
+          w.setTimeout(() => {
+            if (gen !== morphGeneration) return;
+            newBr.focus();
+          }, 50);
+        }, 160);
+      }, 80);
+    }
+
     function destroyOverlay() {
       clearPreviewState();
       const w = getWin();
@@ -402,6 +485,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!overlay || overlay.dataset.closing) return;
 
       overlay.dataset.closing = "true";
+      morphGeneration++;
+      navStack = [];
+      currentViewName = null;
+
       const panel = w.document.getElementById(PANEL_ID);
       overlay.style.animation = "ztt-overlay-out 0.12s ease-in forwards";
       if (panel) panel.style.animation = "ztt-panel-out 0.12s ease-in forwards";
@@ -413,7 +500,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       if (!w) return false;
       const overlay = w.document.getElementById(OVERLAY_ID);
-      // Not open if it's animating out
       return overlay && !overlay.dataset.closing;
     }
 
@@ -861,13 +947,34 @@ this.zenWorkspaces = class extends ExtensionAPI {
             return false;
           }
           pendingView = view || null;
+          pendingParams = {};
           createOverlay();
           pendingView = null;
+          pendingParams = {};
           return true;
         },
 
         async hidePalette() {
           destroyOverlay();
+        },
+
+        async navigateToView(view, params) {
+          if (!isOverlayOpen()) return;
+          const parsed = params ? JSON.parse(params) : {};
+          navStack.push({ view: currentViewName, params: {} });
+          currentViewName = view;
+          morphToView(view, parsed);
+        },
+
+        async navigateBack() {
+          if (!isOverlayOpen()) return;
+          if (navStack.length === 0) {
+            destroyOverlay();
+            return;
+          }
+          const prev = navStack.pop();
+          currentViewName = prev.view;
+          morphToView(prev.view, prev.params);
         },
 
       },

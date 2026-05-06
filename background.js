@@ -202,6 +202,14 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       browser.zenWorkspaces.hidePalette();
       break;
 
+    case "navigate-view":
+      browser.zenWorkspaces.navigateToView(message.view, message.params);
+      break;
+
+    case "navigate-back":
+      browser.zenWorkspaces.navigateBack();
+      break;
+
     case "open-options":
       browser.zenWorkspaces.hidePalette();
       browser.runtime.openOptionsPage();

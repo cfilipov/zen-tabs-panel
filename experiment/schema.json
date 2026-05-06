@@ -206,6 +206,23 @@
         "async": true,
         "description": "Close the command palette overlay",
         "parameters": []
+      },
+      {
+        "name": "navigateToView",
+        "type": "function",
+        "async": true,
+        "description": "Navigate the palette to a different view with morph animation",
+        "parameters": [
+          { "name": "view", "type": "string" },
+          { "name": "params", "type": "string", "optional": true }
+        ]
+      },
+      {
+        "name": "navigateBack",
+        "type": "function",
+        "async": true,
+        "description": "Navigate back in the palette view stack, or close if at root",
+        "parameters": []
       }
     ]
   }

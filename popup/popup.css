@@ -30,7 +30,7 @@
 }
 
 html, body {
-  width: 600px;
+  width: 100%;
   margin: 0;
   overflow: hidden;
   background: light-dark(rgb(244, 244, 244), rgb(31, 31, 31));
@@ -172,7 +172,7 @@ html, body {
 /* Two-column grid for compact action items */
 .actions-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 0;
 }
 
@@ -980,21 +980,3 @@ html, body {
   font-size: 14px;
 }
 
-/* View transition animations */
-@keyframes ztt-slide-in-right {
-  from { opacity: 0; transform: translateX(30px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes ztt-slide-in-left {
-  from { opacity: 0; transform: translateX(-30px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-#list.animate-forward {
-  animation: ztt-slide-in-right 0.15s ease-out;
-}
-
-#list.animate-back {
-  animation: ztt-slide-in-left 0.15s ease-out;
-}

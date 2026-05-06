@@ -589,15 +589,6 @@ function refreshCurrentView() {
   }
 }
 
-function animateList(direction) {
-  if (initialView) return;
-  listEl.classList.remove("animate-forward", "animate-back");
-  void listEl.offsetWidth;
-  listEl.classList.add(direction === "forward" ? "animate-forward" : "animate-back");
-  listEl.addEventListener("animationend", () => {
-    listEl.classList.remove("animate-forward", "animate-back");
-  }, { once: true });
-}
 
 // ---------------------------------------------------------------------------
 // Navigation
@@ -723,13 +714,21 @@ function activateSelected() {
   } else if (item.reorderAction) {
     ext.runtime.sendMessage({ type: item.reorderAction }).catch(() => {});
   } else if (item.domain) {
-    currentDomain = item.domain;
-    showDomainTabs(item.domain);
+    navigateToView("domain-tabs", { domain: item.domain });
   } else if (item.uuid) {
     moveToWorkspace(item.uuid);
   } else if (item.domId) {
     activateTab(item.domId);
   }
+}
+
+function navigateToView(view, params) {
+  ext.runtime.sendMessage({ type: "navigate-view", view, params: params ? JSON.stringify(params) : undefined }).catch(() => {});
+}
+
+function navigateBack() {
+  ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+  ext.runtime.sendMessage({ type: "navigate-back" }).catch(() => {});
 }
 
 function activateAction(action) {
@@ -740,64 +739,27 @@ function activateAction(action) {
     case "move-tab-to-end":
     case "scroll-to-current-tab":
     case "unload-tab":
-      // Background handlers close the palette themselves
       ext.runtime.sendMessage({ type: action.id }).catch(() => {});
-      break;
-
-    case "reorder-tabs":
-      showReorderTabs();
       break;
 
     case "settings":
       ext.runtime.sendMessage({ type: "open-options" }).catch(() => {});
       break;
 
+    case "reorder-tabs":
     case "move-to-workspace":
-      showMoveToWorkspace();
-      break;
-
     case "child-tabs":
-      showChildTabs();
-      break;
-
     case "sibling-tabs":
-      showSiblingTabs();
-      break;
-
     case "parent-tabs":
-      showParentTabs();
-      break;
-
     case "navigation":
-      showNavigation();
-      break;
-
     case "unvisited-tabs":
-      showUnvisitedTabs();
-      break;
-
     case "last-visited":
-      showLastVisited();
-      break;
-
     case "tab-info":
-      showTabInfo();
-      break;
-
     case "domains":
-      showDomains();
-      break;
-
     case "most-visited":
-      showMostVisited();
-      break;
-
     case "tabs-by-age":
-      showTabsByAge();
-      break;
-
     case "duplicates":
-      showDuplicates();
+      navigateToView(action.id);
       break;
   }
 }
@@ -926,7 +888,6 @@ async function showChildTabs(animate) {
   const children = filterByWorkspace(allTabs.filter((t) => t.openerTabDomId === activeTab.domId));
   renderTabList(children, "Children");
   renderFooter();
-  if (animate !== false) animateList("forward");
 }
 
 async function showSiblingTabs(animate) {
@@ -949,7 +910,6 @@ async function showSiblingTabs(animate) {
   const siblings = filterByWorkspace(allTabs.filter((t) => t.openerTabDomId === activeTab.openerTabDomId && t.domId !== activeTab.domId));
   renderTabList(siblings, "Siblings");
   renderFooter();
-  animateList("forward");
 }
 
 async function showParentTabs(animate) {
@@ -967,7 +927,6 @@ async function showParentTabs(animate) {
   const parents = filterByWorkspace(allTabs.filter((t) => childOpeners.has(t.domId)));
   renderTabList(parents, "Parent tabs");
   renderFooter();
-  if (animate !== false) animateList("forward");
 }
 
 async function showNavigation() {
@@ -984,7 +943,6 @@ async function showNavigation() {
   if (!history || !history.entries || history.entries.length === 0) {
     listEl.innerHTML = `<div class="empty-state">No navigation history</div>`;
     updateHeader("Navigation");
-    animateList("forward");
     return;
   }
 
@@ -1039,7 +997,6 @@ async function showNavigation() {
   selectedIndex = currentIndex;
   updateSelection();
   updateHeader("Navigation");
-  animateList("forward");
 }
 
 async function showUnvisitedTabs(animate) {
@@ -1056,7 +1013,6 @@ async function showUnvisitedTabs(animate) {
   const unvisited = filterByWorkspace(allTabs.filter((t) => t.unread));
   renderTabList(unvisited, "New tabs");
   renderFooter();
-  animateList("forward");
 }
 
 async function showLastVisited(animate) {
@@ -1084,7 +1040,6 @@ async function showLastVisited(animate) {
 
   renderTabList(filtered, "Recent");
   renderFooter();
-  if (animate !== false) animateList("forward");
 }
 
 async function showMoveToWorkspace() {
@@ -1095,7 +1050,6 @@ async function showMoveToWorkspace() {
   } catch (e) { workspaces = []; }
   const otherWorkspaces = workspaces.filter(ws => !ws.isActive);
   renderWorkspaceList(otherWorkspaces, "Move to workspace");
-  animateList("forward");
 }
 
 function renderWorkspaceList(workspaces, title) {
@@ -1200,7 +1154,6 @@ async function showTabInfo() {
 
   const duplicates = allTabs.filter((t) => info.duplicateDomIds.includes(t.domId));
   renderTabInfo(info, allVisits, duplicates);
-  animateList("forward");
 }
 
 function formatTransition(t) {
@@ -1498,13 +1451,11 @@ async function showDuplicates(animate) {
   if (groups.length === 0) {
     listEl.innerHTML = `<div class="empty-state">No duplicates</div>`;
     updateHeader("Duplicates");
-    animateList("forward");
     return;
   }
 
   renderDuplicateGroups(groups);
   renderFooter();
-  if (animate !== false) animateList("forward");
 }
 
 function renderDuplicateGroups(groups) {
@@ -1629,7 +1580,6 @@ async function showDomains(animate) {
   const sortOpts = [{ key: "S", label: "sort by " + (domainsSortAlpha ? "count" : "A-Z"), onClick: () => { domainsSortAlpha = !domainsSortAlpha; refreshCurrentView(); } }];
   renderDomainList(domains, "Domains");
   renderFooter(sortOpts);
-  if (animate !== false) animateList("forward");
 }
 
 function renderDomainList(domains, title) {
@@ -1678,8 +1628,7 @@ function renderDomainList(domains, title) {
     if (img) img.addEventListener("error", () => { img.style.display = "none"; });
 
     el.addEventListener("click", () => {
-      currentDomain = d.domain;
-      showDomainTabs(d.domain);
+      navigateToView("domain-tabs", { domain: d.domain });
     });
     listEl.appendChild(el);
   }
@@ -1708,7 +1657,6 @@ async function showDomainTabs(domain, animate) {
 
   renderTabList(wsFiltered, domain);
   renderFooter();
-  if (animate !== false) animateList("forward");
 }
 
 // ---------------------------------------------------------------------------
@@ -1771,7 +1719,6 @@ async function showTabsByAge(animate) {
   const sortOpts = [{ key: "S", label: "sort by " + (tabsByAgeNewestFirst ? "oldest" : "newest"), onClick: () => { tabsByAgeNewestFirst = !tabsByAgeNewestFirst; refreshCurrentView(); } }];
   renderTabsByAge(groups);
   renderFooter(sortOpts);
-  if (animate !== false) animateList("forward");
 }
 
 function renderTabsByAge(groups) {
@@ -1932,7 +1879,6 @@ function showReorderTabs() {
   listEl.appendChild(grid);
   updateSelection();
   updateHeader("Reorder tabs");
-  animateList("forward");
 }
 
 // ---------------------------------------------------------------------------
@@ -1981,7 +1927,6 @@ async function showMostVisited(animate) {
     items = [];
     listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
     updateHeader("Most visited");
-    if (animate !== false) animateList("forward");
     return;
   }
 
@@ -2048,7 +1993,6 @@ async function showMostVisited(animate) {
   updateSelection();
   updateHeader("Most visited");
   renderFooter();
-  if (animate !== false) animateList("forward");
 }
 
 function renderWorkspaceSwitcher(container) {
@@ -2101,25 +2045,8 @@ function moveToWorkspace(workspaceId) {
 }
 
 function goBack() {
-  if (currentView === "domain-tabs") {
-    ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
-    showDomains(false);
-    animateList("back");
-    return;
-  }
   if (currentView !== "actions") {
-    ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
-    workspaceFilter = "all";
-    domainsSortAlpha = false;
-    tabsByAgeNewestFirst = false;
-    currentDomain = null;
-    hideFooter();
-    if (initialView) {
-      closePalette();
-    } else {
-      showActionsMenu();
-      animateList("back");
-    }
+    navigateBack();
   }
 }
 
@@ -2338,8 +2265,13 @@ document.documentElement.style.colorScheme = theme;
 // ---------------------------------------------------------------------------
 
 const initialView = urlParams.get("view");
+const paramDomain = urlParams.get("domain");
+const paramWorkspace = urlParams.get("workspace");
 
 async function init() {
+  if (paramWorkspace) workspaceFilter = paramWorkspace;
+  if (paramDomain) currentDomain = paramDomain;
+
   if (initialView) {
     await fetchWorkspaceMap();
     switch (initialView) {
@@ -2352,6 +2284,7 @@ async function init() {
       case "duplicates": await showDuplicates(); break;
       case "tab-info": await showTabInfo(); break;
       case "domains": await showDomains(); break;
+      case "domain-tabs": await showDomainTabs(paramDomain); break;
       case "tabs-by-age": await showTabsByAge(); break;
       case "most-visited": await showMostVisited(); break;
       case "reorder-tabs": showReorderTabs(); break;
