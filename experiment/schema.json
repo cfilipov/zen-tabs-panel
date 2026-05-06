@@ -121,6 +121,22 @@
         "parameters": []
       },
       {
+        "name": "getNavigationHistory",
+        "type": "function",
+        "async": true,
+        "description": "Get the back/forward navigation history of the current tab",
+        "parameters": []
+      },
+      {
+        "name": "navigateToHistoryIndex",
+        "type": "function",
+        "async": true,
+        "description": "Navigate the current tab to a specific history index",
+        "parameters": [
+          { "name": "index", "type": "integer" }
+        ]
+      },
+      {
         "name": "syncDuplicates",
         "type": "function",
         "async": true,

@@ -966,6 +966,20 @@ html, body {
   background: var(--ztt-bg-hover);
 }
 
+/* Navigation history */
+.nav-current {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.nav-current:hover {
+  background: none;
+}
+
+.nav-direction {
+  font-size: 14px;
+}
+
 /* View transition animations */
 @keyframes ztt-slide-in-right {
   from { opacity: 0; transform: translateX(30px); }

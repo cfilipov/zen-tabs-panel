@@ -265,6 +265,16 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
     }
 
+    case "get-navigation-history":
+      return browser.zenWorkspaces.getNavigationHistory();
+
+    case "navigate-to-history-index":
+      (async () => {
+        await browser.zenWorkspaces.hidePalette();
+        await browser.zenWorkspaces.navigateToHistoryIndex(message.index);
+      })();
+      break;
+
     case "switch-workspace":
       (async () => {
         await browser.zenWorkspaces.hidePalette();

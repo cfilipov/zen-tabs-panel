@@ -18,13 +18,15 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 - Go to parent tab - jump to the tab that opened the current one. Shows workspace indicator and sidebar preview on hover/select.
 - Child tabs - list all tabs spawned from the current tab
 - Sibling tabs - list all tabs that share the same parent as the current tab
+- Parent tabs - list all tabs that have spawned children
+- Navigation - back/forward history of the current tab with B/F shortcuts for immediate back/forward
 - Unvisited tabs - list tabs opened in the background you haven't looked at
-- Tabs by last visited - all tabs sorted by recency, with workspace filter toggle (`W` key). Hovering or arrow-keying through any tab list highlights and scrolls to the tab in the sidebar.
+- Tabs by last visited - all tabs sorted by recency. Hovering or arrow-keying through any tab list highlights and scrolls to the tab in the sidebar.
 - Tab info - detailed view of the current tab: age, memory/CPU usage, visit history (grouped by date, collapsible), and duplicate tab detection with close buttons
 - Duplicates - view all duplicate tabs across all workspaces, grouped by URL, with workspace indicators, tab age, hover preview, and close buttons. Duplicate tabs are marked with an amber diamond indicator in the sidebar (aligned with the unread dot indicator).
-- Domains - browse tabs grouped by domain with drill-down. Supports workspace filter (`W` key).
-- Tabs by age - list all tabs oldest first, grouped by age (today, yesterday, this week, etc.) with close buttons for cleaning up old tabs. Supports workspace filter (`W` key).
-- Most visited - list tabs sorted by browser history visit count, most visited first. Supports workspace filter (`W` key).
+- Domains - browse tabs grouped by domain with drill-down
+- Tabs by age - list all tabs oldest first, grouped by age (today, yesterday, this week, etc.) with close buttons for cleaning up old tabs
+- Most visited - list tabs sorted by browser history visit count, most visited first
 - Move to workspace - move tabs to another workspace without switching away (placed at top of target workspace's tab list). Supports multiselected tabs (Cmd+click).
 - Move tab to start / end of tab bar
 - Reorder tabs - submenu with sort options: by recent, by domain (alphabetical or popularity), by age, most visited, inactive at bottom, group duplicates
@@ -45,7 +47,9 @@ Press `Ctrl+Cmd+.` to open the palette (configurable via `about:addons` > Manage
 | `T` | Parent tab |
 | `C` | Children |
 | `B` | Siblings |
-| `N` | New tabs |
+| `⇧T` | Parent tabs |
+| `N` | Navigation (back/forward history) |
+| `⇧N` | New tabs |
 | `R` | Recent |
 | `D` | Duplicates |
 | `I` | Tab info |
@@ -59,6 +63,8 @@ Press `Ctrl+Cmd+.` to open the palette (configurable via `about:addons` > Manage
 | `L` | Scroll to tab |
 | `U` | Unload tab |
 | `,` | Settings |
+
+**Workspace filtering** - In tab list views, a footer bar shows workspace icons. Use the QWERTY row keys (Q=1st workspace, W=2nd, etc.) to filter by workspace, or backtick (`` ` ``) to toggle between all and current workspace. Tab/Shift-Tab moves focus between the list and the footer.
 
 **Settings** (accessible from the palette or `about:addons` › Extensions › Zen Tabs Panel › Preferences):
 

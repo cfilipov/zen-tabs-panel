@@ -714,6 +714,34 @@ this.zenWorkspaces = class extends ExtensionAPI {
           };
         },
 
+        async getNavigationHistory() {
+          const w = getWin();
+          if (!w || !w.gBrowser) return null;
+          const tab = w.gBrowser.selectedTab;
+          if (!tab) return null;
+          try {
+            const sh = tab.linkedBrowser.browsingContext?.sessionHistory;
+            if (!sh) return null;
+            const entries = [];
+            for (let i = 0; i < sh.count; i++) {
+              const entry = sh.getEntryAtIndex(i);
+              entries.push({
+                url: entry.URI?.spec || "",
+                title: entry.title || "",
+              });
+            }
+            return { entries, index: sh.index };
+          } catch (e) {
+            return null;
+          }
+        },
+
+        async navigateToHistoryIndex(index) {
+          const w = getWin();
+          if (!w || !w.gBrowser) return;
+          w.gBrowser.gotoIndex(index);
+        },
+
         async scrollCurrentTabIntoView() {
           const w = getWin();
           if (!w || !w.gBrowser) return false;
