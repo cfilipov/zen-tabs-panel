@@ -896,6 +896,7 @@ html, body {
   gap: 4px;
   padding: 4px 8px;
   border-radius: 4px;
+  position: relative;
   cursor: pointer;
   color: var(--ztt-text-muted);
   flex-shrink: 0;
@@ -908,6 +909,21 @@ html, body {
 }
 
 .footer-item.active {
+  color: var(--ztt-text);
+}
+
+.footer-item.active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background: var(--zen-primary-color, AccentColor);
+}
+
+.footer-item.focused,
+.footer-sort.focused {
   background: var(--ztt-bg-selected);
   color: var(--ztt-text);
 }

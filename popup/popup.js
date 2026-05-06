@@ -29,6 +29,9 @@ let workspaceFilter = "all";
 let currentDomain = null;
 let tabsByAgeNewestFirst = false;
 let domainsSortAlpha = false;
+let sectionStarts = [];
+let footerFocused = false;
+let footerSelectedIndex = -1;
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
@@ -122,9 +125,11 @@ function isActionDisabled(action) {
 function renderActions(actions, title) {
   items = actions.filter((a) => a.type !== "separator" && a.type !== "workspaces");
   selectedIndex = -1;
+  sectionStarts = [0];
 
   listEl.innerHTML = "";
   let gridContainer = null;
+  let itemIndex = 0;
 
   for (const action of actions) {
     if (action.type === "separator") {
@@ -132,6 +137,7 @@ function renderActions(actions, title) {
       const sep = document.createElement("div");
       sep.className = "list-separator";
       listEl.appendChild(sep);
+      sectionStarts.push(itemIndex);
       continue;
     }
 
@@ -219,6 +225,7 @@ function renderActions(actions, title) {
       gridContainer = null;
       listEl.appendChild(el);
     }
+    itemIndex++;
   }
 
   updateSelection();
@@ -227,6 +234,7 @@ function renderActions(actions, title) {
 
 function renderTabList(tabs, title, hint) {
   selectedIndex = -1;
+  sectionStarts = [0];
   listEl.innerHTML = "";
 
   if (tabs.length === 0) {
@@ -552,6 +560,8 @@ function renderFooter(sortOptions) {
 function hideFooter() {
   footerEl.classList.add("hidden");
   footerEl.innerHTML = "";
+  footerFocused = false;
+  footerSelectedIndex = -1;
 }
 
 function refreshCurrentView() {
@@ -602,6 +612,91 @@ function moveSelection(delta) {
   }
 
   updateSelection();
+}
+
+function jumpToSection(delta) {
+  const count = items.length;
+  if (count === 0) return;
+  const hasFooter = !footerEl.classList.contains("hidden");
+
+  // Single section (submenus): Tab between list and footer
+  if (sectionStarts.length <= 1) {
+    if (hasFooter) {
+      if (!footerFocused) {
+        // Tab: move from list to footer
+        footerFocused = true;
+        footerSelectedIndex = delta > 0 ? 0 : footerEl.querySelectorAll(".footer-item, .footer-sort").length - 1;
+        selectedIndex = -1;
+        updateSelection();
+        updateFooterSelection();
+        return;
+      } else {
+        // Tab/Shift-Tab while in footer: move back to list
+        footerFocused = false;
+        footerSelectedIndex = -1;
+        selectedIndex = delta > 0 ? 0 : count - 1;
+        updateFooterSelection();
+        updateSelection();
+        return;
+      }
+    }
+    // No footer: jump top/bottom
+    selectedIndex = delta > 0 ? 0 : count - 1;
+    updateSelection();
+    return;
+  }
+
+  // Find which section current selection is in
+  let currentSection = 0;
+  for (let i = sectionStarts.length - 1; i >= 0; i--) {
+    if (selectedIndex >= sectionStarts[i]) {
+      currentSection = i;
+      break;
+    }
+  }
+
+  // Move to next/previous section
+  let targetSection = currentSection + delta;
+  if (targetSection < 0) targetSection = sectionStarts.length - 1;
+  if (targetSection >= sectionStarts.length) targetSection = 0;
+
+  selectedIndex = sectionStarts[targetSection];
+
+  // Skip disabled items forward
+  const listItems = listEl.querySelectorAll(".list-item");
+  const startIndex = selectedIndex;
+  while (listItems[selectedIndex]?.classList.contains("disabled")) {
+    selectedIndex = (selectedIndex + 1) % count;
+    if (selectedIndex === startIndex) break;
+  }
+
+  updateSelection();
+}
+
+function updateFooterSelection() {
+  const footerItems = footerEl.querySelectorAll(".footer-item, .footer-sort");
+  footerItems.forEach((el, i) => {
+    el.classList.toggle("focused", footerFocused && i === footerSelectedIndex);
+  });
+}
+
+function moveFooterSelection(delta) {
+  const footerItems = footerEl.querySelectorAll(".footer-item, .footer-sort");
+  const count = footerItems.length;
+  if (count === 0) return;
+  if (footerSelectedIndex === -1) {
+    footerSelectedIndex = delta > 0 ? 0 : count - 1;
+  } else {
+    footerSelectedIndex = (footerSelectedIndex + delta + count) % count;
+  }
+  updateFooterSelection();
+}
+
+function activateFooterSelected() {
+  const footerItems = footerEl.querySelectorAll(".footer-item, .footer-sort");
+  if (footerSelectedIndex >= 0 && footerSelectedIndex < footerItems.length) {
+    footerItems[footerSelectedIndex].click();
+  }
 }
 
 function activateSelected() {
@@ -1289,6 +1384,7 @@ async function showDuplicates(animate) {
 }
 
 function renderDuplicateGroups(groups) {
+  sectionStarts = [0];
   const now = Date.now();
   let html = "";
 
@@ -1415,6 +1511,7 @@ async function showDomains(animate) {
 
 function renderDomainList(domains, title) {
   selectedIndex = -1;
+  sectionStarts = [0];
   listEl.innerHTML = "";
 
   if (domains.length === 0) {
@@ -1556,6 +1653,7 @@ async function showTabsByAge(animate) {
 
 function renderTabsByAge(groups) {
   selectedIndex = -1;
+  sectionStarts = [0];
   listEl.innerHTML = "";
   const allItems = [];
 
@@ -1666,6 +1764,8 @@ function renderTabsByAge(groups) {
 function showReorderTabs() {
   currentView = "reorder-tabs";
 
+  sectionStarts = [0];
+
   const reorderOptions = [
     { label: "Recent (newest first)", hotkey: "1", icon: "svg:clock", reorderAction: "sort-tabs-recent-desc" },
     { label: "Recent (oldest first)", hotkey: "2", icon: "svg:clock", reorderAction: "sort-tabs-recent-asc" },
@@ -1720,6 +1820,7 @@ async function showMostVisited(animate) {
   currentView = "most-visited";
   items = [];
   selectedIndex = -1;
+  sectionStarts = [0];
 
   let allTabs;
   try {
@@ -1905,31 +2006,38 @@ document.addEventListener("keydown", (e) => {
   switch (e.key) {
     case "ArrowDown":
       e.preventDefault();
-      moveSelection(1);
+      if (footerFocused) moveFooterSelection(1);
+      else moveSelection(1);
       break;
 
     case "ArrowUp":
       e.preventDefault();
-      moveSelection(-1);
+      if (footerFocused) moveFooterSelection(-1);
+      else moveSelection(-1);
+      break;
+
+
+    case "Tab":
+      e.preventDefault();
+      jumpToSection(e.shiftKey ? -1 : 1);
       break;
 
     case "ArrowRight":
       e.preventDefault();
-      if (selectedIndex >= 0 && items[selectedIndex]?.isView) {
-        activateSelected();
-      }
+      if (footerFocused) { moveFooterSelection(1); }
+      else if (selectedIndex >= 0 && items[selectedIndex]?.isView) { activateSelected(); }
       break;
 
     case "ArrowLeft":
-      if (currentView !== "actions") {
-        e.preventDefault();
-        goBack();
-      }
+      e.preventDefault();
+      if (footerFocused) { moveFooterSelection(-1); }
+      else if (currentView !== "actions") { goBack(); }
       break;
 
     case "Enter":
       e.preventDefault();
-      activateSelected();
+      if (footerFocused) { activateFooterSelected(); }
+      else { activateSelected(); }
       break;
 
     case "Escape":
