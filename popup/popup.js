@@ -185,7 +185,8 @@ function renderActions(actions, title) {
           wsLabel = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
         }
       }
-      previewHtml = `<span class="action-preview">${iconHtml}<span class="preview-title">${previewTitle}</span>${wsLabel}</span>`;
+      const previewPendingCls = action.preview.pending ? " tab-pending" : "";
+      previewHtml = `<span class="action-preview${previewPendingCls}">${iconHtml}<span class="preview-title">${previewTitle}</span>${wsLabel}</span>`;
     }
 
     // Build count badge
@@ -325,7 +326,7 @@ function renderTabList(tabs, title, hint) {
 
 function createTabElement(tab, badge) {
   const el = document.createElement("div");
-  el.className = "list-item";
+  el.className = "list-item" + (tab.pending ? " tab-pending" : "");
   el.dataset.domId = tab.domId;
 
   let domain = "";
@@ -388,7 +389,7 @@ function createTabElement(tab, badge) {
 
 function createDuplicateTabElement(tab) {
   const el = document.createElement("div");
-  el.className = "list-item duplicate-item";
+  el.className = "list-item duplicate-item" + (tab.pending ? " tab-pending" : "");
   el.dataset.domId = tab.domId;
 
   let domain = "";
@@ -831,7 +832,7 @@ async function showActionsMenu() {
     // Parent tab preview
     if (currentTabHasParent) {
       const parent = allTabs.find((t) => t.domId === activeTab.openerTabDomId);
-      parentTabPreview = parent ? { title: parent.title, favIconUrl: parent.favIconUrl, domId: parent.domId, workspaceId: parent.workspaceId } : null;
+      parentTabPreview = parent ? { title: parent.title, favIconUrl: parent.favIconUrl, domId: parent.domId, workspaceId: parent.workspaceId, pending: parent.pending } : null;
     } else {
       parentTabPreview = null;
     }
@@ -846,7 +847,7 @@ async function showActionsMenu() {
       .filter((t) => !visibleDomIds.has(t.domId) && !t.unread)
       .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
     previousTabPreview = candidates.length > 0
-      ? { title: candidates[0].title, favIconUrl: candidates[0].favIconUrl, domId: candidates[0].domId, workspaceId: candidates[0].workspaceId }
+      ? { title: candidates[0].title, favIconUrl: candidates[0].favIconUrl, domId: candidates[0].domId, workspaceId: candidates[0].workspaceId, pending: candidates[0].pending }
       : null;
 
     // Fetch selected tab count and workspace map in parallel
@@ -1577,7 +1578,7 @@ function renderDuplicateGroups(groups) {
       const isActive = tab.active;
       const wsNote = isActive ? `<span class="dup-ws-note">(this tab)</span>`
         : (tab.workspaceId === activeWorkspaceId) ? `<span class="dup-ws-note">(this workspace)</span>` : "";
-      html += `<div class="info-duplicate-row${isActive ? " dup-self" : ""}" data-dom-id="${escapeAttr(tab.domId)}">`;
+      html += `<div class="info-duplicate-row${isActive ? " dup-self" : ""}${tab.pending ? " tab-pending" : ""}" data-dom-id="${escapeAttr(tab.domId)}">`;
       html += `<span class="dup-index">${i + 1}</span>`;
       html += `<span class="dup-workspace">${wsIcon}${wsName}${wsNote}</span>`;
       html += `<span class="dup-age">open for ${age}</span>`;
@@ -1836,7 +1837,7 @@ function renderTabsByAge(groups) {
       const age = formatDuration(now - created);
 
       const el = document.createElement("div");
-      el.className = "list-item age-tab-item";
+      el.className = "list-item age-tab-item" + (tab.pending ? " tab-pending" : "");
       el.dataset.domId = tab.domId;
 
       let domain = "";
@@ -2020,7 +2021,7 @@ async function showMostVisited(animate) {
     const visits = visitCounts[tab.url] || 0;
 
     const el = document.createElement("div");
-    el.className = "list-item";
+    el.className = "list-item" + (tab.pending ? " tab-pending" : "");
     el.dataset.domId = tab.domId;
 
     let domain = "";

@@ -513,6 +513,26 @@ html, body {
   text-align: center;
 }
 
+/* Sleeping (unloaded) tabs — match the main tab bar dim treatment */
+.list-item.tab-pending .item-icon,
+.list-item.tab-pending .item-icon-placeholder,
+.list-item.tab-pending .item-text {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.action-preview.tab-pending {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.info-duplicate-row.tab-pending .dup-index,
+.info-duplicate-row.tab-pending .dup-workspace,
+.info-duplicate-row.tab-pending .dup-age {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
 /* Separator */
 .list-separator {
   height: 1px;

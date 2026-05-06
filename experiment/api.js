@@ -636,6 +636,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
               openerTabDomId: tab.openerTab?.id || null,
               splitView: tab.hasAttribute("split-view"),
               splitGroupId: tabToGroupId.get(tab.id) || null,
+              pending: tab.hasAttribute("pending"),
             });
           }
           return results;
