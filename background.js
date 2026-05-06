@@ -293,6 +293,26 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "get-navigation-history":
       return browser.zenWorkspaces.getNavigationHistory();
 
+    case "get-recently-closed":
+      return browser.sessions.getRecentlyClosed({ maxResults: 25 }).then((sessions) =>
+        sessions
+          .filter((s) => s.tab)
+          .map((s) => ({
+            sessionId: s.tab.sessionId,
+            title: s.tab.title || "",
+            url: s.tab.url || "",
+            favIconUrl: s.tab.favIconUrl || "",
+            lastModified: s.lastModified || 0,
+          }))
+      );
+
+    case "restore-closed-tab":
+      (async () => {
+        await browser.zenWorkspaces.hidePalette();
+        try { await browser.sessions.restore(message.sessionId); } catch (e) {}
+      })();
+      break;
+
     case "navigate-to-history-index":
       (async () => {
         await browser.zenWorkspaces.hidePalette();

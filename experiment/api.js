@@ -289,6 +289,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       navigation:           { width: 600, height: 604 },
       "unvisited-tabs":     { width: 720, height: 604 },
       "last-visited":       { width: 720, height: 604 },
+      "recently-closed":    { width: 600, height: 604 },
       duplicates:           { width: 720, height: 604 },
       "tab-info":           { width: 600, height: 604 },
       domains:              { width: 720, height: 604 },

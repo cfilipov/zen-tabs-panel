@@ -19,6 +19,7 @@ let duplicateGroupCount = 0;
 let siblingTabCount = 0;
 let parentTabCount = 0;
 let domainCount = 0;
+let recentlyClosedCount = 0;
 
 const listEl = document.getElementById("list");
 const headerEl = document.getElementById("header");
@@ -64,6 +65,7 @@ function getActions() {
     { id: "navigation", label: "Navigation", hotkey: "N", icon: "svg:history", isView: true, compact: true },
     { id: "unvisited-tabs", label: "New tabs", hotkey: "⇧N", icon: "svg:circle-dot", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
     { id: "last-visited", label: "Recent", hotkey: "R", icon: "svg:clock", isView: true, compact: true },
+    { id: "recently-closed", label: "Recently closed", hotkey: "X", icon: "svg:rotate-ccw", isView: true, needsRecentlyClosed: true, count: recentlyClosedCount, compact: true },
     { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "svg:copy", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
     { id: "tab-info", label: "Tab info", hotkey: "I", icon: "svg:info", isView: true, compact: true },
     { id: "domains", label: "Domains", hotkey: "⇧D", icon: "svg:globe", isView: true, count: domainCount, compact: true },
@@ -96,6 +98,7 @@ const SVG_ICONS = {
   "git-branch": `<svg ${SVG_ATTRS}><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>`,
   "circle-dot": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`,
   "clock": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  "rotate-ccw": `<svg ${SVG_ATTRS}><path d="M3 12a9 9 0 1 0 3-7.7L3 7"/><path d="M3 3v4h4"/></svg>`,
   "copy": `<svg ${SVG_ATTRS}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`,
   "info": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
   "globe": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>`,
@@ -127,6 +130,7 @@ function isActionDisabled(action) {
   if (action.needsSiblings && siblingTabCount === 0) return true;
   if (action.needsParentTabs && parentTabCount === 0) return true;
   if (action.needsDuplicates && duplicateGroupCount === 0) return true;
+  if (action.needsRecentlyClosed && recentlyClosedCount === 0) return true;
   return false;
 }
 
@@ -572,6 +576,7 @@ function refreshCurrentView() {
   ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
   switch (currentView) {
     case "last-visited": showLastVisited(false); break;
+    case "recently-closed": showRecentlyClosed(false); break;
     case "child-tabs": showChildTabs(false); break;
     case "sibling-tabs": showSiblingTabs(false); break;
     case "parent-tabs": showParentTabs(false); break;
@@ -709,6 +714,8 @@ function activateSelected() {
     navigateToView("domain-tabs", { domain: item.domain });
   } else if (item.uuid) {
     moveToWorkspace(item.uuid);
+  } else if (item.sessionId) {
+    ext.runtime.sendMessage({ type: "restore-closed-tab", sessionId: item.sessionId }).catch(() => {});
   } else if (item.domId) {
     activateTab(item.domId);
   }
@@ -751,6 +758,7 @@ function activateAction(action) {
     case "most-visited":
     case "tabs-by-age":
     case "duplicates":
+    case "recently-closed":
       navigateToView(action.id);
       break;
   }
@@ -810,6 +818,13 @@ async function showActionsMenu() {
     }
     duplicateGroupCount = Object.values(urlCounts).filter((c) => c > 1).length;
 
+    try {
+      const closed = await ext.runtime.sendMessage({ type: "get-recently-closed" });
+      recentlyClosedCount = Array.isArray(closed) ? closed.length : 0;
+    } catch (e) {
+      recentlyClosedCount = 0;
+    }
+
     // Parent tab preview
     if (currentTabHasParent) {
       const parent = allTabs.find((t) => t.domId === activeTab.openerTabDomId);
@@ -849,6 +864,7 @@ async function showActionsMenu() {
     domainCount = 0;
     unvisitedTabCount = 0;
     duplicateGroupCount = 0;
+    recentlyClosedCount = 0;
     parentTabPreview = null;
     previousTabPreview = null;
     selectedTabCount = 0;
@@ -1032,6 +1048,75 @@ async function showLastVisited(animate) {
 
   renderTabList(filtered, "Recent");
   renderSidebar();
+}
+
+async function showRecentlyClosed(animate) {
+  currentView = "recently-closed";
+  selectedIndex = -1;
+  sectionStarts = [0];
+  hideSidebar();
+
+  let entries;
+  try {
+    entries = await ext.runtime.sendMessage({ type: "get-recently-closed" });
+  } catch (e) { entries = []; }
+
+  if (!entries || entries.length === 0) {
+    items = [];
+    listEl.innerHTML = `<div class="empty-state">No recently closed tabs</div>`;
+    updateHeader("Recently closed");
+    return;
+  }
+
+  renderRecentlyClosedList(entries);
+  updateHeader("Recently closed");
+}
+
+function renderRecentlyClosedList(entries) {
+  listEl.innerHTML = "";
+  items = [];
+
+  let slotIndex = 1;
+  for (const entry of entries) {
+    const badge = slotIndex <= 9 ? String(slotIndex) : null;
+
+    let domain = "";
+    try { domain = new URL(entry.url).hostname; } catch (e) {}
+
+    let favicon = entry.favIconUrl || "";
+    if (favicon.startsWith("moz-remote-image://")) {
+      try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
+    }
+    const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
+
+    const el = document.createElement("div");
+    el.className = "list-item";
+    el.dataset.sessionId = entry.sessionId;
+    el.innerHTML = `
+      ${canLoadFavicon
+        ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
+        : `<span class="item-icon-placeholder">○</span>`}
+      <span class="item-text">
+        <span class="item-title">${escapeHtml(entry.title || entry.url || "Untitled")}</span>
+        ${domain ? `<span class="item-subtitle"><span class="subtitle-domain">${escapeHtml(domain)}</span></span>` : ""}
+      </span>
+      ${badge !== null ? `<span class="item-right"><span class="item-badge">${badge}</span></span>` : ""}
+    `;
+
+    const img = el.querySelector("img.item-icon");
+    if (img) img.addEventListener("error", () => { img.style.display = "none"; });
+
+    const sessionId = entry.sessionId;
+    el.addEventListener("click", () => {
+      ext.runtime.sendMessage({ type: "restore-closed-tab", sessionId }).catch(() => {});
+    });
+
+    items.push({ sessionId });
+    listEl.appendChild(el);
+    slotIndex++;
+  }
+
+  updateSelection();
 }
 
 async function showMoveToWorkspace() {
@@ -2209,6 +2294,8 @@ document.addEventListener("keydown", (e) => {
               if (wsSwitchId) { ext.runtime.sendMessage({ type: "switch-workspace", workspaceId: wsSwitchId }).catch(() => {}); break; }
               const wsId = listItems[i].dataset.workspaceId;
               if (wsId) { moveToWorkspace(wsId); break; }
+              const sessionId = listItems[i].dataset.sessionId;
+              if (sessionId) { ext.runtime.sendMessage({ type: "restore-closed-tab", sessionId }).catch(() => {}); break; }
               const domId = listItems[i].dataset.domId;
               if (domId) activateTab(domId);
               break;
@@ -2270,6 +2357,7 @@ async function init() {
       case "navigation": await showNavigation(); break;
       case "unvisited-tabs": await showUnvisitedTabs(); break;
       case "last-visited": await showLastVisited(); break;
+      case "recently-closed": await showRecentlyClosed(); break;
       case "duplicates": await showDuplicates(); break;
       case "tab-info": await showTabInfo(); break;
       case "domains": await showDomains(); break;
