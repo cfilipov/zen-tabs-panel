@@ -8,6 +8,7 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 > This extension uses internal Zen APIs which could change and break with any Zen update. Use at your own risk.
 
 ![Screenshot](screenshot.png)
+![Tab Info](screenshot-tabinfo.png)
 
 ## Features
 
