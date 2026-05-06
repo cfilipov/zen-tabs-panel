@@ -919,7 +919,6 @@ function groupVisitsByDate(visits) {
   const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const dateFmt = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
   const dayFmt = { weekday: "long", month: "long", day: "numeric" };
   const groups = [];
   const map = new Map();
@@ -928,33 +927,37 @@ function groupVisitsByDate(visits) {
     const d = new Date(visit.visitTime);
     const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     let key, label;
-    let isMonth = false;
     if (day >= today) {
       key = "today";
-      label = "Today - " + d.toLocaleDateString(undefined, dateFmt);
+      label = "Today";
     } else if (day >= yesterday) {
       key = "yesterday";
-      label = "Yesterday - " + d.toLocaleDateString(undefined, dateFmt);
+      label = "Yesterday";
     } else if (day >= thisMonthStart) {
-      key = day.toISOString().slice(0, 10);
-      label = d.toLocaleDateString(undefined, dateFmt);
+      const daysAgo = Math.round((today - day) / (1000 * 60 * 60 * 24));
+      if (daysAgo <= 6) {
+        key = `${daysAgo}-days-ago`;
+        label = `${daysAgo} days ago`;
+      } else {
+        const weeksAgo = Math.round(daysAgo / 7);
+        key = `${weeksAgo}-weeks-ago`;
+        label = weeksAgo === 1 ? "1 week ago" : `${weeksAgo} weeks ago`;
+      }
     } else {
       key = `${d.getFullYear()}-${d.getMonth()}`;
       label = d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-      isMonth = true;
     }
 
     if (!map.has(key)) {
-      const group = { label, isMonth, visits: [], subgroups: null };
+      const group = { label, visits: [], subgroups: null };
       map.set(key, group);
       groups.push(group);
     }
     map.get(key).visits.push(visit);
   }
 
-  // Build subgroups for month groups
+  // Build day subgroups for all groups
   for (const group of groups) {
-    if (!group.isMonth) continue;
     const dayMap = new Map();
     group.subgroups = [];
     for (const visit of group.visits) {
@@ -1102,15 +1105,11 @@ function renderTabInfo(info, visits, duplicates) {
     for (const group of groups) {
       html += `<details class="info-date-details" open>`;
       html += `<summary class="info-date-group">${escapeHtml(group.label)}</summary>`;
-      if (group.subgroups) {
-        for (const sub of group.subgroups) {
-          html += `<details class="info-date-details info-date-sub" open>`;
-          html += `<summary class="info-date-subgroup">${escapeHtml(sub.label)}</summary>`;
-          html += renderVisitRows(sub.visits);
-          html += `</details>`;
-        }
-      } else {
-        html += renderVisitRows(group.visits);
+      for (const sub of group.subgroups) {
+        html += `<details class="info-date-details info-date-sub" open>`;
+        html += `<summary class="info-date-subgroup">${escapeHtml(sub.label)}</summary>`;
+        html += renderVisitRows(sub.visits);
+        html += `</details>`;
       }
       html += `</details>`;
     }
