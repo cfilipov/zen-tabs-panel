@@ -88,7 +88,7 @@ This means two `about:config` flags must be enabled to install it.
 ### Quick install (macOS)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/cfilipov/zen-tabs-panel/main/install.sh | sh
+/bin/sh -c "$(curl -fsSL https://raw.githubusercontent.com/cfilipov/zen-tabs-panel/main/install.sh)"
 ```
 
 This automatically sets the required `about:config` flags, downloads the latest release, and installs it into your Zen profile. Run the same command to update. Restart Zen after installing.
