@@ -71,6 +71,8 @@ function getActions() {
     { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "L", icon: "svg:locate", compact: true },
     { id: "unload-tab", label: "Unload", hotkey: "U", icon: "svg:moon", compact: true },
     { id: "settings", label: "Settings", hotkey: "," , icon: "svg:gear", compact: true },
+    { type: "separator" },
+    { type: "workspaces" },
   ];
 }
 
@@ -120,7 +122,7 @@ function isActionDisabled(action) {
 }
 
 function renderActions(actions, title) {
-  items = actions.filter((a) => a.type !== "separator");
+  items = actions.filter((a) => a.type !== "separator" && a.type !== "workspaces");
   selectedIndex = -1;
 
   listEl.innerHTML = "";
@@ -132,6 +134,12 @@ function renderActions(actions, title) {
       const sep = document.createElement("div");
       sep.className = "list-separator";
       listEl.appendChild(sep);
+      continue;
+    }
+
+    if (action.type === "workspaces") {
+      gridContainer = null;
+      renderWorkspaceSwitcher(listEl);
       continue;
     }
 
@@ -233,13 +241,13 @@ function renderTabList(tabs, title, hint) {
   // Build render order: group split siblings together
   const rendered = new Set();
   const orderedItems = [];
-  let slotIndex = 0; // tracks the 0-9 keybinding slot
+  let slotIndex = 1; // tracks the 1-9 keybinding slot
 
   for (let i = 0; i < tabs.length; i++) {
     if (rendered.has(i)) continue;
 
     const tab = tabs[i];
-    const badge = slotIndex < 10 ? String(slotIndex) : null;
+    const badge = slotIndex <= 9 ? String(slotIndex) : null;
 
     if (tab.splitGroupId) {
       const siblings = [];
@@ -806,7 +814,7 @@ function renderWorkspaceList(workspaces, title) {
 
   for (let i = 0; i < workspaces.length; i++) {
     const ws = workspaces[i];
-    const badge = i < 10 ? String(i) : null;
+    const badge = (i + 1) <= 9 ? String(i + 1) : null;
 
     const el = document.createElement("div");
     el.className = "list-item";
@@ -1341,7 +1349,7 @@ function renderDomainList(domains, title, hint) {
 
   for (let i = 0; i < domains.length; i++) {
     const d = domains[i];
-    const badge = i < 10 ? String(i) : null;
+    const badge = (i + 1) <= 9 ? String(i + 1) : null;
 
     const el = document.createElement("div");
     el.className = "list-item";
@@ -1690,7 +1698,7 @@ async function showMostVisited(animate) {
 
   for (let i = 0; i < filtered.length; i++) {
     const tab = filtered[i];
-    const badge = i < 10 ? String(i) : null;
+    const badge = (i + 1) <= 9 ? String(i + 1) : null;
     const visits = visitCounts[tab.url] || 0;
 
     const el = document.createElement("div");
@@ -1749,6 +1757,49 @@ async function showMostVisited(animate) {
   updateSelection();
   updateHeader("Most visited", hint);
   if (animate !== false) animateList("forward");
+}
+
+function renderWorkspaceSwitcher(container) {
+  const allWorkspaces = Object.entries(workspaceMap);
+  if (allWorkspaces.length === 0) return;
+
+  const grid = document.createElement("div");
+  grid.className = "actions-grid";
+
+  for (let i = 0; i < allWorkspaces.length; i++) {
+    const [uuid, ws] = allWorkspaces[i];
+    const isActive = uuid === activeWorkspaceId;
+    const badge = (i + 1) <= 9 ? String(i + 1) : null;
+
+    const el = document.createElement("div");
+    el.className = "list-item compact-item" + (isActive ? " ws-active" : "");
+    el.dataset.workspaceSwitchId = uuid;
+
+    const iconHtml = ws.svgContent
+      ? `<span class="item-icon-placeholder"><span class="workspace-icon">${ws.svgContent}</span></span>`
+      : `<span class="item-icon-placeholder">○</span>`;
+
+    el.innerHTML = `
+      ${iconHtml}
+      <span class="item-text">
+        <span class="item-title">${escapeHtml(ws.name)}</span>
+      </span>
+      <span class="item-right">
+        ${badge !== null ? `<span class="item-badge">${badge}</span>` : ""}
+        <span class="item-arrow"></span>
+      </span>
+    `;
+
+    if (!isActive) {
+      el.addEventListener("click", () => {
+        ext.runtime.sendMessage({ type: "switch-workspace", workspaceId: uuid }).catch(() => {});
+      });
+    }
+
+    grid.appendChild(el);
+  }
+
+  container.appendChild(grid);
 }
 
 function moveToWorkspace(workspaceId) {
@@ -1833,6 +1884,20 @@ document.addEventListener("keydown", (e) => {
 
     default:
       if (currentView === "actions" || currentView === "reorder-tabs") {
+        // Number keys 1-9 for workspace switching in actions view
+        const num = parseInt(e.key, 10);
+        if (!isNaN(num) && num >= 1 && num <= 9) {
+          const wsItems = listEl.querySelectorAll(".list-item[data-workspace-switch-id]");
+          for (const wsEl of wsItems) {
+            const badge = wsEl.querySelector(".item-badge");
+            if (badge && badge.textContent === String(num)) {
+              e.preventDefault();
+              ext.runtime.sendMessage({ type: "switch-workspace", workspaceId: wsEl.dataset.workspaceSwitchId }).catch(() => {});
+              break;
+            }
+          }
+          break;
+        }
         const key = (e.shiftKey ? "⇧" : "") + e.key.toUpperCase();
         const idx = items.findIndex((item) => item.hotkey === key);
         if (idx >= 0) {
@@ -1893,9 +1958,9 @@ document.addEventListener("keydown", (e) => {
           showTabsByAge(false);
           break;
         }
-        // Number keys 0-9 activate tabs in list views
+        // Number keys 1-9 activate tabs in list views
         const num = parseInt(e.key, 10);
-        if (!isNaN(num) && num >= 0 && num <= 9) {
+        if (!isNaN(num) && num >= 1 && num <= 9) {
           // Check split rows first
           const splitRows = listEl.querySelectorAll(".split-row");
           for (const row of splitRows) {
@@ -1914,6 +1979,8 @@ document.addEventListener("keydown", (e) => {
             const badge = listItems[i].querySelector(".item-badge");
             if (badge && badge.textContent === String(num)) {
               e.preventDefault();
+              const wsSwitchId = listItems[i].dataset.workspaceSwitchId;
+              if (wsSwitchId) { ext.runtime.sendMessage({ type: "switch-workspace", workspaceId: wsSwitchId }).catch(() => {}); break; }
               const wsId = listItems[i].dataset.workspaceId;
               if (wsId) { moveToWorkspace(wsId); break; }
               const domId = listItems[i].dataset.domId;

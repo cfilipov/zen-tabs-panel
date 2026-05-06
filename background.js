@@ -265,6 +265,13 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
     }
 
+    case "switch-workspace":
+      (async () => {
+        await browser.zenWorkspaces.hidePalette();
+        await browser.zenWorkspaces.switchTo(message.workspaceId);
+      })();
+      break;
+
     case "sort-tabs-recent-desc":
     case "sort-tabs-recent-asc":
     case "sort-tabs-domain-alpha":
