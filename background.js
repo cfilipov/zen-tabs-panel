@@ -148,20 +148,37 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
 async function moveTabToStart() {
   const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (!activeTab || activeTab.pinned) return;
+  if (!activeTab) return;
 
-  // Find the first unpinned tab index to avoid moving into the pinned range
   const allTabs = await browser.tabs.query({ currentWindow: true });
-  const firstUnpinned = allTabs.find((t) => !t.pinned);
-  const targetIndex = firstUnpinned ? firstUnpinned.index : 0;
+  const essentialIds = new Set(await browser.zenWorkspaces.getEssentialTabIds());
 
-  await browser.tabs.move(activeTab.id, { index: targetIndex });
+  if (activeTab.pinned) {
+    if (essentialIds.has(activeTab.id)) return;
+    const firstNonEssentialPinned = allTabs.find((t) => t.pinned && !essentialIds.has(t.id));
+    const targetIndex = firstNonEssentialPinned ? firstNonEssentialPinned.index : 0;
+    await browser.tabs.move(activeTab.id, { index: targetIndex });
+  } else {
+    const firstUnpinned = allTabs.find((t) => !t.pinned);
+    const targetIndex = firstUnpinned ? firstUnpinned.index : 0;
+    await browser.tabs.move(activeTab.id, { index: targetIndex });
+  }
 }
 
 async function moveTabToEnd() {
   const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (!activeTab || activeTab.pinned) return;
-  await browser.tabs.move(activeTab.id, { index: -1 });
+  if (!activeTab) return;
+
+  if (activeTab.pinned) {
+    const essentialIds = new Set(await browser.zenWorkspaces.getEssentialTabIds());
+    if (essentialIds.has(activeTab.id)) return;
+    const allTabs = await browser.tabs.query({ currentWindow: true });
+    const pinnedTabs = allTabs.filter((t) => t.pinned);
+    const lastPinnedIndex = pinnedTabs.length > 0 ? pinnedTabs[pinnedTabs.length - 1].index : 0;
+    await browser.tabs.move(activeTab.id, { index: lastPinnedIndex });
+  } else {
+    await browser.tabs.move(activeTab.id, { index: -1 });
+  }
 }
 
 browser.commands.onCommand.addListener((command) => {
@@ -293,9 +310,21 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "sort-tabs-group-dups": {
       (async () => {
         await browser.zenWorkspaces.hidePalette();
+        const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
         const allTabs = await browser.tabs.query({ currentWindow: true });
-        const pinnedCount = allTabs.filter((t) => t.pinned).length;
-        const tabs = allTabs.filter((t) => !t.pinned);
+        const essentialIds = new Set(await browser.zenWorkspaces.getEssentialTabIds());
+        const operateOnPinned = activeTab?.pinned && !essentialIds.has(activeTab?.id);
+
+        let tabs, startIndex;
+        if (operateOnPinned) {
+          const essentialCount = allTabs.filter((t) => essentialIds.has(t.id)).length;
+          tabs = allTabs.filter((t) => t.pinned && !essentialIds.has(t.id));
+          startIndex = essentialCount;
+        } else {
+          const pinnedCount = allTabs.filter((t) => t.pinned).length;
+          tabs = allTabs.filter((t) => !t.pinned);
+          startIndex = pinnedCount;
+        }
 
         const getDomain = (url) => { try { return new URL(url).hostname; } catch (e) { return ""; } };
 
@@ -344,7 +373,6 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             for (const t of tabs) urlCount[t.url] = (urlCount[t.url] || 0) + 1;
             const dups = [];
             const nonDups = [];
-            const seen = new Set();
             for (const t of tabs) {
               if (urlCount[t.url] > 1) {
                 dups.push(t);
@@ -359,7 +387,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
 
-        await browser.tabs.move(tabs.map((t) => t.id), { index: pinnedCount });
+        await browser.tabs.move(tabs.map((t) => t.id), { index: startIndex });
       })();
       break;
     }

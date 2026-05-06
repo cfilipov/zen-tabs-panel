@@ -2176,16 +2176,18 @@ document.addEventListener("keydown", (e) => {
         // Number keys 1-9 for workspace switching in actions view
         const num = parseInt(e.key, 10);
         if (!isNaN(num) && num >= 1 && num <= 9) {
+          let wsHandled = false;
           const wsItems = listEl.querySelectorAll(".list-item[data-workspace-switch-id]");
           for (const wsEl of wsItems) {
             const badge = wsEl.querySelector(".item-badge");
             if (badge && badge.textContent === String(num)) {
               e.preventDefault();
               ext.runtime.sendMessage({ type: "switch-workspace", workspaceId: wsEl.dataset.workspaceSwitchId }).catch(() => {});
+              wsHandled = true;
               break;
             }
           }
-          break;
+          if (wsHandled) break;
         }
         const key = (e.shiftKey ? "⇧" : "") + e.key.toUpperCase();
         const idx = items.findIndex((item) => item.hotkey === key);

@@ -714,6 +714,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
           };
         },
 
+        async getEssentialTabIds() {
+          const w = getWin();
+          if (!w || !w.gBrowser) return [];
+          return Array.from(w.document.querySelectorAll('.tabbrowser-tab[zen-essential]'))
+            .map(t => {
+              try { return context.extension.tabManager.getWrapper(t)?.id ?? null; } catch (e) { return null; }
+            })
+            .filter(id => id !== null);
+        },
+
         async getNavigationHistory() {
           const w = getWin();
           if (!w || !w.gBrowser) return null;
