@@ -58,6 +58,7 @@ function getActions() {
     { type: "separator" },
     { id: "child-tabs", label: "Children", hotkey: "C", icon: "svg:move-down", isView: true, needsChildren: true, count: childTabCount, compact: true },
     { id: "sibling-tabs", label: "Siblings", hotkey: "B", icon: "svg:git-branch", isView: true, needsSiblings: true, count: siblingTabCount, compact: true },
+    { id: "parent-tabs", label: "Parent tabs", hotkey: "⇧T", icon: "svg:parent-node", isView: true, compact: true },
     { id: "unvisited-tabs", label: "New tabs", hotkey: "N", icon: "svg:circle-dot", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
     { id: "last-visited", label: "Recent", hotkey: "R", icon: "svg:clock", isView: true, compact: true },
     { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "svg:copy", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
@@ -87,6 +88,7 @@ const SVG_ICONS = {
   "arrow-left-right": `<svg ${SVG_ATTRS}><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>`,
   "move-up": `<svg ${SVG_ATTRS}><path d="M8 6l4-4 4 4"/><path d="M12 2v14"/><circle cx="12" cy="20" r="2"/></svg>`,
   "move-down": `<svg ${SVG_ATTRS}><path d="M8 18l4 4 4-4"/><path d="M12 22V8"/><circle cx="12" cy="4" r="2"/></svg>`,
+  "parent-node": `<svg ${SVG_ATTRS}><circle cx="12" cy="4" r="3"/><path d="M12 7v5"/><path d="M12 12l-5 5"/><path d="M12 12l5 5"/><circle cx="7" cy="19" r="2"/><circle cx="17" cy="19" r="2"/></svg>`,
   "git-branch": `<svg ${SVG_ATTRS}><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>`,
   "circle-dot": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`,
   "clock": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
@@ -571,6 +573,7 @@ function refreshCurrentView() {
     case "last-visited": showLastVisited(false); break;
     case "child-tabs": showChildTabs(false); break;
     case "sibling-tabs": showSiblingTabs(false); break;
+    case "parent-tabs": showParentTabs(false); break;
     case "unvisited": showUnvisitedTabs(false); break;
     case "duplicates": showDuplicates(false); break;
     case "domains": showDomains(false); break;
@@ -753,6 +756,10 @@ function activateAction(action) {
       showSiblingTabs();
       break;
 
+    case "parent-tabs":
+      showParentTabs();
+      break;
+
     case "unvisited-tabs":
       showUnvisitedTabs();
       break;
@@ -923,6 +930,24 @@ async function showSiblingTabs(animate) {
   renderTabList(siblings, "Siblings");
   renderFooter();
   animateList("forward");
+}
+
+async function showParentTabs(animate) {
+  currentView = "parent-tabs";
+
+  let allTabs;
+  try {
+    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+  } catch (e) {
+    renderTabList([], "Parent tabs");
+    return;
+  }
+
+  const childOpeners = new Set(allTabs.filter((t) => t.openerTabDomId).map((t) => t.openerTabDomId));
+  const parents = filterByWorkspace(allTabs.filter((t) => childOpeners.has(t.domId)));
+  renderTabList(parents, "Parent tabs");
+  renderFooter();
+  if (animate !== false) animateList("forward");
 }
 
 async function showUnvisitedTabs(animate) {
@@ -2206,6 +2231,7 @@ async function init() {
     switch (initialView) {
       case "child-tabs": await showChildTabs(); break;
       case "sibling-tabs": await showSiblingTabs(); break;
+      case "parent-tabs": await showParentTabs(); break;
       case "unvisited-tabs": await showUnvisitedTabs(); break;
       case "last-visited": await showLastVisited(); break;
       case "duplicates": await showDuplicates(); break;
