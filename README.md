@@ -21,9 +21,10 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 - Duplicates - view all duplicate tabs across all workspaces, grouped by URL, with workspace indicators, tab age, hover preview, and close buttons. Duplicate tabs are marked with an amber diamond indicator in the sidebar (aligned with the unread dot indicator).
 - Domains - browse tabs grouped by domain with drill-down. Supports workspace filter (`W` key).
 - Tabs by age - list all tabs oldest first, grouped by age (today, yesterday, this week, etc.) with close buttons for cleaning up old tabs. Supports workspace filter (`W` key).
+- Most visited - list tabs sorted by browser history visit count, most visited first. Supports workspace filter (`W` key).
 - Move to workspace - move tabs to another workspace without switching away (placed at top of target workspace's tab list). Supports multiselected tabs (Cmd+click).
 - Move tab to start / end of tab bar
-- Reorder tabs - submenu with sort options: by recent, by domain (alphabetical or popularity), by age, inactive at bottom, group duplicates
+- Reorder tabs - submenu with sort options: by recent, by domain (alphabetical or popularity), by age, most visited, inactive at bottom, group duplicates
 - Scroll to current tab - scroll the sidebar to center the active tab
 - Unload tab - discard from memory
 - Settings
@@ -48,6 +49,7 @@ All global shortcuts use `Ctrl+Option` as the modifier. The letter key matches t
 | Tab info | `Ctrl+Option+T` | `T` |
 | Domains | — | `Q` |
 | Tabs by age | — | `J` |
+| Most visited | — | `V` |
 | Move to workspace | `Ctrl+Option+M` | `M` |
 | Move to start | `Ctrl+Option+S` | `S` |
 | Move to end | `Ctrl+Option+B` | `B` |

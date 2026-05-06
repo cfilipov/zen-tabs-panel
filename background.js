@@ -310,6 +310,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "sort-tabs-age-asc":
     case "sort-tabs-age-desc":
     case "sort-tabs-inactive-bottom":
+    case "sort-tabs-most-visited":
     case "sort-tabs-group-dups": {
       (async () => {
         await browser.zenWorkspaces.hidePalette();
@@ -347,6 +348,18 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
           case "sort-tabs-inactive-bottom":
             tabs.sort((a, b) => (a.discarded ? 1 : 0) - (b.discarded ? 1 : 0));
             break;
+          case "sort-tabs-most-visited": {
+            const uniqueUrls = [...new Set(tabs.map((t) => t.url))];
+            const visitCounts = {};
+            await Promise.all(uniqueUrls.map((url) =>
+              browser.history.getVisits({ url }).then(
+                (visits) => { visitCounts[url] = visits.length; },
+                () => { visitCounts[url] = 0; }
+              )
+            ));
+            tabs.sort((a, b) => (visitCounts[b.url] || 0) - (visitCounts[a.url] || 0));
+            break;
+          }
           case "sort-tabs-group-dups": {
             const urlCount = {};
             for (const t of tabs) urlCount[t.url] = (urlCount[t.url] || 0) + 1;

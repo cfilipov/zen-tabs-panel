@@ -30,6 +30,7 @@ let tabsByAgeWorkspaceOnly = false;
 let currentDomain = null;
 let tabsByAgeNewestFirst = false;
 let domainsSortAlpha = false;
+let mostVisitedWorkspaceOnly = false;
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
@@ -61,6 +62,7 @@ function getActions() {
     { id: "tab-info", label: "Tab info", hotkey: "T", icon: "ⓘ", isView: true, compact: true },
     { id: "domains", label: "Domains", hotkey: "Q", icon: "◉", isView: true, compact: true },
     { id: "tabs-by-age", label: "Tabs by age", hotkey: "J", icon: "▤", isView: true, compact: true },
+    { id: "most-visited", label: "Most visited", hotkey: "V", icon: "★", isView: true, compact: true },
     { type: "separator" },
     { id: "move-tab-to-start", label: "Move to start", hotkey: "S", icon: "⤒", compact: true },
     { id: "move-tab-to-end", label: "Move to end", hotkey: "B", icon: "⤓", compact: true },
@@ -566,6 +568,10 @@ function activateAction(action) {
 
     case "domains":
       showDomains();
+      break;
+
+    case "most-visited":
+      showMostVisited();
       break;
 
     case "tabs-by-age":
@@ -1571,7 +1577,8 @@ function showReorderTabs() {
     { label: "Age (oldest first)", hotkey: "5", icon: "⇅", reorderAction: "sort-tabs-age-asc" },
     { label: "Age (newest first)", hotkey: "6", icon: "⇅", reorderAction: "sort-tabs-age-desc" },
     { label: "Inactive at bottom", hotkey: "7", icon: "⏻", reorderAction: "sort-tabs-inactive-bottom" },
-    { label: "Group duplicates", hotkey: "8", icon: "⊜", reorderAction: "sort-tabs-group-dups" },
+    { label: "Most visited first", hotkey: "8", icon: "★", reorderAction: "sort-tabs-most-visited" },
+    { label: "Group duplicates", hotkey: "9", icon: "⊜", reorderAction: "sort-tabs-group-dups" },
   ];
 
   items = reorderOptions;
@@ -1608,6 +1615,125 @@ function showReorderTabs() {
   animateList("forward");
 }
 
+// ---------------------------------------------------------------------------
+// Most visited submenu
+// ---------------------------------------------------------------------------
+
+async function showMostVisited(animate) {
+  currentView = "most-visited";
+  items = [];
+  selectedIndex = -1;
+
+  let allTabs;
+  try {
+    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+  } catch (e) {
+    listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
+    updateHeader("Most visited");
+    return;
+  }
+
+  let filtered = allTabs.filter((t) => t.url && !t.url.startsWith("about:"));
+  if (mostVisitedWorkspaceOnly) {
+    filtered = filtered.filter((t) => t.workspaceId === activeWorkspaceId);
+  }
+
+  // Get visit counts for all unique URLs in parallel
+  const uniqueUrls = [...new Set(filtered.map((t) => t.url))];
+  const visitCounts = {};
+  try {
+    const results = await Promise.all(
+      uniqueUrls.map((url) => ext.runtime.sendMessage({ type: "get-history-visits", url }).then(
+        (visits) => ({ url, count: visits.length }),
+        () => ({ url, count: 0 })
+      ))
+    );
+    for (const r of results) visitCounts[r.url] = r.count;
+  } catch (e) {}
+
+  // Sort by visit count descending
+  filtered.sort((a, b) => (visitCounts[b.url] || 0) - (visitCounts[a.url] || 0));
+
+  const hint = [{ key: "W", label: mostVisitedWorkspaceOnly ? "all" : "workspace", onClick: () => { mostVisitedWorkspaceOnly = !mostVisitedWorkspaceOnly; ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {}); showMostVisited(false); } }];
+
+  // Render using a custom list that shows visit count in subtitle
+  selectedIndex = -1;
+  listEl.innerHTML = "";
+  const now = Date.now();
+
+  if (filtered.length === 0) {
+    items = [];
+    listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
+    updateHeader("Most visited", hint);
+    if (animate !== false) animateList("forward");
+    return;
+  }
+
+  items = filtered;
+
+  for (let i = 0; i < filtered.length; i++) {
+    const tab = filtered[i];
+    const badge = i < 10 ? String(i) : null;
+    const visits = visitCounts[tab.url] || 0;
+
+    const el = document.createElement("div");
+    el.className = "list-item";
+    el.dataset.domId = tab.domId;
+
+    let domain = "";
+    try { domain = new URL(tab.url).hostname; } catch (e) {}
+
+    let favicon = tab.favIconUrl || "";
+    if (favicon.startsWith("moz-remote-image://")) {
+      try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
+    }
+    const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
+
+    let wsHtml = "";
+    if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
+      const ws = workspaceMap[tab.workspaceId];
+      if (ws) {
+        const wsIcon = ws.svgContent ? `<span class="subtitle-ws-icon">${ws.svgContent}</span>` : "";
+        wsHtml = `<span class="subtitle-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+      }
+    }
+
+    const subtitleParts = [
+      domain ? `<span class="subtitle-domain">${escapeHtml(domain)}</span>` : "",
+      `<span class="subtitle-age">${visits} visits</span>`,
+      wsHtml,
+    ].filter(Boolean).join("");
+
+    el.innerHTML = `
+      ${canLoadFavicon
+        ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
+        : `<span class="item-icon-placeholder">○</span>`}
+      <span class="item-text">
+        <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
+        <span class="item-subtitle">${subtitleParts}</span>
+      </span>
+      ${badge !== null ? `<span class="item-right"><span class="item-badge">${badge}</span></span>` : ""}
+    `;
+
+    const img = el.querySelector("img.item-icon");
+    if (img) img.addEventListener("error", () => { img.style.display = "none"; });
+
+    el.addEventListener("click", () => activateTab(tab.domId));
+    el.addEventListener("mouseenter", () => {
+      ext.runtime.sendMessage({ type: "preview-tab", domId: tab.domId }).catch(() => {});
+    });
+    el.addEventListener("mouseleave", () => {
+      ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+    });
+
+    listEl.appendChild(el);
+  }
+
+  updateSelection();
+  updateHeader("Most visited", hint);
+  if (animate !== false) animateList("forward");
+}
+
 function moveToWorkspace(workspaceId) {
   ext.runtime.sendMessage({ type: "move-selected-tabs-to-workspace", workspaceId }).catch(() => {});
 }
@@ -1626,6 +1752,7 @@ function goBack() {
     domainsSortAlpha = false;
     tabsByAgeWorkspaceOnly = false;
     tabsByAgeNewestFirst = false;
+    mostVisitedWorkspaceOnly = false;
     currentDomain = null;
     if (initialView) {
       closePalette();
@@ -1724,6 +1851,13 @@ document.addEventListener("keydown", (e) => {
             tabsByAgeWorkspaceOnly = !tabsByAgeWorkspaceOnly;
             ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
             showTabsByAge(false);
+            break;
+          }
+          if (currentView === "most-visited") {
+            e.preventDefault();
+            mostVisitedWorkspaceOnly = !mostVisitedWorkspaceOnly;
+            ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+            showMostVisited(false);
             break;
           }
         }
