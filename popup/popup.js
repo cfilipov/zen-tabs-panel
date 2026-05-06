@@ -448,8 +448,8 @@ function updateSelection() {
 }
 
 function animateList(direction) {
+  if (initialView) return;
   listEl.classList.remove("animate-forward", "animate-back");
-  // Force reflow so re-adding the same class triggers animation
   void listEl.offsetWidth;
   listEl.classList.add(direction === "forward" ? "animate-forward" : "animate-back");
   listEl.addEventListener("animationend", () => {
@@ -636,7 +636,9 @@ async function showActionsMenu() {
     selectedTabCount = 0;
   }
 
-  renderActions(getActions(), null);
+  if (!initialView) {
+    renderActions(getActions(), null);
+  }
 }
 
 async function showChildTabs() {
@@ -1236,8 +1238,12 @@ function goBack() {
   if (currentView !== "actions") {
     ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
     recentWorkspaceOnly = false;
-    showActionsMenu();
-    animateList("back");
+    if (initialView) {
+      closePalette();
+    } else {
+      showActionsMenu();
+      animateList("back");
+    }
   }
 }
 
@@ -1381,17 +1387,19 @@ document.documentElement.style.colorScheme = theme;
 const initialView = urlParams.get("view");
 
 async function init() {
-  await showActionsMenu();
   if (initialView) {
+    await fetchWorkspaceMap();
     switch (initialView) {
-      case "child-tabs": showChildTabs(); break;
-      case "sibling-tabs": showSiblingTabs(); break;
-      case "unvisited-tabs": showUnvisitedTabs(); break;
-      case "last-visited": showLastVisited(); break;
-      case "duplicates": showDuplicates(); break;
-      case "tab-info": showTabInfo(); break;
-      case "move-to-workspace": showMoveToWorkspace(); break;
+      case "child-tabs": await showChildTabs(); break;
+      case "sibling-tabs": await showSiblingTabs(); break;
+      case "unvisited-tabs": await showUnvisitedTabs(); break;
+      case "last-visited": await showLastVisited(); break;
+      case "duplicates": await showDuplicates(); break;
+      case "tab-info": await showTabInfo(); break;
+      case "move-to-workspace": await showMoveToWorkspace(); break;
     }
+  } else {
+    await showActionsMenu();
   }
 }
 
