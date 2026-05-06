@@ -37,29 +37,28 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 
 **Keyboard shortcuts** (configurable via `about:addons` › Manage Extension Shortcuts):
 
-All global shortcuts use `Ctrl+Cmd` as the modifier. The letter key matches the in-panel hotkey, so you only need to learn one set of keys. Some keys are reassigned to avoid macOS system shortcut conflicts (see `KEYBINDING_CONFLICTS.md`).
+Press `Ctrl+Cmd+.` to open the palette (configurable via `about:addons` > Manage Extension Shortcuts). From the palette, use single-key shortcuts to navigate:
 
-| Action | Global shortcut | Panel key |
-|---|---|---|
-| Open palette | `Ctrl+Cmd+.` | — |
-| Previous tab | `Ctrl+Cmd+P` | `P` |
-| Parent tab | `Ctrl+Cmd+T` | `T` |
-| Children | `Ctrl+Cmd+C` | `C` |
-| Siblings | `Ctrl+Cmd+B` | `B` |
-| New tabs | `Ctrl+Cmd+N` | `N` |
-| Recent | `Ctrl+Cmd+R` | `R` |
-| Duplicates | `Ctrl+Cmd+K` | `K` |
-| Tab info | `Ctrl+Cmd+I` | `I` |
-| Domains | `Ctrl+Cmd+H` | `H` |
-| Tabs by age | `Ctrl+Cmd+J` | `J` |
-| Most visited | `Ctrl+Cmd+V` | `V` |
-| Move to start | `Ctrl+Cmd+S` | `S` |
-| Move to end | `Ctrl+Cmd+E` | `E` |
-| Reorder tabs | `Ctrl+Cmd+O` | `O` |
-| Move to workspace | `Ctrl+Cmd+M` | `M` |
-| Scroll to tab | `Ctrl+Cmd+L` | `L` |
-| Unload tab | `Ctrl+Cmd+U` | `U` |
-| Settings | — | `,` |
+| Panel key | Action |
+|---|---|
+| `P` | Previous tab |
+| `T` | Parent tab |
+| `C` | Children |
+| `B` | Siblings |
+| `N` | New tabs |
+| `R` | Recent |
+| `K` | Duplicates |
+| `I` | Tab info |
+| `H` | Domains |
+| `J` | Tabs by age |
+| `V` | Most visited |
+| `S` | Move to start |
+| `E` | Move to end |
+| `O` | Reorder tabs |
+| `M` | Move to workspace |
+| `L` | Scroll to tab |
+| `U` | Unload tab |
+| `,` | Settings |
 
 **Settings** (accessible from the palette or `about:addons` › Extensions › Zen Tabs Panel › Preferences):
 

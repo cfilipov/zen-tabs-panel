@@ -165,50 +165,8 @@ async function moveTabToEnd() {
 }
 
 browser.commands.onCommand.addListener((command) => {
-  switch (command) {
-    case "open-palette":
-      browser.zenWorkspaces.showPalette();
-      break;
-
-    case "go-to-previous-tab":
-      browser.zenWorkspaces.goToPreviousTab();
-      break;
-    case "go-to-parent-tab":
-      browser.zenWorkspaces.goToParentTab();
-      break;
-    case "move-tab-to-start":
-      moveTabToStart();
-      break;
-    case "move-tab-to-end":
-      moveTabToEnd();
-      break;
-    case "scroll-to-current-tab":
-      browser.zenWorkspaces.scrollCurrentTabIntoView();
-      break;
-    case "unload-tab": {
-      (async () => {
-        const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-        if (!activeTab) return;
-        const parentResult = await browser.zenWorkspaces.goToParentTab();
-        if (!parentResult) await browser.zenWorkspaces.goToPreviousTab();
-        try { await browser.tabs.discard(activeTab.id); } catch (e) {}
-      })();
-      break;
-    }
-
-    case "child-tabs":
-    case "sibling-tabs":
-    case "unvisited-tabs":
-    case "last-visited":
-    case "duplicates":
-    case "tab-info":
-    case "domains":
-    case "tabs-by-age":
-    case "most-visited":
-    case "reorder-tabs":
-    case "move-to-workspace":
-      browser.zenWorkspaces.showPalette(command);
-      break;
+  if (command === "open-palette") {
+    browser.zenWorkspaces.showPalette();
   }
 });
 
