@@ -477,15 +477,6 @@ html, body {
   text-overflow: ellipsis;
 }
 
-.dup-group-count {
-  font-size: 12px;
-  color: var(--ztt-text-muted);
-  background: var(--ztt-badge-bg);
-  padding: 2px 7px;
-  border-radius: 8px;
-  flex-shrink: 0;
-}
-
 .item-arrow {
   font-size: 12px;
   color: var(--ztt-text-muted);

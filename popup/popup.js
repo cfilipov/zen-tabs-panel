@@ -26,6 +26,7 @@ const headerHint = document.getElementById("header-hint");
 const footerEl = document.getElementById("footer");
 
 let workspaceFilter = "all";
+let workspaceTabCounts = {};
 let currentDomain = null;
 let tabsByAgeNewestFirst = false;
 let domainsSortAlpha = false;
@@ -61,7 +62,7 @@ function getActions() {
     { id: "last-visited", label: "Recent", hotkey: "R", icon: "svg:clock", isView: true, compact: true },
     { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "svg:copy", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
     { id: "tab-info", label: "Tab info", hotkey: "I", icon: "svg:info", isView: true, compact: true },
-    { id: "domains", label: "Domains", hotkey: "H", icon: "svg:globe", isView: true, compact: true },
+    { id: "domains", label: "Domains", hotkey: "⇧D", icon: "svg:globe", isView: true, compact: true },
     { id: "tabs-by-age", label: "Tabs by age", hotkey: "A", icon: "svg:calendar-clock", isView: true, compact: true },
     { id: "most-visited", label: "Most visited", hotkey: "V", icon: "svg:star", isView: true, compact: true },
     { type: "separator" },
@@ -815,6 +816,12 @@ async function showActionsMenu() {
       : 0;
     unvisitedTabCount = allTabs.filter((t) => t.unread).length;
 
+    // Workspace tab counts
+    workspaceTabCounts = {};
+    for (const t of allTabs) {
+      if (t.workspaceId) workspaceTabCounts[t.workspaceId] = (workspaceTabCounts[t.workspaceId] || 0) + 1;
+    }
+
     // Duplicate groups count
     const urlCounts = {};
     for (const t of allTabs) {
@@ -1405,10 +1412,9 @@ function renderDuplicateGroups(groups) {
       ? `<img class="dup-group-favicon" src="${escapeAttr(favicon)}">`
       : `<span class="dup-group-favicon-placeholder">○</span>`;
     html += `<div class="dup-group-text">`;
-    html += `<div class="dup-group-title">${escapeHtml(sample.title || "Untitled")}</div>`;
+    html += `<div class="dup-group-title">${escapeHtml(sample.title || "Untitled")}<span class="item-count">${group.length}</span></div>`;
     if (domain) html += `<div class="dup-group-domain">${escapeHtml(domain)}</div>`;
     html += `</div>`;
-    html += `<span class="dup-group-count">${group.length}</span>`;
     html += `</div>`;
 
     html += `<div class="info-duplicates-grid">`;
@@ -1948,10 +1954,12 @@ function renderWorkspaceSwitcher(container) {
       ? `<span class="item-icon-placeholder"><span class="workspace-icon">${ws.svgContent}</span></span>`
       : `<span class="item-icon-placeholder">○</span>`;
 
+    const tabCount = workspaceTabCounts[uuid] || 0;
+
     el.innerHTML = `
       ${iconHtml}
       <span class="item-text">
-        <span class="item-title">${escapeHtml(ws.name)}</span>
+        <span class="item-title">${escapeHtml(ws.name)}<span class="item-count">${tabCount}</span></span>
       </span>
       <span class="item-right">
         ${badge !== null ? `<span class="item-badge">${badge}</span>` : ""}
@@ -2006,13 +2014,19 @@ document.addEventListener("keydown", (e) => {
   switch (e.key) {
     case "ArrowDown":
       e.preventDefault();
-      if (footerFocused) moveFooterSelection(1);
+      if (e.metaKey && !footerFocused) {
+        selectedIndex = items.length - 1;
+        updateSelection();
+      } else if (footerFocused) moveFooterSelection(1);
       else moveSelection(1);
       break;
 
     case "ArrowUp":
       e.preventDefault();
-      if (footerFocused) moveFooterSelection(-1);
+      if (e.metaKey && !footerFocused) {
+        selectedIndex = 0;
+        updateSelection();
+      } else if (footerFocused) moveFooterSelection(-1);
       else moveSelection(-1);
       break;
 
@@ -2041,12 +2055,7 @@ document.addEventListener("keydown", (e) => {
       break;
 
     case "Escape":
-      if (currentView !== "actions") {
-        e.preventDefault();
-        goBack();
-      } else {
-        closePalette();
-      }
+      closePalette();
       break;
 
     case "Backspace":

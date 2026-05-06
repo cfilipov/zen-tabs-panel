@@ -49,7 +49,7 @@ Press `Ctrl+Cmd+.` to open the palette (configurable via `about:addons` > Manage
 | `R` | Recent |
 | `D` | Duplicates |
 | `I` | Tab info |
-| `H` | Domains |
+| `⇧D` | Domains |
 | `A` | Tabs by age |
 | `V` | Most visited |
 | `S` | Move to start |
