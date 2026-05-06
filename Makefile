@@ -10,9 +10,11 @@ SRC = manifest.json \
       options/options.html \
       options/options.js \
       options/options.css \
+      welcome/welcome.html \
+      welcome/welcome.js \
+      welcome/welcome.css \
       $(wildcard icons/*.svg) \
-      LICENSE \
-      README.md
+      LICENSE
 
 .PHONY: build clean
 

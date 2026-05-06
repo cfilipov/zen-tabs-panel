@@ -1,5 +1,7 @@
 # Zen Tabs Panel
 
+**Version 0.2.0** · Tested on Zen Browser 1.12 (Firefox 148)
+
 A keyboard-driven tab management extension for [Zen Browser](https://zen-browser.app/) with a command palette UI and optional companion Zen Mods.
 
 > [!CAUTION]
@@ -93,7 +95,7 @@ Open `about:config` in Zen and set both of these:
 
 ### 2. Install the extension
 
-1. Download `zen-tabs-panel.xpi` from this repo.
+1. Download `zen-tabs-panel.xpi` from the [latest release](../../releases/latest).
 2. Open `about:addons` in Zen
 3. Click the gear icon (⚙) › **Install Add-on From File...**
 4. Select the downloaded `.xpi` file
