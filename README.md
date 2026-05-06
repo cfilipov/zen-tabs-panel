@@ -85,7 +85,17 @@ This means two `about:config` flags must be enabled to install it.
 
 ## Install
 
-### 1. Set required `about:config` flags
+### Quick install (macOS)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/cfilipov/zen-tabs-panel/main/install.sh | sh
+```
+
+This automatically sets the required `about:config` flags, downloads the latest release, and installs it into your Zen profile. Run the same command to update. Restart Zen after installing.
+
+### Manual install
+
+#### 1. Set required `about:config` flags
 
 Open `about:config` in Zen and set both of these:
 
@@ -94,7 +104,7 @@ Open `about:config` in Zen and set both of these:
 | `xpinstall.signatures.required` | `false` | Allows installing extensions without a Mozilla signature |
 | `extensions.experiments.enabled` | `true` | Allows extensions to use Experiment APIs |
 
-### 2. Install the extension
+#### 2. Install the extension
 
 1. Download `zen-tabs-panel.xpi` from the [latest release](../../releases/latest).
 2. Open `about:addons` in Zen
@@ -103,7 +113,7 @@ Open `about:config` in Zen and set both of these:
 
 The extension will persist across browser restarts.
 
-### 3. Install companion mods (optional)
+#### 3. Install companion mods (optional)
 
 1. Open the command palette (`Cmd+Option+.`) and press `,` to open settings
 2. Under **Companion Zen Mods**, click **Install** next to any mods you want
