@@ -489,3 +489,14 @@ browser.menus.onClicked.addListener(async (info) => {
 
 browser.zenWorkspaces.getActiveWorkspaceId().catch(() => {});
 browser.zenWorkspaces.syncDuplicates().catch(() => {});
+
+// Show welcome page on first install
+browser.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason === "install") {
+    const { welcomed } = await browser.storage.local.get({ welcomed: false });
+    if (!welcomed) {
+      await browser.storage.local.set({ welcomed: true });
+      browser.tabs.create({ url: browser.runtime.getURL("welcome/welcome.html") });
+    }
+  }
+});
