@@ -25,7 +25,7 @@ const headerEl = document.getElementById("header");
 const backButton = document.getElementById("back-button");
 const viewTitle = document.getElementById("view-title");
 const headerHint = document.getElementById("header-hint");
-const footerEl = document.getElementById("footer");
+const sidebarEl = document.getElementById("sidebar");
 
 let workspaceFilter = "all";
 let workspaceTabCounts = {};
@@ -33,8 +33,8 @@ let currentDomain = null;
 let tabsByAgeNewestFirst = false;
 let domainsSortAlpha = false;
 let sectionStarts = [];
-let footerFocused = false;
-let footerSelectedIndex = -1;
+let sidebarFocused = false;
+let sidebarSelectedIndex = -1;
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
@@ -511,66 +511,61 @@ function filterByWorkspace(tabs) {
   return tabs.filter((t) => t.workspaceId === workspaceFilter);
 }
 
-function renderFooter(sortOptions) {
-  footerEl.innerHTML = "";
+function renderSidebar(sortOptions) {
+  sidebarEl.innerHTML = "";
 
-  // Sort options first
   if (sortOptions) {
     for (const opt of sortOptions) {
-      const el = document.createElement("span");
-      el.className = "footer-sort";
-      el.innerHTML = `${escapeHtml(opt.label)} <span class="footer-badge">${escapeHtml(opt.key)}</span>`;
+      const el = document.createElement("div");
+      el.className = "sidebar-sort";
+      el.innerHTML = `<span class="sidebar-ws-name">${escapeHtml(opt.label)}</span> <span class="sidebar-badge">${escapeHtml(opt.key)}</span>`;
       el.addEventListener("click", opt.onClick);
-      footerEl.appendChild(el);
+      sidebarEl.appendChild(el);
     }
-    const sep = document.createElement("span");
-    sep.className = "footer-sep";
-    footerEl.appendChild(sep);
+    const sep = document.createElement("div");
+    sep.className = "sidebar-sep";
+    sidebarEl.appendChild(sep);
   }
 
-  // "All" item
-  const allEl = document.createElement("span");
-  allEl.className = "footer-item" + (workspaceFilter === "all" ? " active" : "");
-  allEl.innerHTML = `All <span class="footer-badge">\`</span>`;
+  const allEl = document.createElement("div");
+  allEl.className = "sidebar-item" + (workspaceFilter === "all" ? " active" : "");
+  allEl.innerHTML = `<span class="sidebar-ws-name">All</span> <span class="sidebar-badge">0</span>`;
   allEl.addEventListener("click", () => {
     workspaceFilter = workspaceFilter === "all" ? activeWorkspaceId : "all";
     refreshCurrentView();
   });
-  footerEl.appendChild(allEl);
+  sidebarEl.appendChild(allEl);
 
-  // Workspace items
   const allWorkspaces = Object.entries(workspaceMap);
   for (let i = 0; i < allWorkspaces.length; i++) {
     const [uuid, ws] = allWorkspaces[i];
-    const wsKeys = ["Q", "W", "E", "R", "T", "Y", "U", "I", "O"];
-    const badge = i < 9 ? wsKeys[i] : null;
+    const badge = i < 9 ? "⇧" + (i + 1) : null;
     const isActive = workspaceFilter === uuid;
 
-    const el = document.createElement("span");
-    el.className = "footer-item" + (isActive ? " active" : "");
+    const el = document.createElement("div");
+    el.className = "sidebar-item" + (isActive ? " active" : "");
 
     const iconHtml = ws.svgContent
-      ? `<span class="footer-ws-icon">${ws.svgContent}</span>`
+      ? `<span class="sidebar-ws-icon">${ws.svgContent}</span>`
       : "";
-    el.innerHTML = `${iconHtml}${badge !== null ? `<span class="footer-badge">${badge}</span>` : ""}`;
-    el.title = ws.name;
+    el.innerHTML = `${iconHtml}<span class="sidebar-ws-name">${escapeHtml(ws.name)}</span>${badge !== null ? `<span class="sidebar-badge">${badge}</span>` : ""}`;
 
     el.addEventListener("click", () => {
       workspaceFilter = workspaceFilter === uuid ? "all" : uuid;
       refreshCurrentView();
     });
 
-    footerEl.appendChild(el);
+    sidebarEl.appendChild(el);
   }
 
-  footerEl.classList.remove("hidden");
+  sidebarEl.classList.remove("hidden");
 }
 
-function hideFooter() {
-  footerEl.classList.add("hidden");
-  footerEl.innerHTML = "";
-  footerFocused = false;
-  footerSelectedIndex = -1;
+function hideSidebar() {
+  sidebarEl.classList.add("hidden");
+  sidebarEl.innerHTML = "";
+  sidebarFocused = false;
+  sidebarSelectedIndex = -1;
 }
 
 function refreshCurrentView() {
@@ -618,30 +613,27 @@ function moveSelection(delta) {
 function jumpToSection(delta) {
   const count = items.length;
   if (count === 0) return;
-  const hasFooter = !footerEl.classList.contains("hidden");
+  const hasSidebar = !sidebarEl.classList.contains("hidden");
 
-  // Single section (submenus): Tab between list and footer
+  // Single section (submenus): Tab between list and sidebar
   if (sectionStarts.length <= 1) {
-    if (hasFooter) {
-      if (!footerFocused) {
-        // Tab: move from list to footer
-        footerFocused = true;
-        footerSelectedIndex = delta > 0 ? 0 : footerEl.querySelectorAll(".footer-item, .footer-sort").length - 1;
+    if (hasSidebar) {
+      if (!sidebarFocused) {
+        sidebarFocused = true;
+        sidebarSelectedIndex = delta > 0 ? 0 : sidebarEl.querySelectorAll(".sidebar-item, .sidebar-sort").length - 1;
         selectedIndex = -1;
         updateSelection();
-        updateFooterSelection();
+        updateSidebarSelection();
         return;
       } else {
-        // Tab/Shift-Tab while in footer: move back to list
-        footerFocused = false;
-        footerSelectedIndex = -1;
+        sidebarFocused = false;
+        sidebarSelectedIndex = -1;
         selectedIndex = delta > 0 ? 0 : count - 1;
-        updateFooterSelection();
+        updateSidebarSelection();
         updateSelection();
         return;
       }
     }
-    // No footer: jump top/bottom
     selectedIndex = delta > 0 ? 0 : count - 1;
     updateSelection();
     return;
@@ -674,29 +666,29 @@ function jumpToSection(delta) {
   updateSelection();
 }
 
-function updateFooterSelection() {
-  const footerItems = footerEl.querySelectorAll(".footer-item, .footer-sort");
-  footerItems.forEach((el, i) => {
-    el.classList.toggle("focused", footerFocused && i === footerSelectedIndex);
+function updateSidebarSelection() {
+  const sidebarItems = sidebarEl.querySelectorAll(".sidebar-item, .sidebar-sort");
+  sidebarItems.forEach((el, i) => {
+    el.classList.toggle("focused", sidebarFocused && i === sidebarSelectedIndex);
   });
 }
 
-function moveFooterSelection(delta) {
-  const footerItems = footerEl.querySelectorAll(".footer-item, .footer-sort");
-  const count = footerItems.length;
+function moveSidebarSelection(delta) {
+  const sidebarItems = sidebarEl.querySelectorAll(".sidebar-item, .sidebar-sort");
+  const count = sidebarItems.length;
   if (count === 0) return;
-  if (footerSelectedIndex === -1) {
-    footerSelectedIndex = delta > 0 ? 0 : count - 1;
+  if (sidebarSelectedIndex === -1) {
+    sidebarSelectedIndex = delta > 0 ? 0 : count - 1;
   } else {
-    footerSelectedIndex = (footerSelectedIndex + delta + count) % count;
+    sidebarSelectedIndex = (sidebarSelectedIndex + delta + count) % count;
   }
-  updateFooterSelection();
+  updateSidebarSelection();
 }
 
-function activateFooterSelected() {
-  const footerItems = footerEl.querySelectorAll(".footer-item, .footer-sort");
-  if (footerSelectedIndex >= 0 && footerSelectedIndex < footerItems.length) {
-    footerItems[footerSelectedIndex].click();
+function activateSidebarSelected() {
+  const sidebarItems = sidebarEl.querySelectorAll(".sidebar-item, .sidebar-sort");
+  if (sidebarSelectedIndex >= 0 && sidebarSelectedIndex < sidebarItems.length) {
+    sidebarItems[sidebarSelectedIndex].click();
   }
 }
 
@@ -864,7 +856,7 @@ async function showActionsMenu() {
 
   if (!initialView) {
     renderActions(getActions(), null);
-    hideFooter();
+    hideSidebar();
   }
 }
 
@@ -887,7 +879,7 @@ async function showChildTabs(animate) {
 
   const children = filterByWorkspace(allTabs.filter((t) => t.openerTabDomId === activeTab.domId));
   renderTabList(children, "Children");
-  renderFooter();
+  renderSidebar();
 }
 
 async function showSiblingTabs(animate) {
@@ -909,7 +901,7 @@ async function showSiblingTabs(animate) {
 
   const siblings = filterByWorkspace(allTabs.filter((t) => t.openerTabDomId === activeTab.openerTabDomId && t.domId !== activeTab.domId));
   renderTabList(siblings, "Siblings");
-  renderFooter();
+  renderSidebar();
 }
 
 async function showParentTabs(animate) {
@@ -926,7 +918,7 @@ async function showParentTabs(animate) {
   const childOpeners = new Set(allTabs.filter((t) => t.openerTabDomId).map((t) => t.openerTabDomId));
   const parents = filterByWorkspace(allTabs.filter((t) => childOpeners.has(t.domId)));
   renderTabList(parents, "Parent tabs");
-  renderFooter();
+  renderSidebar();
 }
 
 async function showNavigation() {
@@ -1012,7 +1004,7 @@ async function showUnvisitedTabs(animate) {
 
   const unvisited = filterByWorkspace(allTabs.filter((t) => t.unread));
   renderTabList(unvisited, "New tabs");
-  renderFooter();
+  renderSidebar();
 }
 
 async function showLastVisited(animate) {
@@ -1039,7 +1031,7 @@ async function showLastVisited(animate) {
   }));
 
   renderTabList(filtered, "Recent");
-  renderFooter();
+  renderSidebar();
 }
 
 async function showMoveToWorkspace() {
@@ -1455,7 +1447,7 @@ async function showDuplicates(animate) {
   }
 
   renderDuplicateGroups(groups);
-  renderFooter();
+  renderSidebar();
 }
 
 function renderDuplicateGroups(groups) {
@@ -1577,9 +1569,9 @@ async function showDomains(animate) {
       ? (a, b) => a.domain.localeCompare(b.domain)
       : (a, b) => b.count - a.count);
 
-  const sortOpts = [{ key: "S", label: "sort by " + (domainsSortAlpha ? "count" : "A-Z"), onClick: () => { domainsSortAlpha = !domainsSortAlpha; refreshCurrentView(); } }];
+  const sortOpts = [{ key: "S", label: "Sort by " + (domainsSortAlpha ? "count" : "A-Z"), onClick: () => { domainsSortAlpha = !domainsSortAlpha; refreshCurrentView(); } }];
   renderDomainList(domains, "Domains");
-  renderFooter(sortOpts);
+  renderSidebar(sortOpts);
 }
 
 function renderDomainList(domains, title) {
@@ -1656,7 +1648,7 @@ async function showDomainTabs(domain, animate) {
   const wsFiltered = filterByWorkspace(filtered);
 
   renderTabList(wsFiltered, domain);
-  renderFooter();
+  renderSidebar();
 }
 
 // ---------------------------------------------------------------------------
@@ -1716,9 +1708,9 @@ async function showTabsByAge(animate) {
     groupMap.get(label).tabs.push(tab);
   }
 
-  const sortOpts = [{ key: "S", label: "sort by " + (tabsByAgeNewestFirst ? "oldest" : "newest"), onClick: () => { tabsByAgeNewestFirst = !tabsByAgeNewestFirst; refreshCurrentView(); } }];
+  const sortOpts = [{ key: "S", label: "Sort by " + (tabsByAgeNewestFirst ? "oldest" : "newest"), onClick: () => { tabsByAgeNewestFirst = !tabsByAgeNewestFirst; refreshCurrentView(); } }];
   renderTabsByAge(groups);
-  renderFooter(sortOpts);
+  renderSidebar(sortOpts);
 }
 
 function renderTabsByAge(groups) {
@@ -1992,7 +1984,7 @@ async function showMostVisited(animate) {
 
   updateSelection();
   updateHeader("Most visited");
-  renderFooter();
+  renderSidebar();
 }
 
 function renderWorkspaceSwitcher(container) {
@@ -2058,22 +2050,21 @@ document.addEventListener("keydown", (e) => {
   switch (e.key) {
     case "ArrowDown":
       e.preventDefault();
-      if (e.metaKey && !footerFocused) {
+      if (e.metaKey && !sidebarFocused) {
         selectedIndex = items.length - 1;
         updateSelection();
-      } else if (footerFocused) moveFooterSelection(1);
+      } else if (sidebarFocused) moveSidebarSelection(1);
       else moveSelection(1);
       break;
 
     case "ArrowUp":
       e.preventDefault();
-      if (e.metaKey && !footerFocused) {
+      if (e.metaKey && !sidebarFocused) {
         selectedIndex = 0;
         updateSelection();
-      } else if (footerFocused) moveFooterSelection(-1);
+      } else if (sidebarFocused) moveSidebarSelection(-1);
       else moveSelection(-1);
       break;
-
 
     case "Tab":
       e.preventDefault();
@@ -2082,19 +2073,17 @@ document.addEventListener("keydown", (e) => {
 
     case "ArrowRight":
       e.preventDefault();
-      if (footerFocused) { moveFooterSelection(1); }
-      else if (selectedIndex >= 0 && items[selectedIndex]?.isView) { activateSelected(); }
+      if (!sidebarFocused && selectedIndex >= 0 && items[selectedIndex]?.isView) { activateSelected(); }
       break;
 
     case "ArrowLeft":
       e.preventDefault();
-      if (footerFocused) { moveFooterSelection(-1); }
-      else if (currentView !== "actions") { goBack(); }
+      if (!sidebarFocused && currentView !== "actions") { goBack(); }
       break;
 
     case "Enter":
       e.preventDefault();
-      if (footerFocused) { activateFooterSelected(); }
+      if (sidebarFocused) { activateSidebarSelected(); }
       else { activateSelected(); }
       break;
 
@@ -2152,7 +2141,7 @@ document.addEventListener("keydown", (e) => {
           }
           break;
         }
-        // S key for sort toggles in footer
+        // S key for sort toggles
         if (e.key.toUpperCase() === "S") {
           if (currentView === "domains" || currentView === "domain-tabs") {
             e.preventDefault();
@@ -2167,19 +2156,19 @@ document.addEventListener("keydown", (e) => {
             break;
           }
         }
-        // Backtick toggles workspace filter (all vs current workspace)
-        if (e.key === "`" && !footerEl.classList.contains("hidden")) {
+        // 0 toggles workspace filter (all vs current workspace)
+        if (e.key === "0" && !e.shiftKey && !sidebarEl.classList.contains("hidden")) {
           e.preventDefault();
           workspaceFilter = workspaceFilter === "all" ? activeWorkspaceId : "all";
           refreshCurrentView();
           break;
         }
-        // QWERTY row for workspace filtering (Q=1, W=2, ..., O=9)
-        if (!footerEl.classList.contains("hidden")) {
-          const wsKeys = { "Q": 0, "W": 1, "E": 2, "R": 3, "T": 4, "Y": 5, "U": 6, "I": 7, "O": 8 };
-          const wsIndex = wsKeys[e.key.toUpperCase()];
-          if (wsIndex !== undefined) {
+        // Shift+1-9 for workspace filtering
+        if (e.shiftKey && !sidebarEl.classList.contains("hidden") && e.code && e.code.startsWith("Digit")) {
+          const num = parseInt(e.code.slice(5), 10);
+          if (num >= 1 && num <= 9) {
             const allWorkspaces = Object.entries(workspaceMap);
+            const wsIndex = num - 1;
             if (wsIndex < allWorkspaces.length) {
               e.preventDefault();
               const uuid = allWorkspaces[wsIndex][0];
