@@ -146,6 +146,19 @@ For iterating on `background.js`, `popup/`, and `options/`:
 3. Select `extension/manifest.json`
 4. Use the **Reload** button after making changes
 
+### Remote debugging
+
+To enable remote debugging in Zen. Open about:config and set these two preferences:                          
+                                                                                                                        
+- devtools.debugger.remote-enabled → true                                                                             
+- devtools.chrome.enabled → true                                                                                      
+                                                                                                                        
+Then restart Zen with the remote debugging port flag. You can do that by quitting Zen and running:                    
+
+```bash   
+/Applications/Zen.app/Contents/MacOS/zen --start-debugger-server 6000
+```
+
 ### Browser Toolbox
 
 The Browser Toolbox is essential for inspecting Zen's chrome DOM, testing CSS selectors, and debugging the experiment API.
