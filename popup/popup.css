@@ -209,6 +209,11 @@ html, body {
   color: var(--ztt-text-muted);
 }
 
+.item-icon-placeholder svg {
+  width: 16px;
+  height: 16px;
+}
+
 .list-item.disabled .item-icon-placeholder {
   color: var(--ztt-text-disabled);
 }

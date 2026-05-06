@@ -51,25 +51,25 @@ function activateTab(domId) {
 
 function getActions() {
   return [
-    { id: "go-to-previous-tab", label: "Previous", hotkey: "P", icon: "↔", preview: previousTabPreview },
-    { id: "go-to-parent-tab", label: "Parent", hotkey: "⇧P", icon: "↑", needsParent: true, preview: parentTabPreview },
+    { id: "go-to-previous-tab", label: "Previous", hotkey: "P", icon: "svg:arrow-left-right", preview: previousTabPreview },
+    { id: "go-to-parent-tab", label: "Parent", hotkey: "⇧P", icon: "svg:move-up", needsParent: true, preview: parentTabPreview },
     { type: "separator" },
-    { id: "child-tabs", label: "Children", hotkey: "C", icon: "↓", isView: true, needsChildren: true, count: childTabCount, compact: true },
-    { id: "sibling-tabs", label: "Siblings", hotkey: "⇧C", icon: "↔", isView: true, needsSiblings: true, count: siblingTabCount, compact: true },
-    { id: "unvisited-tabs", label: "New tabs", hotkey: "A", icon: "●", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
-    { id: "last-visited", label: "Recent", hotkey: "R", icon: "◷", isView: true, compact: true },
-    { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "⊜", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
-    { id: "tab-info", label: "Tab info", hotkey: "T", icon: "ⓘ", isView: true, compact: true },
-    { id: "domains", label: "Domains", hotkey: "Q", icon: "◉", isView: true, compact: true },
-    { id: "tabs-by-age", label: "Tabs by age", hotkey: "J", icon: "▤", isView: true, compact: true },
-    { id: "most-visited", label: "Most visited", hotkey: "V", icon: "★", isView: true, compact: true },
+    { id: "child-tabs", label: "Children", hotkey: "C", icon: "svg:move-down", isView: true, needsChildren: true, count: childTabCount, compact: true },
+    { id: "sibling-tabs", label: "Siblings", hotkey: "⇧C", icon: "svg:git-branch", isView: true, needsSiblings: true, count: siblingTabCount, compact: true },
+    { id: "unvisited-tabs", label: "New tabs", hotkey: "A", icon: "svg:circle-dot", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
+    { id: "last-visited", label: "Recent", hotkey: "R", icon: "svg:clock", isView: true, compact: true },
+    { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "svg:copy", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
+    { id: "tab-info", label: "Tab info", hotkey: "T", icon: "svg:info", isView: true, compact: true },
+    { id: "domains", label: "Domains", hotkey: "Q", icon: "svg:globe", isView: true, compact: true },
+    { id: "tabs-by-age", label: "Tabs by age", hotkey: "J", icon: "svg:calendar-clock", isView: true, compact: true },
+    { id: "most-visited", label: "Most visited", hotkey: "V", icon: "svg:star", isView: true, compact: true },
     { type: "separator" },
-    { id: "move-tab-to-start", label: "Move to start", hotkey: "S", icon: "⤒", compact: true },
-    { id: "move-tab-to-end", label: "Move to end", hotkey: "B", icon: "⤓", compact: true },
-    { id: "reorder-tabs", label: "Reorder tabs", hotkey: "O", icon: "⇅", isView: true, compact: true },
-    { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "⇥", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0, compact: true },
-    { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "F", icon: "◎", compact: true },
-    { id: "unload-tab", label: "Unload", hotkey: "X", icon: "⏻", compact: true },
+    { id: "move-tab-to-start", label: "Move to start", hotkey: "S", icon: "svg:arrow-up-to-line", compact: true },
+    { id: "move-tab-to-end", label: "Move to end", hotkey: "B", icon: "svg:arrow-down-to-line", compact: true },
+    { id: "reorder-tabs", label: "Reorder tabs", hotkey: "O", icon: "svg:arrow-up-down", isView: true, compact: true },
+    { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "svg:arrow-right-to-line", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0, compact: true },
+    { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "F", icon: "svg:locate", compact: true },
+    { id: "unload-tab", label: "Unload", hotkey: "X", icon: "svg:moon", compact: true },
     { id: "settings", label: "Settings", hotkey: "," , icon: "svg:gear", compact: true },
   ];
 }
@@ -78,8 +78,26 @@ function getActions() {
 // Icon rendering — SVG icons for consistent sizing
 // ---------------------------------------------------------------------------
 
+const SVG_ATTRS = 'width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const SVG_ICONS = {
-  gear: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`,
+  "arrow-left-right": `<svg ${SVG_ATTRS}><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>`,
+  "move-up": `<svg ${SVG_ATTRS}><path d="M8 6l4-4 4 4"/><path d="M12 2v14"/><circle cx="12" cy="20" r="2"/></svg>`,
+  "move-down": `<svg ${SVG_ATTRS}><path d="M8 18l4 4 4-4"/><path d="M12 22V8"/><circle cx="12" cy="4" r="2"/></svg>`,
+  "git-branch": `<svg ${SVG_ATTRS}><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>`,
+  "circle-dot": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`,
+  "clock": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  "copy": `<svg ${SVG_ATTRS}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`,
+  "info": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
+  "globe": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>`,
+  "calendar-clock": `<svg ${SVG_ATTRS}><path d="M21 7.5V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><circle cx="18" cy="18" r="4"/><path d="M18 16.5v1.5l.7.7"/></svg>`,
+  "star": `<svg ${SVG_ATTRS}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+  "arrow-up-to-line": `<svg ${SVG_ATTRS}><path d="M5 3h14"/><path d="m12 7 5 5"/><path d="m12 7-5 5"/><path d="M12 7v14"/></svg>`,
+  "arrow-down-to-line": `<svg ${SVG_ATTRS}><path d="M5 21h14"/><path d="m12 17 5-5"/><path d="m12 17-5-5"/><path d="M12 3v14"/></svg>`,
+  "arrow-up-down": `<svg ${SVG_ATTRS}><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>`,
+  "arrow-right-to-line": `<svg ${SVG_ATTRS}><path d="M17 12H3"/><path d="m11 18 6-6-6-6"/><path d="M21 5v14"/></svg>`,
+  "locate": `<svg ${SVG_ATTRS}><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`,
+  "moon": `<svg ${SVG_ATTRS}><path d="M12 3a6 6 0 009 9 9 9 0 11-9-9z"/></svg>`,
+  "gear": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`,
 };
 
 function getIcon(icon) {
@@ -1570,14 +1588,14 @@ function showReorderTabs() {
   currentView = "reorder-tabs";
 
   const reorderOptions = [
-    { label: "Recent (newest first)", hotkey: "1", icon: "⇅", reorderAction: "sort-tabs-recent-desc" },
-    { label: "Recent (oldest first)", hotkey: "2", icon: "⇅", reorderAction: "sort-tabs-recent-asc" },
-    { label: "Domain (A-Z)", hotkey: "3", icon: "⇅", reorderAction: "sort-tabs-domain-alpha" },
-    { label: "Domain (by popularity)", hotkey: "4", icon: "⇅", reorderAction: "sort-tabs-domain-pop" },
-    { label: "Age (oldest first)", hotkey: "5", icon: "⇅", reorderAction: "sort-tabs-age-asc" },
-    { label: "Age (newest first)", hotkey: "6", icon: "⇅", reorderAction: "sort-tabs-age-desc" },
-    { label: "Inactive at bottom", hotkey: "7", icon: "⏻", reorderAction: "sort-tabs-inactive-bottom" },
-    { label: "Most visited first", hotkey: "8", icon: "★", reorderAction: "sort-tabs-most-visited" },
+    { label: "Recent (newest first)", hotkey: "1", icon: "svg:clock", reorderAction: "sort-tabs-recent-desc" },
+    { label: "Recent (oldest first)", hotkey: "2", icon: "svg:clock", reorderAction: "sort-tabs-recent-asc" },
+    { label: "Domain (A-Z)", hotkey: "3", icon: "svg:globe", reorderAction: "sort-tabs-domain-alpha" },
+    { label: "Domain (by popularity)", hotkey: "4", icon: "svg:globe", reorderAction: "sort-tabs-domain-pop" },
+    { label: "Age (oldest first)", hotkey: "5", icon: "svg:calendar-clock", reorderAction: "sort-tabs-age-asc" },
+    { label: "Age (newest first)", hotkey: "6", icon: "svg:calendar-clock", reorderAction: "sort-tabs-age-desc" },
+    { label: "Inactive at bottom", hotkey: "7", icon: "svg:moon", reorderAction: "sort-tabs-inactive-bottom" },
+    { label: "Most visited first", hotkey: "8", icon: "svg:star", reorderAction: "sort-tabs-most-visited" },
     { label: "Group duplicates", hotkey: "9", icon: "⊜", reorderAction: "sort-tabs-group-dups" },
   ];
 
