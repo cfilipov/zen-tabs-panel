@@ -280,9 +280,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
     const OVERLAY_ID = "zen-tabs-panel-overlay";
     const PANEL_ID = "zen-tabs-panel-panel";
 
+    let pendingView = null;
+
     function getPaletteURL() {
       const isDark = getWin()?.document?.documentElement?.getAttribute("zen-should-be-dark-mode") === "true";
-      return context.extension.getURL("popup/popup.html") + "?theme=" + (isDark ? "dark" : "light");
+      let url = context.extension.getURL("popup/popup.html") + "?theme=" + (isDark ? "dark" : "light");
+      if (pendingView) url += "&view=" + encodeURIComponent(pendingView);
+      return url;
     }
 
     function createOverlay() {
@@ -813,18 +817,21 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         // Palette management
-        async showPalette() {
+        async showPalette(view) {
           if (isOverlayOpen()) {
             destroyOverlay();
             return false;
           }
+          pendingView = view || null;
           createOverlay();
+          pendingView = null;
           return true;
         },
 
         async hidePalette() {
           destroyOverlay();
         },
+
       },
     };
   }

@@ -31,13 +31,27 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 
 **Keyboard shortcuts** (configurable via `about:addons` › Manage Extension Shortcuts):
 
-| Action | Default |
-|---|---|
-| Open palette | `Cmd+Option+.` |
-| Go to previous tab | `Cmd+Option+P` |
-| Go to parent tab | `Option+Up` |
-| Move tab to start | `Cmd+Up` |
-| Move tab to end | `Cmd+Down` |
+All global shortcuts use `Ctrl+Option` as the modifier. The letter key matches the in-panel hotkey, so you only need to learn one set of keys. Some keys are reassigned from their natural mnemonic to avoid conflicts with Firefox/Zen built-in shortcuts (see `KEYBINDING_CONFLICTS.md`).
+
+| Action | Global shortcut | Panel key |
+|---|---|---|
+| Open palette | `Ctrl+Option+Space` | — |
+| Previous tab | `Ctrl+Option+P` | `P` |
+| Parent tab | — | `⇧P` |
+| Children | `Ctrl+Option+C` | `C` |
+| Siblings | — | `⇧C` |
+| New tabs | `Ctrl+Option+A` | `A` |
+| Recent | `Ctrl+Option+R` | `R` |
+| Duplicates | `Ctrl+Option+D` | `D` |
+| Tab info | `Ctrl+Option+T` | `T` |
+| Move to workspace | `Ctrl+Option+M` | `M` |
+| Move to start | `Ctrl+Option+S` | `S` |
+| Move to end | `Ctrl+Option+B` | `B` |
+| Sort by recent | — | `O` |
+| Sort by domain | — | `G` |
+| Scroll to tab | `Ctrl+Option+F` | `F` |
+| Unload tab | `Ctrl+Option+X` | `X` |
+| Settings | — | `,` |
 
 **Settings** (accessible from the palette or `about:addons` › Extensions › Zen Tabs Panel › Preferences):
 

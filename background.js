@@ -169,17 +169,67 @@ browser.commands.onCommand.addListener((command) => {
     case "open-palette":
       browser.zenWorkspaces.showPalette();
       break;
-    case "go-to-parent-tab":
-      browser.zenWorkspaces.goToParentTab();
-      break;
+
     case "go-to-previous-tab":
       browser.zenWorkspaces.goToPreviousTab();
+      break;
+    case "go-to-parent-tab":
+      browser.zenWorkspaces.goToParentTab();
       break;
     case "move-tab-to-start":
       moveTabToStart();
       break;
     case "move-tab-to-end":
       moveTabToEnd();
+      break;
+    case "sort-tabs-by-recent": {
+      (async () => {
+        const allTabs = await browser.tabs.query({ currentWindow: true });
+        const pinnedCount = allTabs.filter((t) => t.pinned).length;
+        const tabs = allTabs.filter((t) => !t.pinned);
+        tabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
+        await browser.tabs.move(tabs.map((t) => t.id), { index: pinnedCount });
+      })();
+      break;
+    }
+    case "sort-tabs-by-domain": {
+      (async () => {
+        const allTabs = await browser.tabs.query({ currentWindow: true });
+        const pinnedCount = allTabs.filter((t) => t.pinned).length;
+        const tabs = allTabs.filter((t) => !t.pinned);
+        tabs.sort((a, b) => {
+          try {
+            return new URL(a.url).hostname.localeCompare(new URL(b.url).hostname);
+          } catch (e) { return 0; }
+        });
+        for (let i = 0; i < tabs.length; i++) {
+          await browser.tabs.move(tabs[i].id, { index: pinnedCount + i });
+        }
+      })();
+      break;
+    }
+    case "scroll-to-current-tab":
+      browser.zenWorkspaces.scrollCurrentTabIntoView();
+      break;
+    case "unload-tab": {
+      (async () => {
+        const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+        if (!activeTab) return;
+        const parentResult = await browser.zenWorkspaces.goToParentTab();
+        if (!parentResult) await browser.zenWorkspaces.goToPreviousTab();
+        try { await browser.tabs.discard(activeTab.id); } catch (e) {}
+      })();
+      break;
+    }
+
+    case "child-tabs":
+    case "sibling-tabs":
+    case "unvisited-tabs":
+    case "last-visited":
+    case "duplicates":
+    case "tab-info":
+    case "move-to-workspace":
+      browser.zenWorkspaces.showPalette(command);
       break;
   }
 });

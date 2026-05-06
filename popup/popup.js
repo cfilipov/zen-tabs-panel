@@ -50,18 +50,18 @@ function getActions() {
     { type: "separator" },
     { id: "child-tabs", label: "Children", hotkey: "C", icon: "↓", isView: true, needsChildren: true, count: childTabCount, compact: true },
     { id: "sibling-tabs", label: "Siblings", hotkey: "⇧C", icon: "↔", isView: true, needsSiblings: true, count: siblingTabCount, compact: true },
-    { id: "unvisited-tabs", label: "New tabs", hotkey: "N", icon: "●", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
+    { id: "unvisited-tabs", label: "New tabs", hotkey: "A", icon: "●", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
     { id: "last-visited", label: "Recent", hotkey: "R", icon: "◷", isView: true, compact: true },
     { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "⊜", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
-    { id: "tab-info", label: "Tab info", hotkey: "I", icon: "ⓘ", isView: true, compact: true },
+    { id: "tab-info", label: "Tab info", hotkey: "T", icon: "ⓘ", isView: true, compact: true },
     { type: "separator" },
     { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "⇥", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0, compact: true },
     { id: "move-tab-to-start", label: "To start", hotkey: "S", icon: "⤒", compact: true },
-    { id: "move-tab-to-end", label: "To end", hotkey: "E", icon: "⤓", compact: true },
+    { id: "move-tab-to-end", label: "To end", hotkey: "B", icon: "⤓", compact: true },
     { id: "sort-tabs", label: "Sort recent", hotkey: "O", icon: "⇅", compact: true },
     { id: "sort-tabs-domain", label: "Sort domain", hotkey: "G", icon: "⇅", compact: true },
     { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "F", icon: "◎", compact: true },
-    { id: "unload-tab", label: "Unload", hotkey: "U", icon: "⏻", compact: true },
+    { id: "unload-tab", label: "Unload", hotkey: "X", icon: "⏻", compact: true },
     { id: "settings", label: "Settings", hotkey: "," , icon: "svg:gear", compact: true },
   ];
 }
@@ -1378,4 +1378,21 @@ document.documentElement.style.colorScheme = theme;
 // Init
 // ---------------------------------------------------------------------------
 
-showActionsMenu();
+const initialView = urlParams.get("view");
+
+async function init() {
+  await showActionsMenu();
+  if (initialView) {
+    switch (initialView) {
+      case "child-tabs": showChildTabs(); break;
+      case "sibling-tabs": showSiblingTabs(); break;
+      case "unvisited-tabs": showUnvisitedTabs(); break;
+      case "last-visited": showLastVisited(); break;
+      case "duplicates": showDuplicates(); break;
+      case "tab-info": showTabInfo(); break;
+      case "move-to-workspace": showMoveToWorkspace(); break;
+    }
+  }
+}
+
+init();

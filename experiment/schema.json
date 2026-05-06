@@ -173,7 +173,9 @@
         "type": "function",
         "async": true,
         "description": "Toggle the command palette overlay. Returns true if opened, false if closed.",
-        "parameters": []
+        "parameters": [
+          { "name": "view", "type": "string", "optional": true }
+        ]
       },
       {
         "name": "hidePalette",

@@ -51,34 +51,64 @@
 
   "commands": {
     "open-palette": {
-      "suggested_key": {
-        "default": "Command+Alt+Period"
-      },
+      "suggested_key": { "default": "MacCtrl+Alt+Space" },
       "description": "Open tab actions palette"
     },
-    "go-to-parent-tab": {
-      "suggested_key": {
-        "default": "Alt+Up"
-      },
-      "description": "Switch to the tab that opened the current one"
-    },
     "go-to-previous-tab": {
-      "suggested_key": {
-        "default": "Command+Alt+P"
-      },
-      "description": "Toggle between the last two visited tabs"
+      "suggested_key": { "default": "MacCtrl+Alt+P" },
+      "description": "Go to previous tab"
+    },
+    "go-to-parent-tab": {
+      "description": "Go to parent tab"
+    },
+    "child-tabs": {
+      "suggested_key": { "default": "MacCtrl+Alt+C" },
+      "description": "Open children submenu"
+    },
+    "sibling-tabs": {
+      "description": "Open siblings submenu"
+    },
+    "unvisited-tabs": {
+      "suggested_key": { "default": "MacCtrl+Alt+A" },
+      "description": "Open new tabs submenu"
+    },
+    "last-visited": {
+      "suggested_key": { "default": "MacCtrl+Alt+R" },
+      "description": "Open recent tabs submenu"
+    },
+    "duplicates": {
+      "suggested_key": { "default": "MacCtrl+Alt+D" },
+      "description": "Open duplicates submenu"
+    },
+    "tab-info": {
+      "suggested_key": { "default": "MacCtrl+Alt+T" },
+      "description": "Open tab info"
+    },
+    "move-to-workspace": {
+      "suggested_key": { "default": "MacCtrl+Alt+M" },
+      "description": "Move tab to workspace"
     },
     "move-tab-to-start": {
-      "suggested_key": {
-        "default": "Command+Up"
-      },
-      "description": "Move current tab to the start of the tab bar"
+      "suggested_key": { "default": "MacCtrl+Alt+S" },
+      "description": "Move tab to start"
     },
     "move-tab-to-end": {
-      "suggested_key": {
-        "default": "Command+Down"
-      },
-      "description": "Move current tab to the end of the tab bar"
+      "suggested_key": { "default": "MacCtrl+Alt+B" },
+      "description": "Move tab to end"
+    },
+    "sort-tabs-by-recent": {
+      "description": "Sort tabs by recent"
+    },
+    "sort-tabs-by-domain": {
+      "description": "Sort tabs by domain"
+    },
+    "scroll-to-current-tab": {
+      "suggested_key": { "default": "MacCtrl+Alt+F" },
+      "description": "Scroll to current tab"
+    },
+    "unload-tab": {
+      "suggested_key": { "default": "MacCtrl+Alt+X" },
+      "description": "Unload tab"
     }
   },
 
