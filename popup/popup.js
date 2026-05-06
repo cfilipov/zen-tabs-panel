@@ -29,6 +29,7 @@ let domainsWorkspaceOnly = false;
 let tabsByAgeWorkspaceOnly = false;
 let currentDomain = null;
 let tabsByAgeNewestFirst = false;
+let domainsSortAlpha = false;
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
@@ -1290,9 +1291,14 @@ async function showDomains(animate) {
 
   const domains = Object.entries(domainMap)
     .map(([domain, data]) => ({ domain, count: data.tabs.length, favicon: data.favicon }))
-    .sort((a, b) => b.count - a.count);
+    .sort(domainsSortAlpha
+      ? (a, b) => a.domain.localeCompare(b.domain)
+      : (a, b) => b.count - a.count);
 
-  const hint = [{ key: "W", label: domainsWorkspaceOnly ? "all" : "workspace", onClick: () => { domainsWorkspaceOnly = !domainsWorkspaceOnly; ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {}); showDomains(false); } }];
+  const hint = [
+    { key: "W", label: domainsWorkspaceOnly ? "all" : "workspace", onClick: () => { domainsWorkspaceOnly = !domainsWorkspaceOnly; ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {}); showDomains(false); } },
+    { key: "S", label: domainsSortAlpha ? "popularity" : "A-Z", onClick: () => { domainsSortAlpha = !domainsSortAlpha; ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {}); showDomains(false); } },
+  ];
   renderDomainList(domains, "Domains", hint);
   if (animate !== false) animateList("forward");
 }
@@ -1558,12 +1564,12 @@ function showReorderTabs() {
   currentView = "reorder-tabs";
 
   const reorderOptions = [
-    { label: "Recent (newest)", hotkey: "1", icon: "⇅", reorderAction: "sort-tabs-recent-desc" },
-    { label: "Recent (oldest)", hotkey: "2", icon: "⇅", reorderAction: "sort-tabs-recent-asc" },
+    { label: "Recent (newest first)", hotkey: "1", icon: "⇅", reorderAction: "sort-tabs-recent-desc" },
+    { label: "Recent (oldest first)", hotkey: "2", icon: "⇅", reorderAction: "sort-tabs-recent-asc" },
     { label: "Domain (A-Z)", hotkey: "3", icon: "⇅", reorderAction: "sort-tabs-domain-alpha" },
-    { label: "Domain (pop)", hotkey: "4", icon: "⇅", reorderAction: "sort-tabs-domain-pop" },
-    { label: "Age (oldest)", hotkey: "5", icon: "⇅", reorderAction: "sort-tabs-age-asc" },
-    { label: "Age (newest)", hotkey: "6", icon: "⇅", reorderAction: "sort-tabs-age-desc" },
+    { label: "Domain (by popularity)", hotkey: "4", icon: "⇅", reorderAction: "sort-tabs-domain-pop" },
+    { label: "Age (oldest first)", hotkey: "5", icon: "⇅", reorderAction: "sort-tabs-age-asc" },
+    { label: "Age (newest first)", hotkey: "6", icon: "⇅", reorderAction: "sort-tabs-age-desc" },
     { label: "Inactive at bottom", hotkey: "7", icon: "⏻", reorderAction: "sort-tabs-inactive-bottom" },
     { label: "Group duplicates", hotkey: "8", icon: "⊜", reorderAction: "sort-tabs-group-dups" },
   ];
@@ -1617,6 +1623,7 @@ function goBack() {
     ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
     recentWorkspaceOnly = false;
     domainsWorkspaceOnly = false;
+    domainsSortAlpha = false;
     tabsByAgeWorkspaceOnly = false;
     tabsByAgeNewestFirst = false;
     currentDomain = null;
@@ -1719,6 +1726,14 @@ document.addEventListener("keydown", (e) => {
             showTabsByAge(false);
             break;
           }
+        }
+        if (e.key.toUpperCase() === "S" && (currentView === "domains" || currentView === "domain-tabs")) {
+          e.preventDefault();
+          domainsSortAlpha = !domainsSortAlpha;
+          ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+          if (currentView === "domain-tabs") showDomainTabs(currentDomain, false);
+          else showDomains(false);
+          break;
         }
         if (e.key.toUpperCase() === "S" && currentView === "tabs-by-age") {
           e.preventDefault();
