@@ -62,7 +62,7 @@ function getActions() {
     { id: "child-tabs", label: "Children", hotkey: "C", icon: "svg:move-down", isView: true, needsChildren: true, count: childTabCount, compact: true },
     { id: "sibling-tabs", label: "Siblings", hotkey: "B", icon: "svg:git-branch", isView: true, needsSiblings: true, count: siblingTabCount, compact: true },
     { id: "parent-tabs", label: "Parent tabs", hotkey: "⇧T", icon: "svg:parent-node", isView: true, needsParentTabs: true, count: parentTabCount, compact: true },
-    { id: "navigation", label: "Navigation", hotkey: "N", icon: "svg:history", isView: true, compact: true },
+    { id: "navigation", label: "Tab history", hotkey: "H", icon: "svg:history", isView: true, compact: true },
     { id: "unvisited-tabs", label: "New tabs", hotkey: "⇧N", icon: "svg:circle-dot", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
     { id: "last-visited", label: "Recent", hotkey: "R", icon: "svg:clock", isView: true, compact: true },
     { id: "recently-closed", label: "Recently closed", hotkey: "X", icon: "svg:rotate-ccw", isView: true, needsRecentlyClosed: true, count: recentlyClosedCount, compact: true },
@@ -181,8 +181,8 @@ function renderActions(actions, title) {
       if (action.preview.workspaceId && action.preview.workspaceId !== activeWorkspaceId) {
         const ws = workspaceMap[action.preview.workspaceId];
         if (ws) {
-          const wsIcon = ws.svgContent ? `<span class="preview-ws-icon">${ws.svgContent}</span>` : "";
-          wsLabel = `<span class="preview-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+          const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
+          wsLabel = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
         }
       }
       previewHtml = `<span class="action-preview">${iconHtml}<span class="preview-title">${previewTitle}</span>${wsLabel}</span>`;
@@ -345,16 +345,19 @@ function createTabElement(tab, badge) {
     const ws = workspaceMap[tab.workspaceId];
     if (ws) {
       const wsIcon = ws.svgContent
-        ? `<span class="subtitle-ws-icon">${ws.svgContent}</span>`
+        ? `<span class="row-ws-icon">${ws.svgContent}</span>`
         : "";
-      wsHtml = `<span class="subtitle-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+      wsHtml = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
     }
   }
 
-  const subtitleParts = [
-    domain ? `<span class="subtitle-domain">${escapeHtml(domain)}</span>` : "",
-    wsHtml,
-  ].filter(Boolean).join("");
+  const subtitleHtml = domain
+    ? `<span class="item-subtitle"><span class="subtitle-domain">${escapeHtml(domain)}</span></span>`
+    : "";
+
+  const badgeHtml = badge !== null
+    ? `<span class="item-badge">${badge}</span>`
+    : `<span class="item-badge-placeholder"></span>`;
 
   el.innerHTML = `
     ${canLoadFavicon
@@ -362,9 +365,9 @@ function createTabElement(tab, badge) {
       : `<span class="item-icon-placeholder">○</span>`}
     <span class="item-text">
       <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
-      ${subtitleParts ? `<span class="item-subtitle">${subtitleParts}</span>` : ""}
+      ${subtitleHtml}
     </span>
-    ${badge !== null ? `<span class="item-right"><span class="item-badge">${badge}</span></span>` : ""}
+    <span class="item-right">${wsHtml}${badgeHtml}</span>
   `;
 
   // Attach error handler via JS instead of inline onerror (CSP blocks inline handlers)
@@ -402,16 +405,15 @@ function createDuplicateTabElement(tab) {
     const ws = workspaceMap[tab.workspaceId];
     if (ws) {
       const wsIcon = ws.svgContent
-        ? `<span class="subtitle-ws-icon">${ws.svgContent}</span>`
+        ? `<span class="row-ws-icon">${ws.svgContent}</span>`
         : "";
-      wsHtml = `<span class="subtitle-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+      wsHtml = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
     }
   }
 
-  const subtitleParts = [
-    domain ? `<span class="subtitle-domain">${escapeHtml(domain)}</span>` : "",
-    wsHtml,
-  ].filter(Boolean).join("");
+  const subtitleHtml = domain
+    ? `<span class="item-subtitle"><span class="subtitle-domain">${escapeHtml(domain)}</span></span>`
+    : "";
 
   el.innerHTML = `
     ${canLoadFavicon
@@ -419,9 +421,10 @@ function createDuplicateTabElement(tab) {
       : `<span class="item-icon-placeholder">○</span>`}
     <span class="item-text">
       <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
-      ${subtitleParts ? `<span class="item-subtitle">${subtitleParts}</span>` : ""}
+      ${subtitleHtml}
     </span>
     <span class="item-right">
+      ${wsHtml}
       <span class="duplicate-close" title="Close tab">✕</span>
     </span>
   `;
@@ -522,7 +525,7 @@ function renderSidebar(sortOptions) {
     for (const opt of sortOptions) {
       const el = document.createElement("div");
       el.className = "sidebar-sort";
-      el.innerHTML = `<span class="sidebar-ws-name">${escapeHtml(opt.label)}</span> <span class="sidebar-badge">${escapeHtml(opt.key)}</span>`;
+      el.innerHTML = `<span class="sidebar-ws-name">${escapeHtml(opt.label)}</span> <span class="item-badge">${escapeHtml(opt.key)}</span>`;
       el.addEventListener("click", opt.onClick);
       sidebarEl.appendChild(el);
     }
@@ -533,7 +536,7 @@ function renderSidebar(sortOptions) {
 
   const allEl = document.createElement("div");
   allEl.className = "sidebar-item" + (workspaceFilter === "all" ? " active" : "");
-  allEl.innerHTML = `<span class="sidebar-ws-name">All</span> <span class="sidebar-badge">0</span>`;
+  allEl.innerHTML = `<span class="sidebar-ws-name">All</span> <span class="item-badge">0</span>`;
   allEl.addEventListener("click", () => {
     workspaceFilter = workspaceFilter === "all" ? activeWorkspaceId : "all";
     refreshCurrentView();
@@ -552,7 +555,7 @@ function renderSidebar(sortOptions) {
     const iconHtml = ws.svgContent
       ? `<span class="sidebar-ws-icon">${ws.svgContent}</span>`
       : "";
-    el.innerHTML = `${iconHtml}<span class="sidebar-ws-name">${escapeHtml(ws.name)}</span>${badge !== null ? `<span class="sidebar-badge">${badge}</span>` : ""}`;
+    el.innerHTML = `${iconHtml}<span class="sidebar-ws-name">${escapeHtml(ws.name)}</span>${badge !== null ? `<span class="item-badge">${badge}</span>` : ""}`;
 
     el.addEventListener("click", () => {
       workspaceFilter = workspaceFilter === uuid ? "all" : uuid;
@@ -950,7 +953,7 @@ async function showNavigation() {
 
   if (!history || !history.entries || history.entries.length === 0) {
     listEl.innerHTML = `<div class="empty-state">No navigation history</div>`;
-    updateHeader("Navigation");
+    updateHeader("Tab history");
     return;
   }
 
@@ -1004,7 +1007,7 @@ async function showNavigation() {
   // Pre-select the current item
   selectedIndex = currentIndex;
   updateSelection();
-  updateHeader("Navigation");
+  updateHeader("Tab history");
 }
 
 async function showUnvisitedTabs(animate) {
@@ -1100,7 +1103,9 @@ function renderRecentlyClosedList(entries) {
         <span class="item-title">${escapeHtml(entry.title || entry.url || "Untitled")}</span>
         ${domain ? `<span class="item-subtitle"><span class="subtitle-domain">${escapeHtml(domain)}</span></span>` : ""}
       </span>
-      ${badge !== null ? `<span class="item-right"><span class="item-badge">${badge}</span></span>` : ""}
+      <span class="item-right">${badge !== null
+        ? `<span class="item-badge">${badge}</span>`
+        : `<span class="item-badge-placeholder"></span>`}</span>
     `;
 
     const img = el.querySelector("img.item-icon");
@@ -1847,15 +1852,14 @@ function renderTabsByAge(groups) {
       if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
         const ws = workspaceMap[tab.workspaceId];
         if (ws) {
-          const wsIcon = ws.svgContent ? `<span class="subtitle-ws-icon">${ws.svgContent}</span>` : "";
-          wsHtml = `<span class="subtitle-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+          const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
+          wsHtml = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
         }
       }
 
       const subtitleParts = [
         domain ? `<span class="subtitle-domain">${escapeHtml(domain)}</span>` : "",
         `<span class="subtitle-age">${age}</span>`,
-        wsHtml,
       ].filter(Boolean).join("");
 
       el.innerHTML = `
@@ -1867,6 +1871,7 @@ function renderTabsByAge(groups) {
           <span class="item-subtitle">${subtitleParts}</span>
         </span>
         <span class="item-right">
+          ${wsHtml}
           <span class="age-close" title="Close tab">✕</span>
         </span>
       `;
@@ -1930,7 +1935,7 @@ function showReorderTabs() {
   listEl.innerHTML = "";
 
   const grid = document.createElement("div");
-  grid.className = "actions-grid";
+  grid.className = "actions-grid actions-grid-2col";
 
   for (const opt of reorderOptions) {
     const el = document.createElement("div");
@@ -2031,16 +2036,19 @@ async function showMostVisited(animate) {
     if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
       const ws = workspaceMap[tab.workspaceId];
       if (ws) {
-        const wsIcon = ws.svgContent ? `<span class="subtitle-ws-icon">${ws.svgContent}</span>` : "";
-        wsHtml = `<span class="subtitle-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+        const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
+        wsHtml = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
       }
     }
 
     const subtitleParts = [
       domain ? `<span class="subtitle-domain">${escapeHtml(domain)}</span>` : "",
       `<span class="subtitle-age">${visits} visits</span>`,
-      wsHtml,
     ].filter(Boolean).join("");
+
+    const badgeHtml = badge !== null
+      ? `<span class="item-badge">${badge}</span>`
+      : `<span class="item-badge-placeholder"></span>`;
 
     el.innerHTML = `
       ${canLoadFavicon
@@ -2050,7 +2058,7 @@ async function showMostVisited(animate) {
         <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
         <span class="item-subtitle">${subtitleParts}</span>
       </span>
-      ${badge !== null ? `<span class="item-right"><span class="item-badge">${badge}</span></span>` : ""}
+      <span class="item-right">${wsHtml}${badgeHtml}</span>
     `;
 
     const img = el.querySelector("img.item-icon");

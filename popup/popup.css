@@ -176,7 +176,7 @@ html, body {
   background: none;
 }
 
-/* Two-column grid for compact action items */
+/* Multi-column grid for compact action items */
 .actions-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -184,6 +184,16 @@ html, body {
   background:
     linear-gradient(var(--ztt-border), var(--ztt-border)) calc(100% / 3) 50% / 1px calc(100% - 16px) no-repeat,
     linear-gradient(var(--ztt-border), var(--ztt-border)) calc(200% / 3) 50% / 1px calc(100% - 16px) no-repeat;
+}
+
+.actions-grid.actions-grid-2col {
+  grid-template-columns: 1fr 1fr;
+  background:
+    linear-gradient(var(--ztt-border), var(--ztt-border)) 50% 50% / 1px calc(100% - 16px) no-repeat;
+}
+
+.actions-grid > .list-item {
+  margin: 0 4px;
 }
 
 .compact-item {
@@ -272,16 +282,19 @@ html, body {
   text-overflow: ellipsis;
 }
 
-.subtitle-workspace {
-  margin-left: auto;
+.row-workspace {
   flex-shrink: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 3px;
-  opacity: 0.6;
+  background: var(--ztt-badge-bg);
+  color: var(--ztt-text-muted);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 8px;
 }
 
-.subtitle-ws-icon {
+.row-ws-icon {
   width: 12px;
   height: 12px;
   display: flex;
@@ -289,7 +302,7 @@ html, body {
   justify-content: center;
 }
 
-.subtitle-ws-icon svg {
+.row-ws-icon svg {
   width: 10px;
   height: 10px;
   fill: currentColor;
@@ -307,18 +320,24 @@ html, body {
 .item-badge {
   font-size: 11px;
   font-weight: 500;
-  color: var(--ztt-badge-text);
-  background: var(--ztt-badge-bg);
+  color: color-mix(in srgb, var(--ztt-badge-text), AccentColor 12%);
+  background: color-mix(in srgb, var(--ztt-badge-bg), AccentColor 5%);
   padding: 3px 0;
   border-radius: 4px;
   letter-spacing: 0.03em;
   min-width: 22px;
   text-align: center;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .item-badge.badge-wide {
   min-width: 32px;
+}
+
+.item-badge-placeholder {
+  width: 22px;
+  flex-shrink: 0;
 }
 
 /* Duplicate tabs in tab info */
@@ -544,6 +563,10 @@ html, body {
   display: none;
 }
 
+.split-pair .list-item .item-right {
+  display: none;
+}
+
 .split-pair-indicator {
   display: flex;
   align-items: center;
@@ -558,22 +581,22 @@ html, body {
 .action-preview {
   display: flex;
   align-items: center;
-  gap: 5px;
-  max-width: 240px;
+  gap: 7px;
+  max-width: 480px;
   overflow: hidden;
 }
 
 .preview-icon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 3px;
   flex-shrink: 0;
   object-fit: contain;
 }
 
 .preview-icon-placeholder {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -583,36 +606,11 @@ html, body {
 }
 
 .preview-title {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ztt-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.preview-workspace {
-  font-size: 10px;
-  color: var(--ztt-text-muted);
-  opacity: 0.7;
-  flex-shrink: 0;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.preview-ws-icon {
-  width: 10px;
-  height: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.preview-ws-icon svg {
-  width: 9px;
-  height: 9px;
-  fill: currentColor;
 }
 
 /* Count badge for Children / New tabs */
@@ -936,17 +934,6 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.sidebar-badge {
-  font-size: 11px;
-  color: var(--ztt-badge-text);
-  background: var(--ztt-badge-bg);
-  padding: 2px 5px;
-  border-radius: 3px;
-  min-width: 16px;
-  text-align: center;
-  flex-shrink: 0;
 }
 
 .sidebar-sep {
