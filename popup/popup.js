@@ -17,6 +17,8 @@ let workspaceMap = {};     // uuid → { name, svgContent }
 let activeWorkspaceId = null;
 let duplicateGroupCount = 0;
 let siblingTabCount = 0;
+let parentTabCount = 0;
+let domainCount = 0;
 
 const listEl = document.getElementById("list");
 const headerEl = document.getElementById("header");
@@ -58,13 +60,13 @@ function getActions() {
     { type: "separator" },
     { id: "child-tabs", label: "Children", hotkey: "C", icon: "svg:move-down", isView: true, needsChildren: true, count: childTabCount, compact: true },
     { id: "sibling-tabs", label: "Siblings", hotkey: "B", icon: "svg:git-branch", isView: true, needsSiblings: true, count: siblingTabCount, compact: true },
-    { id: "parent-tabs", label: "Parent tabs", hotkey: "⇧T", icon: "svg:parent-node", isView: true, compact: true },
+    { id: "parent-tabs", label: "Parent tabs", hotkey: "⇧T", icon: "svg:parent-node", isView: true, needsParentTabs: true, count: parentTabCount, compact: true },
     { id: "navigation", label: "Navigation", hotkey: "N", icon: "svg:history", isView: true, compact: true },
     { id: "unvisited-tabs", label: "New tabs", hotkey: "⇧N", icon: "svg:circle-dot", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
     { id: "last-visited", label: "Recent", hotkey: "R", icon: "svg:clock", isView: true, compact: true },
     { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "svg:copy", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
     { id: "tab-info", label: "Tab info", hotkey: "I", icon: "svg:info", isView: true, compact: true },
-    { id: "domains", label: "Domains", hotkey: "⇧D", icon: "svg:globe", isView: true, compact: true },
+    { id: "domains", label: "Domains", hotkey: "⇧D", icon: "svg:globe", isView: true, count: domainCount, compact: true },
     { id: "tabs-by-age", label: "Tabs by age", hotkey: "A", icon: "svg:calendar-clock", isView: true, compact: true },
     { id: "most-visited", label: "Most visited", hotkey: "V", icon: "svg:star", isView: true, compact: true },
     { type: "separator" },
@@ -123,6 +125,7 @@ function isActionDisabled(action) {
   if (action.needsChildren && childTabCount === 0) return true;
   if (action.needsUnvisited && unvisitedTabCount === 0) return true;
   if (action.needsSiblings && siblingTabCount === 0) return true;
+  if (action.needsParentTabs && parentTabCount === 0) return true;
   if (action.needsDuplicates && duplicateGroupCount === 0) return true;
   return false;
 }
@@ -831,6 +834,12 @@ async function showActionsMenu() {
       ? allTabs.filter((t) => t.openerTabDomId === activeTab.openerTabDomId && t.domId !== activeTab.domId).length
       : 0;
     unvisitedTabCount = allTabs.filter((t) => t.unread).length;
+    const childOpeners = new Set(allTabs.filter((t) => t.openerTabDomId).map((t) => t.openerTabDomId));
+    parentTabCount = allTabs.filter((t) => childOpeners.has(t.domId)).length;
+    const domainSet = new Set();
+    for (const t of allTabs) { try { domainSet.add(new URL(t.url).hostname); } catch (e) {} }
+    domainSet.delete("");
+    domainCount = domainSet.size;
 
     // Workspace tab counts
     workspaceTabCounts = {};
@@ -882,6 +891,8 @@ async function showActionsMenu() {
     currentTabHasParent = false;
     childTabCount = 0;
     siblingTabCount = 0;
+    parentTabCount = 0;
+    domainCount = 0;
     unvisitedTabCount = 0;
     duplicateGroupCount = 0;
     parentTabPreview = null;
