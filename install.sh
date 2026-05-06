@@ -125,7 +125,7 @@ else
   done
 
   printf "Select profile [%s]: " "$DEFAULT_INDEX"
-  read -r SELECTION
+  read -r SELECTION < /dev/tty
   SELECTION="${SELECTION:-$DEFAULT_INDEX}"
 
   if [ "$SELECTION" -lt 0 ] 2>/dev/null || [ "$SELECTION" -ge "$PROFILE_COUNT" ] 2>/dev/null; then
@@ -202,7 +202,7 @@ if [ -n "$CURRENT_VERSION" ]; then
     echo "You are already on the latest version (v$LATEST_VERSION)."
     echo ""
     printf "Would you like to uninstall? [y/N]: "
-    read -r UNINSTALL
+    read -r UNINSTALL < /dev/tty
     case "$UNINSTALL" in
       [yY]|[yY][eE][sS]) do_uninstall ;;
       *) echo "No changes made."; exit 0 ;;
@@ -211,7 +211,7 @@ if [ -n "$CURRENT_VERSION" ]; then
     echo "A newer version is available: v$LATEST_VERSION"
     echo ""
     printf "1) Update  2) Uninstall  3) Cancel [1]: "
-    read -r CHOICE
+    read -r CHOICE < /dev/tty
     CHOICE="${CHOICE:-1}"
     case "$CHOICE" in
       2) do_uninstall ;;
