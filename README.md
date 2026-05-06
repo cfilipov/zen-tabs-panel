@@ -50,7 +50,7 @@ Press `Ctrl+Cmd+.` to open the palette (configurable via `about:addons` > Manage
 | `D` | Duplicates |
 | `I` | Tab info |
 | `H` | Domains |
-| `J` | Tabs by age |
+| `A` | Tabs by age |
 | `V` | Most visited |
 | `S` | Move to start |
 | `E` | Move to end |
