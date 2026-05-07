@@ -51,35 +51,85 @@ function activateTab(domId) {
 }
 
 // ---------------------------------------------------------------------------
+// Keybindings registry (loaded by popup.html before this script)
+// ---------------------------------------------------------------------------
+
+const KEYBINDINGS = window.ZEN_KEYBINDINGS || [];
+const displayKey = window.zenDisplayKey || ((s) => s);
+
+function kbById(id) {
+  for (const e of KEYBINDINGS) {
+    if (e.id === id) return e;
+    if (e.children) {
+      for (const c of e.children) if (c.id === id) return c;
+    }
+  }
+  return null;
+}
+
+function kbChildrenOf(prefixId) {
+  const parent = KEYBINDINGS.find((e) => e.id === prefixId);
+  return parent?.children || [];
+}
+
+// Compute the canonical chord string for a keydown event ("Shift+T", "T", ",")
+// matching the format stored in the registry.
+function chordFromEvent(e) {
+  if (e.key.length === 1 && /[a-z]/i.test(e.key)) {
+    return (e.shiftKey ? "Shift+" : "") + e.key.toUpperCase();
+  }
+  return e.key;
+}
+
+// ---------------------------------------------------------------------------
 // Actions menu definition
 // ---------------------------------------------------------------------------
 
+// Build a popup menu item from a registry entry, merging runtime-computed
+// fields (preview, count). Layout flags (compact, etc.) are added by callers.
+function actionFromRegistry(id, extra) {
+  const entry = kbById(id);
+  if (!entry) return null;
+  const base = {
+    id: entry.id,
+    label: entry.label,
+    icon: entry.icon,
+    hotkey: entry.chord,
+    isView: entry.kind === "open-view" || entry.kind === "prefix",
+  };
+  for (const flag of ["needsParent", "needsChildren", "needsSiblings", "needsParentTabs", "needsUnvisited", "needsDuplicates", "needsRecentlyClosed"]) {
+    if (entry[flag]) base[flag] = true;
+  }
+  return Object.assign(base, extra);
+}
+
 function getActions() {
+  const compact = { compact: true };
   return [
-    { id: "go-to-previous-tab", label: "Previous", hotkey: "P", icon: "svg:arrow-left-right", preview: previousTabPreview },
-    { id: "go-to-parent-tab", label: "Parent", hotkey: "T", icon: "svg:move-up", needsParent: true, preview: parentTabPreview },
+    actionFromRegistry("go-to-previous-tab", { preview: previousTabPreview }),
+    actionFromRegistry("go-to-parent-tab",   { preview: parentTabPreview }),
     { type: "separator" },
-    { id: "child-tabs", label: "Children", hotkey: "C", icon: "svg:move-down", isView: true, needsChildren: true, count: childTabCount, compact: true },
-    { id: "sibling-tabs", label: "Siblings", hotkey: "B", icon: "svg:git-branch", isView: true, needsSiblings: true, count: siblingTabCount, compact: true },
-    { id: "parent-tabs", label: "Parent tabs", hotkey: "⇧T", icon: "svg:parent-node", isView: true, needsParentTabs: true, count: parentTabCount, compact: true },
-    { id: "navigation", label: "Tab history", hotkey: "H", icon: "svg:history", isView: true, compact: true },
-    { id: "unvisited-tabs", label: "New tabs", hotkey: "⇧N", icon: "svg:circle-dot", isView: true, needsUnvisited: true, count: unvisitedTabCount, compact: true },
-    { id: "last-visited", label: "Recent", hotkey: "R", icon: "svg:clock", isView: true, compact: true },
-    { id: "recently-closed", label: "Recently closed", hotkey: "X", icon: "svg:rotate-ccw", isView: true, needsRecentlyClosed: true, count: recentlyClosedCount, compact: true },
-    { id: "duplicates", label: "Duplicates", hotkey: "D", icon: "svg:copy", isView: true, needsDuplicates: true, count: duplicateGroupCount, compact: true },
-    { id: "tab-info", label: "Tab info", hotkey: "I", icon: "svg:info", isView: true, compact: true },
-    { id: "domains", label: "Domains", hotkey: "⇧D", icon: "svg:globe", isView: true, count: domainCount, compact: true },
-    { id: "tabs-by-age", label: "Tabs by age", hotkey: "A", icon: "svg:calendar-clock", isView: true, compact: true },
-    { id: "most-visited", label: "Most visited", hotkey: "V", icon: "svg:star", isView: true, compact: true },
+    actionFromRegistry("child-tabs",      { count: childTabCount, ...compact }),
+    actionFromRegistry("sibling-tabs",    { count: siblingTabCount, ...compact }),
+    actionFromRegistry("parent-tabs",     { count: parentTabCount, ...compact }),
+    actionFromRegistry("navigation",      compact),
+    actionFromRegistry("unvisited-tabs",  { count: unvisitedTabCount, ...compact }),
+    actionFromRegistry("last-visited",    compact),
+    actionFromRegistry("recently-closed", { count: recentlyClosedCount, ...compact }),
+    actionFromRegistry("duplicates",      { count: duplicateGroupCount, ...compact }),
+    actionFromRegistry("tab-info",        compact),
+    actionFromRegistry("domains",         { count: domainCount, ...compact }),
+    actionFromRegistry("tabs-by-age",     compact),
+    actionFromRegistry("most-visited",    compact),
     { type: "separator" },
-    { id: "move-tab-to-start", label: "Move to start", hotkey: "S", icon: "svg:arrow-up-to-line", compact: true },
-    { id: "move-tab-to-end", label: "Move to end", hotkey: "E", icon: "svg:arrow-down-to-line", compact: true },
-    { id: "reorder-tabs", label: "Reorder tabs", hotkey: "O", icon: "svg:arrow-up-down", isView: true, compact: true },
-    { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "svg:arrow-right-to-line", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0, compact: true },
-    { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "L", icon: "svg:locate", compact: true },
-    { id: "unload-tab", label: "Unload", hotkey: "U", icon: "svg:moon", compact: true },
-    { id: "close-and-select", label: "Close & select…", hotkey: "W", icon: "svg:x-circle", isView: true, compact: true },
-    { id: "settings", label: "Settings", hotkey: "," , icon: "svg:gear", compact: true },
+    actionFromRegistry("move-tab-to-start",     compact),
+    actionFromRegistry("move-tab-to-end",       compact),
+    actionFromRegistry("reorder-tabs",          compact),
+    actionFromRegistry("move-to-workspace",     { count: selectedTabCount > 1 ? selectedTabCount : 0, ...compact }),
+    actionFromRegistry("scroll-to-current-tab", compact),
+    actionFromRegistry("unload-tab",            compact),
+    actionFromRegistry("close-and-select",      compact),
+    actionFromRegistry("open-options",          compact),
     { type: "separator" },
     { type: "workspaces" },
   ];
@@ -139,6 +189,7 @@ function isActionDisabled(action) {
 }
 
 function renderActions(actions, title) {
+  actions = actions.filter(Boolean);
   items = actions.filter((a) => a.type !== "separator" && a.type !== "workspaces");
   selectedIndex = -1;
   sectionStarts = [0];
@@ -201,7 +252,7 @@ function renderActions(actions, title) {
 
     const rightContent = `
       ${previewHtml}
-      ${renderBadge(action.hotkey)}
+      ${renderBadge(displayKey(action.hotkey))}
       <span class="item-arrow">${action.isView ? "›" : ""}</span>
     `;
 
@@ -739,37 +790,12 @@ function navigateBack() {
 }
 
 function activateAction(action) {
-  switch (action.id) {
-    case "go-to-previous-tab":
-    case "go-to-parent-tab":
-    case "move-tab-to-start":
-    case "move-tab-to-end":
-    case "scroll-to-current-tab":
-    case "unload-tab":
-      ext.runtime.sendMessage({ type: action.id }).catch(() => {});
-      break;
-
-    case "settings":
-      ext.runtime.sendMessage({ type: "open-options" }).catch(() => {});
-      break;
-
-    case "reorder-tabs":
-    case "move-to-workspace":
-    case "child-tabs":
-    case "sibling-tabs":
-    case "parent-tabs":
-    case "navigation":
-    case "unvisited-tabs":
-    case "last-visited":
-    case "tab-info":
-    case "domains":
-    case "most-visited":
-    case "tabs-by-age":
-    case "duplicates":
-    case "recently-closed":
-    case "close-and-select":
-      navigateToView(action.id);
-      break;
+  const entry = kbById(action.id);
+  if (!entry) return;
+  if (entry.kind === "action") {
+    ext.runtime.sendMessage({ type: action.id }).catch(() => {});
+  } else if (entry.kind === "open-view" || entry.kind === "prefix") {
+    navigateToView(entry.view);
   }
 }
 
@@ -1921,20 +1947,14 @@ function renderTabsByAge(groups) {
 
 function showReorderTabs() {
   currentView = "reorder-tabs";
-
   sectionStarts = [0];
 
-  const reorderOptions = [
-    { label: "Recent (newest first)", hotkey: "R", icon: "svg:clock", reorderAction: "sort-tabs-recent-desc" },
-    { label: "Recent (oldest first)", hotkey: "⇧R", icon: "svg:clock", reorderAction: "sort-tabs-recent-asc" },
-    { label: "Domain (A-Z)", hotkey: "D", icon: "svg:globe", reorderAction: "sort-tabs-domain-alpha" },
-    { label: "Domain (by popularity)", hotkey: "⇧D", icon: "svg:globe", reorderAction: "sort-tabs-domain-pop" },
-    { label: "Age (oldest first)", hotkey: "A", icon: "svg:calendar-clock", reorderAction: "sort-tabs-age-asc" },
-    { label: "Age (newest first)", hotkey: "⇧A", icon: "svg:calendar-clock", reorderAction: "sort-tabs-age-desc" },
-    { label: "Inactive at bottom", hotkey: "I", icon: "svg:moon", reorderAction: "sort-tabs-inactive-bottom" },
-    { label: "Most visited first", hotkey: "V", icon: "svg:star", reorderAction: "sort-tabs-most-visited" },
-    { label: "Group duplicates", hotkey: "G", icon: "⊜", reorderAction: "sort-tabs-group-dups" },
-  ];
+  const reorderOptions = kbChildrenOf("reorder-tabs").map((c) => ({
+    label: c.label,
+    hotkey: c.chord,
+    icon: c.icon,
+    reorderAction: c.id,
+  }));
 
   items = reorderOptions;
   selectedIndex = -1;
@@ -1953,7 +1973,7 @@ function showReorderTabs() {
         <span class="item-title">${escapeHtml(opt.label)}</span>
       </span>
       <span class="item-right">
-        ${renderBadge(opt.hotkey)}
+        ${renderBadge(displayKey(opt.hotkey))}
       </span>
     `;
 
@@ -1979,8 +1999,12 @@ async function showCloseAndSelect() {
 
   let allTabs = [];
   let activeTab = null;
+  let defaultCloseTargetDomId = null;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    [allTabs, defaultCloseTargetDomId] = await Promise.all([
+      ext.runtime.sendMessage({ type: "get-all-tabs" }),
+      ext.runtime.sendMessage({ type: "get-default-close-target" }).catch(() => null),
+    ]);
     activeTab = allTabs.find((t) => t.active);
   } catch (e) {}
 
@@ -2023,27 +2047,44 @@ async function showCloseAndSelect() {
   const nextVerticalPreview = (vIdx >= 0 && vIdx < wsTabs.length - 1) ? buildPreview(wsTabs[vIdx + 1]) : null;
   const prevVerticalPreview = (vIdx > 0) ? buildPreview(wsTabs[vIdx - 1]) : null;
 
-  const options = [
-    { label: "Previous",            hotkey: "P",  icon: "svg:arrow-left-right", closeAndSelectAction: "close-and-select-previous",      preview: previousPreview },
-    { label: "Parent",              hotkey: "T",  icon: "svg:move-up",          closeAndSelectAction: "close-and-select-parent",        preview: parentPreview },
-    { label: "Next child",          hotkey: "C",  icon: "svg:git-branch",       closeAndSelectAction: "close-and-select-next-sibling",  preview: nextSiblingPreview },
-    { label: "Previous child",      hotkey: "⇧C", icon: "svg:git-branch",       closeAndSelectAction: "close-and-select-prev-sibling",  preview: prevSiblingPreview },
-    { label: "Next in sidebar",     hotkey: "N",  icon: "svg:arrow-down",       closeAndSelectAction: "close-and-select-next-vertical", preview: nextVerticalPreview },
-    { label: "Previous in sidebar", hotkey: "⇧N", icon: "svg:arrow-up",         closeAndSelectAction: "close-and-select-prev-vertical", preview: prevVerticalPreview },
-  ];
+  const defaultPreview = defaultCloseTargetDomId
+    ? buildPreview(allTabs.find((t) => t.domId === defaultCloseTargetDomId))
+    : null;
+
+  const previewByActionId = {
+    "close-and-select-default":       defaultPreview,
+    "close-and-select-previous":      previousPreview,
+    "close-and-select-parent":        parentPreview,
+    "close-and-select-next-sibling":  nextSiblingPreview,
+    "close-and-select-prev-sibling":  prevSiblingPreview,
+    "close-and-select-next-vertical": nextVerticalPreview,
+    "close-and-select-prev-vertical": prevVerticalPreview,
+  };
+  const options = kbChildrenOf("close-and-select").map((c) => ({
+    label: c.label,
+    hotkey: c.chord,
+    icon: c.icon,
+    closeAndSelectAction: c.id,
+    preview: previewByActionId[c.id] || null,
+    // The default close lets the browser pick the next tab — always enabled,
+    // no specific target tab to preview.
+    isDefault: c.id === "close-and-select-default",
+  }));
 
   items = options;
   selectedIndex = -1;
   listEl.innerHTML = "";
 
   for (const opt of options) {
-    const disabled = !opt.preview;
+    const disabled = !opt.isDefault && !opt.preview;
 
     const el = document.createElement("div");
-    el.className = "list-item" + (disabled ? " disabled" : "");
+    el.className = "list-item close-and-select-row" + (disabled ? " disabled" : "");
 
-    let previewHtml = "";
-    if (opt.preview && !disabled) {
+    let previewHtml = `<span class="action-preview"></span>`;
+    if (opt.isDefault && !opt.preview) {
+      previewHtml = `<span class="action-preview"><span class="preview-hint">browser picks next tab</span></span>`;
+    } else if (opt.preview && !disabled) {
       let prevFav = opt.preview.favIconUrl || "";
       if (prevFav.startsWith("moz-remote-image://")) {
         try { prevFav = new URL(prevFav).searchParams.get("url") || ""; } catch (e) { prevFav = ""; }
@@ -2070,10 +2111,8 @@ async function showCloseAndSelect() {
       <span class="item-text">
         <span class="item-title">${escapeHtml(opt.label)}</span>
       </span>
-      <span class="item-right">
-        ${previewHtml}
-        ${renderBadge(opt.hotkey)}
-      </span>
+      ${previewHtml}
+      <span class="item-right">${renderBadge(displayKey(opt.hotkey))}</span>
     `;
 
     const img = el.querySelector("img.preview-icon");
@@ -2348,7 +2387,7 @@ document.addEventListener("keydown", (e) => {
           }
           if (wsHandled) break;
         }
-        const key = (e.shiftKey ? "⇧" : "") + e.key.toUpperCase();
+        const key = chordFromEvent(e);
         const idx = items.findIndex((item) => item.hotkey === key);
         if (idx >= 0) {
           const listItems = listEl.querySelectorAll(".list-item");

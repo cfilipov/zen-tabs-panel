@@ -606,6 +606,39 @@ html, body {
   overflow: hidden;
 }
 
+/* Close & select rows: align action-icon, action-label, target-favicon,
+   target-title and badge into the same columns across rows. */
+.list-item.close-and-select-row {
+  display: grid;
+  grid-template-columns: 20px 150px minmax(0, 1fr) 32px;
+  gap: 12px;
+  align-items: center;
+}
+
+.list-item.close-and-select-row .item-text {
+  min-width: 0;
+}
+
+.list-item.close-and-select-row .action-preview {
+  min-width: 0;
+  max-width: none;
+  overflow: hidden;
+}
+
+.list-item.close-and-select-row .preview-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.list-item.close-and-select-row .preview-hint {
+  font-size: 13px;
+  color: var(--ztt-text-muted);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .preview-icon {
   width: 16px;
   height: 16px;

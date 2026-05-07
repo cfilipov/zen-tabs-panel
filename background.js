@@ -200,6 +200,9 @@ async function unloadActiveTab() {
 }
 
 const CLOSE_AND_SELECT_NAVS = {
+  // No-op navigation: just close the active tab and let the browser pick
+  // the successor (matches default Cmd+W behavior).
+  "close-and-select-default":       () => Promise.resolve(true),
   "close-and-select-previous":      () => browser.zenWorkspaces.goToPreviousTab(),
   "close-and-select-parent":        () => browser.zenWorkspaces.goToParentTab(),
   "close-and-select-next-sibling":  () => browser.zenWorkspaces.goToNextSibling(),
@@ -399,6 +402,9 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "get-all-tabs":
       return browser.zenWorkspaces.getAllTabs();
 
+    case "get-default-close-target":
+      return browser.zenWorkspaces.getDefaultCloseTargetDomId();
+
     case "get-active-tab-info": {
       // Check if the current tab has a parent (opener) tab
       const promise = (async () => {
@@ -453,6 +459,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })();
       break;
 
+    case "close-and-select-default":
     case "close-and-select-previous":
     case "close-and-select-parent":
     case "close-and-select-next-sibling":

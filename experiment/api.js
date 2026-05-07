@@ -305,72 +305,46 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Chord/leader-key shortcut tree. After the leader (MacCtrl+Cmd+.) fires,
     // a chrome-window-level keydown listener runs the user's next key against
     // this tree. Matched terminals fire actions or open submenus directly,
-    // skipping the main palette menu. Mirrors the hotkey table in popup.js.
+    // skipping the main palette menu. The tree is built from the shared
+    // keybindings registry (shared/keybindings.js) so chord shortcuts and
+    // popup menu hotkey badges stay in sync.
     const CHORD_ROOT_TIMEOUT_MS = 400;
     const CHORD_PREFIX_TIMEOUT_MS = 600;
-    const CHORD_TREE = {
-      children: {
-        "P": { type: "action", actionId: "go-to-previous-tab" },
-        "T": { type: "action", actionId: "go-to-parent-tab" },
-        "Shift+T": { type: "open-view", view: "parent-tabs" },
-        "C": { type: "open-view", view: "child-tabs" },
-        "B": { type: "open-view", view: "sibling-tabs" },
-        "H": { type: "open-view", view: "navigation" },
-        "Shift+N": { type: "open-view", view: "unvisited-tabs" },
-        "R": { type: "open-view", view: "last-visited" },
-        "X": { type: "open-view", view: "recently-closed" },
-        "D": { type: "open-view", view: "duplicates" },
-        "Shift+D": { type: "open-view", view: "domains" },
-        "I": { type: "open-view", view: "tab-info" },
-        "A": { type: "open-view", view: "tabs-by-age" },
-        "V": { type: "open-view", view: "most-visited" },
-        "M": { type: "open-view", view: "move-to-workspace" },
-        "S": { type: "action", actionId: "move-tab-to-start" },
-        "E": { type: "action", actionId: "move-tab-to-end" },
-        "L": { type: "action", actionId: "scroll-to-current-tab" },
-        "U": { type: "action", actionId: "unload-tab" },
-        ",": { type: "action", actionId: "open-options" },
-        "1": { type: "switch-workspace", index: 0 },
-        "2": { type: "switch-workspace", index: 1 },
-        "3": { type: "switch-workspace", index: 2 },
-        "4": { type: "switch-workspace", index: 3 },
-        "5": { type: "switch-workspace", index: 4 },
-        "6": { type: "switch-workspace", index: 5 },
-        "7": { type: "switch-workspace", index: 6 },
-        "8": { type: "switch-workspace", index: 7 },
-        "9": { type: "switch-workspace", index: 8 },
-        "0": { type: "switch-workspace", index: 9 },
-        "W": {
+
+    const kbScope = {};
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("shared/keybindings.js"),
+      kbScope
+    );
+    const KEYBINDINGS = kbScope.ZEN_KEYBINDINGS || [];
+    const WORKSPACE_DIGIT_CHORDS = kbScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
+
+    function buildChordNode(entry) {
+      if (entry.kind === "action") return { type: "action", actionId: entry.id };
+      if (entry.kind === "open-view") return { type: "open-view", view: entry.view };
+      if (entry.kind === "prefix") {
+        const children = {};
+        for (const child of (entry.children || [])) {
+          children[child.chord] = buildChordNode(child);
+        }
+        return {
           type: "prefix",
           timeoutMs: CHORD_PREFIX_TIMEOUT_MS,
-          onTimeout: { type: "open-view", view: "close-and-select" },
-          children: {
-            "P": { type: "action", actionId: "close-and-select-previous" },
-            "T": { type: "action", actionId: "close-and-select-parent" },
-            "C": { type: "action", actionId: "close-and-select-next-sibling" },
-            "Shift+C": { type: "action", actionId: "close-and-select-prev-sibling" },
-            "N": { type: "action", actionId: "close-and-select-next-vertical" },
-            "Shift+N": { type: "action", actionId: "close-and-select-prev-vertical" },
-          },
-        },
-        "O": {
-          type: "prefix",
-          timeoutMs: CHORD_PREFIX_TIMEOUT_MS,
-          onTimeout: { type: "open-view", view: "reorder-tabs" },
-          children: {
-            "R": { type: "action", actionId: "sort-tabs-recent-desc" },
-            "Shift+R": { type: "action", actionId: "sort-tabs-recent-asc" },
-            "D": { type: "action", actionId: "sort-tabs-domain-alpha" },
-            "Shift+D": { type: "action", actionId: "sort-tabs-domain-pop" },
-            "A": { type: "action", actionId: "sort-tabs-age-asc" },
-            "Shift+A": { type: "action", actionId: "sort-tabs-age-desc" },
-            "I": { type: "action", actionId: "sort-tabs-inactive-bottom" },
-            "V": { type: "action", actionId: "sort-tabs-most-visited" },
-            "G": { type: "action", actionId: "sort-tabs-group-dups" },
-          },
-        },
-      },
-    };
+          onTimeout: { type: "open-view", view: entry.view },
+          children,
+        };
+      }
+      return null;
+    }
+
+    const CHORD_TREE = { children: {} };
+    for (const entry of KEYBINDINGS) {
+      const node = buildChordNode(entry);
+      if (node) CHORD_TREE.children[entry.chord] = node;
+    }
+    for (let i = 0; i < WORKSPACE_DIGIT_CHORDS.length; i++) {
+      CHORD_TREE.children[WORKSPACE_DIGIT_CHORDS[i]] = { type: "switch-workspace", index: i };
+    }
 
     let pendingView = null;
     let pendingParams = {};
@@ -864,6 +838,21 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const idx = sameWorkspace.indexOf(currentTab);
           if (idx < 0 || idx === sameWorkspace.length - 1) return false;
           return activateNativeTab(sameWorkspace[idx + 1]);
+        },
+
+        // Return the DOM id of the tab that would be focused if the active
+        // tab were closed right now (the browser's default Cmd+W successor).
+        async getDefaultCloseTargetDomId() {
+          const w = getWin();
+          if (!w?.gBrowser) return null;
+          const cur = w.gBrowser.selectedTab;
+          if (!cur) return null;
+          try {
+            const next = w.gBrowser._findTabToBlurTo(cur);
+            return next?.id || null;
+          } catch (e) {
+            return null;
+          }
         },
 
         async goToPrevVerticalTab() {

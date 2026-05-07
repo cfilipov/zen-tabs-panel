@@ -87,6 +87,13 @@
         "parameters": []
       },
       {
+        "name": "getDefaultCloseTargetDomId",
+        "type": "function",
+        "async": true,
+        "description": "Return the DOM id of the tab the browser would focus if the active tab were closed right now (default Cmd+W successor)",
+        "parameters": []
+      },
+      {
         "name": "closeTabByDomId",
         "type": "function",
         "async": true,
