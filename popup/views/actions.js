@@ -82,6 +82,10 @@ function isActionDisabled(action) {
   if (action.needsParentTabs && tabState.parentTabCount === 0) return true;
   if (action.needsDuplicates && tabState.duplicateGroupCount === 0) return true;
   if (action.needsRecentlyClosed && tabState.recentlyClosedCount === 0) return true;
+  // Tab-history view is only useful when there's somewhere to navigate. With
+  // 0 entries it's empty; with 1 entry it's just the current page (no back/
+  // forward to choose from), so disable in both cases.
+  if (action.needsHistory && tabState.navigationHistoryCount <= 1) return true;
   return false;
 }
 function buildPreviewHtml(preview) {
@@ -352,6 +356,7 @@ function resetActionsState() {
   tabState.unvisitedTabCount = 0;
   tabState.duplicateGroupCount = 0;
   tabState.recentlyClosedCount = 0;
+  tabState.navigationHistoryCount = 0;
   tabState.parentTabPreview = null;
   tabState.previousTabPreview = null;
   tabState.backPreview = null;
@@ -491,6 +496,7 @@ async function showActionsMenu() {
 
   if (navHist && Array.isArray(navHist.entries)) {
     const i = navHist.index;
+    tabState.navigationHistoryCount = navHist.entries.length;
     tabState.backPreview = i > 0
       ? { title: navHist.entries[i - 1].title, url: navHist.entries[i - 1].url, isHistory: true }
       : null;
@@ -498,6 +504,7 @@ async function showActionsMenu() {
       ? { title: navHist.entries[i + 1].title, url: navHist.entries[i + 1].url, isHistory: true }
       : null;
   } else {
+    tabState.navigationHistoryCount = 0;
     tabState.backPreview = null;
     tabState.forwardPreview = null;
   }

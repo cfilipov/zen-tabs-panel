@@ -35,7 +35,7 @@ this.ZEN_KEYBINDINGS = [
   { id: "child-tabs",      kind: "open-view", chord: "C",       view: "child-tabs",      label: "Children",        icon: "svg:move-down",     needsChildren: true },
   { id: "sibling-tabs",    kind: "open-view", chord: "B",       view: "sibling-tabs",    label: "Siblings",        icon: "svg:git-branch",    needsSiblings: true },
   { id: "parent-tabs",     kind: "open-view", chord: "Shift+T", view: "parent-tabs",     label: "Parent tabs",     icon: "svg:parent-node",   needsParentTabs: true },
-  { id: "navigation",      kind: "open-view", chord: "H",       view: "navigation",      label: "Tab history",     icon: "svg:history" },
+  { id: "navigation",      kind: "open-view", chord: "H",       view: "navigation",      label: "Tab history",     icon: "svg:history",       needsHistory: true },
   { id: "unvisited-tabs",  kind: "open-view", chord: "N",       view: "unvisited-tabs",  label: "New tabs",        icon: "svg:circle-dot",    needsUnvisited: true },
   { id: "last-visited",    kind: "open-view", chord: "R",       view: "last-visited",    label: "Recent",          icon: "svg:clock" },
   { id: "recently-closed", kind: "open-view", chord: "X",       view: "recently-closed", label: "Recently closed", icon: "svg:rotate-ccw",    needsRecentlyClosed: true },

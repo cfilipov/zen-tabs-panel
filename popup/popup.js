@@ -133,7 +133,7 @@ function actionFromRegistry(id, extra) {
     hotkey: entry.chord,
     isView: entry.kind === "open-view" || entry.kind === "prefix",
   };
-  for (const flag of ["needsParent", "needsChildren", "needsSiblings", "needsParentTabs", "needsUnvisited", "needsDuplicates", "needsRecentlyClosed"]) {
+  for (const flag of ["needsParent", "needsChildren", "needsSiblings", "needsParentTabs", "needsUnvisited", "needsDuplicates", "needsRecentlyClosed", "needsHistory"]) {
     if (entry[flag]) base[flag] = true;
   }
   return Object.assign(base, extra);

@@ -34,6 +34,7 @@ const tabState = {
   parentTabCount: 0,
   domainCount: 0,
   recentlyClosedCount: 0,
+  navigationHistoryCount: 0,
   currentDomain: null,
   tabsByAgeNewestFirst: false,
   domainsSortAlpha: false,
