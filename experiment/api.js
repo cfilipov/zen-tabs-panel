@@ -1,6 +1,9 @@
 /* globals ExtensionAPI, Services */
 "use strict";
 
+const { ExtensionCommon } = ChromeUtils.importESModule("resource://gre/modules/ExtensionCommon.sys.mjs");
+const { EventManager } = ExtensionCommon;
+
 this.zenWorkspaces = class extends ExtensionAPI {
   getAPI(context) {
 
@@ -82,6 +85,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     context.callOnClose({
       close() {
         try { disarmChord(); } catch (e) {}
+        try { uninstallGestureListener(); } catch (e) {}
         const w = Services.wm.getMostRecentWindow("navigator:browser");
         if (!w) return;
         const overlay = w.document.getElementById("zen-tabs-panel-overlay");
@@ -596,6 +600,67 @@ this.zenWorkspaces = class extends ExtensionAPI {
       chordPrefixOnTimeout = null;
     }
 
+    // -----------------------------------------------------------------------
+    // Double-tap-Cmd gesture: persistent chrome-window listener that opens
+    // the palette when the user taps Cmd-alone twice within DOUBLE_TAP_WINDOW_MS.
+    // Replaces the awkward Ctrl+Cmd+. leader for daily use; the manifest
+    // keybinding stays as a fallback.
+    // -----------------------------------------------------------------------
+    const DOUBLE_TAP_WINDOW_MS = 350;
+    let cmdAlone = false;
+    let lastCmdAloneRelease = 0;
+    let gestureListeners = null;
+    let paletteRequestFire = null;
+
+    function onGestureKeydown(e) {
+      if (e.key === "Meta") {
+        cmdAlone = true;
+      } else if (e.metaKey) {
+        // A non-modifier key pressed while Cmd is held — Cmd is being used
+        // as part of a real shortcut, so disqualify this hold from counting
+        // as a clean Cmd-alone tap.
+        cmdAlone = false;
+      }
+    }
+
+    function onGestureKeyup(e) {
+      if (e.key !== "Meta") return;
+      if (cmdAlone) {
+        const now = Date.now();
+        if (now - lastCmdAloneRelease < DOUBLE_TAP_WINDOW_MS) {
+          lastCmdAloneRelease = 0;
+          if (paletteRequestFire) paletteRequestFire.async();
+        } else {
+          lastCmdAloneRelease = now;
+        }
+      } else {
+        lastCmdAloneRelease = 0;
+      }
+    }
+
+    function onGestureBlur() {
+      cmdAlone = false;
+      lastCmdAloneRelease = 0;
+    }
+
+    function installGestureListener() {
+      const w = getWin();
+      if (!w || gestureListeners) return;
+      gestureListeners = { keydown: onGestureKeydown, keyup: onGestureKeyup, blur: onGestureBlur };
+      w.addEventListener("keydown", gestureListeners.keydown, true);
+      w.addEventListener("keyup",   gestureListeners.keyup,   true);
+      w.addEventListener("blur",    gestureListeners.blur,    true);
+    }
+
+    function uninstallGestureListener() {
+      const w = getWin();
+      if (!w || !gestureListeners) return;
+      w.removeEventListener("keydown", gestureListeners.keydown, true);
+      w.removeEventListener("keyup",   gestureListeners.keyup,   true);
+      w.removeEventListener("blur",    gestureListeners.blur,    true);
+      gestureListeners = null;
+    }
+
     function openOverlayWithView(view) {
       pendingView = view || null;
       pendingParams = {};
@@ -722,8 +787,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
       chordTimer = w.setTimeout(onChordTimeout, CHORD_ROOT_TIMEOUT_MS);
     }
 
+    installGestureListener();
+
     return {
       zenWorkspaces: {
+        onPaletteRequest: new EventManager({
+          context,
+          name: "zenWorkspaces.onPaletteRequest",
+          register: (fire) => {
+            paletteRequestFire = fire;
+            return () => { paletteRequestFire = null; };
+          },
+        }).api(),
+
         async getAll() {
           const w = getWin();
           if (!w || !w.gZenWorkspaces) return [];

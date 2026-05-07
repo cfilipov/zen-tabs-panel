@@ -259,6 +259,14 @@
         "description": "Navigate back in the palette view stack, or close if at root",
         "parameters": []
       }
+    ],
+    "events": [
+      {
+        "name": "onPaletteRequest",
+        "type": "function",
+        "description": "Fires when the user invokes the palette via a chrome-side gesture (e.g. double-tap Cmd). Background listens and runs the same flow as browser.commands.onCommand for open-palette.",
+        "parameters": []
+      }
     ]
   }
 ]

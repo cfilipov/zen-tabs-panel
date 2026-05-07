@@ -354,13 +354,20 @@ async function runChordAction(actionId) {
   }
 }
 
-browser.commands.onCommand.addListener(async (command) => {
-  if (command !== "open-palette") return;
+async function handleOpenPaletteRequest() {
   const result = await browser.zenWorkspaces.showPalette();
   if (result && result.kind === "chord-action") {
     await runChordAction(result.actionId);
   }
+}
+
+browser.commands.onCommand.addListener(async (command) => {
+  if (command !== "open-palette") return;
+  await handleOpenPaletteRequest();
 });
+
+// Chrome-side gesture (double-tap Cmd) — see experiment/api.js.
+browser.zenWorkspaces.onPaletteRequest.addListener(handleOpenPaletteRequest);
 
 // Toolbar icon click opens the palette immediately, bypassing chord-arming.
 browser.browserAction.onClicked.addListener(() => {

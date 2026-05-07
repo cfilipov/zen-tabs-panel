@@ -40,7 +40,9 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 
 **Keyboard shortcuts** (configurable via `about:addons` › Manage Extension Shortcuts):
 
-Press `Ctrl+Cmd+.` to open the palette (configurable via `about:addons` > Manage Extension Shortcuts). From the palette, use single-key shortcuts to navigate:
+**Double-tap Cmd** — the primary way to open the palette. Tap the Cmd key twice within ~350 ms (no other keys in between) and the palette opens. This is detected entirely in chrome scope, not registered as a global shortcut, so it doesn't conflict with macOS defaults (Spotlight, emoji picker, Finder search) or with apps that grab `Ctrl+Opt+*`. Normal `Cmd+letter` shortcuts (like `Cmd+T`, `Cmd+W`, `Cmd+L`) won't false-trigger it because the gesture only counts releases of Cmd that were never combined with another key.
+
+Press `Ctrl+Cmd+.` as a fallback to open the palette (this is the registered keybinding in `about:addons` > Manage Extension Shortcuts and can be changed there). From the palette, use single-key shortcuts to navigate:
 
 | Panel key | Action |
 |---|---|
@@ -67,7 +69,7 @@ Press `Ctrl+Cmd+.` to open the palette (configurable via `about:addons` > Manage
 | `1`–`9`, `0` | Switch to workspace 1–10 |
 | `,` | Settings |
 
-**Chord shortcuts** - the same keys work as leader-key chords. Press `Ctrl+Cmd+.` then a panel key within ~400 ms to fire the action without the menu appearing:
+**Chord shortcuts** - the same keys work as leader-key chords. Either trigger (double-tap Cmd, or `Ctrl+Cmd+.`) followed by a panel key within ~400 ms fires the action without the menu appearing. The 350 ms gesture window is only for detecting the double-tap itself; once you're in, the chord engine uses its own 400/600 ms timeouts:
 
 - `Ctrl+Cmd+. P` - jump to previous tab, no menu shown
 - `Ctrl+Cmd+. T` - jump to parent tab, no menu shown
