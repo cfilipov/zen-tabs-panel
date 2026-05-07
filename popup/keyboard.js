@@ -114,6 +114,17 @@ function handleActionsKey(e) {
 // workspace filter, Shift+1-9 to filter to a specific workspace, and
 // 1-9 to activate the badge-numbered list item.
 function handleListViewKey(e) {
+  // W: close the currently-selected tab in close-supporting views. Bare
+  // letter only — must not be chordable, since the close target is the
+  // arrow-key selection (not a registry entry).
+  if ((e.key === "w" || e.key === "W") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    if (CLOSEABLE_VIEWS.has(ui.currentView) && ui.selectedIndex >= 0) {
+      e.preventDefault();
+      closeSelectedRow();
+    }
+    return;
+  }
+
   // B/F: step navigation history
   if (ui.currentView === "navigation") {
     const upper = e.key.toUpperCase();

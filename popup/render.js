@@ -53,7 +53,10 @@ function updateHeader(title, hint) {
 // Build a tab row element. Click / hover / image-error are handled by the
 // single set of delegated listeners installed on listEl from popup.js, so
 // rows are pure data-bearing markup with zero per-row listeners.
-function createTabElement(tab, badge) {
+//
+// opts.subtitleSuffix(tab) → optional HTML string appended after the domain
+// in the subtitle (used by views like "most visited" to show "N visits").
+function createTabElement(tab, badge, opts) {
   const el = document.createElement("div");
   el.className = "list-item" + (tab.pending ? " tab-pending" : "");
   el.dataset.domId = tab.domId;
@@ -72,8 +75,9 @@ function createTabElement(tab, badge) {
     }
   }
 
-  const subtitleHtml = domain
-    ? `<span class="item-subtitle"><span class="subtitle-domain">${escapeHtml(domain)}</span></span>`
+  const subtitleSuffix = opts?.subtitleSuffix ? opts.subtitleSuffix(tab) : "";
+  const subtitleHtml = (domain || subtitleSuffix)
+    ? `<span class="item-subtitle">${domain ? `<span class="subtitle-domain">${escapeHtml(domain)}</span>` : ""}${subtitleSuffix}</span>`
     : "";
 
   const badgeHtml = badge !== null
@@ -88,12 +92,12 @@ function createTabElement(tab, badge) {
       <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
       ${subtitleHtml}
     </span>
-    <span class="item-right">${wsHtml}${badgeHtml}</span>
+    <span class="item-right">${wsHtml}<span class="item-badge-stack">${badgeHtml}<span class="item-close" title="Close tab">✕</span></span></span>
   `;
   return el;
 }
 
-function renderTabList(tabs, title, hint) {
+function renderTabList(tabs, title, hint, opts) {
   ui.selectedIndex = -1;
   ui.sectionStarts = [0];
   listEl.innerHTML = "";
@@ -143,7 +147,7 @@ function renderTabList(tabs, title, hint) {
             pairEl.appendChild(sep);
           }
 
-          pairEl.appendChild(createTabElement(sib.tab, null));
+          pairEl.appendChild(createTabElement(sib.tab, null, opts));
         }
 
         rowEl.appendChild(pairEl);
@@ -163,7 +167,7 @@ function renderTabList(tabs, title, hint) {
 
     rendered.add(i);
     orderedItems.push(tab);
-    listEl.appendChild(createTabElement(tab, badge));
+    listEl.appendChild(createTabElement(tab, badge, opts));
     slotIndex++;
   }
 

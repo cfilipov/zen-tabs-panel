@@ -175,14 +175,13 @@ async function showMostVisited(animate) {
   try {
     allTabs = await getAllTabsCached();
   } catch (e) {
-    listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
-    updateHeader("Most visited");
+    renderTabList([], "Most visited");
+    renderSidebar();
     return;
   }
 
-  let filtered = filterByWorkspace(allTabs.filter((t) => t.url && !t.url.startsWith("about:")));
+  const filtered = filterByWorkspace(allTabs.filter((t) => t.url && !t.url.startsWith("about:")));
 
-  // Get visit counts for all unique URLs in parallel
   const uniqueUrls = [...new Set(filtered.map((t) => t.url))];
   const visitCounts = {};
   try {
@@ -195,80 +194,11 @@ async function showMostVisited(animate) {
     for (const r of results) visitCounts[r.url] = r.count;
   } catch (e) {}
 
-  // Sort by visit count descending
   filtered.sort((a, b) => (visitCounts[b.url] || 0) - (visitCounts[a.url] || 0));
 
-  // Render using a custom list that shows visit count in subtitle
-  ui.selectedIndex = -1;
-  listEl.innerHTML = "";
-  const now = Date.now();
-
-  if (filtered.length === 0) {
-    ui.items = [];
-    listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
-    updateHeader("Most visited");
-    return;
-  }
-
-  ui.items = filtered;
-
-  for (let i = 0; i < filtered.length; i++) {
-    const tab = filtered[i];
-    const badge = (i + 1) <= 9 ? String(i + 1) : null;
-    const visits = visitCounts[tab.url] || 0;
-
-    const el = document.createElement("div");
-    el.className = "list-item" + (tab.pending ? " tab-pending" : "");
-    el.dataset.domId = tab.domId;
-
-    const domain = extractDomain(tab.url);
-    const favicon = extractFavicon(tab.favIconUrl);
-
-    let wsHtml = "";
-    if (tab.workspaceId && tab.workspaceId !== wsState.activeWorkspaceId) {
-      const ws = wsState.workspaceMap[tab.workspaceId];
-      if (ws) {
-        const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
-        wsHtml = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
-      }
-    }
-
-    const subtitleParts = [
-      domain ? `<span class="subtitle-domain">${escapeHtml(domain)}</span>` : "",
-      `<span class="subtitle-age">${visits} visits</span>`,
-    ].filter(Boolean).join("");
-
-    const badgeHtml = badge !== null
-      ? `<span class="item-badge">${badge}</span>`
-      : `<span class="item-badge-placeholder"></span>`;
-
-    el.innerHTML = `
-      ${favicon
-        ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
-        : `<span class="item-icon-placeholder">○</span>`}
-      <span class="item-text">
-        <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
-        <span class="item-subtitle">${subtitleParts}</span>
-      </span>
-      <span class="item-right">${wsHtml}${badgeHtml}</span>
-    `;
-
-    const img = el.querySelector("img.item-icon");
-    if (img) img.addEventListener("error", () => { img.style.display = "none"; });
-
-    el.addEventListener("click", () => activateTab(tab.domId));
-    el.addEventListener("mouseenter", () => {
-      ext.runtime.sendMessage({ type: "preview-tab", domId: tab.domId }).catch(() => {});
-    });
-    el.addEventListener("mouseleave", () => {
-      ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
-    });
-
-    listEl.appendChild(el);
-  }
-
-  updateSelection();
-  updateHeader("Most visited");
+  renderTabList(filtered, "Most visited", null, {
+    subtitleSuffix: (tab) => `<span class="subtitle-age">${visitCounts[tab.url] || 0} visits</span>`,
+  });
   renderSidebar();
 }
 

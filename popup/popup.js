@@ -44,6 +44,11 @@ function isDelegateSkipped(row) {
 listEl.addEventListener("click", (e) => {
   const row = e.target.closest("[data-dom-id]");
   if (!row || row.classList.contains("disabled") || isDelegateSkipped(row)) return;
+  if (e.target.classList.contains("item-close")) {
+    e.stopPropagation();
+    closeRowAndReindex(row);
+    return;
+  }
   activateTab(row.dataset.domId);
 });
 
@@ -83,6 +88,102 @@ function closePalette() {
 function activateTab(domId) {
   // activate-tab handler in background.js closes the palette and switches
   ext.runtime.sendMessage({ type: "activate-tab", domId }).catch(() => {});
+}
+
+// Close the tab represented by `row`, remove the row, re-number the
+// remaining 1-9 badges, and adjust selection / empty state. Used by the
+// X-button click delegate and by the W key shortcut. The menu stays open
+// so the user can chain closes.
+function closeRowAndReindex(row) {
+  const domId = row.dataset.domId;
+  if (!domId) return;
+  ext.runtime.sendMessage({ type: "close-tab", domId }).catch(() => {});
+
+  const idx = ui.items.findIndex((t) => t && t.domId === domId);
+  if (idx >= 0) ui.items.splice(idx, 1);
+
+  // If the row lived inside a .split-pair and removing it leaves a single
+  // sibling, drop the now-orphaned pair separator so the layout doesn't
+  // dangle. The .split-row container itself stays — the survivor renders
+  // fine as a 1-tab pair.
+  const pair = row.closest(".split-pair");
+  row.remove();
+  if (pair) {
+    const remaining = pair.querySelectorAll(".list-item[data-dom-id]");
+    if (remaining.length <= 1) {
+      pair.querySelectorAll(".split-pair-indicator").forEach((s) => s.remove());
+    }
+    if (remaining.length === 0) {
+      pair.closest(".split-row")?.remove();
+    }
+  }
+
+  reassignBadges();
+
+  if (ui.items.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
+    ui.selectedIndex = -1;
+    updateSelection();
+  } else {
+    if (ui.selectedIndex >= ui.items.length) {
+      ui.selectedIndex = ui.items.length - 1;
+    }
+    updateSelection();
+  }
+
+  invalidateAllTabsCache();
+}
+
+// Walk listEl in DOM order and renumber 1-9 badges across .split-row and
+// top-level .list-item rows. Rows nested inside a .split-pair are skipped
+// (their slot is owned by the parent .split-row). Rows past slot 9 lose
+// their badge in favor of the placeholder element used by createTabElement.
+function reassignBadges() {
+  let slot = 1;
+  const candidates = listEl.querySelectorAll(".split-row, .list-item[data-dom-id]");
+  for (const row of candidates) {
+    const isSplit = row.classList.contains("split-row");
+    if (!isSplit && row.closest(".split-pair")) continue;
+
+    if (isSplit) {
+      let badgeWrap = row.querySelector(".split-row-badge");
+      if (slot <= 9) {
+        if (!badgeWrap) {
+          badgeWrap = document.createElement("span");
+          badgeWrap.className = "split-row-badge";
+          row.appendChild(badgeWrap);
+        }
+        badgeWrap.innerHTML = renderBadge(String(slot));
+      } else if (badgeWrap) {
+        badgeWrap.remove();
+      }
+    } else {
+      const stack = row.querySelector(".item-badge-stack");
+      if (!stack) { slot++; continue; }
+      const oldBadge = stack.querySelector(".item-badge");
+      const oldPlaceholder = stack.querySelector(".item-badge-placeholder");
+      if (slot <= 9) {
+        if (oldBadge) {
+          oldBadge.textContent = String(slot);
+          oldBadge.classList.remove("badge-wide");
+        } else if (oldPlaceholder) {
+          oldPlaceholder.outerHTML = renderBadge(String(slot));
+        } else {
+          stack.insertAdjacentHTML("afterbegin", renderBadge(String(slot)));
+        }
+      } else if (oldBadge) {
+        oldBadge.outerHTML = `<span class="item-badge-placeholder"></span>`;
+      }
+    }
+    slot++;
+  }
+}
+
+function closeSelectedRow() {
+  if (ui.selectedIndex < 0 || ui.items.length === 0) return;
+  const listItems = listEl.querySelectorAll(".list-item");
+  const row = listItems[ui.selectedIndex];
+  if (row && row.dataset.domId) closeRowAndReindex(row);
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +319,10 @@ function updateSelection() {
   } else if (ui.currentView === "actions" || ui.currentView === "close-and-select") {
     ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
   }
+
+  // Sidebar "w" close hint is only meaningful with an active selection.
+  const closeHint = sidebarEl.querySelector(".sidebar-close-hint");
+  if (closeHint) closeHint.classList.toggle("hidden", ui.selectedIndex < 0);
 }
 
 function filterByWorkspace(tabs) {
@@ -227,6 +332,14 @@ function filterByWorkspace(tabs) {
 
 function renderSidebar(sortOptions) {
   sidebarEl.innerHTML = "";
+
+  if (CLOSEABLE_VIEWS.has(ui.currentView)) {
+    const hint = document.createElement("div");
+    hint.className = "sidebar-close-hint hidden";
+    hint.innerHTML = `<span class="sidebar-ws-name">Close tab</span> ${renderBadge("W")}`;
+    hint.addEventListener("click", closeSelectedRow);
+    sidebarEl.appendChild(hint);
+  }
 
   if (sortOptions) {
     for (const opt of sortOptions) {
@@ -289,6 +402,17 @@ const REFRESHABLE_VIEWS = new Set([
   "child-tabs", "sibling-tabs", "parent-tabs", "unvisited-tabs",
   "last-visited", "recently-closed", "duplicates",
   "domains", "domain-tabs", "tabs-by-age", "most-visited",
+]);
+
+// View ids where rows represent a live tab that can be closed in place via
+// the X button (mouse) or W key (selection). Excludes:
+//  - actions/info/navigation: not a tab list at all
+//  - duplicates: has its own .dup-close handler (kept as the model)
+//  - domains: rows are domain aggregates, not individual tabs
+//  - recently-closed: rows are already-closed sessions
+const CLOSEABLE_VIEWS = new Set([
+  "child-tabs", "sibling-tabs", "parent-tabs", "unvisited",
+  "last-visited", "domain-tabs", "most-visited", "tabs-by-age",
 ]);
 
 function refreshCurrentView() {

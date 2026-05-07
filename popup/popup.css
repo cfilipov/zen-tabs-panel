@@ -341,6 +341,48 @@ html, body {
   flex-shrink: 0;
 }
 
+/* Stack badge + close button in the same slot so the X swaps in for the
+   1-9 indicator on hover or arrow-key selection. */
+.item-badge-stack {
+  display: grid;
+  grid-template-areas: "stack";
+  align-items: center;
+  justify-items: stretch;
+  flex-shrink: 0;
+}
+
+.item-badge-stack > * {
+  grid-area: stack;
+}
+
+.item-close {
+  font-size: 14px;
+  color: var(--ztt-text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease, background 0.1s ease, color 0.1s ease;
+}
+
+.list-item:hover .item-badge-stack .item-close,
+.list-item.selected .item-badge-stack .item-close {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.list-item:hover .item-badge-stack .item-badge,
+.list-item.selected .item-badge-stack .item-badge {
+  opacity: 0;
+}
+
+.item-close:hover {
+  color: var(--ztt-text);
+  background: var(--ztt-bg-hover);
+}
+
 /* Duplicate tabs in tab info */
 .info-section-header {
   display: flex;
@@ -1082,6 +1124,26 @@ html, body {
 }
 
 .sidebar-sort:hover {
+  background: var(--ztt-bg-hover);
+}
+
+/* "w Close tab" hint — only visible while a row is selected. */
+.sidebar-close-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--ztt-text-muted);
+  transition: background 0.08s ease;
+}
+
+.sidebar-close-hint.hidden {
+  display: none;
+}
+
+.sidebar-close-hint:hover {
   background: var(--ztt-bg-hover);
 }
 
