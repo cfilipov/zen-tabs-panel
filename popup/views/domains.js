@@ -24,8 +24,7 @@ async function showDomains(animate) {
 
   const domainMap = {};
   for (const tab of wsFiltered) {
-    let hostname = "";
-    try { hostname = new URL(tab.url).hostname; } catch (e) {}
+    const hostname = extractDomain(tab.url);
     if (!hostname) continue;
     if (!domainMap[hostname]) domainMap[hostname] = { tabs: [], favicon: "" };
     domainMap[hostname].tabs.push(tab);
@@ -67,14 +66,10 @@ function renderDomainList(domains, title) {
     el.className = "list-item";
     el.dataset.domain = d.domain;
 
-    let favicon = d.favicon || "";
-    if (favicon.startsWith("moz-remote-image://")) {
-      try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
-    }
-    const canLoad = favicon && !favicon.startsWith("chrome://");
+    const favicon = extractFavicon(d.favicon);
 
     el.innerHTML = `
-      ${canLoad
+      ${favicon
         ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
         : `<span class="item-icon-placeholder">○</span>`}
       <span class="item-text">
@@ -113,7 +108,7 @@ async function showDomainTabs(domain, animate) {
   }
 
   const filtered = allTabs.filter((t) => {
-    try { return new URL(t.url).hostname === domain; } catch (e) { return false; }
+    return extractDomain(t.url) === domain;
   });
 
   const wsFiltered = filterByWorkspace(filtered);

@@ -100,14 +100,8 @@ function renderTabsByAge(groups) {
       el.className = "list-item age-tab-item" + (tab.pending ? " tab-pending" : "");
       el.dataset.domId = tab.domId;
 
-      let domain = "";
-      try { domain = new URL(tab.url).hostname; } catch (e) {}
-
-      let favicon = tab.favIconUrl || "";
-      if (favicon.startsWith("moz-remote-image://")) {
-        try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
-      }
-      const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
+      const domain = extractDomain(tab.url);
+      const favicon = extractFavicon(tab.favIconUrl);
 
       let wsHtml = "";
       if (tab.workspaceId && tab.workspaceId !== wsState.activeWorkspaceId) {
@@ -124,7 +118,7 @@ function renderTabsByAge(groups) {
       ].filter(Boolean).join("");
 
       el.innerHTML = `
-        ${canLoadFavicon
+        ${favicon
           ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
           : `<span class="item-icon-placeholder">○</span>`}
         <span class="item-text">
@@ -225,14 +219,8 @@ async function showMostVisited(animate) {
     el.className = "list-item" + (tab.pending ? " tab-pending" : "");
     el.dataset.domId = tab.domId;
 
-    let domain = "";
-    try { domain = new URL(tab.url).hostname; } catch (e) {}
-
-    let favicon = tab.favIconUrl || "";
-    if (favicon.startsWith("moz-remote-image://")) {
-      try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
-    }
-    const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
+    const domain = extractDomain(tab.url);
+    const favicon = extractFavicon(tab.favIconUrl);
 
     let wsHtml = "";
     if (tab.workspaceId && tab.workspaceId !== wsState.activeWorkspaceId) {
@@ -253,7 +241,7 @@ async function showMostVisited(animate) {
       : `<span class="item-badge-placeholder"></span>`;
 
     el.innerHTML = `
-      ${canLoadFavicon
+      ${favicon
         ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
         : `<span class="item-icon-placeholder">○</span>`}
       <span class="item-text">

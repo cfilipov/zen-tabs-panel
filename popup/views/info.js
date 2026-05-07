@@ -187,15 +187,9 @@ function renderTabInfo(info, visits, duplicates) {
 
   const now = Date.now();
 
-  let domain = "";
-  try { domain = new URL(info.url).hostname; } catch (e) {}
-
-  let infoFavicon = info.favIconUrl || "";
-  if (infoFavicon.startsWith("moz-remote-image://")) {
-    try { infoFavicon = new URL(infoFavicon).searchParams.get("url") || ""; } catch (e) { infoFavicon = ""; }
-  }
-  const canLoadFavicon = infoFavicon && !infoFavicon.startsWith("chrome://");
-  const faviconHtml = canLoadFavicon
+  const domain = extractDomain(info.url);
+  const infoFavicon = extractFavicon(info.favIconUrl);
+  const faviconHtml = infoFavicon
     ? `<img class="info-favicon" src="${escapeAttr(infoFavicon)}">`
     : `<span class="info-favicon-placeholder">○</span>`;
 
@@ -376,18 +370,12 @@ function renderDuplicateGroups(groups) {
 
   for (const group of groups) {
     const sample = group[0];
-    let domain = "";
-    try { domain = new URL(sample.url).hostname; } catch (e) {}
-
-    let favicon = sample.favIconUrl || "";
-    if (favicon.startsWith("moz-remote-image://")) {
-      try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
-    }
-    const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
+    const domain = extractDomain(sample.url);
+    const favicon = extractFavicon(sample.favIconUrl);
 
     html += `<div class="dup-group">`;
     html += `<div class="dup-group-header">`;
-    html += canLoadFavicon
+    html += favicon
       ? `<img class="dup-group-favicon" src="${escapeAttr(favicon)}">`
       : `<span class="dup-group-favicon-placeholder">○</span>`;
     html += `<div class="dup-group-text">`;

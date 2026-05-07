@@ -184,12 +184,8 @@ async function showCloseAndSelect() {
     if (opt.isDefault && !opt.preview) {
       previewHtml = `<span class="action-preview"><span class="preview-hint">browser picks next tab</span></span>`;
     } else if (opt.preview && !disabled) {
-      let prevFav = opt.preview.favIconUrl || "";
-      if (prevFav.startsWith("moz-remote-image://")) {
-        try { prevFav = new URL(prevFav).searchParams.get("url") || ""; } catch (e) { prevFav = ""; }
-      }
-      const canLoad = prevFav && !prevFav.startsWith("chrome://");
-      const iconHtml = canLoad
+      const prevFav = extractFavicon(opt.preview.favIconUrl);
+      const iconHtml = prevFav
         ? `<img class="preview-icon" src="${escapeAttr(prevFav)}">`
         : `<span class="preview-icon-placeholder">○</span>`;
       const previewTitle = escapeHtml(opt.preview.title || "Untitled");

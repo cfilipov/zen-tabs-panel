@@ -30,9 +30,7 @@ async function showNavigation() {
   for (let i = 0; i < history.entries.length; i++) {
     const entry = history.entries[i];
     const isCurrent = i === currentIndex;
-
-    let domain = "";
-    try { domain = new URL(entry.url).hostname; } catch (e) {}
+    const domain = extractDomain(entry.url);
 
     const el = document.createElement("div");
     el.className = "list-item" + (isCurrent ? " nav-current" : "");
@@ -132,20 +130,14 @@ function renderRecentlyClosedList(entries) {
   for (const entry of entries) {
     const badge = slotIndex <= 9 ? String(slotIndex) : null;
 
-    let domain = "";
-    try { domain = new URL(entry.url).hostname; } catch (e) {}
-
-    let favicon = entry.favIconUrl || "";
-    if (favicon.startsWith("moz-remote-image://")) {
-      try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
-    }
-    const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
+    const domain = extractDomain(entry.url);
+    const favicon = extractFavicon(entry.favIconUrl);
 
     const el = document.createElement("div");
     el.className = "list-item";
     el.dataset.sessionId = entry.sessionId;
     el.innerHTML = `
-      ${canLoadFavicon
+      ${favicon
         ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
         : `<span class="item-icon-placeholder">○</span>`}
       <span class="item-text">

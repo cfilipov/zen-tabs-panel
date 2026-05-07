@@ -88,19 +88,14 @@ function buildPreviewHtml(preview) {
   if (!preview) return "";
 
   if (preview.isHistory) {
-    let domain = "";
-    try { domain = new URL(preview.url).hostname.replace(/^www\./, ""); } catch (e) {}
+    const domain = extractDomain(preview.url).replace(/^www\./, "");
     const titleHtml = escapeHtml(preview.title || preview.url || "Untitled");
     const domainHtml = domain ? `<span class="row-workspace">${escapeHtml(domain)}</span>` : "";
     return `<span class="action-preview"><span class="preview-icon-placeholder">○</span><span class="preview-title">${titleHtml}</span>${domainHtml}</span>`;
   }
 
-  let prevFav = preview.favIconUrl || "";
-  if (prevFav.startsWith("moz-remote-image://")) {
-    try { prevFav = new URL(prevFav).searchParams.get("url") || ""; } catch (e) { prevFav = ""; }
-  }
-  const canLoad = prevFav && !prevFav.startsWith("chrome://");
-  const iconHtml = canLoad
+  const prevFav = extractFavicon(preview.favIconUrl);
+  const iconHtml = prevFav
     ? `<img class="preview-icon" src="${escapeAttr(prevFav)}">`
     : `<span class="preview-icon-placeholder">○</span>`;
   const previewTitle = escapeHtml(preview.title || "Untitled");
@@ -126,13 +121,8 @@ function buildNavigateCell(action) {
   // back to the action's own icon.
   let iconHtml = "";
   if (action.preview && !action.preview.isHistory) {
-    let fav = action.preview.favIconUrl || "";
-    if (fav.startsWith("moz-remote-image://")) {
-      try { fav = new URL(fav).searchParams.get("url") || ""; } catch (e) { fav = ""; }
-    }
-    if (fav && !fav.startsWith("chrome://")) {
-      iconHtml = `<img class="item-icon" src="${escapeAttr(fav)}">`;
-    }
+    const fav = extractFavicon(action.preview.favIconUrl);
+    if (fav) iconHtml = `<img class="item-icon" src="${escapeAttr(fav)}">`;
   }
   if (!iconHtml) {
     iconHtml = `<span class="item-icon-placeholder">${getIcon(action.icon)}</span>`;
@@ -146,8 +136,7 @@ function buildNavigateCell(action) {
   let trailingHtml = "";
   if (action.preview) {
     if (action.preview.isHistory) {
-      let domain = "";
-      try { domain = new URL(action.preview.url || "").hostname.replace(/^www\./, ""); } catch (e) {}
+      const domain = extractDomain(action.preview.url || "").replace(/^www\./, "");
       if (domain) trailingHtml = `<span class="row-workspace">${escapeHtml(domain)}</span>`;
     } else if (action.preview.workspaceId && action.preview.workspaceId !== wsState.activeWorkspaceId) {
       const ws = wsState.workspaceMap[action.preview.workspaceId];
