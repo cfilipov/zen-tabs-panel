@@ -197,7 +197,7 @@ function renderActions(actions, title) {
 
     const rightContent = `
       ${previewHtml}
-      ${action.hotkey ? `<span class="item-badge${action.hotkey.length > 1 ? " badge-wide" : ""}">${action.hotkey}</span>` : ""}
+      ${renderBadge(action.hotkey)}
       <span class="item-arrow">${action.isView ? "›" : ""}</span>
     `;
 
@@ -303,7 +303,7 @@ function renderTabList(tabs, title, hint) {
         if (badge !== null) {
           const badgeEl = document.createElement("span");
           badgeEl.className = "split-row-badge";
-          badgeEl.innerHTML = `<span class="item-badge">${badge}</span>`;
+          badgeEl.innerHTML = renderBadge(badge);
           rowEl.appendChild(badgeEl);
         }
 
@@ -357,7 +357,7 @@ function createTabElement(tab, badge) {
     : "";
 
   const badgeHtml = badge !== null
-    ? `<span class="item-badge">${badge}</span>`
+    ? renderBadge(badge)
     : `<span class="item-badge-placeholder"></span>`;
 
   el.innerHTML = `
@@ -526,7 +526,7 @@ function renderSidebar(sortOptions) {
     for (const opt of sortOptions) {
       const el = document.createElement("div");
       el.className = "sidebar-sort";
-      el.innerHTML = `<span class="sidebar-ws-name">${escapeHtml(opt.label)}</span> <span class="item-badge">${escapeHtml(opt.key)}</span>`;
+      el.innerHTML = `<span class="sidebar-ws-name">${escapeHtml(opt.label)}</span> ${renderBadge(opt.key)}`;
       el.addEventListener("click", opt.onClick);
       sidebarEl.appendChild(el);
     }
@@ -537,7 +537,7 @@ function renderSidebar(sortOptions) {
 
   const allEl = document.createElement("div");
   allEl.className = "sidebar-item" + (workspaceFilter === "all" ? " active" : "");
-  allEl.innerHTML = `<span class="sidebar-ws-name">All</span> <span class="item-badge">0</span>`;
+  allEl.innerHTML = `<span class="sidebar-ws-name">All</span> ${renderBadge("0")}`;
   allEl.addEventListener("click", () => {
     workspaceFilter = workspaceFilter === "all" ? activeWorkspaceId : "all";
     refreshCurrentView();
@@ -556,7 +556,7 @@ function renderSidebar(sortOptions) {
     const iconHtml = ws.svgContent
       ? `<span class="sidebar-ws-icon">${ws.svgContent}</span>`
       : "";
-    el.innerHTML = `${iconHtml}<span class="sidebar-ws-name">${escapeHtml(ws.name)}</span>${badge !== null ? `<span class="item-badge">${badge}</span>` : ""}`;
+    el.innerHTML = `${iconHtml}<span class="sidebar-ws-name">${escapeHtml(ws.name)}</span>${renderBadge(badge)}`;
 
     el.addEventListener("click", () => {
       workspaceFilter = workspaceFilter === uuid ? "all" : uuid;
@@ -977,8 +977,8 @@ async function showNavigation() {
     if (!isCurrent) {
       if (itemNum <= 9) { badge = String(itemNum); itemNum++; }
     }
-    if (i === currentIndex - 1) extraBadge = `<span class="item-badge">B</span>`;
-    if (i === currentIndex + 1) extraBadge = `<span class="item-badge">F</span>`;
+    if (i === currentIndex - 1) extraBadge = renderBadge("B");
+    if (i === currentIndex + 1) extraBadge = renderBadge("F");
 
     const label = i < currentIndex ? "← " : i > currentIndex ? "→ " : "● ";
 
@@ -990,7 +990,7 @@ async function showNavigation() {
       </span>
       <span class="item-right">
         ${extraBadge}
-        ${badge !== null ? `<span class="item-badge">${badge}</span>` : ""}
+        ${renderBadge(badge)}
       </span>
     `;
 
@@ -1105,7 +1105,7 @@ function renderRecentlyClosedList(entries) {
         ${domain ? `<span class="item-subtitle"><span class="subtitle-domain">${escapeHtml(domain)}</span></span>` : ""}
       </span>
       <span class="item-right">${badge !== null
-        ? `<span class="item-badge">${badge}</span>`
+        ? renderBadge(badge)
         : `<span class="item-badge-placeholder"></span>`}</span>
     `;
 
@@ -1165,7 +1165,7 @@ function renderWorkspaceList(workspaces, title) {
       <span class="item-text">
         <span class="item-title">${escapeHtml(ws.name)}</span>
       </span>
-      ${badge !== null ? `<span class="item-right"><span class="item-badge">${badge}</span></span>` : ""}
+      ${badge !== null ? `<span class="item-right">${renderBadge(badge)}</span>` : ""}
     `;
 
     el.addEventListener("click", () => moveToWorkspace(ws.uuid));
@@ -1702,7 +1702,7 @@ function renderDomainList(domains, title) {
       </span>
       <span class="item-right">
         <span class="item-count">${d.count}</span>
-        ${badge !== null ? `<span class="item-badge">${badge}</span>` : ""}
+        ${renderBadge(badge)}
         <span class="item-arrow">›</span>
       </span>
     `;
@@ -1920,15 +1920,15 @@ function showReorderTabs() {
   sectionStarts = [0];
 
   const reorderOptions = [
-    { label: "Recent (newest first)", hotkey: "1", icon: "svg:clock", reorderAction: "sort-tabs-recent-desc" },
-    { label: "Recent (oldest first)", hotkey: "2", icon: "svg:clock", reorderAction: "sort-tabs-recent-asc" },
-    { label: "Domain (A-Z)", hotkey: "3", icon: "svg:globe", reorderAction: "sort-tabs-domain-alpha" },
-    { label: "Domain (by popularity)", hotkey: "4", icon: "svg:globe", reorderAction: "sort-tabs-domain-pop" },
-    { label: "Age (oldest first)", hotkey: "5", icon: "svg:calendar-clock", reorderAction: "sort-tabs-age-asc" },
-    { label: "Age (newest first)", hotkey: "6", icon: "svg:calendar-clock", reorderAction: "sort-tabs-age-desc" },
-    { label: "Inactive at bottom", hotkey: "7", icon: "svg:moon", reorderAction: "sort-tabs-inactive-bottom" },
-    { label: "Most visited first", hotkey: "8", icon: "svg:star", reorderAction: "sort-tabs-most-visited" },
-    { label: "Group duplicates", hotkey: "9", icon: "⊜", reorderAction: "sort-tabs-group-dups" },
+    { label: "Recent (newest first)", hotkey: "R", icon: "svg:clock", reorderAction: "sort-tabs-recent-desc" },
+    { label: "Recent (oldest first)", hotkey: "⇧R", icon: "svg:clock", reorderAction: "sort-tabs-recent-asc" },
+    { label: "Domain (A-Z)", hotkey: "D", icon: "svg:globe", reorderAction: "sort-tabs-domain-alpha" },
+    { label: "Domain (by popularity)", hotkey: "⇧D", icon: "svg:globe", reorderAction: "sort-tabs-domain-pop" },
+    { label: "Age (oldest first)", hotkey: "A", icon: "svg:calendar-clock", reorderAction: "sort-tabs-age-asc" },
+    { label: "Age (newest first)", hotkey: "⇧A", icon: "svg:calendar-clock", reorderAction: "sort-tabs-age-desc" },
+    { label: "Inactive at bottom", hotkey: "I", icon: "svg:moon", reorderAction: "sort-tabs-inactive-bottom" },
+    { label: "Most visited first", hotkey: "V", icon: "svg:star", reorderAction: "sort-tabs-most-visited" },
+    { label: "Group duplicates", hotkey: "G", icon: "⊜", reorderAction: "sort-tabs-group-dups" },
   ];
 
   items = reorderOptions;
@@ -1948,7 +1948,7 @@ function showReorderTabs() {
         <span class="item-title">${escapeHtml(opt.label)}</span>
       </span>
       <span class="item-right">
-        <span class="item-badge">${opt.hotkey}</span>
+        ${renderBadge(opt.hotkey)}
       </span>
     `;
 
@@ -2326,6 +2326,15 @@ function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
   return div.innerHTML;
+}
+
+// Render a hotkey badge. Multi-character labels (e.g. "⇧R", "⇧1") get the
+// wider min-width so paired-shift variants line up with single-char badges.
+function renderBadge(text) {
+  if (text == null || text === "") return "";
+  const s = String(text);
+  const wide = s.length > 1 ? " badge-wide" : "";
+  return `<span class="item-badge${wide}">${escapeHtml(s)}</span>`;
 }
 
 function escapeAttr(str) {
