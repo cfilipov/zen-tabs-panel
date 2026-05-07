@@ -17,6 +17,63 @@ const sidebarEl = document.getElementById("sidebar");
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
+// ---------------------------------------------------------------------------
+// Delegated listeners on listEl
+//
+// One set of click / mouseover / mouseout / error listeners covers every
+// tab row rendered by createTabElement (popup/render.js). Bespoke renderers
+// in views/info.js (info-duplicate-row) and views/age.js (age-tab-item)
+// have their own custom click + close-button handling — the delegate skips
+// rows tagged with those classes so we don't double-fire.
+//
+// The error capture listener replaces what was previously a per-row
+// img.addEventListener("error", ...) — error events don't bubble but they
+// fire in capture phase, so a single listener at listEl handles every
+// broken favicon in any sub-view.
+// ---------------------------------------------------------------------------
+
+const DELEGATE_SKIP_CLASSES = ["info-duplicate-row", "age-tab-item"];
+
+function isDelegateSkipped(row) {
+  for (const cls of DELEGATE_SKIP_CLASSES) {
+    if (row.classList.contains(cls)) return true;
+  }
+  return false;
+}
+
+listEl.addEventListener("click", (e) => {
+  const row = e.target.closest("[data-dom-id]");
+  if (!row || row.classList.contains("disabled") || isDelegateSkipped(row)) return;
+  activateTab(row.dataset.domId);
+});
+
+listEl.addEventListener("mouseover", (e) => {
+  const row = e.target.closest("[data-dom-id]");
+  if (!row || isDelegateSkipped(row)) return;
+  // Suppress when the mouse merely entered a child element of the same row.
+  const fromRow = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("[data-dom-id]");
+  if (fromRow === row) return;
+  ext.runtime.sendMessage({ type: "preview-tab", domId: row.dataset.domId }).catch(() => {});
+});
+
+listEl.addEventListener("mouseout", (e) => {
+  const row = e.target.closest("[data-dom-id]");
+  if (!row || isDelegateSkipped(row)) return;
+  // Don't clear when moving within the same row, or directly to a sibling
+  // row whose mouseover will overwrite the preview anyway.
+  const toRow = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("[data-dom-id]");
+  if (toRow === row || (toRow && !isDelegateSkipped(toRow))) return;
+  ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+});
+
+// Image-error events don't bubble — capture phase to catch failed favicons.
+listEl.addEventListener("error", (e) => {
+  const t = e.target;
+  if (t && t.tagName === "IMG" && t.classList.contains("item-icon")) {
+    t.style.display = "none";
+  }
+}, true);
+
 // Fire-and-forget — don't await since the overlay destruction kills our context
 function closePalette() {
   ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});

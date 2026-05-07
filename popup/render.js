@@ -50,6 +50,9 @@ function updateHeader(title, hint) {
   }
 }
 
+// Build a tab row element. Click / hover / image-error are handled by the
+// single set of delegated listeners installed on listEl from popup.js, so
+// rows are pure data-bearing markup with zero per-row listeners.
 function createTabElement(tab, badge) {
   const el = document.createElement("div");
   el.className = "list-item" + (tab.pending ? " tab-pending" : "");
@@ -87,20 +90,6 @@ function createTabElement(tab, badge) {
     </span>
     <span class="item-right">${wsHtml}${badgeHtml}</span>
   `;
-
-  // Attach error handler via JS instead of inline onerror (CSP blocks inline handlers)
-  const img = el.querySelector("img.item-icon");
-  if (img) {
-    img.addEventListener("error", () => { img.style.display = "none"; });
-  }
-
-  el.addEventListener("click", () => activateTab(tab.domId));
-  el.addEventListener("mouseenter", () => {
-    ext.runtime.sendMessage({ type: "preview-tab", domId: tab.domId }).catch(() => {});
-  });
-  el.addEventListener("mouseleave", () => {
-    ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
-  });
   return el;
 }
 
