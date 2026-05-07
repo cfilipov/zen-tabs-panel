@@ -526,3 +526,6 @@ function renderWorkspaceSwitcher(container, layout = "grid") {
     target.appendChild(el);
   }
 }
+
+// View registry
+VIEWS["actions"] = () => showActionsMenu();

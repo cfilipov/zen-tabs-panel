@@ -449,3 +449,7 @@ function renderDuplicateGroups(groups) {
 
   updateHeader("Duplicates");
 }
+
+// View registry
+VIEWS["tab-info"]   = () => showTabInfo();
+VIEWS["duplicates"] = () => showDuplicates();

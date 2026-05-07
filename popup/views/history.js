@@ -172,3 +172,8 @@ function renderRecentlyClosedList(entries) {
 
   updateSelection();
 }
+
+// View registry
+VIEWS["navigation"]      = () => showNavigation();
+VIEWS["last-visited"]    = () => showLastVisited();
+VIEWS["recently-closed"] = () => showRecentlyClosed();

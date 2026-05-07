@@ -121,3 +121,7 @@ async function showDomainTabs(domain, animate) {
   renderTabList(wsFiltered, domain);
   renderSidebar();
 }
+
+// View registry
+VIEWS["domains"]      = () => showDomains();
+VIEWS["domain-tabs"]  = (params) => showDomainTabs((params && params.domain) || tabState.currentDomain);

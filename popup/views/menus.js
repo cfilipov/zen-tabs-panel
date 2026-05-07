@@ -239,3 +239,8 @@ async function showCloseAndSelect() {
   updateSelection();
   updateHeader("Close & select…");
 }
+
+// View registry
+VIEWS["reorder-tabs"]      = () => showReorderTabs();
+VIEWS["split-view"]        = () => showSplitView();
+VIEWS["close-and-select"]  = () => showCloseAndSelect();

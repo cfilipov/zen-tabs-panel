@@ -46,3 +46,9 @@ const wsState = {
   activeWorkspaceId: null,
   workspaceFilter: "all",
 };
+
+// View registry — populated by popup/views/*.js. Each entry maps a view id
+// (the same string used in URL ?view=, init(), and ui.currentView) to a
+// thunk `(params) => Promise<void>`. Object.create(null) for prototype-
+// free lookup on the keyboard hot path.
+const VIEWS = Object.create(null);

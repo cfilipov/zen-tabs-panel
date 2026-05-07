@@ -225,21 +225,20 @@ function hideSidebar() {
   ui.sidebarSelectedIndex = -1;
 }
 
+// View ids whose render is idempotent and cheap enough to re-run when
+// the user toggles a sort or filter that affects them. Static views like
+// the actions menu, info panes, and quick-menus are excluded.
+const REFRESHABLE_VIEWS = new Set([
+  "child-tabs", "sibling-tabs", "parent-tabs", "unvisited-tabs",
+  "last-visited", "recently-closed", "duplicates",
+  "domains", "domain-tabs", "tabs-by-age", "most-visited",
+]);
+
 function refreshCurrentView() {
   ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
-  switch (ui.currentView) {
-    case "last-visited": showLastVisited(false); break;
-    case "recently-closed": showRecentlyClosed(false); break;
-    case "child-tabs": showChildTabs(false); break;
-    case "sibling-tabs": showSiblingTabs(false); break;
-    case "parent-tabs": showParentTabs(false); break;
-    case "unvisited": showUnvisitedTabs(false); break;
-    case "duplicates": showDuplicates(false); break;
-    case "domains": showDomains(false); break;
-    case "domain-tabs": showDomainTabs(tabState.currentDomain, false); break;
-    case "tabs-by-age": showTabsByAge(false); break;
-    case "most-visited": showMostVisited(false); break;
-  }
+  if (!REFRESHABLE_VIEWS.has(ui.currentView)) return;
+  const handler = VIEWS[ui.currentView];
+  if (handler) handler();
 }
 
 
@@ -440,30 +439,14 @@ async function init() {
   if (paramWorkspace) wsState.workspaceFilter = paramWorkspace;
   if (paramDomain) tabState.currentDomain = paramDomain;
 
-  if (initialView) {
-    await fetchWorkspaceMap();
-    switch (initialView) {
-      case "child-tabs": await showChildTabs(); break;
-      case "sibling-tabs": await showSiblingTabs(); break;
-      case "parent-tabs": await showParentTabs(); break;
-      case "navigation": await showNavigation(); break;
-      case "unvisited-tabs": await showUnvisitedTabs(); break;
-      case "last-visited": await showLastVisited(); break;
-      case "recently-closed": await showRecentlyClosed(); break;
-      case "duplicates": await showDuplicates(); break;
-      case "tab-info": await showTabInfo(); break;
-      case "domains": await showDomains(); break;
-      case "domain-tabs": await showDomainTabs(paramDomain); break;
-      case "tabs-by-age": await showTabsByAge(); break;
-      case "most-visited": await showMostVisited(); break;
-      case "reorder-tabs": showReorderTabs(); break;
-      case "split-view": showSplitView(); break;
-      case "move-to-workspace": await showMoveToWorkspace(); break;
-      case "close-and-select": await showCloseAndSelect(); break;
-    }
-  } else {
+  if (!initialView) {
     await showActionsMenu();
+    return;
   }
+
+  await fetchWorkspaceMap();
+  const handler = VIEWS[initialView];
+  if (handler) await handler({ domain: paramDomain });
 }
 
 init();

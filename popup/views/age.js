@@ -281,3 +281,7 @@ async function showMostVisited(animate) {
   updateHeader("Most visited");
   renderSidebar();
 }
+
+// View registry
+VIEWS["tabs-by-age"]   = () => showTabsByAge();
+VIEWS["most-visited"]  = () => showMostVisited();

@@ -81,3 +81,9 @@ async function showUnvisitedTabs(animate) {
   renderTabList(unvisited, "New tabs");
   renderSidebar();
 }
+
+// View registry
+VIEWS["child-tabs"]      = () => showChildTabs();
+VIEWS["sibling-tabs"]    = () => showSiblingTabs();
+VIEWS["parent-tabs"]     = () => showParentTabs();
+VIEWS["unvisited-tabs"]  = () => showUnvisitedTabs();

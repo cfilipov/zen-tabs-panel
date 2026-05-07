@@ -59,3 +59,6 @@ function renderWorkspaceList(workspaces, title) {
 function moveToWorkspace(workspaceId) {
   ext.runtime.sendMessage({ type: "move-selected-tabs-to-workspace", workspaceId }).catch(() => {});
 }
+
+// View registry
+VIEWS["move-to-workspace"] = () => showMoveToWorkspace();
