@@ -299,6 +299,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "most-visited":       { width: 720, height: 604 },
       "reorder-tabs":       { width: 600, height: 604 },
       "move-to-workspace":  { width: 600, height: 604 },
+      "close-and-select":   { width: 600, height: 604 },
     };
 
     // Chord/leader-key shortcut tree. After the leader (MacCtrl+Cmd+.) fires,
@@ -329,6 +330,29 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "L": { type: "action", actionId: "scroll-to-current-tab" },
         "U": { type: "action", actionId: "unload-tab" },
         ",": { type: "action", actionId: "open-options" },
+        "1": { type: "switch-workspace", index: 0 },
+        "2": { type: "switch-workspace", index: 1 },
+        "3": { type: "switch-workspace", index: 2 },
+        "4": { type: "switch-workspace", index: 3 },
+        "5": { type: "switch-workspace", index: 4 },
+        "6": { type: "switch-workspace", index: 5 },
+        "7": { type: "switch-workspace", index: 6 },
+        "8": { type: "switch-workspace", index: 7 },
+        "9": { type: "switch-workspace", index: 8 },
+        "0": { type: "switch-workspace", index: 9 },
+        "W": {
+          type: "prefix",
+          timeoutMs: CHORD_PREFIX_TIMEOUT_MS,
+          onTimeout: { type: "open-view", view: "close-and-select" },
+          children: {
+            "P": { type: "action", actionId: "close-and-select-previous" },
+            "T": { type: "action", actionId: "close-and-select-parent" },
+            "C": { type: "action", actionId: "close-and-select-next-sibling" },
+            "Shift+C": { type: "action", actionId: "close-and-select-prev-sibling" },
+            "N": { type: "action", actionId: "close-and-select-next-vertical" },
+            "Shift+N": { type: "action", actionId: "close-and-select-prev-vertical" },
+          },
+        },
         "O": {
           type: "prefix",
           timeoutMs: CHORD_PREFIX_TIMEOUT_MS,
@@ -658,6 +682,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return;
       }
 
+      if (node.type === "switch-workspace") {
+        const w = getWin();
+        const resolve = chordResolve;
+        chordResolve = null;
+        disarmChord();
+        if (w?.gZenWorkspaces) {
+          const list = w.gZenWorkspaces.getWorkspaces();
+          const ws = Array.isArray(list) ? list[node.index] : null;
+          if (ws?.uuid) {
+            try { w.gZenWorkspaces.changeWorkspaceWithID(ws.uuid); } catch (err) {}
+          }
+        }
+        if (resolve) resolve({ kind: "chord-cancelled" });
+        return;
+      }
+
       if (node.type === "prefix") {
         const w = getWin();
         if (chordTimer !== null && w) w.clearTimeout(chordTimer);
@@ -788,6 +828,56 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!currentTab || !currentTab.openerTab) return false;
 
           return activateNativeTab(currentTab.openerTab);
+        },
+
+        async goToNextSibling() {
+          const w = getWin();
+          if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
+          const currentTab = w.gBrowser.selectedTab;
+          if (!currentTab || !currentTab.openerTab) return false;
+          const siblings = getAllTabElements().filter((t) => t.openerTab === currentTab.openerTab);
+          const idx = siblings.indexOf(currentTab);
+          if (idx < 0 || idx === siblings.length - 1) return false;
+          return activateNativeTab(siblings[idx + 1]);
+        },
+
+        async goToPrevSibling() {
+          const w = getWin();
+          if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
+          const currentTab = w.gBrowser.selectedTab;
+          if (!currentTab || !currentTab.openerTab) return false;
+          const siblings = getAllTabElements().filter((t) => t.openerTab === currentTab.openerTab);
+          const idx = siblings.indexOf(currentTab);
+          if (idx <= 0) return false;
+          return activateNativeTab(siblings[idx - 1]);
+        },
+
+        async goToNextVerticalTab() {
+          const w = getWin();
+          if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
+          const currentTab = w.gBrowser.selectedTab;
+          if (!currentTab) return false;
+          const ws = currentTab.getAttribute("zen-workspace-id");
+          const sameWorkspace = getAllTabElements().filter(
+            (t) => t.getAttribute("zen-workspace-id") === ws
+          );
+          const idx = sameWorkspace.indexOf(currentTab);
+          if (idx < 0 || idx === sameWorkspace.length - 1) return false;
+          return activateNativeTab(sameWorkspace[idx + 1]);
+        },
+
+        async goToPrevVerticalTab() {
+          const w = getWin();
+          if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
+          const currentTab = w.gBrowser.selectedTab;
+          if (!currentTab) return false;
+          const ws = currentTab.getAttribute("zen-workspace-id");
+          const sameWorkspace = getAllTabElements().filter(
+            (t) => t.getAttribute("zen-workspace-id") === ws
+          );
+          const idx = sameWorkspace.indexOf(currentTab);
+          if (idx <= 0) return false;
+          return activateNativeTab(sameWorkspace[idx - 1]);
         },
 
         // Close a tab by DOM id — works cross-workspace.

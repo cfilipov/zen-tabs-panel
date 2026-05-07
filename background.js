@@ -199,6 +199,25 @@ async function unloadActiveTab() {
   } catch (e) {}
 }
 
+const CLOSE_AND_SELECT_NAVS = {
+  "close-and-select-previous":      () => browser.zenWorkspaces.goToPreviousTab(),
+  "close-and-select-parent":        () => browser.zenWorkspaces.goToParentTab(),
+  "close-and-select-next-sibling":  () => browser.zenWorkspaces.goToNextSibling(),
+  "close-and-select-prev-sibling":  () => browser.zenWorkspaces.goToPrevSibling(),
+  "close-and-select-next-vertical": () => browser.zenWorkspaces.goToNextVerticalTab(),
+  "close-and-select-prev-vertical": () => browser.zenWorkspaces.goToPrevVerticalTab(),
+};
+
+async function closeAndSelect(actionId) {
+  const navFn = CLOSE_AND_SELECT_NAVS[actionId];
+  if (!navFn) return;
+  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (!activeTab || activeTab.pinned) return;
+  const ok = await navFn();
+  if (!ok) return;
+  await browser.tabs.remove(activeTab.id);
+}
+
 async function openOptions() {
   browser.runtime.openOptionsPage();
 }
@@ -325,6 +344,10 @@ async function runChordAction(actionId) {
   }
   if (SORT_ACTIONS.has(actionId)) {
     await runSortAction(actionId);
+    return;
+  }
+  if (CLOSE_AND_SELECT_NAVS[actionId]) {
+    await closeAndSelect(actionId);
   }
 }
 
@@ -427,6 +450,18 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (async () => {
         await browser.zenWorkspaces.hidePalette();
         await unloadActiveTab();
+      })();
+      break;
+
+    case "close-and-select-previous":
+    case "close-and-select-parent":
+    case "close-and-select-next-sibling":
+    case "close-and-select-prev-sibling":
+    case "close-and-select-next-vertical":
+    case "close-and-select-prev-vertical":
+      (async () => {
+        await browser.zenWorkspaces.hidePalette();
+        await closeAndSelect(message.type);
       })();
       break;
 

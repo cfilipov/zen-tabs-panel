@@ -59,6 +59,34 @@
         "parameters": []
       },
       {
+        "name": "goToNextSibling",
+        "type": "function",
+        "async": true,
+        "description": "Activate the next sibling tab (next tab sharing the same opener)",
+        "parameters": []
+      },
+      {
+        "name": "goToPrevSibling",
+        "type": "function",
+        "async": true,
+        "description": "Activate the previous sibling tab (previous tab sharing the same opener)",
+        "parameters": []
+      },
+      {
+        "name": "goToNextVerticalTab",
+        "type": "function",
+        "async": true,
+        "description": "Activate the tab immediately below the current one in the vertical bar (same workspace)",
+        "parameters": []
+      },
+      {
+        "name": "goToPrevVerticalTab",
+        "type": "function",
+        "async": true,
+        "description": "Activate the tab immediately above the current one in the vertical bar (same workspace)",
+        "parameters": []
+      },
+      {
         "name": "closeTabByDomId",
         "type": "function",
         "async": true,

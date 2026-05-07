@@ -78,6 +78,7 @@ function getActions() {
     { id: "move-to-workspace", label: "Move to workspace", hotkey: "M", icon: "svg:arrow-right-to-line", isView: true, count: selectedTabCount > 1 ? selectedTabCount : 0, compact: true },
     { id: "scroll-to-current-tab", label: "Scroll to tab", hotkey: "L", icon: "svg:locate", compact: true },
     { id: "unload-tab", label: "Unload", hotkey: "U", icon: "svg:moon", compact: true },
+    { id: "close-and-select", label: "Close & select…", hotkey: "W", icon: "svg:x-circle", isView: true, compact: true },
     { id: "settings", label: "Settings", hotkey: "," , icon: "svg:gear", compact: true },
     { type: "separator" },
     { type: "workspaces" },
@@ -110,6 +111,9 @@ const SVG_ICONS = {
   "arrow-right-to-line": `<svg ${SVG_ATTRS}><path d="M17 12H3"/><path d="m11 18 6-6-6-6"/><path d="M21 5v14"/></svg>`,
   "locate": `<svg ${SVG_ATTRS}><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`,
   "moon": `<svg ${SVG_ATTRS}><path d="M12 3a6 6 0 009 9 9 9 0 11-9-9z"/></svg>`,
+  "x-circle": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+  "arrow-down": `<svg ${SVG_ATTRS}><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`,
+  "arrow-up": `<svg ${SVG_ATTRS}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`,
   "gear": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`,
 };
 
@@ -501,15 +505,15 @@ function updateSelection() {
 
   if (selectedIndex >= 0) {
     const item = items[selectedIndex];
-    const isTabView = currentView !== "actions" && currentView !== "move-to-workspace";
+    const isTabView = currentView !== "actions" && currentView !== "move-to-workspace" && currentView !== "close-and-select" && currentView !== "reorder-tabs";
     if (isTabView && item?.domId) {
       ext.runtime.sendMessage({ type: "preview-tab", domId: item.domId }).catch(() => {});
-    } else if (currentView === "actions" && item?.preview?.domId) {
+    } else if ((currentView === "actions" || currentView === "close-and-select") && item?.preview?.domId) {
       ext.runtime.sendMessage({ type: "preview-tab", domId: item.preview.domId }).catch(() => {});
-    } else if (currentView === "actions") {
+    } else if (currentView === "actions" || currentView === "close-and-select") {
       ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
     }
-  } else if (currentView === "actions") {
+  } else if (currentView === "actions" || currentView === "close-and-select") {
     ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
   }
 }
@@ -763,6 +767,7 @@ function activateAction(action) {
     case "tabs-by-age":
     case "duplicates":
     case "recently-closed":
+    case "close-and-select":
       navigateToView(action.id);
       break;
   }
@@ -1965,6 +1970,139 @@ function showReorderTabs() {
 }
 
 // ---------------------------------------------------------------------------
+// Close-and-select submenu — close current tab, then activate chosen target.
+// ---------------------------------------------------------------------------
+
+async function showCloseAndSelect() {
+  currentView = "close-and-select";
+  sectionStarts = [0];
+
+  let allTabs = [];
+  let activeTab = null;
+  try {
+    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    activeTab = allTabs.find((t) => t.active);
+  } catch (e) {}
+
+  if (!workspaceMap || Object.keys(workspaceMap).length === 0) {
+    await fetchWorkspaceMap();
+  }
+
+  const buildPreview = (tab) => tab
+    ? { title: tab.title, favIconUrl: tab.favIconUrl, domId: tab.domId, workspaceId: tab.workspaceId, pending: tab.pending }
+    : null;
+
+  // Previous: most-recently-accessed tab excluding current (and split siblings)
+  let previousPreview = null;
+  if (activeTab) {
+    const visibleDomIds = new Set([activeTab.domId]);
+    if (activeTab.splitGroupId) {
+      allTabs.filter((t) => t.splitGroupId === activeTab.splitGroupId).forEach((t) => visibleDomIds.add(t.domId));
+    }
+    const candidates = allTabs
+      .filter((t) => !visibleDomIds.has(t.domId) && !t.unread)
+      .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+    previousPreview = buildPreview(candidates[0]);
+  }
+
+  // Parent
+  const parentTab = activeTab?.openerTabDomId
+    ? allTabs.find((t) => t.domId === activeTab.openerTabDomId) : null;
+  const parentPreview = buildPreview(parentTab);
+
+  // Siblings (in DOM order = allTabs order)
+  const siblings = activeTab?.openerTabDomId
+    ? allTabs.filter((t) => t.openerTabDomId === activeTab.openerTabDomId) : [];
+  const sibIdx = activeTab ? siblings.findIndex((t) => t.domId === activeTab.domId) : -1;
+  const nextSiblingPreview = (sibIdx >= 0 && sibIdx < siblings.length - 1) ? buildPreview(siblings[sibIdx + 1]) : null;
+  const prevSiblingPreview = (sibIdx > 0) ? buildPreview(siblings[sibIdx - 1]) : null;
+
+  // Vertical (same workspace, DOM order)
+  const wsTabs = activeTab ? allTabs.filter((t) => t.workspaceId === activeTab.workspaceId) : [];
+  const vIdx = activeTab ? wsTabs.findIndex((t) => t.domId === activeTab.domId) : -1;
+  const nextVerticalPreview = (vIdx >= 0 && vIdx < wsTabs.length - 1) ? buildPreview(wsTabs[vIdx + 1]) : null;
+  const prevVerticalPreview = (vIdx > 0) ? buildPreview(wsTabs[vIdx - 1]) : null;
+
+  const options = [
+    { label: "Previous",            hotkey: "P",  icon: "svg:arrow-left-right", closeAndSelectAction: "close-and-select-previous",      preview: previousPreview },
+    { label: "Parent",              hotkey: "T",  icon: "svg:move-up",          closeAndSelectAction: "close-and-select-parent",        preview: parentPreview },
+    { label: "Next child",          hotkey: "C",  icon: "svg:git-branch",       closeAndSelectAction: "close-and-select-next-sibling",  preview: nextSiblingPreview },
+    { label: "Previous child",      hotkey: "⇧C", icon: "svg:git-branch",       closeAndSelectAction: "close-and-select-prev-sibling",  preview: prevSiblingPreview },
+    { label: "Next in sidebar",     hotkey: "N",  icon: "svg:arrow-down",       closeAndSelectAction: "close-and-select-next-vertical", preview: nextVerticalPreview },
+    { label: "Previous in sidebar", hotkey: "⇧N", icon: "svg:arrow-up",         closeAndSelectAction: "close-and-select-prev-vertical", preview: prevVerticalPreview },
+  ];
+
+  items = options;
+  selectedIndex = -1;
+  listEl.innerHTML = "";
+
+  for (const opt of options) {
+    const disabled = !opt.preview;
+
+    const el = document.createElement("div");
+    el.className = "list-item" + (disabled ? " disabled" : "");
+
+    let previewHtml = "";
+    if (opt.preview && !disabled) {
+      let prevFav = opt.preview.favIconUrl || "";
+      if (prevFav.startsWith("moz-remote-image://")) {
+        try { prevFav = new URL(prevFav).searchParams.get("url") || ""; } catch (e) { prevFav = ""; }
+      }
+      const canLoad = prevFav && !prevFav.startsWith("chrome://");
+      const iconHtml = canLoad
+        ? `<img class="preview-icon" src="${escapeAttr(prevFav)}">`
+        : `<span class="preview-icon-placeholder">○</span>`;
+      const previewTitle = escapeHtml(opt.preview.title || "Untitled");
+      let wsLabel = "";
+      if (opt.preview.workspaceId && opt.preview.workspaceId !== activeWorkspaceId) {
+        const ws = workspaceMap[opt.preview.workspaceId];
+        if (ws) {
+          const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
+          wsLabel = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+        }
+      }
+      const pendingCls = opt.preview.pending ? " tab-pending" : "";
+      previewHtml = `<span class="action-preview${pendingCls}">${iconHtml}<span class="preview-title">${previewTitle}</span>${wsLabel}</span>`;
+    }
+
+    el.innerHTML = `
+      <span class="item-icon-placeholder">${getIcon(opt.icon)}</span>
+      <span class="item-text">
+        <span class="item-title">${escapeHtml(opt.label)}</span>
+      </span>
+      <span class="item-right">
+        ${previewHtml}
+        ${renderBadge(opt.hotkey)}
+      </span>
+    `;
+
+    const img = el.querySelector("img.preview-icon");
+    if (img) {
+      img.addEventListener("error", () => { img.style.display = "none"; });
+    }
+
+    if (!disabled) {
+      el.addEventListener("click", () => {
+        ext.runtime.sendMessage({ type: opt.closeAndSelectAction }).catch(() => {});
+      });
+      if (opt.preview?.domId) {
+        el.addEventListener("mouseenter", () => {
+          ext.runtime.sendMessage({ type: "preview-tab", domId: opt.preview.domId }).catch(() => {});
+        });
+        el.addEventListener("mouseleave", () => {
+          ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+        });
+      }
+    }
+
+    listEl.appendChild(el);
+  }
+
+  updateSelection();
+  updateHeader("Close & select…");
+}
+
+// ---------------------------------------------------------------------------
 // Most visited submenu
 // ---------------------------------------------------------------------------
 
@@ -2193,7 +2331,7 @@ document.addEventListener("keydown", (e) => {
       break;
 
     default:
-      if (currentView === "actions" || currentView === "reorder-tabs") {
+      if (currentView === "actions" || currentView === "reorder-tabs" || currentView === "close-and-select") {
         // Number keys 1-9 for workspace switching in actions view
         const num = parseInt(e.key, 10);
         if (!isNaN(num) && num >= 1 && num <= 9) {
@@ -2218,6 +2356,8 @@ document.addEventListener("keydown", (e) => {
             e.preventDefault();
             if (items[idx].reorderAction) {
               ext.runtime.sendMessage({ type: items[idx].reorderAction }).catch(() => {});
+            } else if (items[idx].closeAndSelectAction) {
+              ext.runtime.sendMessage({ type: items[idx].closeAndSelectAction }).catch(() => {});
             } else {
               activateAction(items[idx]);
             }
@@ -2384,6 +2524,7 @@ async function init() {
       case "most-visited": await showMostVisited(); break;
       case "reorder-tabs": showReorderTabs(); break;
       case "move-to-workspace": await showMoveToWorkspace(); break;
+      case "close-and-select": await showCloseAndSelect(); break;
     }
   } else {
     await showActionsMenu();
