@@ -1,0 +1,9 @@
+{
+  "name": "zen-tabs-panel",
+  "private": true,
+  "version": "0.3.0",
+  "description": "Tab management command palette and utilities for Zen Browser",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

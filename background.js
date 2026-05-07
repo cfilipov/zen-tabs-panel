@@ -248,35 +248,28 @@ async function runSortAction(actionId) {
     startIndex = pinnedCount;
   }
 
-  const getDomain = (url) => { try { return new URL(url).hostname; } catch (e) { return ""; } };
-
+  // Comparators and group helpers come from lib/tab-sort.js.
   switch (actionId) {
     case MSG.SORT_TABS_RECENT_DESC:
-      tabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
+      tabs.sort(compareByRecentDesc);
       break;
     case MSG.SORT_TABS_RECENT_ASC:
-      tabs.sort((a, b) => a.lastAccessed - b.lastAccessed);
+      tabs.sort(compareByRecentAsc);
       break;
     case MSG.SORT_TABS_DOMAIN_ALPHA:
-      tabs.sort((a, b) => getDomain(a.url).localeCompare(getDomain(b.url)) || b.lastAccessed - a.lastAccessed);
+      tabs.sort(compareByDomainAlpha);
       break;
-    case MSG.SORT_TABS_DOMAIN_POP: {
-      const domainCounts = {};
-      for (const t of tabs) {
-        const d = getDomain(t.url);
-        domainCounts[d] = (domainCounts[d] || 0) + 1;
-      }
-      tabs.sort((a, b) => (domainCounts[getDomain(b.url)] || 0) - (domainCounts[getDomain(a.url)] || 0) || b.lastAccessed - a.lastAccessed);
+    case MSG.SORT_TABS_DOMAIN_POP:
+      tabs.sort(makeCompareByDomainPop(buildDomainCounts(tabs)));
       break;
-    }
     case MSG.SORT_TABS_AGE_ASC:
-      tabs.sort((a, b) => a.id - b.id);
+      tabs.sort(compareByAgeAsc);
       break;
     case MSG.SORT_TABS_AGE_DESC:
-      tabs.sort((a, b) => b.id - a.id);
+      tabs.sort(compareByAgeDesc);
       break;
     case MSG.SORT_TABS_INACTIVE_BOTTOM:
-      tabs.sort((a, b) => (a.discarded ? 1 : 0) - (b.discarded ? 1 : 0));
+      tabs.sort(compareInactiveBottom);
       break;
     case MSG.SORT_TABS_MOST_VISITED: {
       const uniqueUrls = [...new Set(tabs.map((t) => t.url))];
@@ -287,24 +280,13 @@ async function runSortAction(actionId) {
           () => { visitCounts[url] = 0; }
         )
       ));
-      tabs.sort((a, b) => (visitCounts[b.url] || 0) - (visitCounts[a.url] || 0));
+      tabs.sort(makeCompareByVisits(visitCounts));
       break;
     }
     case MSG.SORT_TABS_GROUP_DUPS: {
-      const urlCount = {};
-      for (const t of tabs) urlCount[t.url] = (urlCount[t.url] || 0) + 1;
-      const dups = [];
-      const nonDups = [];
-      for (const t of tabs) {
-        if (urlCount[t.url] > 1) {
-          dups.push(t);
-        } else {
-          nonDups.push(t);
-        }
-      }
-      dups.sort((a, b) => a.url.localeCompare(b.url));
+      const grouped = groupDuplicatesFirst(tabs);
       tabs.length = 0;
-      tabs.push(...dups, ...nonDups);
+      tabs.push(...grouped);
       break;
     }
   }
