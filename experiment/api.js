@@ -133,6 +133,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return Array.from(w.document.querySelectorAll(".tabbrowser-tab"));
     }
 
+    async function changeWorkspaceByOffset(offset) {
+      const w = getWin();
+      if (!w?.gZenWorkspaces) return false;
+      const list = w.gZenWorkspaces.getWorkspaces();
+      if (!Array.isArray(list) || list.length < 2) return false;
+      const active = w.gZenWorkspaces.getActiveWorkspace();
+      if (!active) return false;
+      const idx = list.findIndex((ws) => ws.uuid === active.uuid);
+      if (idx < 0) return false;
+      const next = list[(idx + offset + list.length) % list.length];
+      try { await w.gZenWorkspaces.changeWorkspace(next); return true; }
+      catch (e) { return false; }
+    }
+
     const DUP_INDICATOR_CSS = `
         .tabbrowser-tab[zen-tabs-panel-duplicate] .tab-content {
           position: relative !important;
@@ -943,6 +957,87 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const idx = sameWorkspace.indexOf(currentTab);
           if (idx <= 0) return false;
           return activateNativeTab(sameWorkspace[idx - 1]);
+        },
+
+        async goToNextWorkspace() {
+          return changeWorkspaceByOffset(+1);
+        },
+
+        async goToPrevWorkspace() {
+          return changeWorkspaceByOffset(-1);
+        },
+
+        async togglePinTab() {
+          const w = getWin();
+          if (!w || !w.gBrowser) return false;
+          const tab = w.gBrowser.selectedTab;
+          if (!tab) return false;
+          if (tab.hasAttribute("zen-essential")) return false;
+          if (tab.pinned) {
+            w.gBrowser.unpinTab(tab);
+          } else {
+            w.gBrowser.pinTab(tab);
+          }
+          return true;
+        },
+
+        async copyCurrentUrlMarkdown() {
+          const w = getWin();
+          if (!w || !w.gBrowser) return false;
+          const tab = w.gBrowser.selectedTab;
+          if (!tab) return false;
+          const url = tab.linkedBrowser?.currentURI?.spec || "";
+          if (!url) return false;
+          const title = (tab.label || "").replace(/[\[\]]/g, "");
+          const md = "[" + title + "](" + url + ")";
+          try {
+            const clip = Cc["@mozilla.org/widget/clipboardhelper;1"].getService(Ci.nsIClipboardHelper);
+            clip.copyString(md);
+            return true;
+          } catch (e) {
+            return false;
+          }
+        },
+
+        async restoreLastClosedTab() {
+          const w = getWin();
+          if (!w) return false;
+          try {
+            const SS = ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs").SessionStore;
+            if (!SS || SS.getClosedTabCount(w) === 0) return false;
+            SS.undoCloseTab(w, 0);
+            return true;
+          } catch (e) {
+            return false;
+          }
+        },
+
+        async splitNew() {
+          const w = getWin();
+          if (!w?.gZenViewSplitter) return false;
+          try { w.gZenViewSplitter.createEmptySplit("right"); return true; }
+          catch (e) { return false; }
+        },
+
+        async splitClose() {
+          const w = getWin();
+          if (!w?.gZenViewSplitter) return false;
+          try { w.gZenViewSplitter.unsplitCurrentView(); return true; }
+          catch (e) { return false; }
+        },
+
+        async splitHorizontal() {
+          const w = getWin();
+          if (!w?.gZenViewSplitter) return false;
+          try { w.gZenViewSplitter.toggleShortcut("hsep"); return true; }
+          catch (e) { return false; }
+        },
+
+        async splitVertical() {
+          const w = getWin();
+          if (!w?.gZenViewSplitter) return false;
+          try { w.gZenViewSplitter.toggleShortcut("vsep"); return true; }
+          catch (e) { return false; }
         },
 
         // Close a tab by DOM id — works cross-workspace.

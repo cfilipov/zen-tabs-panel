@@ -33,6 +33,11 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 - Scroll to current tab - scroll the sidebar to center the active tab
 - Unload tab - discard from memory
 - Close & select - close the current tab and explicitly choose which tab to focus next: default (whatever Cmd+W would do, with the predicted successor previewed live), previous (last-active), parent, next/previous child (sibling sharing the same parent), or next/previous tab in the vertical bar. Each row shows the actual target tab's favicon and title; hover or arrow-key to highlight it in the sidebar; rows with no available target are disabled.
+- Pin/unpin tab — toggle pinned state of the active tab (refuses to act on Essentials)
+- Copy URL as Markdown — copies the active tab as `[Title](URL)` to the clipboard
+- Restore closed tab — reopens the most recently closed tab in this window via SessionStore
+- Next/Previous workspace — cycle through workspaces with wraparound
+- Split — submenu for Zen's split view: New, Close, Horizontal (top/bottom panes), Vertical (side-by-side panes)
 - Settings
 - "Copy selected tab URLs" right click menu item when multiple tabs are selected
 
@@ -51,9 +56,10 @@ Press `Ctrl+Cmd+.` as a fallback to open the palette (this is the registered key
 | `C` | Children |
 | `B` | Siblings |
 | `⇧T` | Parent tabs |
-| `N` | Navigation (back/forward history) |
+| `H` | Tab history (back/forward) |
 | `⇧N` | New tabs |
 | `R` | Recent |
+| `X` | Recently closed |
 | `D` | Duplicates |
 | `I` | Tab info |
 | `⇧D` | Domains |
@@ -61,11 +67,17 @@ Press `Ctrl+Cmd+.` as a fallback to open the palette (this is the registered key
 | `V` | Most visited |
 | `S` | Move to start |
 | `E` | Move to end |
-| `O` | Reorder tabs |
+| `O` | Reorder tabs (submenu) |
 | `M` | Move to workspace |
 | `L` | Scroll to tab |
 | `U` | Unload tab |
 | `W` | Close & select (submenu) |
+| `K` | Split view (submenu) |
+| `F` | Pin/unpin tab |
+| `Y` | Copy URL as Markdown |
+| `Z` | Restore last closed tab |
+| `]` | Next workspace |
+| `[` | Previous workspace |
 | `1`–`9`, `0` | Switch to workspace 1–10 |
 | `,` | Settings |
 
@@ -77,6 +89,11 @@ Press `Ctrl+Cmd+.` as a fallback to open the palette (this is the registered key
 - `Ctrl+Cmd+. O R` - sort tabs by recent newest (any of the reorder mnemonics work after `O` — `R`/`⇧R`, `D`/`⇧D`, `A`/`⇧A`, `I`, `V`, `G`)
 - `Ctrl+Cmd+. W W` - close current tab, browser picks next (Cmd+W equivalent)
 - `Ctrl+Cmd+. W P` / `T` / `C` / `⇧C` / `N` / `⇧N` - close current tab and jump to previous / parent / next-or-previous sibling / next-or-previous in the sidebar. Pause after `W` to see a menu of all options with live previews of the target tab in each row.
+- `Ctrl+Cmd+. K N` / `C` / `H` / `V` - split view: new, close, horizontal (top/bottom), vertical (side-by-side). Pause after `K` for the menu.
+- `Ctrl+Cmd+. ]` / `[` - next / previous workspace (with wraparound)
+- `Ctrl+Cmd+. F` - toggle pin on current tab
+- `Ctrl+Cmd+. Y` - copy current URL as Markdown link
+- `Ctrl+Cmd+. Z` - restore the most recently closed tab
 - `Ctrl+Cmd+. 1` … `9`, `0` - switch directly to workspace 1–10
 - `Ctrl+Cmd+. S` / `E` / `L` / `U` / `,` - move to start/end, scroll to current, unload, settings
 

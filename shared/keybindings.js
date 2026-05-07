@@ -49,6 +49,31 @@ this.ZEN_KEYBINDINGS = [
   { id: "unload-tab",            kind: "action",    chord: "U", label: "Unload",             icon: "svg:moon" },
   { id: "open-options",          kind: "action",    chord: ",", label: "Settings",           icon: "svg:gear" },
 
+  // Workspace navigation
+  { id: "go-to-next-workspace", kind: "action", chord: "]", label: "Next workspace",     icon: "svg:arrow-right" },
+  { id: "go-to-prev-workspace", kind: "action", chord: "[", label: "Previous workspace", icon: "svg:arrow-left" },
+
+  // Quick tab tools
+  { id: "toggle-pin-tab",          kind: "action", chord: "F", label: "Pin/unpin tab",      icon: "svg:pin" },
+  { id: "copy-url-markdown",       kind: "action", chord: "Y", label: "Copy URL as Markdown", icon: "svg:link" },
+  { id: "restore-last-closed-tab", kind: "action", chord: "Z", label: "Restore closed tab", icon: "svg:rotate-ccw" },
+
+  // Split-view submenu
+  {
+    id: "split-view",
+    kind: "prefix",
+    chord: "K",
+    view: "split-view",
+    label: "Split",
+    icon: "svg:columns",
+    children: [
+      { id: "split-new",        kind: "action", chord: "N", label: "New split",   icon: "svg:plus" },
+      { id: "split-close",      kind: "action", chord: "C", label: "Close split", icon: "svg:x-circle" },
+      { id: "split-horizontal", kind: "action", chord: "H", label: "Horizontal",  icon: "svg:rows" },
+      { id: "split-vertical",   kind: "action", chord: "V", label: "Vertical",    icon: "svg:columns" },
+    ],
+  },
+
   // Reorder submenu
   {
     id: "reorder-tabs",

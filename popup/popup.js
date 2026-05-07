@@ -129,7 +129,14 @@ function getActions() {
     actionFromRegistry("scroll-to-current-tab", compact),
     actionFromRegistry("unload-tab",            compact),
     actionFromRegistry("close-and-select",      compact),
+    actionFromRegistry("toggle-pin-tab",        compact),
+    actionFromRegistry("copy-url-markdown",     compact),
+    actionFromRegistry("restore-last-closed-tab", compact),
+    actionFromRegistry("split-view",            compact),
     actionFromRegistry("open-options",          compact),
+    { type: "separator" },
+    actionFromRegistry("go-to-prev-workspace",  compact),
+    actionFromRegistry("go-to-next-workspace",  compact),
     { type: "separator" },
     { type: "workspaces" },
   ];
@@ -164,6 +171,13 @@ const SVG_ICONS = {
   "x-circle": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
   "arrow-down": `<svg ${SVG_ATTRS}><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`,
   "arrow-up": `<svg ${SVG_ATTRS}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`,
+  "arrow-left": `<svg ${SVG_ATTRS}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>`,
+  "arrow-right": `<svg ${SVG_ATTRS}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`,
+  "pin": `<svg ${SVG_ATTRS}><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24z"/></svg>`,
+  "link": `<svg ${SVG_ATTRS}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+  "columns": `<svg ${SVG_ATTRS}><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7zM3 3h7v18H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></svg>`,
+  "rows": `<svg ${SVG_ATTRS}><path d="M3 12h18v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v7H3z"/></svg>`,
+  "plus": `<svg ${SVG_ATTRS}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   "gear": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`,
 };
 
@@ -1990,6 +2004,54 @@ function showReorderTabs() {
 }
 
 // ---------------------------------------------------------------------------
+// Split view submenu
+// ---------------------------------------------------------------------------
+
+function showSplitView() {
+  currentView = "split-view";
+  sectionStarts = [0];
+
+  const opts = kbChildrenOf("split-view").map((c) => ({
+    label: c.label,
+    hotkey: c.chord,
+    icon: c.icon,
+    submenuAction: c.id,
+  }));
+
+  items = opts;
+  selectedIndex = -1;
+  listEl.innerHTML = "";
+
+  const grid = document.createElement("div");
+  grid.className = "actions-grid actions-grid-2col";
+
+  for (const opt of opts) {
+    const el = document.createElement("div");
+    el.className = "list-item compact-item";
+
+    el.innerHTML = `
+      <span class="item-icon-placeholder">${getIcon(opt.icon)}</span>
+      <span class="item-text">
+        <span class="item-title">${escapeHtml(opt.label)}</span>
+      </span>
+      <span class="item-right">
+        ${renderBadge(displayKey(opt.hotkey))}
+      </span>
+    `;
+
+    el.addEventListener("click", () => {
+      ext.runtime.sendMessage({ type: opt.submenuAction }).catch(() => {});
+    });
+
+    grid.appendChild(el);
+  }
+
+  listEl.appendChild(grid);
+  updateSelection();
+  updateHeader("Split");
+}
+
+// ---------------------------------------------------------------------------
 // Close-and-select submenu — close current tab, then activate chosen target.
 // ---------------------------------------------------------------------------
 
@@ -2370,7 +2432,7 @@ document.addEventListener("keydown", (e) => {
       break;
 
     default:
-      if (currentView === "actions" || currentView === "reorder-tabs" || currentView === "close-and-select") {
+      if (currentView === "actions" || currentView === "reorder-tabs" || currentView === "close-and-select" || currentView === "split-view") {
         // Number keys 1-9 for workspace switching in actions view
         const num = parseInt(e.key, 10);
         if (!isNaN(num) && num >= 1 && num <= 9) {
@@ -2397,6 +2459,8 @@ document.addEventListener("keydown", (e) => {
               ext.runtime.sendMessage({ type: items[idx].reorderAction }).catch(() => {});
             } else if (items[idx].closeAndSelectAction) {
               ext.runtime.sendMessage({ type: items[idx].closeAndSelectAction }).catch(() => {});
+            } else if (items[idx].submenuAction) {
+              ext.runtime.sendMessage({ type: items[idx].submenuAction }).catch(() => {});
             } else {
               activateAction(items[idx]);
             }
@@ -2562,6 +2626,7 @@ async function init() {
       case "tabs-by-age": await showTabsByAge(); break;
       case "most-visited": await showMostVisited(); break;
       case "reorder-tabs": showReorderTabs(); break;
+      case "split-view": showSplitView(); break;
       case "move-to-workspace": await showMoveToWorkspace(); break;
       case "close-and-select": await showCloseAndSelect(); break;
     }

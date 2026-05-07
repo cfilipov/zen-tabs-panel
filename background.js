@@ -344,6 +344,33 @@ async function runChordAction(actionId) {
     case "open-options":
       await openOptions();
       return;
+    case "go-to-next-workspace":
+      await browser.zenWorkspaces.goToNextWorkspace();
+      return;
+    case "go-to-prev-workspace":
+      await browser.zenWorkspaces.goToPrevWorkspace();
+      return;
+    case "toggle-pin-tab":
+      await browser.zenWorkspaces.togglePinTab();
+      return;
+    case "copy-url-markdown":
+      await browser.zenWorkspaces.copyCurrentUrlMarkdown();
+      return;
+    case "restore-last-closed-tab":
+      await browser.zenWorkspaces.restoreLastClosedTab();
+      return;
+    case "split-new":
+      await browser.zenWorkspaces.splitNew();
+      return;
+    case "split-close":
+      await browser.zenWorkspaces.splitClose();
+      return;
+    case "split-horizontal":
+      await browser.zenWorkspaces.splitHorizontal();
+      return;
+    case "split-vertical":
+      await browser.zenWorkspaces.splitVertical();
+      return;
   }
   if (SORT_ACTIONS.has(actionId)) {
     await runSortAction(actionId);
@@ -478,6 +505,33 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await closeAndSelect(message.type);
       })();
       break;
+
+    case "go-to-next-workspace":
+    case "go-to-prev-workspace":
+    case "toggle-pin-tab":
+    case "copy-url-markdown":
+    case "restore-last-closed-tab":
+    case "split-new":
+    case "split-close":
+    case "split-horizontal":
+    case "split-vertical": {
+      const method = {
+        "go-to-next-workspace":     "goToNextWorkspace",
+        "go-to-prev-workspace":     "goToPrevWorkspace",
+        "toggle-pin-tab":           "togglePinTab",
+        "copy-url-markdown":        "copyCurrentUrlMarkdown",
+        "restore-last-closed-tab":  "restoreLastClosedTab",
+        "split-new":                "splitNew",
+        "split-close":              "splitClose",
+        "split-horizontal":         "splitHorizontal",
+        "split-vertical":           "splitVertical",
+      }[message.type];
+      (async () => {
+        await browser.zenWorkspaces.hidePalette();
+        await browser.zenWorkspaces[method]();
+      })();
+      break;
+    }
 
     case "get-navigation-history":
       return browser.zenWorkspaces.getNavigationHistory();

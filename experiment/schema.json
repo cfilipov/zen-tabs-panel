@@ -94,6 +94,69 @@
         "parameters": []
       },
       {
+        "name": "goToNextWorkspace",
+        "type": "function",
+        "async": true,
+        "description": "Switch to the next workspace (with wraparound)",
+        "parameters": []
+      },
+      {
+        "name": "goToPrevWorkspace",
+        "type": "function",
+        "async": true,
+        "description": "Switch to the previous workspace (with wraparound)",
+        "parameters": []
+      },
+      {
+        "name": "togglePinTab",
+        "type": "function",
+        "async": true,
+        "description": "Toggle pinned state of the active tab. Refuses to act on Essentials.",
+        "parameters": []
+      },
+      {
+        "name": "copyCurrentUrlMarkdown",
+        "type": "function",
+        "async": true,
+        "description": "Copy the active tab's URL to the clipboard as a Markdown link [title](url)",
+        "parameters": []
+      },
+      {
+        "name": "restoreLastClosedTab",
+        "type": "function",
+        "async": true,
+        "description": "Restore the most recently closed tab in this window via SessionStore",
+        "parameters": []
+      },
+      {
+        "name": "splitNew",
+        "type": "function",
+        "async": true,
+        "description": "Open a new empty split next to the current tab",
+        "parameters": []
+      },
+      {
+        "name": "splitClose",
+        "type": "function",
+        "async": true,
+        "description": "Close the current split view (no-op if no split active)",
+        "parameters": []
+      },
+      {
+        "name": "splitHorizontal",
+        "type": "function",
+        "async": true,
+        "description": "Toggle/set split orientation to horizontal divider (top/bottom panes)",
+        "parameters": []
+      },
+      {
+        "name": "splitVertical",
+        "type": "function",
+        "async": true,
+        "description": "Toggle/set split orientation to vertical divider (side-by-side panes)",
+        "parameters": []
+      },
+      {
         "name": "closeTabByDomId",
         "type": "function",
         "async": true,
