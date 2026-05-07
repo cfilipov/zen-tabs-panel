@@ -32,6 +32,7 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 - Reorder tabs - submenu with sort options: by recent, by domain (alphabetical or popularity), by age, most visited, inactive at bottom, group duplicates
 - Scroll to current tab - scroll the sidebar to center the active tab
 - Unload tab - discard from memory
+- Close & select - close the current tab and explicitly choose which tab to focus next: default (whatever Cmd+W would do, with the predicted successor previewed live), previous (last-active), parent, next/previous child (sibling sharing the same parent), or next/previous tab in the vertical bar. Each row shows the actual target tab's favicon and title; hover or arrow-key to highlight it in the sidebar; rows with no available target are disabled.
 - Settings
 - "Copy selected tab URLs" right click menu item when multiple tabs are selected
 
@@ -62,6 +63,8 @@ Press `Ctrl+Cmd+.` to open the palette (configurable via `about:addons` > Manage
 | `M` | Move to workspace |
 | `L` | Scroll to tab |
 | `U` | Unload tab |
+| `W` | Close & select (submenu) |
+| `1`–`9`, `0` | Switch to workspace 1–10 |
 | `,` | Settings |
 
 **Chord shortcuts** - the same keys work as leader-key chords. Press `Ctrl+Cmd+.` then a panel key within ~400 ms to fire the action without the menu appearing:
@@ -70,6 +73,9 @@ Press `Ctrl+Cmd+.` to open the palette (configurable via `about:addons` > Manage
 - `Ctrl+Cmd+. T` - jump to parent tab, no menu shown
 - `Ctrl+Cmd+. D` - open the Duplicates submenu directly, skipping the main menu
 - `Ctrl+Cmd+. O R` - sort tabs by recent newest (any of the reorder mnemonics work after `O` — `R`/`⇧R`, `D`/`⇧D`, `A`/`⇧A`, `I`, `V`, `G`)
+- `Ctrl+Cmd+. W W` - close current tab, browser picks next (Cmd+W equivalent)
+- `Ctrl+Cmd+. W P` / `T` / `C` / `⇧C` / `N` / `⇧N` - close current tab and jump to previous / parent / next-or-previous sibling / next-or-previous in the sidebar. Pause after `W` to see a menu of all options with live previews of the target tab in each row.
+- `Ctrl+Cmd+. 1` … `9`, `0` - switch directly to workspace 1–10
 - `Ctrl+Cmd+. S` / `E` / `L` / `U` / `,` - move to start/end, scroll to current, unload, settings
 
 If you don't press a follow-up key, the main menu opens after the timeout. Pressing any unrecognized key or Escape during the chord window cancels silently. Toolbar clicks bypass the chord and open the menu immediately.
