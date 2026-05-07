@@ -28,7 +28,7 @@ async function showTabsByAge(animate) {
 
   let allTabs;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    allTabs = await getAllTabsCached();
   } catch (e) {
     listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
     updateHeader("Tabs by age");
@@ -177,7 +177,7 @@ async function showMostVisited(animate) {
 
   let allTabs;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    allTabs = await getAllTabsCached();
   } catch (e) {
     listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
     updateHeader("Most visited");

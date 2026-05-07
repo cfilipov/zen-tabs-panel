@@ -30,7 +30,7 @@ async function showTabInfo() {
 
   let allTabs, info;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    allTabs = await getAllTabsCached();
     const activeTab = allTabs.find((t) => t.active);
     if (!activeTab) { renderTabInfo(null); return; }
     info = await ext.runtime.sendMessage({ type: "get-tab-info", domId: activeTab.domId });
@@ -337,7 +337,7 @@ async function showDuplicates(animate) {
 
   let allTabs;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    allTabs = await getAllTabsCached();
   } catch (e) {
     listEl.innerHTML = `<div class="empty-state">No duplicates</div>`;
     updateHeader("Duplicates");

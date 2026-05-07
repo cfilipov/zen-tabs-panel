@@ -101,7 +101,7 @@ async function showCloseAndSelect() {
   let defaultCloseTargetDomId = null;
   try {
     [allTabs, defaultCloseTargetDomId] = await Promise.all([
-      ext.runtime.sendMessage({ type: "get-all-tabs" }),
+      getAllTabsCached(),
       ext.runtime.sendMessage({ type: "get-default-close-target" }).catch(() => null),
     ]);
     activeTab = allTabs.find((t) => t.active);

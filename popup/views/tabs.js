@@ -11,7 +11,7 @@ async function showChildTabs(animate) {
 
   let allTabs;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    allTabs = await getAllTabsCached();
   } catch (e) {
     renderTabList([], "Children");
     return;
@@ -33,7 +33,7 @@ async function showSiblingTabs(animate) {
 
   let allTabs;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    allTabs = await getAllTabsCached();
   } catch (e) {
     renderTabList([], "Siblings");
     return;
@@ -55,7 +55,7 @@ async function showParentTabs(animate) {
 
   let allTabs;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    allTabs = await getAllTabsCached();
   } catch (e) {
     renderTabList([], "Parent tabs");
     return;
@@ -71,7 +71,7 @@ async function showUnvisitedTabs(animate) {
 
   let allTabs;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    allTabs = await getAllTabsCached();
   } catch (e) {
     renderTabList([], "New tabs");
     return;

@@ -381,7 +381,7 @@ async function showActionsMenu() {
   let allTabs, closed, navHist, selectedDomIds;
   try {
     [allTabs, closed, navHist, selectedDomIds] = await Promise.all([
-      ext.runtime.sendMessage({ type: "get-all-tabs" }),
+      getAllTabsCached(),
       ext.runtime.sendMessage({ type: "get-recently-closed" }).catch(() => []),
       ext.runtime.sendMessage({ type: "get-navigation-history" }).catch(() => null),
       ext.runtime.sendMessage({ type: "get-selected-tab-dom-ids" }).catch(() => []),

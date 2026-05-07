@@ -13,7 +13,7 @@ async function showDomains(animate) {
 
   let allTabs;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    allTabs = await getAllTabsCached();
   } catch (e) {
     listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
     updateHeader("Domains");
@@ -106,7 +106,7 @@ async function showDomainTabs(domain, animate) {
 
   let allTabs;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    allTabs = await getAllTabsCached();
   } catch (e) {
     renderTabList([], domain);
     return;

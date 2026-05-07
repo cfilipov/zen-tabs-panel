@@ -80,7 +80,7 @@ async function showLastVisited(animate) {
 
   let allTabs;
   try {
-    allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
+    allTabs = await getAllTabsCached();
   } catch (e) {
     renderTabList([], "Recent");
     return;
