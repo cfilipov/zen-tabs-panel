@@ -86,6 +86,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       close() {
         try { disarmChord(); } catch (e) {}
         try { uninstallGestureListener(); } catch (e) {}
+        try { cancelSyncDuplicates(); } catch (e) {}
         const w = Services.wm.getMostRecentWindow("navigator:browser");
         if (!w) return;
         const overlay = w.document.getElementById("zen-tabs-panel-overlay");
@@ -185,36 +186,74 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
     `;
 
+    const DUP_ATTR = "zen-tabs-panel-duplicate";
+    const DUP_STYLE_ID = "zen-tabs-panel-dup-indicator-styles";
+    const SYNC_DUP_DEBOUNCE_MS = 50;
+    let dupStylesInjected = false;
+    let syncDupDebounceTimer = null;
+
     function ensureDuplicateStyles() {
+      if (dupStylesInjected) return;
       const w = getWin();
       if (!w) return;
-      let el = w.document.getElementById("zen-tabs-panel-dup-indicator-styles");
+      let el = w.document.getElementById(DUP_STYLE_ID);
       if (!el) {
         el = w.document.createElement("style");
-        el.id = "zen-tabs-panel-dup-indicator-styles";
+        el.id = DUP_STYLE_ID;
+        el.textContent = DUP_INDICATOR_CSS;
         w.document.documentElement.appendChild(el);
+      } else if (el.textContent !== DUP_INDICATOR_CSS) {
+        el.textContent = DUP_INDICATOR_CSS;
       }
-      el.textContent = DUP_INDICATOR_CSS;
+      dupStylesInjected = true;
     }
 
+    // Walk all tabs once to count URLs, then a second time to apply only the
+    // diffs (gated by hasAttribute) — most calls in steady state mutate zero
+    // attributes since dup status changes only when a tab navigates.
     function syncDuplicateAttributes() {
       ensureDuplicateStyles();
       const tabs = getAllTabElements();
-      const urlCounts = {};
-      for (const tab of tabs) {
-        const url = tab.linkedBrowser?.currentURI?.spec || "";
+      const urlCounts = new Map();
+      for (let i = 0; i < tabs.length; i++) {
+        const url = tabs[i].linkedBrowser?.currentURI?.spec || "";
         if (url && url !== "about:newtab" && url !== "about:blank") {
-          urlCounts[url] = (urlCounts[url] || 0) + 1;
+          urlCounts.set(url, (urlCounts.get(url) || 0) + 1);
         }
       }
-      for (const tab of tabs) {
+      for (let i = 0; i < tabs.length; i++) {
+        const tab = tabs[i];
         const url = tab.linkedBrowser?.currentURI?.spec || "";
-        if (urlCounts[url] > 1) {
-          tab.setAttribute("zen-tabs-panel-duplicate", "true");
-        } else {
-          tab.removeAttribute("zen-tabs-panel-duplicate");
+        const shouldBeDup = (urlCounts.get(url) || 0) > 1;
+        const isDup = tab.hasAttribute(DUP_ATTR);
+        if (shouldBeDup && !isDup) {
+          tab.setAttribute(DUP_ATTR, "true");
+        } else if (!shouldBeDup && isDup) {
+          tab.removeAttribute(DUP_ATTR);
         }
       }
+    }
+
+    // Trailing-edge debounce: every call resets the timer so a burst of tab
+    // events (e.g. the multiple URL-change notifications during one page
+    // load) coalesces into a single attribute-update pass.
+    function scheduleSyncDuplicates() {
+      const w = getWin();
+      if (!w) return;
+      if (syncDupDebounceTimer !== null) {
+        w.clearTimeout(syncDupDebounceTimer);
+      }
+      syncDupDebounceTimer = w.setTimeout(() => {
+        syncDupDebounceTimer = null;
+        syncDuplicateAttributes();
+      }, SYNC_DUP_DEBOUNCE_MS);
+    }
+
+    function cancelSyncDuplicates() {
+      if (syncDupDebounceTimer === null) return;
+      const w = getWin();
+      if (w) w.clearTimeout(syncDupDebounceTimer);
+      syncDupDebounceTimer = null;
     }
 
     // Activate a native tab, switching workspaces if needed
@@ -1212,8 +1251,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
             .filter(url => url !== "");
         },
 
+        // Coalesce bursts of tab events (page-load fires multiple URL
+        // changes) into a single attribute-update pass via the trailing-
+        // edge debounce in scheduleSyncDuplicates().
         async syncDuplicates() {
-          syncDuplicateAttributes();
+          scheduleSyncDuplicates();
         },
 
         async getTabInfo(domId) {
