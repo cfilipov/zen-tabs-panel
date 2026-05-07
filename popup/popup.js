@@ -1,29 +1,12 @@
 "use strict";
 
 // ---------------------------------------------------------------------------
-// State
+// DOM refs and state
+//
+// Mutable state lives in popup/state.js (the `ui`, `tabState`, `wsState`
+// objects). Const DOM refs stay here since they bind to elements found in
+// popup.html which is owned by this script.
 // ---------------------------------------------------------------------------
-
-let currentView = "actions";
-let selectedIndex = -1;
-let items = [];
-let currentTabHasParent = false;
-let childTabCount = 0;
-let unvisitedTabCount = 0;
-let parentTabPreview = null;  // { title, favIconUrl }
-let previousTabPreview = null; // { title, favIconUrl }
-let backPreview = null;          // { title, url, isHistory: true }
-let forwardPreview = null;       // { title, url, isHistory: true }
-let nextVerticalPreview = null;  // { title, favIconUrl, domId, workspaceId }
-let prevVerticalPreview = null;  // same shape
-let selectedTabCount = 0;
-let workspaceMap = {};     // uuid → { name, svgContent }
-let activeWorkspaceId = null;
-let duplicateGroupCount = 0;
-let siblingTabCount = 0;
-let parentTabCount = 0;
-let domainCount = 0;
-let recentlyClosedCount = 0;
 
 const listEl = document.getElementById("list");
 const headerEl = document.getElementById("header");
@@ -31,15 +14,6 @@ const backButton = document.getElementById("back-button");
 const viewTitle = document.getElementById("view-title");
 const headerHint = document.getElementById("header-hint");
 const sidebarEl = document.getElementById("sidebar");
-
-let workspaceFilter = "all";
-let workspaceTabCounts = {};
-let currentDomain = null;
-let tabsByAgeNewestFirst = false;
-let domainsSortAlpha = false;
-let sectionStarts = [];
-let sidebarFocused = false;
-let sidebarSelectedIndex = -1;
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
@@ -112,8 +86,8 @@ function getActions() {
 
   // Substitute the actual prev/next workspace SVG icons in place of the
   // generic arrow icons, so the user sees which workspace they'd jump to.
-  const wsList = Object.entries(workspaceMap);
-  const activeIdx = wsList.findIndex(([uuid]) => uuid === activeWorkspaceId);
+  const wsList = Object.entries(wsState.workspaceMap);
+  const activeIdx = wsList.findIndex(([uuid]) => uuid === wsState.activeWorkspaceId);
   let prevWsIconHtml = null;
   let nextWsIconHtml = null;
   if (activeIdx >= 0 && wsList.length > 1) {
@@ -128,18 +102,18 @@ function getActions() {
     // 3 columns × 2 rows in column-first DOM order:
     // [Previous] [Back   ] [Above]
     // [Parent  ] [Forward] [Below]
-    actionFromRegistry("go-to-previous-tab",      { preview: previousTabPreview }),
-    actionFromRegistry("go-to-parent-tab",        { preview: parentTabPreview }),
-    actionFromRegistry("go-back-in-tab",          { preview: backPreview }),
-    actionFromRegistry("go-forward-in-tab",       { preview: forwardPreview }),
-    actionFromRegistry("go-to-prev-vertical-tab", { preview: prevVerticalPreview }),
-    actionFromRegistry("go-to-next-vertical-tab", { preview: nextVerticalPreview }),
+    actionFromRegistry("go-to-previous-tab",      { preview: tabState.previousTabPreview }),
+    actionFromRegistry("go-to-parent-tab",        { preview: tabState.parentTabPreview }),
+    actionFromRegistry("go-back-in-tab",          { preview: tabState.backPreview }),
+    actionFromRegistry("go-forward-in-tab",       { preview: tabState.forwardPreview }),
+    actionFromRegistry("go-to-prev-vertical-tab", { preview: tabState.prevVerticalPreview }),
+    actionFromRegistry("go-to-next-vertical-tab", { preview: tabState.nextVerticalPreview }),
 
     { type: "section", label: "This tab", column: true },
     actionFromRegistry("tab-info",        compact),
     actionFromRegistry("navigation",      compact),
-    actionFromRegistry("child-tabs",      { count: childTabCount, ...compact }),
-    actionFromRegistry("sibling-tabs",    { count: siblingTabCount, ...compact }),
+    actionFromRegistry("child-tabs",      { count: tabState.childTabCount, ...compact }),
+    actionFromRegistry("sibling-tabs",    { count: tabState.siblingTabCount, ...compact }),
 
     { type: "section", label: "Tab actions", column: true, stack: true },
     actionFromRegistry("copy-url-markdown",       compact),
@@ -148,12 +122,12 @@ function getActions() {
     actionFromRegistry("close-and-select",        compact),
 
     { type: "section", label: "All tabs", column: true },
-    actionFromRegistry("parent-tabs",     { count: parentTabCount, ...compact }),
-    actionFromRegistry("unvisited-tabs",  { count: unvisitedTabCount, ...compact }),
+    actionFromRegistry("parent-tabs",     { count: tabState.parentTabCount, ...compact }),
+    actionFromRegistry("unvisited-tabs",  { count: tabState.unvisitedTabCount, ...compact }),
     actionFromRegistry("last-visited",    compact),
-    actionFromRegistry("recently-closed", { count: recentlyClosedCount, ...compact }),
-    actionFromRegistry("duplicates",      { count: duplicateGroupCount, ...compact }),
-    actionFromRegistry("domains",         { count: domainCount, ...compact }),
+    actionFromRegistry("recently-closed", { count: tabState.recentlyClosedCount, ...compact }),
+    actionFromRegistry("duplicates",      { count: tabState.duplicateGroupCount, ...compact }),
+    actionFromRegistry("domains",         { count: tabState.domainCount, ...compact }),
     actionFromRegistry("tabs-by-age",     compact),
     actionFromRegistry("most-visited",    compact),
 
@@ -162,7 +136,7 @@ function getActions() {
     actionFromRegistry("move-tab-to-start",     compact),
     actionFromRegistry("move-tab-to-end",       compact),
     actionFromRegistry("reorder-tabs",          compact),
-    actionFromRegistry("move-to-workspace",     { count: selectedTabCount > 1 ? selectedTabCount : 0, ...compact }),
+    actionFromRegistry("move-to-workspace",     { count: tabState.selectedTabCount > 1 ? tabState.selectedTabCount : 0, ...compact }),
     actionFromRegistry("scroll-to-current-tab", compact),
     actionFromRegistry("split-view",            compact),
 
@@ -226,13 +200,13 @@ function getIcon(icon) {
 // ---------------------------------------------------------------------------
 
 function isActionDisabled(action) {
-  if (action.needsParent && !currentTabHasParent) return true;
-  if (action.needsChildren && childTabCount === 0) return true;
-  if (action.needsUnvisited && unvisitedTabCount === 0) return true;
-  if (action.needsSiblings && siblingTabCount === 0) return true;
-  if (action.needsParentTabs && parentTabCount === 0) return true;
-  if (action.needsDuplicates && duplicateGroupCount === 0) return true;
-  if (action.needsRecentlyClosed && recentlyClosedCount === 0) return true;
+  if (action.needsParent && !tabState.currentTabHasParent) return true;
+  if (action.needsChildren && tabState.childTabCount === 0) return true;
+  if (action.needsUnvisited && tabState.unvisitedTabCount === 0) return true;
+  if (action.needsSiblings && tabState.siblingTabCount === 0) return true;
+  if (action.needsParentTabs && tabState.parentTabCount === 0) return true;
+  if (action.needsDuplicates && tabState.duplicateGroupCount === 0) return true;
+  if (action.needsRecentlyClosed && tabState.recentlyClosedCount === 0) return true;
   return false;
 }
 
@@ -261,8 +235,8 @@ function buildPreviewHtml(preview) {
     : `<span class="preview-icon-placeholder">○</span>`;
   const previewTitle = escapeHtml(preview.title || "Untitled");
   let wsLabel = "";
-  if (preview.workspaceId && preview.workspaceId !== activeWorkspaceId) {
-    const ws = workspaceMap[preview.workspaceId];
+  if (preview.workspaceId && preview.workspaceId !== wsState.activeWorkspaceId) {
+    const ws = wsState.workspaceMap[preview.workspaceId];
     if (ws) {
       const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
       wsLabel = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
@@ -305,8 +279,8 @@ function buildNavigateCell(action) {
       let domain = "";
       try { domain = new URL(action.preview.url || "").hostname.replace(/^www\./, ""); } catch (e) {}
       if (domain) trailingHtml = `<span class="row-workspace">${escapeHtml(domain)}</span>`;
-    } else if (action.preview.workspaceId && action.preview.workspaceId !== activeWorkspaceId) {
-      const ws = workspaceMap[action.preview.workspaceId];
+    } else if (action.preview.workspaceId && action.preview.workspaceId !== wsState.activeWorkspaceId) {
+      const ws = wsState.workspaceMap[action.preview.workspaceId];
       if (ws) {
         const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
         trailingHtml = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
@@ -342,9 +316,9 @@ function buildNavigateCell(action) {
 
 function renderActions(actions, title) {
   actions = actions.filter(Boolean);
-  items = actions.filter((a) => a.type !== "separator" && a.type !== "workspaces" && a.type !== "section");
-  selectedIndex = -1;
-  sectionStarts = [0];
+  ui.items = actions.filter((a) => a.type !== "separator" && a.type !== "workspaces" && a.type !== "section");
+  ui.selectedIndex = -1;
+  ui.sectionStarts = [0];
 
   listEl.innerHTML = "";
   let gridContainer = null;
@@ -389,7 +363,7 @@ function renderActions(actions, title) {
         closeNavigateGrid();
         listEl.appendChild(header);
       }
-      sectionStarts.push(itemIndex);
+      ui.sectionStarts.push(itemIndex);
       continue;
     }
 
@@ -400,7 +374,7 @@ function renderActions(actions, title) {
       const sep = document.createElement("div");
       sep.className = "list-separator";
       listEl.appendChild(sep);
-      sectionStarts.push(itemIndex);
+      ui.sectionStarts.push(itemIndex);
       continue;
     }
 
@@ -494,34 +468,34 @@ function renderActions(actions, title) {
 function updateSelection() {
   const listItems = listEl.querySelectorAll(".list-item");
   listItems.forEach((el, i) => {
-    el.classList.toggle("selected", i === selectedIndex);
+    el.classList.toggle("selected", i === ui.selectedIndex);
   });
 
-  if (selectedIndex >= 0) {
-    const selected = listItems[selectedIndex];
+  if (ui.selectedIndex >= 0) {
+    const selected = listItems[ui.selectedIndex];
     if (selected) {
       selected.scrollIntoView({ block: "nearest" });
     }
   }
 
-  if (selectedIndex >= 0) {
-    const item = items[selectedIndex];
-    const isTabView = currentView !== "actions" && currentView !== "move-to-workspace" && currentView !== "close-and-select" && currentView !== "reorder-tabs";
+  if (ui.selectedIndex >= 0) {
+    const item = ui.items[ui.selectedIndex];
+    const isTabView = ui.currentView !== "actions" && ui.currentView !== "move-to-workspace" && ui.currentView !== "close-and-select" && ui.currentView !== "reorder-tabs";
     if (isTabView && item?.domId) {
       ext.runtime.sendMessage({ type: "preview-tab", domId: item.domId }).catch(() => {});
-    } else if ((currentView === "actions" || currentView === "close-and-select") && item?.preview?.domId) {
+    } else if ((ui.currentView === "actions" || ui.currentView === "close-and-select") && item?.preview?.domId) {
       ext.runtime.sendMessage({ type: "preview-tab", domId: item.preview.domId }).catch(() => {});
-    } else if (currentView === "actions" || currentView === "close-and-select") {
+    } else if (ui.currentView === "actions" || ui.currentView === "close-and-select") {
       ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
     }
-  } else if (currentView === "actions" || currentView === "close-and-select") {
+  } else if (ui.currentView === "actions" || ui.currentView === "close-and-select") {
     ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
   }
 }
 
 function filterByWorkspace(tabs) {
-  if (workspaceFilter === "all") return tabs;
-  return tabs.filter((t) => t.workspaceId === workspaceFilter);
+  if (wsState.workspaceFilter === "all") return tabs;
+  return tabs.filter((t) => t.workspaceId === wsState.workspaceFilter);
 }
 
 function renderSidebar(sortOptions) {
@@ -541,19 +515,19 @@ function renderSidebar(sortOptions) {
   }
 
   const allEl = document.createElement("div");
-  allEl.className = "sidebar-item" + (workspaceFilter === "all" ? " active" : "");
+  allEl.className = "sidebar-item" + (wsState.workspaceFilter === "all" ? " active" : "");
   allEl.innerHTML = `<span class="sidebar-ws-name">All</span> ${renderBadge("0")}`;
   allEl.addEventListener("click", () => {
-    workspaceFilter = workspaceFilter === "all" ? activeWorkspaceId : "all";
+    wsState.workspaceFilter = wsState.workspaceFilter === "all" ? wsState.activeWorkspaceId : "all";
     refreshCurrentView();
   });
   sidebarEl.appendChild(allEl);
 
-  const allWorkspaces = Object.entries(workspaceMap);
+  const allWorkspaces = Object.entries(wsState.workspaceMap);
   for (let i = 0; i < allWorkspaces.length; i++) {
     const [uuid, ws] = allWorkspaces[i];
     const badge = i < 9 ? "⇧" + (i + 1) : null;
-    const isActive = workspaceFilter === uuid;
+    const isActive = wsState.workspaceFilter === uuid;
 
     const el = document.createElement("div");
     el.className = "sidebar-item" + (isActive ? " active" : "");
@@ -564,7 +538,7 @@ function renderSidebar(sortOptions) {
     el.innerHTML = `${iconHtml}<span class="sidebar-ws-name">${escapeHtml(ws.name)}</span>${renderBadge(badge)}`;
 
     el.addEventListener("click", () => {
-      workspaceFilter = workspaceFilter === uuid ? "all" : uuid;
+      wsState.workspaceFilter = wsState.workspaceFilter === uuid ? "all" : uuid;
       refreshCurrentView();
     });
 
@@ -577,13 +551,13 @@ function renderSidebar(sortOptions) {
 function hideSidebar() {
   sidebarEl.classList.add("hidden");
   sidebarEl.innerHTML = "";
-  sidebarFocused = false;
-  sidebarSelectedIndex = -1;
+  ui.sidebarFocused = false;
+  ui.sidebarSelectedIndex = -1;
 }
 
 function refreshCurrentView() {
   ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
-  switch (currentView) {
+  switch (ui.currentView) {
     case "last-visited": showLastVisited(false); break;
     case "recently-closed": showRecentlyClosed(false); break;
     case "child-tabs": showChildTabs(false); break;
@@ -592,7 +566,7 @@ function refreshCurrentView() {
     case "unvisited": showUnvisitedTabs(false); break;
     case "duplicates": showDuplicates(false); break;
     case "domains": showDomains(false); break;
-    case "domain-tabs": showDomainTabs(currentDomain, false); break;
+    case "domain-tabs": showDomainTabs(tabState.currentDomain, false); break;
     case "tabs-by-age": showTabsByAge(false); break;
     case "most-visited": showMostVisited(false); break;
   }
@@ -604,59 +578,59 @@ function refreshCurrentView() {
 // ---------------------------------------------------------------------------
 
 function moveSelection(delta) {
-  const count = items.length;
+  const count = ui.items.length;
   if (count === 0) return;
 
-  if (selectedIndex === -1) {
-    selectedIndex = delta > 0 ? 0 : count - 1;
+  if (ui.selectedIndex === -1) {
+    ui.selectedIndex = delta > 0 ? 0 : count - 1;
   } else {
-    selectedIndex = (selectedIndex + delta + count) % count;
+    ui.selectedIndex = (ui.selectedIndex + delta + count) % count;
   }
 
-  // Skip disabled items
-  const startIndex = selectedIndex;
+  // Skip disabled ui.items
+  const startIndex = ui.selectedIndex;
   const listItems = listEl.querySelectorAll(".list-item");
-  while (listItems[selectedIndex]?.classList.contains("disabled")) {
-    selectedIndex = (selectedIndex + delta + count) % count;
-    if (selectedIndex === startIndex) break;
+  while (listItems[ui.selectedIndex]?.classList.contains("disabled")) {
+    ui.selectedIndex = (ui.selectedIndex + delta + count) % count;
+    if (ui.selectedIndex === startIndex) break;
   }
 
   updateSelection();
 }
 
 function jumpToSection(delta) {
-  const count = items.length;
+  const count = ui.items.length;
   if (count === 0) return;
   const hasSidebar = !sidebarEl.classList.contains("hidden");
 
   // Single section (submenus): Tab between list and sidebar
-  if (sectionStarts.length <= 1) {
+  if (ui.sectionStarts.length <= 1) {
     if (hasSidebar) {
-      if (!sidebarFocused) {
-        sidebarFocused = true;
-        sidebarSelectedIndex = delta > 0 ? 0 : sidebarEl.querySelectorAll(".sidebar-item, .sidebar-sort").length - 1;
-        selectedIndex = -1;
+      if (!ui.sidebarFocused) {
+        ui.sidebarFocused = true;
+        ui.sidebarSelectedIndex = delta > 0 ? 0 : sidebarEl.querySelectorAll(".sidebar-item, .sidebar-sort").length - 1;
+        ui.selectedIndex = -1;
         updateSelection();
         updateSidebarSelection();
         return;
       } else {
-        sidebarFocused = false;
-        sidebarSelectedIndex = -1;
-        selectedIndex = delta > 0 ? 0 : count - 1;
+        ui.sidebarFocused = false;
+        ui.sidebarSelectedIndex = -1;
+        ui.selectedIndex = delta > 0 ? 0 : count - 1;
         updateSidebarSelection();
         updateSelection();
         return;
       }
     }
-    selectedIndex = delta > 0 ? 0 : count - 1;
+    ui.selectedIndex = delta > 0 ? 0 : count - 1;
     updateSelection();
     return;
   }
 
   // Find which section current selection is in
   let currentSection = 0;
-  for (let i = sectionStarts.length - 1; i >= 0; i--) {
-    if (selectedIndex >= sectionStarts[i]) {
+  for (let i = ui.sectionStarts.length - 1; i >= 0; i--) {
+    if (ui.selectedIndex >= ui.sectionStarts[i]) {
       currentSection = i;
       break;
     }
@@ -664,17 +638,17 @@ function jumpToSection(delta) {
 
   // Move to next/previous section
   let targetSection = currentSection + delta;
-  if (targetSection < 0) targetSection = sectionStarts.length - 1;
-  if (targetSection >= sectionStarts.length) targetSection = 0;
+  if (targetSection < 0) targetSection = ui.sectionStarts.length - 1;
+  if (targetSection >= ui.sectionStarts.length) targetSection = 0;
 
-  selectedIndex = sectionStarts[targetSection];
+  ui.selectedIndex = ui.sectionStarts[targetSection];
 
-  // Skip disabled items forward
+  // Skip disabled ui.items forward
   const listItems = listEl.querySelectorAll(".list-item");
-  const startIndex = selectedIndex;
-  while (listItems[selectedIndex]?.classList.contains("disabled")) {
-    selectedIndex = (selectedIndex + 1) % count;
-    if (selectedIndex === startIndex) break;
+  const startIndex = ui.selectedIndex;
+  while (listItems[ui.selectedIndex]?.classList.contains("disabled")) {
+    ui.selectedIndex = (ui.selectedIndex + 1) % count;
+    if (ui.selectedIndex === startIndex) break;
   }
 
   updateSelection();
@@ -683,7 +657,7 @@ function jumpToSection(delta) {
 function updateSidebarSelection() {
   const sidebarItems = sidebarEl.querySelectorAll(".sidebar-item, .sidebar-sort");
   sidebarItems.forEach((el, i) => {
-    el.classList.toggle("focused", sidebarFocused && i === sidebarSelectedIndex);
+    el.classList.toggle("focused", ui.sidebarFocused && i === ui.sidebarSelectedIndex);
   });
 }
 
@@ -691,27 +665,27 @@ function moveSidebarSelection(delta) {
   const sidebarItems = sidebarEl.querySelectorAll(".sidebar-item, .sidebar-sort");
   const count = sidebarItems.length;
   if (count === 0) return;
-  if (sidebarSelectedIndex === -1) {
-    sidebarSelectedIndex = delta > 0 ? 0 : count - 1;
+  if (ui.sidebarSelectedIndex === -1) {
+    ui.sidebarSelectedIndex = delta > 0 ? 0 : count - 1;
   } else {
-    sidebarSelectedIndex = (sidebarSelectedIndex + delta + count) % count;
+    ui.sidebarSelectedIndex = (ui.sidebarSelectedIndex + delta + count) % count;
   }
   updateSidebarSelection();
 }
 
 function activateSidebarSelected() {
   const sidebarItems = sidebarEl.querySelectorAll(".sidebar-item, .sidebar-sort");
-  if (sidebarSelectedIndex >= 0 && sidebarSelectedIndex < sidebarItems.length) {
-    sidebarItems[sidebarSelectedIndex].click();
+  if (ui.sidebarSelectedIndex >= 0 && ui.sidebarSelectedIndex < sidebarItems.length) {
+    sidebarItems[ui.sidebarSelectedIndex].click();
   }
 }
 
 function activateSelected() {
-  if (selectedIndex < 0 || items.length === 0) return;
+  if (ui.selectedIndex < 0 || ui.items.length === 0) return;
 
-  const item = items[selectedIndex];
+  const item = ui.items[ui.selectedIndex];
   const listItems = listEl.querySelectorAll(".list-item");
-  if (listItems[selectedIndex]?.classList.contains("disabled")) return;
+  if (listItems[ui.selectedIndex]?.classList.contains("disabled")) return;
 
   if (item.navIndex !== undefined && !item.isCurrent) {
     ext.runtime.sendMessage({ type: "navigate-to-history-index", index: item.navIndex }).catch(() => {});
@@ -756,42 +730,42 @@ function activateAction(action) {
 async function fetchWorkspaceMap() {
   try {
     const workspaces = await ext.runtime.sendMessage({ type: "get-workspaces-with-icons" });
-    workspaceMap = {};
-    activeWorkspaceId = null;
+    wsState.workspaceMap = {};
+    wsState.activeWorkspaceId = null;
     for (const ws of workspaces) {
-      workspaceMap[ws.uuid] = { name: ws.name, svgContent: ws.svgContent };
-      if (ws.isActive) activeWorkspaceId = ws.uuid;
+      wsState.workspaceMap[ws.uuid] = { name: ws.name, svgContent: ws.svgContent };
+      if (ws.isActive) wsState.activeWorkspaceId = ws.uuid;
     }
   } catch (e) {
-    workspaceMap = {};
-    activeWorkspaceId = null;
+    wsState.workspaceMap = {};
+    wsState.activeWorkspaceId = null;
   }
 }
 
 async function showActionsMenu() {
-  currentView = "actions";
+  ui.currentView = "actions";
 
   // Fetch tab info for disabling unavailable actions and previews
   try {
     const allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
     const activeTab = allTabs.find((t) => t.active);
-    currentTabHasParent = !!(activeTab && activeTab.openerTabDomId);
-    childTabCount = activeTab ? allTabs.filter((t) => t.openerTabDomId === activeTab.domId).length : 0;
-    siblingTabCount = (activeTab && activeTab.openerTabDomId)
+    tabState.currentTabHasParent = !!(activeTab && activeTab.openerTabDomId);
+    tabState.childTabCount = activeTab ? allTabs.filter((t) => t.openerTabDomId === activeTab.domId).length : 0;
+    tabState.siblingTabCount = (activeTab && activeTab.openerTabDomId)
       ? allTabs.filter((t) => t.openerTabDomId === activeTab.openerTabDomId && t.domId !== activeTab.domId).length
       : 0;
-    unvisitedTabCount = allTabs.filter((t) => t.unread).length;
+    tabState.unvisitedTabCount = allTabs.filter((t) => t.unread).length;
     const childOpeners = new Set(allTabs.filter((t) => t.openerTabDomId).map((t) => t.openerTabDomId));
-    parentTabCount = allTabs.filter((t) => childOpeners.has(t.domId)).length;
+    tabState.parentTabCount = allTabs.filter((t) => childOpeners.has(t.domId)).length;
     const domainSet = new Set();
     for (const t of allTabs) { try { domainSet.add(new URL(t.url).hostname); } catch (e) {} }
     domainSet.delete("");
-    domainCount = domainSet.size;
+    tabState.domainCount = domainSet.size;
 
     // Workspace tab counts
-    workspaceTabCounts = {};
+    tabState.workspaceTabCounts = {};
     for (const t of allTabs) {
-      if (t.workspaceId) workspaceTabCounts[t.workspaceId] = (workspaceTabCounts[t.workspaceId] || 0) + 1;
+      if (t.workspaceId) tabState.workspaceTabCounts[t.workspaceId] = (tabState.workspaceTabCounts[t.workspaceId] || 0) + 1;
     }
 
     // Duplicate groups count
@@ -801,21 +775,21 @@ async function showActionsMenu() {
         urlCounts[t.url] = (urlCounts[t.url] || 0) + 1;
       }
     }
-    duplicateGroupCount = Object.values(urlCounts).filter((c) => c > 1).length;
+    tabState.duplicateGroupCount = Object.values(urlCounts).filter((c) => c > 1).length;
 
     try {
       const closed = await ext.runtime.sendMessage({ type: "get-recently-closed" });
-      recentlyClosedCount = Array.isArray(closed) ? closed.length : 0;
+      tabState.recentlyClosedCount = Array.isArray(closed) ? closed.length : 0;
     } catch (e) {
-      recentlyClosedCount = 0;
+      tabState.recentlyClosedCount = 0;
     }
 
     // Parent tab preview
-    if (currentTabHasParent) {
+    if (tabState.currentTabHasParent) {
       const parent = allTabs.find((t) => t.domId === activeTab.openerTabDomId);
-      parentTabPreview = parent ? { title: parent.title, favIconUrl: parent.favIconUrl, domId: parent.domId, workspaceId: parent.workspaceId, pending: parent.pending } : null;
+      tabState.parentTabPreview = parent ? { title: parent.title, favIconUrl: parent.favIconUrl, domId: parent.domId, workspaceId: parent.workspaceId, pending: parent.pending } : null;
     } else {
-      parentTabPreview = null;
+      tabState.parentTabPreview = null;
     }
 
     // Previous tab preview — most recently accessed tab excluding current and split siblings
@@ -827,7 +801,7 @@ async function showActionsMenu() {
     const candidates = allTabs
       .filter((t) => !visibleDomIds.has(t.domId) && !t.unread)
       .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-    previousTabPreview = candidates.length > 0
+    tabState.previousTabPreview = candidates.length > 0
       ? { title: candidates[0].title, favIconUrl: candidates[0].favIconUrl, domId: candidates[0].domId, workspaceId: candidates[0].workspaceId, pending: candidates[0].pending }
       : null;
 
@@ -839,11 +813,11 @@ async function showActionsMenu() {
       const buildTabPreview = (tab) => tab
         ? { title: tab.title, favIconUrl: tab.favIconUrl, domId: tab.domId, workspaceId: tab.workspaceId, pending: tab.pending }
         : null;
-      prevVerticalPreview = vIdx > 0 ? buildTabPreview(sameWs[vIdx - 1]) : null;
-      nextVerticalPreview = vIdx >= 0 && vIdx < sameWs.length - 1 ? buildTabPreview(sameWs[vIdx + 1]) : null;
+      tabState.prevVerticalPreview = vIdx > 0 ? buildTabPreview(sameWs[vIdx - 1]) : null;
+      tabState.nextVerticalPreview = vIdx >= 0 && vIdx < sameWs.length - 1 ? buildTabPreview(sameWs[vIdx + 1]) : null;
     } else {
-      prevVerticalPreview = null;
-      nextVerticalPreview = null;
+      tabState.prevVerticalPreview = null;
+      tabState.nextVerticalPreview = null;
     }
 
     // Back/forward previews from the active tab's session history.
@@ -851,19 +825,19 @@ async function showActionsMenu() {
       const navHist = await ext.runtime.sendMessage({ type: "get-navigation-history" });
       if (navHist && Array.isArray(navHist.entries)) {
         const i = navHist.index;
-        backPreview = i > 0
+        tabState.backPreview = i > 0
           ? { title: navHist.entries[i - 1].title, url: navHist.entries[i - 1].url, isHistory: true }
           : null;
-        forwardPreview = i < navHist.entries.length - 1
+        tabState.forwardPreview = i < navHist.entries.length - 1
           ? { title: navHist.entries[i + 1].title, url: navHist.entries[i + 1].url, isHistory: true }
           : null;
       } else {
-        backPreview = null;
-        forwardPreview = null;
+        tabState.backPreview = null;
+        tabState.forwardPreview = null;
       }
     } catch (e) {
-      backPreview = null;
-      forwardPreview = null;
+      tabState.backPreview = null;
+      tabState.forwardPreview = null;
     }
 
     // Fetch selected tab count and workspace map in parallel
@@ -872,26 +846,26 @@ async function showActionsMenu() {
         ext.runtime.sendMessage({ type: "get-selected-tab-dom-ids" }),
         fetchWorkspaceMap(),
       ]);
-      selectedTabCount = selectedDomIds.length;
+      tabState.selectedTabCount = selectedDomIds.length;
     } catch (e) {
-      selectedTabCount = 0;
+      tabState.selectedTabCount = 0;
     }
   } catch (e) {
-    currentTabHasParent = false;
-    childTabCount = 0;
-    siblingTabCount = 0;
-    parentTabCount = 0;
-    domainCount = 0;
-    unvisitedTabCount = 0;
-    duplicateGroupCount = 0;
-    recentlyClosedCount = 0;
-    parentTabPreview = null;
-    previousTabPreview = null;
-    backPreview = null;
-    forwardPreview = null;
-    nextVerticalPreview = null;
-    prevVerticalPreview = null;
-    selectedTabCount = 0;
+    tabState.currentTabHasParent = false;
+    tabState.childTabCount = 0;
+    tabState.siblingTabCount = 0;
+    tabState.parentTabCount = 0;
+    tabState.domainCount = 0;
+    tabState.unvisitedTabCount = 0;
+    tabState.duplicateGroupCount = 0;
+    tabState.recentlyClosedCount = 0;
+    tabState.parentTabPreview = null;
+    tabState.previousTabPreview = null;
+    tabState.backPreview = null;
+    tabState.forwardPreview = null;
+    tabState.nextVerticalPreview = null;
+    tabState.prevVerticalPreview = null;
+    tabState.selectedTabCount = 0;
   }
 
   if (!initialView) {
@@ -901,7 +875,7 @@ async function showActionsMenu() {
 }
 
 async function showChildTabs(animate) {
-  currentView = "child-tabs";
+  ui.currentView = "child-tabs";
 
   let allTabs;
   try {
@@ -923,7 +897,7 @@ async function showChildTabs(animate) {
 }
 
 async function showSiblingTabs(animate) {
-  currentView = "sibling-tabs";
+  ui.currentView = "sibling-tabs";
 
   let allTabs;
   try {
@@ -945,7 +919,7 @@ async function showSiblingTabs(animate) {
 }
 
 async function showParentTabs(animate) {
-  currentView = "parent-tabs";
+  ui.currentView = "parent-tabs";
 
   let allTabs;
   try {
@@ -962,10 +936,10 @@ async function showParentTabs(animate) {
 }
 
 async function showNavigation() {
-  currentView = "navigation";
-  items = [];
-  selectedIndex = -1;
-  sectionStarts = [0];
+  ui.currentView = "navigation";
+  ui.items = [];
+  ui.selectedIndex = -1;
+  ui.sectionStarts = [0];
 
   let history;
   try {
@@ -1021,18 +995,18 @@ async function showNavigation() {
       });
     }
 
-    items.push({ navIndex: i, isCurrent });
+    ui.items.push({ navIndex: i, isCurrent });
     listEl.appendChild(el);
   }
 
   // Pre-select the current item
-  selectedIndex = currentIndex;
+  ui.selectedIndex = currentIndex;
   updateSelection();
   updateHeader("Tab history");
 }
 
 async function showUnvisitedTabs(animate) {
-  currentView = "unvisited";
+  ui.currentView = "unvisited";
 
   let allTabs;
   try {
@@ -1048,7 +1022,7 @@ async function showUnvisitedTabs(animate) {
 }
 
 async function showLastVisited(animate) {
-  currentView = "last-visited";
+  ui.currentView = "last-visited";
 
   let allTabs;
   try {
@@ -1075,9 +1049,9 @@ async function showLastVisited(animate) {
 }
 
 async function showRecentlyClosed(animate) {
-  currentView = "recently-closed";
-  selectedIndex = -1;
-  sectionStarts = [0];
+  ui.currentView = "recently-closed";
+  ui.selectedIndex = -1;
+  ui.sectionStarts = [0];
   hideSidebar();
 
   let entries;
@@ -1086,7 +1060,7 @@ async function showRecentlyClosed(animate) {
   } catch (e) { entries = []; }
 
   if (!entries || entries.length === 0) {
-    items = [];
+    ui.items = [];
     listEl.innerHTML = `<div class="empty-state">No recently closed tabs</div>`;
     updateHeader("Recently closed");
     return;
@@ -1098,7 +1072,7 @@ async function showRecentlyClosed(animate) {
 
 function renderRecentlyClosedList(entries) {
   listEl.innerHTML = "";
-  items = [];
+  ui.items = [];
 
   let slotIndex = 1;
   for (const entry of entries) {
@@ -1137,7 +1111,7 @@ function renderRecentlyClosedList(entries) {
       ext.runtime.sendMessage({ type: "restore-closed-tab", sessionId }).catch(() => {});
     });
 
-    items.push({ sessionId });
+    ui.items.push({ sessionId });
     listEl.appendChild(el);
     slotIndex++;
   }
@@ -1146,7 +1120,7 @@ function renderRecentlyClosedList(entries) {
 }
 
 async function showMoveToWorkspace() {
-  currentView = "move-to-workspace";
+  ui.currentView = "move-to-workspace";
   let workspaces;
   try {
     workspaces = await ext.runtime.sendMessage({ type: "get-workspaces-with-icons" });
@@ -1156,17 +1130,17 @@ async function showMoveToWorkspace() {
 }
 
 function renderWorkspaceList(workspaces, title) {
-  selectedIndex = -1;
+  ui.selectedIndex = -1;
   listEl.innerHTML = "";
 
   if (workspaces.length === 0) {
-    items = [];
+    ui.items = [];
     listEl.innerHTML = `<div class="empty-state">No other workspaces</div>`;
     updateHeader(title);
     return;
   }
 
-  items = workspaces;
+  ui.items = workspaces;
 
   for (let i = 0; i < workspaces.length; i++) {
     const ws = workspaces[i];
@@ -1215,9 +1189,9 @@ function formatBytes(bytes) {
 }
 
 async function showTabInfo() {
-  currentView = "tab-info";
-  items = [];
-  selectedIndex = -1;
+  ui.currentView = "tab-info";
+  ui.items = [];
+  ui.selectedIndex = -1;
 
   let allTabs, info;
   try {
@@ -1440,11 +1414,11 @@ function renderTabInfo(info, visits, duplicates) {
       const dup = duplicates[i];
       const isSelf = dup.domId === info.domId;
       const dupAge = formatDuration(now - parseInt(dup.domId.split("-")[0]));
-      const ws = dup.workspaceId ? workspaceMap[dup.workspaceId] : null;
+      const ws = dup.workspaceId ? wsState.workspaceMap[dup.workspaceId] : null;
       const wsIcon = ws?.svgContent ? `<span class="dup-ws-icon">${ws.svgContent}</span>` : "";
       const wsName = ws ? escapeHtml(ws.name) : "";
       const wsNote = isSelf ? `<span class="dup-ws-note">(this tab)</span>`
-        : (dup.workspaceId === activeWorkspaceId) ? `<span class="dup-ws-note">(this workspace)</span>` : "";
+        : (dup.workspaceId === wsState.activeWorkspaceId) ? `<span class="dup-ws-note">(this workspace)</span>` : "";
       html += `<div class="info-duplicate-row${isSelf ? " dup-self" : ""}" data-dom-id="${escapeAttr(dup.domId)}">`;
       html += `<span class="dup-index">${i + 1}</span>`;
       html += `<span class="dup-workspace">${wsIcon}${wsName}${wsNote}</span>`;
@@ -1523,9 +1497,9 @@ function renderTabInfo(info, visits, duplicates) {
 }
 
 async function showDuplicates(animate) {
-  currentView = "duplicates";
-  items = [];
-  selectedIndex = -1;
+  ui.currentView = "duplicates";
+  ui.items = [];
+  ui.selectedIndex = -1;
 
   let allTabs;
   try {
@@ -1562,7 +1536,7 @@ async function showDuplicates(animate) {
 }
 
 function renderDuplicateGroups(groups) {
-  sectionStarts = [0];
+  ui.sectionStarts = [0];
   const now = Date.now();
   let html = "";
 
@@ -1592,12 +1566,12 @@ function renderDuplicateGroups(groups) {
     for (let i = 0; i < group.length; i++) {
       const tab = group[i];
       const age = formatDuration(now - parseInt(tab.domId.split("-")[0]));
-      const ws = tab.workspaceId ? workspaceMap[tab.workspaceId] : null;
+      const ws = tab.workspaceId ? wsState.workspaceMap[tab.workspaceId] : null;
       const wsIcon = ws?.svgContent ? `<span class="dup-ws-icon">${ws.svgContent}</span>` : "";
       const wsName = ws ? escapeHtml(ws.name) : "";
       const isActive = tab.active;
       const wsNote = isActive ? `<span class="dup-ws-note">(this tab)</span>`
-        : (tab.workspaceId === activeWorkspaceId) ? `<span class="dup-ws-note">(this workspace)</span>` : "";
+        : (tab.workspaceId === wsState.activeWorkspaceId) ? `<span class="dup-ws-note">(this workspace)</span>` : "";
       html += `<div class="info-duplicate-row${isActive ? " dup-self" : ""}${tab.pending ? " tab-pending" : ""}" data-dom-id="${escapeAttr(tab.domId)}">`;
       html += `<span class="dup-index">${i + 1}</span>`;
       html += `<span class="dup-workspace">${wsIcon}${wsName}${wsNote}</span>`;
@@ -1647,9 +1621,9 @@ function renderDuplicateGroups(groups) {
 // ---------------------------------------------------------------------------
 
 async function showDomains(animate) {
-  currentView = "domains";
-  items = [];
-  selectedIndex = -1;
+  ui.currentView = "domains";
+  ui.items = [];
+  ui.selectedIndex = -1;
 
   let allTabs;
   try {
@@ -1676,28 +1650,28 @@ async function showDomains(animate) {
 
   const domains = Object.entries(domainMap)
     .map(([domain, data]) => ({ domain, count: data.tabs.length, favicon: data.favicon }))
-    .sort(domainsSortAlpha
+    .sort(tabState.domainsSortAlpha
       ? (a, b) => a.domain.localeCompare(b.domain)
       : (a, b) => b.count - a.count);
 
-  const sortOpts = [{ key: "S", label: "Sort by " + (domainsSortAlpha ? "count" : "A-Z"), onClick: () => { domainsSortAlpha = !domainsSortAlpha; refreshCurrentView(); } }];
+  const sortOpts = [{ key: "S", label: "Sort by " + (tabState.domainsSortAlpha ? "count" : "A-Z"), onClick: () => { tabState.domainsSortAlpha = !tabState.domainsSortAlpha; refreshCurrentView(); } }];
   renderDomainList(domains, "Domains");
   renderSidebar(sortOpts);
 }
 
 function renderDomainList(domains, title) {
-  selectedIndex = -1;
-  sectionStarts = [0];
+  ui.selectedIndex = -1;
+  ui.sectionStarts = [0];
   listEl.innerHTML = "";
 
   if (domains.length === 0) {
-    items = [];
+    ui.items = [];
     listEl.innerHTML = `<div class="empty-state">No domains</div>`;
     updateHeader(title);
     return;
   }
 
-  items = domains;
+  ui.items = domains;
 
   for (let i = 0; i < domains.length; i++) {
     const d = domains[i];
@@ -1741,8 +1715,8 @@ function renderDomainList(domains, title) {
 }
 
 async function showDomainTabs(domain, animate) {
-  currentView = "domain-tabs";
-  currentDomain = domain;
+  ui.currentView = "domain-tabs";
+  tabState.currentDomain = domain;
 
   let allTabs;
   try {
@@ -1782,9 +1756,9 @@ function getAgeGroup(ageMs) {
 }
 
 async function showTabsByAge(animate) {
-  currentView = "tabs-by-age";
-  items = [];
-  selectedIndex = -1;
+  ui.currentView = "tabs-by-age";
+  ui.items = [];
+  ui.selectedIndex = -1;
 
   let allTabs;
   try {
@@ -1801,7 +1775,7 @@ async function showTabsByAge(animate) {
   filtered.sort((a, b) => {
     const ageA = parseInt(a.domId.split("-")[0]) || now;
     const ageB = parseInt(b.domId.split("-")[0]) || now;
-    return tabsByAgeNewestFirst ? ageB - ageA : ageA - ageB;
+    return tabState.tabsByAgeNewestFirst ? ageB - ageA : ageA - ageB;
   });
 
   // Group by age
@@ -1819,19 +1793,19 @@ async function showTabsByAge(animate) {
     groupMap.get(label).tabs.push(tab);
   }
 
-  const sortOpts = [{ key: "S", label: "Sort by " + (tabsByAgeNewestFirst ? "oldest" : "newest"), onClick: () => { tabsByAgeNewestFirst = !tabsByAgeNewestFirst; refreshCurrentView(); } }];
+  const sortOpts = [{ key: "S", label: "Sort by " + (tabState.tabsByAgeNewestFirst ? "oldest" : "newest"), onClick: () => { tabState.tabsByAgeNewestFirst = !tabState.tabsByAgeNewestFirst; refreshCurrentView(); } }];
   renderTabsByAge(groups);
   renderSidebar(sortOpts);
 }
 
 function renderTabsByAge(groups) {
-  selectedIndex = -1;
-  sectionStarts = [0];
+  ui.selectedIndex = -1;
+  ui.sectionStarts = [0];
   listEl.innerHTML = "";
   const allItems = [];
 
   if (groups.length === 0) {
-    items = [];
+    ui.items = [];
     listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
     updateHeader("Tabs by age");
     return;
@@ -1870,8 +1844,8 @@ function renderTabsByAge(groups) {
       const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
 
       let wsHtml = "";
-      if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
-        const ws = workspaceMap[tab.workspaceId];
+      if (tab.workspaceId && tab.workspaceId !== wsState.activeWorkspaceId) {
+        const ws = wsState.workspaceMap[tab.workspaceId];
         if (ws) {
           const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
           wsHtml = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
@@ -1926,7 +1900,7 @@ function renderTabsByAge(groups) {
     listEl.appendChild(details);
   }
 
-  items = allItems;
+  ui.items = allItems;
   updateHeader("Tabs by age");
 }
 
@@ -1935,8 +1909,8 @@ function renderTabsByAge(groups) {
 // ---------------------------------------------------------------------------
 
 function showReorderTabs() {
-  currentView = "reorder-tabs";
-  sectionStarts = [0];
+  ui.currentView = "reorder-tabs";
+  ui.sectionStarts = [0];
 
   const reorderOptions = kbChildrenOf("reorder-tabs").map((c) => ({
     label: c.label,
@@ -1945,8 +1919,8 @@ function showReorderTabs() {
     reorderAction: c.id,
   }));
 
-  items = reorderOptions;
-  selectedIndex = -1;
+  ui.items = reorderOptions;
+  ui.selectedIndex = -1;
   listEl.innerHTML = "";
 
   const grid = document.createElement("div");
@@ -1983,8 +1957,8 @@ function showReorderTabs() {
 // ---------------------------------------------------------------------------
 
 function showSplitView() {
-  currentView = "split-view";
-  sectionStarts = [0];
+  ui.currentView = "split-view";
+  ui.sectionStarts = [0];
 
   const opts = kbChildrenOf("split-view").map((c) => ({
     label: c.label,
@@ -1993,8 +1967,8 @@ function showSplitView() {
     submenuAction: c.id,
   }));
 
-  items = opts;
-  selectedIndex = -1;
+  ui.items = opts;
+  ui.selectedIndex = -1;
   listEl.innerHTML = "";
 
   const grid = document.createElement("div");
@@ -2031,8 +2005,8 @@ function showSplitView() {
 // ---------------------------------------------------------------------------
 
 async function showCloseAndSelect() {
-  currentView = "close-and-select";
-  sectionStarts = [0];
+  ui.currentView = "close-and-select";
+  ui.sectionStarts = [0];
 
   let allTabs = [];
   let activeTab = null;
@@ -2045,7 +2019,7 @@ async function showCloseAndSelect() {
     activeTab = allTabs.find((t) => t.active);
   } catch (e) {}
 
-  if (!workspaceMap || Object.keys(workspaceMap).length === 0) {
+  if (!wsState.workspaceMap || Object.keys(wsState.workspaceMap).length === 0) {
     await fetchWorkspaceMap();
   }
 
@@ -2081,8 +2055,8 @@ async function showCloseAndSelect() {
   // Vertical (same workspace, DOM order)
   const wsTabs = activeTab ? allTabs.filter((t) => t.workspaceId === activeTab.workspaceId) : [];
   const vIdx = activeTab ? wsTabs.findIndex((t) => t.domId === activeTab.domId) : -1;
-  const nextVerticalPreview = (vIdx >= 0 && vIdx < wsTabs.length - 1) ? buildPreview(wsTabs[vIdx + 1]) : null;
-  const prevVerticalPreview = (vIdx > 0) ? buildPreview(wsTabs[vIdx - 1]) : null;
+  const nextVerticalLocal = (vIdx >= 0 && vIdx < wsTabs.length - 1) ? buildPreview(wsTabs[vIdx + 1]) : null;
+  const prevVerticalLocal = (vIdx > 0) ? buildPreview(wsTabs[vIdx - 1]) : null;
 
   const defaultPreview = defaultCloseTargetDomId
     ? buildPreview(allTabs.find((t) => t.domId === defaultCloseTargetDomId))
@@ -2094,8 +2068,8 @@ async function showCloseAndSelect() {
     "close-and-select-parent":        parentPreview,
     "close-and-select-next-sibling":  nextSiblingPreview,
     "close-and-select-prev-sibling":  prevSiblingPreview,
-    "close-and-select-next-vertical": nextVerticalPreview,
-    "close-and-select-prev-vertical": prevVerticalPreview,
+    "close-and-select-next-vertical": nextVerticalLocal,
+    "close-and-select-prev-vertical": prevVerticalLocal,
   };
   const options = kbChildrenOf("close-and-select").map((c) => ({
     label: c.label,
@@ -2108,8 +2082,8 @@ async function showCloseAndSelect() {
     isDefault: c.id === "close-and-select-default",
   }));
 
-  items = options;
-  selectedIndex = -1;
+  ui.items = options;
+  ui.selectedIndex = -1;
   listEl.innerHTML = "";
 
   for (const opt of options) {
@@ -2132,8 +2106,8 @@ async function showCloseAndSelect() {
         : `<span class="preview-icon-placeholder">○</span>`;
       const previewTitle = escapeHtml(opt.preview.title || "Untitled");
       let wsLabel = "";
-      if (opt.preview.workspaceId && opt.preview.workspaceId !== activeWorkspaceId) {
-        const ws = workspaceMap[opt.preview.workspaceId];
+      if (opt.preview.workspaceId && opt.preview.workspaceId !== wsState.activeWorkspaceId) {
+        const ws = wsState.workspaceMap[opt.preview.workspaceId];
         if (ws) {
           const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
           wsLabel = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
@@ -2183,10 +2157,10 @@ async function showCloseAndSelect() {
 // ---------------------------------------------------------------------------
 
 async function showMostVisited(animate) {
-  currentView = "most-visited";
-  items = [];
-  selectedIndex = -1;
-  sectionStarts = [0];
+  ui.currentView = "most-visited";
+  ui.items = [];
+  ui.selectedIndex = -1;
+  ui.sectionStarts = [0];
 
   let allTabs;
   try {
@@ -2216,18 +2190,18 @@ async function showMostVisited(animate) {
   filtered.sort((a, b) => (visitCounts[b.url] || 0) - (visitCounts[a.url] || 0));
 
   // Render using a custom list that shows visit count in subtitle
-  selectedIndex = -1;
+  ui.selectedIndex = -1;
   listEl.innerHTML = "";
   const now = Date.now();
 
   if (filtered.length === 0) {
-    items = [];
+    ui.items = [];
     listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
     updateHeader("Most visited");
     return;
   }
 
-  items = filtered;
+  ui.items = filtered;
 
   for (let i = 0; i < filtered.length; i++) {
     const tab = filtered[i];
@@ -2248,8 +2222,8 @@ async function showMostVisited(animate) {
     const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
 
     let wsHtml = "";
-    if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
-      const ws = workspaceMap[tab.workspaceId];
+    if (tab.workspaceId && tab.workspaceId !== wsState.activeWorkspaceId) {
+      const ws = wsState.workspaceMap[tab.workspaceId];
       if (ws) {
         const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
         wsHtml = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
@@ -2296,7 +2270,7 @@ async function showMostVisited(animate) {
 }
 
 function renderWorkspaceSwitcher(container, layout = "grid") {
-  const allWorkspaces = Object.entries(workspaceMap);
+  const allWorkspaces = Object.entries(wsState.workspaceMap);
   if (allWorkspaces.length === 0) return;
 
   let target;
@@ -2311,7 +2285,7 @@ function renderWorkspaceSwitcher(container, layout = "grid") {
 
   for (let i = 0; i < allWorkspaces.length; i++) {
     const [uuid, ws] = allWorkspaces[i];
-    const isActive = uuid === activeWorkspaceId;
+    const isActive = uuid === wsState.activeWorkspaceId;
     const badge = (i + 1) <= 9 ? String(i + 1) : null;
 
     const el = document.createElement("div");
@@ -2322,7 +2296,7 @@ function renderWorkspaceSwitcher(container, layout = "grid") {
       ? `<span class="item-icon-placeholder"><span class="workspace-icon">${ws.svgContent}</span></span>`
       : `<span class="item-icon-placeholder">○</span>`;
 
-    const tabCount = workspaceTabCounts[uuid] || 0;
+    const tabCount = tabState.workspaceTabCounts[uuid] || 0;
 
     el.innerHTML = `
       ${iconHtml}
@@ -2350,7 +2324,7 @@ function moveToWorkspace(workspaceId) {
 }
 
 function goBack() {
-  if (currentView !== "actions") {
+  if (ui.currentView !== "actions") {
     navigateBack();
   }
 }
@@ -2363,19 +2337,19 @@ document.addEventListener("keydown", (e) => {
   switch (e.key) {
     case "ArrowDown":
       e.preventDefault();
-      if (e.metaKey && !sidebarFocused) {
-        selectedIndex = items.length - 1;
+      if (e.metaKey && !ui.sidebarFocused) {
+        ui.selectedIndex = ui.items.length - 1;
         updateSelection();
-      } else if (sidebarFocused) moveSidebarSelection(1);
+      } else if (ui.sidebarFocused) moveSidebarSelection(1);
       else moveSelection(1);
       break;
 
     case "ArrowUp":
       e.preventDefault();
-      if (e.metaKey && !sidebarFocused) {
-        selectedIndex = 0;
+      if (e.metaKey && !ui.sidebarFocused) {
+        ui.selectedIndex = 0;
         updateSelection();
-      } else if (sidebarFocused) moveSidebarSelection(-1);
+      } else if (ui.sidebarFocused) moveSidebarSelection(-1);
       else moveSelection(-1);
       break;
 
@@ -2386,17 +2360,17 @@ document.addEventListener("keydown", (e) => {
 
     case "ArrowRight":
       e.preventDefault();
-      if (!sidebarFocused && selectedIndex >= 0 && items[selectedIndex]?.isView) { activateSelected(); }
+      if (!ui.sidebarFocused && ui.selectedIndex >= 0 && ui.items[ui.selectedIndex]?.isView) { activateSelected(); }
       break;
 
     case "ArrowLeft":
       e.preventDefault();
-      if (!sidebarFocused && currentView !== "actions") { goBack(); }
+      if (!ui.sidebarFocused && ui.currentView !== "actions") { goBack(); }
       break;
 
     case "Enter":
       e.preventDefault();
-      if (sidebarFocused) { activateSidebarSelected(); }
+      if (ui.sidebarFocused) { activateSidebarSelected(); }
       else { activateSelected(); }
       break;
 
@@ -2405,14 +2379,14 @@ document.addEventListener("keydown", (e) => {
       break;
 
     case "Backspace":
-      if (currentView !== "actions") {
+      if (ui.currentView !== "actions") {
         e.preventDefault();
         goBack();
       }
       break;
 
     default:
-      if (currentView === "actions" || currentView === "reorder-tabs" || currentView === "close-and-select" || currentView === "split-view") {
+      if (ui.currentView === "actions" || ui.currentView === "reorder-tabs" || ui.currentView === "close-and-select" || ui.currentView === "split-view") {
         // Number keys 1-9 for workspace switching in actions view
         const num = parseInt(e.key, 10);
         if (!isNaN(num) && num >= 1 && num <= 9) {
@@ -2430,28 +2404,28 @@ document.addEventListener("keydown", (e) => {
           if (wsHandled) break;
         }
         const key = chordFromEvent(e);
-        const idx = items.findIndex((item) => item.hotkey === key);
+        const idx = ui.items.findIndex((item) => item.hotkey === key);
         if (idx >= 0) {
           const listItems = listEl.querySelectorAll(".list-item");
           if (!listItems[idx]?.classList.contains("disabled")) {
             e.preventDefault();
-            if (items[idx].reorderAction) {
-              ext.runtime.sendMessage({ type: items[idx].reorderAction }).catch(() => {});
-            } else if (items[idx].closeAndSelectAction) {
-              ext.runtime.sendMessage({ type: items[idx].closeAndSelectAction }).catch(() => {});
-            } else if (items[idx].submenuAction) {
-              ext.runtime.sendMessage({ type: items[idx].submenuAction }).catch(() => {});
+            if (ui.items[idx].reorderAction) {
+              ext.runtime.sendMessage({ type: ui.items[idx].reorderAction }).catch(() => {});
+            } else if (ui.items[idx].closeAndSelectAction) {
+              ext.runtime.sendMessage({ type: ui.items[idx].closeAndSelectAction }).catch(() => {});
+            } else if (ui.items[idx].submenuAction) {
+              ext.runtime.sendMessage({ type: ui.items[idx].submenuAction }).catch(() => {});
             } else {
-              activateAction(items[idx]);
+              activateAction(ui.items[idx]);
             }
           }
         }
       } else {
         // B/F keys for back/forward in navigation view
-        if (currentView === "navigation" && (e.key.toUpperCase() === "B" || e.key.toUpperCase() === "F")) {
+        if (ui.currentView === "navigation" && (e.key.toUpperCase() === "B" || e.key.toUpperCase() === "F")) {
           const navItem = e.key.toUpperCase() === "B"
-            ? items.find((it) => it.navIndex !== undefined && it.navIndex === items.find((c) => c.isCurrent)?.navIndex - 1)
-            : items.find((it) => it.navIndex !== undefined && it.navIndex === items.find((c) => c.isCurrent)?.navIndex + 1);
+            ? ui.items.find((it) => it.navIndex !== undefined && it.navIndex === ui.items.find((c) => c.isCurrent)?.navIndex - 1)
+            : ui.items.find((it) => it.navIndex !== undefined && it.navIndex === ui.items.find((c) => c.isCurrent)?.navIndex + 1);
           if (navItem && !navItem.isCurrent) {
             e.preventDefault();
             ext.runtime.sendMessage({ type: "navigate-to-history-index", index: navItem.navIndex }).catch(() => {});
@@ -2460,15 +2434,15 @@ document.addEventListener("keydown", (e) => {
         }
         // S key for sort toggles
         if (e.key.toUpperCase() === "S") {
-          if (currentView === "domains" || currentView === "domain-tabs") {
+          if (ui.currentView === "domains" || ui.currentView === "domain-tabs") {
             e.preventDefault();
-            domainsSortAlpha = !domainsSortAlpha;
+            tabState.domainsSortAlpha = !tabState.domainsSortAlpha;
             refreshCurrentView();
             break;
           }
-          if (currentView === "tabs-by-age") {
+          if (ui.currentView === "tabs-by-age") {
             e.preventDefault();
-            tabsByAgeNewestFirst = !tabsByAgeNewestFirst;
+            tabState.tabsByAgeNewestFirst = !tabState.tabsByAgeNewestFirst;
             refreshCurrentView();
             break;
           }
@@ -2476,7 +2450,7 @@ document.addEventListener("keydown", (e) => {
         // 0 toggles workspace filter (all vs current workspace)
         if (e.key === "0" && !e.shiftKey && !sidebarEl.classList.contains("hidden")) {
           e.preventDefault();
-          workspaceFilter = workspaceFilter === "all" ? activeWorkspaceId : "all";
+          wsState.workspaceFilter = wsState.workspaceFilter === "all" ? wsState.activeWorkspaceId : "all";
           refreshCurrentView();
           break;
         }
@@ -2484,18 +2458,18 @@ document.addEventListener("keydown", (e) => {
         if (e.shiftKey && !sidebarEl.classList.contains("hidden") && e.code && e.code.startsWith("Digit")) {
           const num = parseInt(e.code.slice(5), 10);
           if (num >= 1 && num <= 9) {
-            const allWorkspaces = Object.entries(workspaceMap);
+            const allWorkspaces = Object.entries(wsState.workspaceMap);
             const wsIndex = num - 1;
             if (wsIndex < allWorkspaces.length) {
               e.preventDefault();
               const uuid = allWorkspaces[wsIndex][0];
-              workspaceFilter = workspaceFilter === uuid ? "all" : uuid;
+              wsState.workspaceFilter = wsState.workspaceFilter === uuid ? "all" : uuid;
               refreshCurrentView();
             }
             break;
           }
         }
-        // Number keys 1-9 activate list items
+        // Number keys 1-9 activate list ui.items
         const num = parseInt(e.key, 10);
         if (!isNaN(num) && num >= 1 && num <= 9) {
           // Check split rows first
@@ -2510,7 +2484,7 @@ document.addEventListener("keydown", (e) => {
               return;
             }
           }
-          // Then check regular items
+          // Then check regular ui.items
           const listItems = listEl.querySelectorAll(".list-item");
           for (let i = 0; i < listItems.length; i++) {
             const badges = listItems[i].querySelectorAll(".item-badge");
@@ -2518,8 +2492,8 @@ document.addEventListener("keydown", (e) => {
             if (matched) {
               e.preventDefault();
               // Navigation history item
-              if (items[i]?.navIndex !== undefined && !items[i]?.isCurrent) {
-                ext.runtime.sendMessage({ type: "navigate-to-history-index", index: items[i].navIndex }).catch(() => {});
+              if (ui.items[i]?.navIndex !== undefined && !ui.items[i]?.isCurrent) {
+                ext.runtime.sendMessage({ type: "navigate-to-history-index", index: ui.items[i].navIndex }).catch(() => {});
                 break;
               }
               const wsSwitchId = listItems[i].dataset.workspaceSwitchId;
@@ -2567,8 +2541,8 @@ const paramDomain = urlParams.get("domain");
 const paramWorkspace = urlParams.get("workspace");
 
 async function init() {
-  if (paramWorkspace) workspaceFilter = paramWorkspace;
-  if (paramDomain) currentDomain = paramDomain;
+  if (paramWorkspace) wsState.workspaceFilter = paramWorkspace;
+  if (paramDomain) tabState.currentDomain = paramDomain;
 
   if (initialView) {
     await fetchWorkspaceMap();

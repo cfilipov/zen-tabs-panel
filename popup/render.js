@@ -1,7 +1,7 @@
 "use strict";
 
 // Rendering helpers for the popup. These functions write into popup.js's
-// top-level `let` bindings (selectedIndex, sectionStarts, items) and read
+// top-level `let` bindings (ui.selectedIndex, ui.sectionStarts, ui.items) and read
 // the DOM refs declared there (listEl, headerEl, viewTitle, etc.) — all
 // share the same script-global lexical scope because every popup script
 // is loaded as a plain <script> tag.
@@ -59,8 +59,8 @@ function createTabElement(tab, badge) {
   const favicon = extractFavicon(tab.favIconUrl);
 
   let wsHtml = "";
-  if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
-    const ws = workspaceMap[tab.workspaceId];
+  if (tab.workspaceId && tab.workspaceId !== wsState.activeWorkspaceId) {
+    const ws = wsState.workspaceMap[tab.workspaceId];
     if (ws) {
       const wsIcon = ws.svgContent
         ? `<span class="row-ws-icon">${ws.svgContent}</span>`
@@ -105,12 +105,12 @@ function createTabElement(tab, badge) {
 }
 
 function renderTabList(tabs, title, hint) {
-  selectedIndex = -1;
-  sectionStarts = [0];
+  ui.selectedIndex = -1;
+  ui.sectionStarts = [0];
   listEl.innerHTML = "";
 
   if (tabs.length === 0) {
-    items = [];
+    ui.items = [];
     listEl.innerHTML = `<div class="empty-state">No tabs</div>`;
     updateHeader(title, hint);
     return;
@@ -178,7 +178,7 @@ function renderTabList(tabs, title, hint) {
     slotIndex++;
   }
 
-  items = orderedItems;
+  ui.items = orderedItems;
   updateSelection();
   updateHeader(title, hint);
 }
