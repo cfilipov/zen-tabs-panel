@@ -8,15 +8,18 @@
 
 function getAgeGroup(ageMs) {
   const days = ageMs / (1000 * 60 * 60 * 24);
+  // Sub-week buckets read most naturally as a duration-from-now ("less than
+  // a day"). Once we're at a week or more, range labels read better and
+  // match how people talk about older tabs ("a few weeks", "a month or so").
   if (days < 1)   return "Less than a day";
   if (days < 2)   return "Less than 2 days";
   if (days < 3)   return "Less than 3 days";
   if (days < 7)   return "Less than a week";
-  if (days < 14)  return "Less than 2 weeks";
-  if (days < 28)  return "Less than a month";
-  if (days < 90)  return "Less than 3 months";
-  if (days < 180) return "Less than 6 months";
-  if (days < 365) return "Less than a year";
+  if (days < 14)  return "1-2 weeks";
+  if (days < 28)  return "2-4 weeks";
+  if (days < 90)  return "1-3 months";
+  if (days < 180) return "3-6 months";
+  if (days < 365) return "6-12 months";
   return "Over a year";
 }
 
