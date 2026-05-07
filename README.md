@@ -14,8 +14,7 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 
 **Command palette** (`Cmd+Option+.` or toolbar icon) - a Zen-styled floating panel with:
 
-- Go to previous tab - jump to the last tab you were on, even across workspaces. Shows workspace indicator when the tab is in a different workspace. Hovering or selecting highlights the tab in the sidebar.
-- Go to parent tab - jump to the tab that opened the current one. Shows workspace indicator and sidebar preview on hover/select.
+- Navigate panel — a 3×2 grid at the top of the menu showing what tab/page you'd land on for each direction, each with a live preview of the target. Three columns: jumps to known tabs (Previous lastAccessed, Parent opener), browser-style history (Back/Forward in the current tab), and vertical-bar neighbors (Above/Below in the sidebar). Hovering a cell highlights the target in the sidebar; the icon shown is the target tab's favicon when it's a tab.
 - Child tabs - list all tabs spawned from the current tab
 - Sibling tabs - list all tabs that share the same parent as the current tab
 - Parent tabs - list all tabs that have spawned children
@@ -49,48 +48,87 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 
 Press `Ctrl+Cmd+.` as a fallback to open the palette (this is the registered keybinding in `about:addons` > Manage Extension Shortcuts and can be changed there). From the palette, use single-key shortcuts to navigate:
 
+The main menu groups actions into columns:
+
+**Navigate** (3×2 grid with live previews of the target tab/page):
+
 | Panel key | Action |
 |---|---|
-| `P` | Previous tab |
-| `T` | Parent tab |
+| `P` | Previous tab (last-active) |
+| `T` | Parent tab (opener) |
+| `[` | Back (in this tab's history) |
+| `]` | Forward (in this tab's history) |
+| `<` | Above (tab above current in sidebar) |
+| `>` | Below (tab below current in sidebar) |
+
+**This tab** (current-tab-scoped views):
+
+| Panel key | Action |
+|---|---|
+| `I` | Tab info |
+| `H` | Tab history list |
 | `C` | Children |
 | `B` | Siblings |
+
+**All tabs** (global views):
+
+| Panel key | Action |
+|---|---|
 | `⇧T` | Parent tabs |
-| `H` | Tab history (back/forward) |
-| `⇧N` | New tabs |
+| `N` | New tabs (unvisited) |
 | `R` | Recent |
 | `X` | Recently closed |
 | `D` | Duplicates |
-| `I` | Tab info |
-| `⇧D` | Domains |
+| `Q` | Domains |
 | `A` | Tabs by age |
 | `V` | Most visited |
+
+**Tab actions**:
+
+| Panel key | Action |
+|---|---|
+| `Y` | Copy URL as Markdown |
+| `Z` | Restore last closed tab |
+| `U` | Unload tab |
+| `W` | Close & select (submenu) |
+
+**Organize**:
+
+| Panel key | Action |
+|---|---|
+| `F` | Pin/unpin tab |
 | `S` | Move to start |
 | `E` | Move to end |
 | `O` | Reorder tabs (submenu) |
 | `M` | Move to workspace |
 | `L` | Scroll to tab |
-| `U` | Unload tab |
-| `W` | Close & select (submenu) |
 | `K` | Split view (submenu) |
-| `F` | Pin/unpin tab |
-| `Y` | Copy URL as Markdown |
-| `Z` | Restore last closed tab |
-| `]` | Next workspace |
-| `[` | Previous workspace |
+
+**Workspaces**:
+
+| Panel key | Action |
+|---|---|
+| `{` | Previous workspace |
+| `}` | Next workspace |
 | `1`–`9`, `0` | Switch to workspace 1–10 |
+
+**Other**:
+
+| Panel key | Action |
+|---|---|
 | `,` | Settings |
 
 **Chord shortcuts** - the same keys work as leader-key chords. Either trigger (double-tap Cmd, or `Ctrl+Cmd+.`) followed by a panel key within ~400 ms fires the action without the menu appearing. The 350 ms gesture window is only for detecting the double-tap itself; once you're in, the chord engine uses its own 400/600 ms timeouts:
 
-- `Ctrl+Cmd+. P` - jump to previous tab, no menu shown
-- `Ctrl+Cmd+. T` - jump to parent tab, no menu shown
+- `Ctrl+Cmd+. P` / `T` - jump to previous tab / parent tab, no menu shown
+- `Ctrl+Cmd+. [` / `]` - back / forward in the current tab's history (like the browser back/forward buttons)
+- `Ctrl+Cmd+. <` / `>` - jump to the tab visually above / below the current tab in the vertical sidebar
+- `Ctrl+Cmd+. {` / `}` - previous / next workspace (with wraparound)
 - `Ctrl+Cmd+. D` - open the Duplicates submenu directly, skipping the main menu
 - `Ctrl+Cmd+. O R` - sort tabs by recent newest (any of the reorder mnemonics work after `O` — `R`/`⇧R`, `D`/`⇧D`, `A`/`⇧A`, `I`, `V`, `G`)
 - `Ctrl+Cmd+. W W` - close current tab, browser picks next (Cmd+W equivalent)
 - `Ctrl+Cmd+. W P` / `T` / `C` / `⇧C` / `N` / `⇧N` - close current tab and jump to previous / parent / next-or-previous sibling / next-or-previous in the sidebar. Pause after `W` to see a menu of all options with live previews of the target tab in each row.
 - `Ctrl+Cmd+. K N` / `C` / `H` / `V` - split view: new, close, horizontal (top/bottom), vertical (side-by-side). Pause after `K` for the menu.
-- `Ctrl+Cmd+. ]` / `[` - next / previous workspace (with wraparound)
 - `Ctrl+Cmd+. F` - toggle pin on current tab
 - `Ctrl+Cmd+. Y` - copy current URL as Markdown link
 - `Ctrl+Cmd+. Z` - restore the most recently closed tab
@@ -99,7 +137,7 @@ Press `Ctrl+Cmd+.` as a fallback to open the palette (this is the registered key
 
 If you don't press a follow-up key, the main menu opens after the timeout. Pressing any unrecognized key or Escape during the chord window cancels silently. Toolbar clicks bypass the chord and open the menu immediately.
 
-**Workspace filtering** - In tab list views, a footer bar shows workspace icons. Use the QWERTY row keys (Q=1st workspace, W=2nd, etc.) to filter by workspace, or backtick (`` ` ``) to toggle between all and current workspace. Tab/Shift-Tab moves focus between the list and the footer.
+**Workspace filtering** - In tab list views, a sidebar shows workspace icons. Press `⇧1`–`⇧9` to filter the list by the 1st–9th workspace, or `0` to toggle between "all workspaces" and the current one. Tab/Shift-Tab moves focus between the list and the sidebar.
 
 **Settings** (accessible from the palette or `about:addons` › Extensions › Zen Tabs Panel › Preferences):
 

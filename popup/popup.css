@@ -540,6 +540,79 @@ html, body {
   margin: 4px 12px;
 }
 
+.list-section-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--ztt-badge-text), AccentColor 12%);
+  padding: 10px 12px 4px;
+}
+
+.navigate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, auto);
+  grid-auto-flow: column;
+  gap: 6px;
+  margin: 0 8px 8px;
+}
+
+.navigate-cell.list-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+
+.navigate-cell-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ztt-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.navigate-cell-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ztt-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.navigate-cell .row-workspace {
+  flex-shrink: 0;
+}
+
+.sections-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 4px 8px 0;
+}
+
+.section-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.section-column .list-item {
+  margin: 0;
+}
+
+.section-column .list-section-header {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.section-column .list-item + .list-section-header {
+  margin-top: 8px;
+}
+
 /* Empty state */
 .empty-state {
   padding: 24px 16px;

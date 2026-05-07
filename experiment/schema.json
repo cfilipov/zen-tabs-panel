@@ -157,6 +157,20 @@
         "parameters": []
       },
       {
+        "name": "goBackInTab",
+        "type": "function",
+        "async": true,
+        "description": "Navigate the active tab one step back in its session history",
+        "parameters": []
+      },
+      {
+        "name": "goForwardInTab",
+        "type": "function",
+        "async": true,
+        "description": "Navigate the active tab one step forward in its session history",
+        "parameters": []
+      },
+      {
         "name": "closeTabByDomId",
         "type": "function",
         "async": true,

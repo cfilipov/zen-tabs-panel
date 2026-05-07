@@ -12,6 +12,10 @@ let childTabCount = 0;
 let unvisitedTabCount = 0;
 let parentTabPreview = null;  // { title, favIconUrl }
 let previousTabPreview = null; // { title, favIconUrl }
+let backPreview = null;          // { title, url, isHistory: true }
+let forwardPreview = null;       // { title, url, isHistory: true }
+let nextVerticalPreview = null;  // { title, favIconUrl, domId, workspaceId }
+let prevVerticalPreview = null;  // same shape
 let selectedTabCount = 0;
 let workspaceMap = {};     // uuid → { name, svgContent }
 let activeWorkspaceId = null;
@@ -105,40 +109,70 @@ function actionFromRegistry(id, extra) {
 
 function getActions() {
   const compact = { compact: true };
+
+  // Substitute the actual prev/next workspace SVG icons in place of the
+  // generic arrow icons, so the user sees which workspace they'd jump to.
+  const wsList = Object.entries(workspaceMap);
+  const activeIdx = wsList.findIndex(([uuid]) => uuid === activeWorkspaceId);
+  let prevWsIconHtml = null;
+  let nextWsIconHtml = null;
+  if (activeIdx >= 0 && wsList.length > 1) {
+    const prevSvg = wsList[(activeIdx - 1 + wsList.length) % wsList.length][1].svgContent;
+    const nextSvg = wsList[(activeIdx + 1) % wsList.length][1].svgContent;
+    if (prevSvg) prevWsIconHtml = `<span class="workspace-icon">${prevSvg}</span>`;
+    if (nextSvg) nextWsIconHtml = `<span class="workspace-icon">${nextSvg}</span>`;
+  }
+
   return [
-    actionFromRegistry("go-to-previous-tab", { preview: previousTabPreview }),
-    actionFromRegistry("go-to-parent-tab",   { preview: parentTabPreview }),
-    { type: "separator" },
+    { type: "section", label: "Navigate", navigateGrid: true },
+    // 3 columns × 2 rows in column-first DOM order:
+    // [Previous] [Back   ] [Above]
+    // [Parent  ] [Forward] [Below]
+    actionFromRegistry("go-to-previous-tab",      { preview: previousTabPreview }),
+    actionFromRegistry("go-to-parent-tab",        { preview: parentTabPreview }),
+    actionFromRegistry("go-back-in-tab",          { preview: backPreview }),
+    actionFromRegistry("go-forward-in-tab",       { preview: forwardPreview }),
+    actionFromRegistry("go-to-prev-vertical-tab", { preview: prevVerticalPreview }),
+    actionFromRegistry("go-to-next-vertical-tab", { preview: nextVerticalPreview }),
+
+    { type: "section", label: "This tab", column: true },
+    actionFromRegistry("tab-info",        compact),
+    actionFromRegistry("navigation",      compact),
     actionFromRegistry("child-tabs",      { count: childTabCount, ...compact }),
     actionFromRegistry("sibling-tabs",    { count: siblingTabCount, ...compact }),
+
+    { type: "section", label: "Tab actions", column: true, stack: true },
+    actionFromRegistry("copy-url-markdown",       compact),
+    actionFromRegistry("restore-last-closed-tab", compact),
+    actionFromRegistry("unload-tab",              compact),
+    actionFromRegistry("close-and-select",        compact),
+
+    { type: "section", label: "All tabs", column: true },
     actionFromRegistry("parent-tabs",     { count: parentTabCount, ...compact }),
-    actionFromRegistry("navigation",      compact),
     actionFromRegistry("unvisited-tabs",  { count: unvisitedTabCount, ...compact }),
     actionFromRegistry("last-visited",    compact),
     actionFromRegistry("recently-closed", { count: recentlyClosedCount, ...compact }),
     actionFromRegistry("duplicates",      { count: duplicateGroupCount, ...compact }),
-    actionFromRegistry("tab-info",        compact),
     actionFromRegistry("domains",         { count: domainCount, ...compact }),
     actionFromRegistry("tabs-by-age",     compact),
     actionFromRegistry("most-visited",    compact),
-    { type: "separator" },
+
+    { type: "section", label: "Organize", column: true },
+    actionFromRegistry("toggle-pin-tab",         compact),
     actionFromRegistry("move-tab-to-start",     compact),
     actionFromRegistry("move-tab-to-end",       compact),
     actionFromRegistry("reorder-tabs",          compact),
     actionFromRegistry("move-to-workspace",     { count: selectedTabCount > 1 ? selectedTabCount : 0, ...compact }),
     actionFromRegistry("scroll-to-current-tab", compact),
-    actionFromRegistry("unload-tab",            compact),
-    actionFromRegistry("close-and-select",      compact),
-    actionFromRegistry("toggle-pin-tab",        compact),
-    actionFromRegistry("copy-url-markdown",     compact),
-    actionFromRegistry("restore-last-closed-tab", compact),
     actionFromRegistry("split-view",            compact),
-    actionFromRegistry("open-options",          compact),
-    { type: "separator" },
-    actionFromRegistry("go-to-prev-workspace",  compact),
-    actionFromRegistry("go-to-next-workspace",  compact),
-    { type: "separator" },
+
+    { type: "section", label: "Workspaces", column: true },
+    actionFromRegistry("go-to-prev-workspace",  { ...compact, iconHtml: prevWsIconHtml }),
+    actionFromRegistry("go-to-next-workspace",  { ...compact, iconHtml: nextWsIconHtml }),
     { type: "workspaces" },
+
+    { type: "section", label: "Other", column: true, stack: true },
+    actionFromRegistry("open-options", compact),
   ];
 }
 
@@ -202,19 +236,167 @@ function isActionDisabled(action) {
   return false;
 }
 
+// Render preview HTML for an action's `preview` field.
+// Two preview shapes:
+//  - tab preview: { title, favIconUrl, domId, workspaceId, pending }
+//  - history entry: { title, url, isHistory: true }
+function buildPreviewHtml(preview) {
+  if (!preview) return "";
+
+  if (preview.isHistory) {
+    let domain = "";
+    try { domain = new URL(preview.url).hostname.replace(/^www\./, ""); } catch (e) {}
+    const titleHtml = escapeHtml(preview.title || preview.url || "Untitled");
+    const domainHtml = domain ? `<span class="row-workspace">${escapeHtml(domain)}</span>` : "";
+    return `<span class="action-preview"><span class="preview-icon-placeholder">○</span><span class="preview-title">${titleHtml}</span>${domainHtml}</span>`;
+  }
+
+  let prevFav = preview.favIconUrl || "";
+  if (prevFav.startsWith("moz-remote-image://")) {
+    try { prevFav = new URL(prevFav).searchParams.get("url") || ""; } catch (e) { prevFav = ""; }
+  }
+  const canLoad = prevFav && !prevFav.startsWith("chrome://");
+  const iconHtml = canLoad
+    ? `<img class="preview-icon" src="${escapeAttr(prevFav)}">`
+    : `<span class="preview-icon-placeholder">○</span>`;
+  const previewTitle = escapeHtml(preview.title || "Untitled");
+  let wsLabel = "";
+  if (preview.workspaceId && preview.workspaceId !== activeWorkspaceId) {
+    const ws = workspaceMap[preview.workspaceId];
+    if (ws) {
+      const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
+      wsLabel = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+    }
+  }
+  const pendingCls = preview.pending ? " tab-pending" : "";
+  return `<span class="action-preview${pendingCls}">${iconHtml}<span class="preview-title">${previewTitle}</span>${wsLabel}</span>`;
+}
+
+function buildNavigateCell(action) {
+  const disabled = !action.preview;
+  const cell = document.createElement("div");
+  cell.className = "navigate-cell list-item compact-item" + (disabled ? " disabled" : "");
+  cell.dataset.id = action.id;
+
+  // Icon: favicon if preview has one (and it's a tab, not history), else fall
+  // back to the action's own icon.
+  let iconHtml = "";
+  if (action.preview && !action.preview.isHistory) {
+    let fav = action.preview.favIconUrl || "";
+    if (fav.startsWith("moz-remote-image://")) {
+      try { fav = new URL(fav).searchParams.get("url") || ""; } catch (e) { fav = ""; }
+    }
+    if (fav && !fav.startsWith("chrome://")) {
+      iconHtml = `<img class="item-icon" src="${escapeAttr(fav)}">`;
+    }
+  }
+  if (!iconHtml) {
+    iconHtml = `<span class="item-icon-placeholder">${getIcon(action.icon)}</span>`;
+  }
+
+  // Inline tab/page title + workspace-or-domain badge.
+  // Always emit the title span (empty when no preview) so it flex-grows
+  // and keeps the hotkey badge anchored to the right edge of the cell.
+  const titleText = action.preview ? (action.preview.title || "Untitled") : "";
+  const titleHtml = `<span class="navigate-cell-title">${escapeHtml(titleText)}</span>`;
+  let trailingHtml = "";
+  if (action.preview) {
+    if (action.preview.isHistory) {
+      let domain = "";
+      try { domain = new URL(action.preview.url || "").hostname.replace(/^www\./, ""); } catch (e) {}
+      if (domain) trailingHtml = `<span class="row-workspace">${escapeHtml(domain)}</span>`;
+    } else if (action.preview.workspaceId && action.preview.workspaceId !== activeWorkspaceId) {
+      const ws = workspaceMap[action.preview.workspaceId];
+      if (ws) {
+        const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
+        trailingHtml = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
+      }
+    }
+  }
+
+  cell.innerHTML = `
+    ${iconHtml}
+    <span class="navigate-cell-label">${escapeHtml(action.label)}</span>
+    ${titleHtml}
+    ${trailingHtml}
+    ${renderBadge(displayKey(action.hotkey))}
+  `;
+
+  const img = cell.querySelector("img.item-icon");
+  if (img) img.addEventListener("error", () => { img.style.display = "none"; });
+
+  if (!disabled) {
+    cell.addEventListener("click", () => activateAction(action));
+    if (action.preview?.domId) {
+      cell.addEventListener("mouseenter", () => {
+        ext.runtime.sendMessage({ type: "preview-tab", domId: action.preview.domId }).catch(() => {});
+      });
+      cell.addEventListener("mouseleave", () => {
+        ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+      });
+    }
+  }
+
+  return cell;
+}
+
 function renderActions(actions, title) {
   actions = actions.filter(Boolean);
-  items = actions.filter((a) => a.type !== "separator" && a.type !== "workspaces");
+  items = actions.filter((a) => a.type !== "separator" && a.type !== "workspaces" && a.type !== "section");
   selectedIndex = -1;
   sectionStarts = [0];
 
   listEl.innerHTML = "";
   let gridContainer = null;
+  let columnsContainer = null;
+  let currentColumn = null;
+  let navigateGrid = null;
   let itemIndex = 0;
 
+  const closeColumns = () => { columnsContainer = null; currentColumn = null; };
+  const closeNavigateGrid = () => { navigateGrid = null; };
+
   for (const action of actions) {
+    if (action.type === "section") {
+      gridContainer = null;
+      const header = document.createElement("div");
+      header.className = "list-section-header";
+      header.textContent = action.label;
+      if (action.navigateGrid) {
+        closeColumns();
+        listEl.appendChild(header);
+        navigateGrid = document.createElement("div");
+        navigateGrid.className = "navigate-grid";
+        listEl.appendChild(navigateGrid);
+      } else if (action.column) {
+        closeNavigateGrid();
+        if (!columnsContainer) {
+          columnsContainer = document.createElement("div");
+          columnsContainer.className = "sections-row";
+          listEl.appendChild(columnsContainer);
+        }
+        if (action.stack && currentColumn) {
+          // Stack this section in the existing column rather than starting a new one
+          currentColumn.appendChild(header);
+        } else {
+          currentColumn = document.createElement("div");
+          currentColumn.className = "section-column";
+          currentColumn.appendChild(header);
+          columnsContainer.appendChild(currentColumn);
+        }
+      } else {
+        closeColumns();
+        closeNavigateGrid();
+        listEl.appendChild(header);
+      }
+      sectionStarts.push(itemIndex);
+      continue;
+    }
+
     if (action.type === "separator") {
       gridContainer = null;
+      closeColumns();
+      closeNavigateGrid();
       const sep = document.createElement("div");
       sep.className = "list-separator";
       listEl.appendChild(sep);
@@ -224,7 +406,18 @@ function renderActions(actions, title) {
 
     if (action.type === "workspaces") {
       gridContainer = null;
-      renderWorkspaceSwitcher(listEl);
+      if (currentColumn) {
+        renderWorkspaceSwitcher(currentColumn, "single");
+      } else {
+        renderWorkspaceSwitcher(listEl, "grid");
+      }
+      continue;
+    }
+
+    if (navigateGrid) {
+      const cell = buildNavigateCell(action);
+      navigateGrid.appendChild(cell);
+      itemIndex++;
       continue;
     }
 
@@ -234,29 +427,7 @@ function renderActions(actions, title) {
     el.className = "list-item" + (disabled ? " disabled" : "") + (action.compact ? " compact-item" : "");
     el.dataset.id = action.id;
 
-    // Build preview HTML for Previous/Parent
-    let previewHtml = "";
-    if (action.preview && !disabled) {
-      let prevFav = action.preview.favIconUrl || "";
-      if (prevFav.startsWith("moz-remote-image://")) {
-        try { prevFav = new URL(prevFav).searchParams.get("url") || ""; } catch (e) { prevFav = ""; }
-      }
-      const canLoad = prevFav && !prevFav.startsWith("chrome://");
-      const iconHtml = canLoad
-        ? `<img class="preview-icon" src="${escapeAttr(prevFav)}">`
-        : `<span class="preview-icon-placeholder">○</span>`;
-      const previewTitle = escapeHtml(action.preview.title || "Untitled");
-      let wsLabel = "";
-      if (action.preview.workspaceId && action.preview.workspaceId !== activeWorkspaceId) {
-        const ws = workspaceMap[action.preview.workspaceId];
-        if (ws) {
-          const wsIcon = ws.svgContent ? `<span class="row-ws-icon">${ws.svgContent}</span>` : "";
-          wsLabel = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
-        }
-      }
-      const previewPendingCls = action.preview.pending ? " tab-pending" : "";
-      previewHtml = `<span class="action-preview${previewPendingCls}">${iconHtml}<span class="preview-title">${previewTitle}</span>${wsLabel}</span>`;
-    }
+    const previewHtml = (action.preview && !disabled) ? buildPreviewHtml(action.preview) : "";
 
     // Build count badge
     let countHtml = "";
@@ -271,7 +442,7 @@ function renderActions(actions, title) {
     `;
 
     el.innerHTML = `
-      <span class="item-icon-placeholder">${getIcon(action.icon)}</span>
+      <span class="item-icon-placeholder">${action.iconHtml || getIcon(action.icon)}</span>
       <span class="item-text">
         <span class="item-title">${action.label}${countHtml}</span>
       </span>
@@ -296,7 +467,10 @@ function renderActions(actions, title) {
       }
     }
 
-    if (action.compact) {
+    if (currentColumn) {
+      gridContainer = null;
+      currentColumn.appendChild(el);
+    } else if (action.compact) {
       if (!gridContainer) {
         gridContainer = document.createElement("div");
         gridContainer.className = "actions-grid";
@@ -305,6 +479,7 @@ function renderActions(actions, title) {
       gridContainer.appendChild(el);
     } else {
       gridContainer = null;
+      closeColumns();
       listEl.appendChild(el);
     }
     itemIndex++;
@@ -895,6 +1070,41 @@ async function showActionsMenu() {
       ? { title: candidates[0].title, favIconUrl: candidates[0].favIconUrl, domId: candidates[0].domId, workspaceId: candidates[0].workspaceId, pending: candidates[0].pending }
       : null;
 
+    // Vertical-bar neighbors (above/below the current tab in the sidebar,
+    // same workspace). Reuses the DOM order in allTabs.
+    if (activeTab) {
+      const sameWs = allTabs.filter((t) => t.workspaceId === activeTab.workspaceId);
+      const vIdx = sameWs.findIndex((t) => t.domId === activeTab.domId);
+      const buildTabPreview = (tab) => tab
+        ? { title: tab.title, favIconUrl: tab.favIconUrl, domId: tab.domId, workspaceId: tab.workspaceId, pending: tab.pending }
+        : null;
+      prevVerticalPreview = vIdx > 0 ? buildTabPreview(sameWs[vIdx - 1]) : null;
+      nextVerticalPreview = vIdx >= 0 && vIdx < sameWs.length - 1 ? buildTabPreview(sameWs[vIdx + 1]) : null;
+    } else {
+      prevVerticalPreview = null;
+      nextVerticalPreview = null;
+    }
+
+    // Back/forward previews from the active tab's session history.
+    try {
+      const navHist = await ext.runtime.sendMessage({ type: "get-navigation-history" });
+      if (navHist && Array.isArray(navHist.entries)) {
+        const i = navHist.index;
+        backPreview = i > 0
+          ? { title: navHist.entries[i - 1].title, url: navHist.entries[i - 1].url, isHistory: true }
+          : null;
+        forwardPreview = i < navHist.entries.length - 1
+          ? { title: navHist.entries[i + 1].title, url: navHist.entries[i + 1].url, isHistory: true }
+          : null;
+      } else {
+        backPreview = null;
+        forwardPreview = null;
+      }
+    } catch (e) {
+      backPreview = null;
+      forwardPreview = null;
+    }
+
     // Fetch selected tab count and workspace map in parallel
     try {
       const [selectedDomIds] = await Promise.all([
@@ -916,6 +1126,10 @@ async function showActionsMenu() {
     recentlyClosedCount = 0;
     parentTabPreview = null;
     previousTabPreview = null;
+    backPreview = null;
+    forwardPreview = null;
+    nextVerticalPreview = null;
+    prevVerticalPreview = null;
     selectedTabCount = 0;
   }
 
@@ -2320,12 +2534,19 @@ async function showMostVisited(animate) {
   renderSidebar();
 }
 
-function renderWorkspaceSwitcher(container) {
+function renderWorkspaceSwitcher(container, layout = "grid") {
   const allWorkspaces = Object.entries(workspaceMap);
   if (allWorkspaces.length === 0) return;
 
-  const grid = document.createElement("div");
-  grid.className = "actions-grid";
+  let target;
+  if (layout === "single") {
+    target = container;
+  } else {
+    const grid = document.createElement("div");
+    grid.className = "actions-grid";
+    container.appendChild(grid);
+    target = grid;
+  }
 
   for (let i = 0; i < allWorkspaces.length; i++) {
     const [uuid, ws] = allWorkspaces[i];
@@ -2359,10 +2580,8 @@ function renderWorkspaceSwitcher(container) {
       });
     }
 
-    grid.appendChild(el);
+    target.appendChild(el);
   }
-
-  container.appendChild(grid);
 }
 
 function moveToWorkspace(workspaceId) {

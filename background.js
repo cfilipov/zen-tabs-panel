@@ -371,6 +371,18 @@ async function runChordAction(actionId) {
     case "split-vertical":
       await browser.zenWorkspaces.splitVertical();
       return;
+    case "go-back-in-tab":
+      await browser.zenWorkspaces.goBackInTab();
+      return;
+    case "go-forward-in-tab":
+      await browser.zenWorkspaces.goForwardInTab();
+      return;
+    case "go-to-next-vertical-tab":
+      await browser.zenWorkspaces.goToNextVerticalTab();
+      return;
+    case "go-to-prev-vertical-tab":
+      await browser.zenWorkspaces.goToPrevVerticalTab();
+      return;
   }
   if (SORT_ACTIONS.has(actionId)) {
     await runSortAction(actionId);
@@ -514,7 +526,11 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "split-new":
     case "split-close":
     case "split-horizontal":
-    case "split-vertical": {
+    case "split-vertical":
+    case "go-back-in-tab":
+    case "go-forward-in-tab":
+    case "go-to-next-vertical-tab":
+    case "go-to-prev-vertical-tab": {
       const method = {
         "go-to-next-workspace":     "goToNextWorkspace",
         "go-to-prev-workspace":     "goToPrevWorkspace",
@@ -525,6 +541,10 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         "split-close":              "splitClose",
         "split-horizontal":         "splitHorizontal",
         "split-vertical":           "splitVertical",
+        "go-back-in-tab":           "goBackInTab",
+        "go-forward-in-tab":        "goForwardInTab",
+        "go-to-next-vertical-tab":  "goToNextVerticalTab",
+        "go-to-prev-vertical-tab":  "goToPrevVerticalTab",
       }[message.type];
       (async () => {
         await browser.zenWorkspaces.hidePalette();

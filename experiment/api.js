@@ -301,7 +301,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     const BROWSER_ID = "zen-tabs-panel-browser";
 
     const VIEW_SIZES = {
-      actions:              { width: 780, height: 604 },
+      actions:              { width: 960, height: 604 },
       "child-tabs":         { width: 720, height: 604 },
       "sibling-tabs":       { width: 720, height: 604 },
       "parent-tabs":        { width: 720, height: 604 },
@@ -1038,6 +1038,26 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!w?.gZenViewSplitter) return false;
           try { w.gZenViewSplitter.toggleShortcut("vsep"); return true; }
           catch (e) { return false; }
+        },
+
+        async goBackInTab() {
+          const w = getWin();
+          if (!w?.gBrowser) return false;
+          try {
+            if (!w.gBrowser.canGoBack) return false;
+            w.gBrowser.goBack();
+            return true;
+          } catch (e) { return false; }
+        },
+
+        async goForwardInTab() {
+          const w = getWin();
+          if (!w?.gBrowser) return false;
+          try {
+            if (!w.gBrowser.canGoForward) return false;
+            w.gBrowser.goForward();
+            return true;
+          } catch (e) { return false; }
         },
 
         // Close a tab by DOM id — works cross-workspace.

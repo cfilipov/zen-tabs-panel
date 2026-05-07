@@ -26,18 +26,22 @@ this.ZEN_KEYBINDINGS = [
   // Tab navigation
   { id: "go-to-previous-tab", kind: "action", chord: "P", label: "Previous", icon: "svg:arrow-left-right" },
   { id: "go-to-parent-tab",   kind: "action", chord: "T", label: "Parent",   icon: "svg:move-up", needsParent: true },
+  { id: "go-back-in-tab",          kind: "action", chord: "[", label: "Back",     icon: "svg:arrow-left" },
+  { id: "go-forward-in-tab",       kind: "action", chord: "]", label: "Forward",  icon: "svg:arrow-right" },
+  { id: "go-to-prev-vertical-tab", kind: "action", chord: "<", label: "Above",    icon: "svg:arrow-up" },
+  { id: "go-to-next-vertical-tab", kind: "action", chord: ">", label: "Below",    icon: "svg:arrow-down" },
 
   // Browse views
   { id: "child-tabs",      kind: "open-view", chord: "C",       view: "child-tabs",      label: "Children",        icon: "svg:move-down",     needsChildren: true },
   { id: "sibling-tabs",    kind: "open-view", chord: "B",       view: "sibling-tabs",    label: "Siblings",        icon: "svg:git-branch",    needsSiblings: true },
   { id: "parent-tabs",     kind: "open-view", chord: "Shift+T", view: "parent-tabs",     label: "Parent tabs",     icon: "svg:parent-node",   needsParentTabs: true },
   { id: "navigation",      kind: "open-view", chord: "H",       view: "navigation",      label: "Tab history",     icon: "svg:history" },
-  { id: "unvisited-tabs",  kind: "open-view", chord: "Shift+N", view: "unvisited-tabs",  label: "New tabs",        icon: "svg:circle-dot",    needsUnvisited: true },
+  { id: "unvisited-tabs",  kind: "open-view", chord: "N",       view: "unvisited-tabs",  label: "New tabs",        icon: "svg:circle-dot",    needsUnvisited: true },
   { id: "last-visited",    kind: "open-view", chord: "R",       view: "last-visited",    label: "Recent",          icon: "svg:clock" },
   { id: "recently-closed", kind: "open-view", chord: "X",       view: "recently-closed", label: "Recently closed", icon: "svg:rotate-ccw",    needsRecentlyClosed: true },
   { id: "duplicates",      kind: "open-view", chord: "D",       view: "duplicates",      label: "Duplicates",      icon: "svg:copy",          needsDuplicates: true },
   { id: "tab-info",        kind: "open-view", chord: "I",       view: "tab-info",        label: "Tab info",        icon: "svg:info" },
-  { id: "domains",         kind: "open-view", chord: "Shift+D", view: "domains",         label: "Domains",         icon: "svg:globe" },
+  { id: "domains",         kind: "open-view", chord: "Q",       view: "domains",         label: "Domains",         icon: "svg:globe" },
   { id: "tabs-by-age",     kind: "open-view", chord: "A",       view: "tabs-by-age",     label: "Tabs by age",     icon: "svg:calendar-clock" },
   { id: "most-visited",    kind: "open-view", chord: "V",       view: "most-visited",    label: "Most visited",    icon: "svg:star" },
 
@@ -50,12 +54,12 @@ this.ZEN_KEYBINDINGS = [
   { id: "open-options",          kind: "action",    chord: ",", label: "Settings",           icon: "svg:gear" },
 
   // Workspace navigation
-  { id: "go-to-next-workspace", kind: "action", chord: "]", label: "Next workspace",     icon: "svg:arrow-right" },
-  { id: "go-to-prev-workspace", kind: "action", chord: "[", label: "Previous workspace", icon: "svg:arrow-left" },
+  { id: "go-to-next-workspace", kind: "action", chord: "}", label: "Next workspace",     icon: "svg:arrow-right" },
+  { id: "go-to-prev-workspace", kind: "action", chord: "{", label: "Previous workspace", icon: "svg:arrow-left" },
 
   // Quick tab tools
   { id: "toggle-pin-tab",          kind: "action", chord: "F", label: "Pin/unpin tab",      icon: "svg:pin" },
-  { id: "copy-url-markdown",       kind: "action", chord: "Y", label: "Copy URL as Markdown", icon: "svg:link" },
+  { id: "copy-url-markdown",       kind: "action", chord: "Y", label: "Copy URL as MD", icon: "svg:link" },
   { id: "restore-last-closed-tab", kind: "action", chord: "Z", label: "Restore closed tab", icon: "svg:rotate-ccw" },
 
   // Split-view submenu
