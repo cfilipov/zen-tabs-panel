@@ -7,17 +7,16 @@
 // helpers, shared/dom-utils.js) resolve via the shared script-global scope.
 
 function getAgeGroup(ageMs) {
-  const hours = ageMs / (1000 * 60 * 60);
-  const days = hours / 24;
-  if (days < 1) return "Today";
-  if (days < 2) return "Yesterday";
-  if (days < 3) return "2-3 days";
-  if (days < 7) return "This week";
-  if (days < 14) return "1-2 weeks";
-  if (days < 28) return "2-4 weeks";
-  if (days < 90) return "1-3 months";
-  if (days < 180) return "3-6 months";
-  if (days < 365) return "6-12 months";
+  const days = ageMs / (1000 * 60 * 60 * 24);
+  if (days < 1)   return "Less than a day";
+  if (days < 2)   return "Less than 2 days";
+  if (days < 3)   return "Less than 3 days";
+  if (days < 7)   return "Less than a week";
+  if (days < 14)  return "Less than 2 weeks";
+  if (days < 28)  return "Less than a month";
+  if (days < 90)  return "Less than 3 months";
+  if (days < 180) return "Less than 6 months";
+  if (days < 365) return "Less than a year";
   return "Over a year";
 }
 
