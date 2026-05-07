@@ -13,6 +13,7 @@ SRC = manifest.json \
       welcome/welcome.html \
       welcome/welcome.js \
       welcome/welcome.css \
+      $(wildcard shared/*.js) \
       $(wildcard icons/*.svg) \
       LICENSE
 

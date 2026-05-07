@@ -2784,11 +2784,8 @@ backButton.addEventListener("click", goBack);
 // Helpers
 // ---------------------------------------------------------------------------
 
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
+// `escapeHtml`, `escapeAttr`, `extractFavicon`, `extractDomain` come from
+// shared/dom-utils.js (loaded via <script> tag in popup.html).
 
 // Render a hotkey badge. Multi-character labels (e.g. "⇧R", "⇧1") get the
 // wider min-width so paired-shift variants line up with single-char badges.
@@ -2797,15 +2794,6 @@ function renderBadge(text) {
   const s = String(text);
   const wide = s.length > 1 ? " badge-wide" : "";
   return `<span class="item-badge${wide}">${escapeHtml(s)}</span>`;
-}
-
-function escapeAttr(str) {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
 // ---------------------------------------------------------------------------

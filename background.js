@@ -61,8 +61,8 @@ const THRESHOLD_MS = {
 
 async function autoCloseSweep() {
   const settings = await browser.storage.local.get({
-    autoCloseEnabled: false,
-    autoCloseThreshold: "48h",
+    autoCloseEnabled: STORAGE_DEFAULTS.autoCloseEnabled,
+    autoCloseThreshold: STORAGE_DEFAULTS.autoCloseThreshold,
   });
 
   if (!settings.autoCloseEnabled) return;
@@ -109,8 +109,8 @@ browser.tabs.onActivated.addListener(async (activeInfo) => {
 
   // Auto-move logic
   const settings = await browser.storage.local.get({
-    autoMoveEnabled: false,
-    autoMoveDelay: 3000,
+    autoMoveEnabled: STORAGE_DEFAULTS.autoMoveEnabled,
+    autoMoveDelay: STORAGE_DEFAULTS.autoMoveDelay,
   });
 
   if (settings.autoMoveEnabled) {
@@ -713,7 +713,7 @@ browser.zenWorkspaces.syncDuplicates().catch(() => {});
 // Show welcome page on first install
 browser.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === "install") {
-    const { welcomed } = await browser.storage.local.get({ welcomed: false });
+    const { welcomed } = await browser.storage.local.get({ welcomed: STORAGE_DEFAULTS.welcomed });
     if (!welcomed) {
       await browser.storage.local.set({ welcomed: true });
       browser.tabs.create({ url: browser.runtime.getURL("welcome/welcome.html") });
