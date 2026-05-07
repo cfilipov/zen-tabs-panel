@@ -346,130 +346,171 @@ async function fetchWorkspaceMap() {
     wsState.activeWorkspaceId = null;
   }
 }
+// Build the lightweight preview shape passed into `getActions` for any
+// tab-style preview slot (parent, previous, vertical neighbors).
+function buildTabPreview(tab) {
+  return tab
+    ? { title: tab.title, favIconUrl: tab.favIconUrl, domId: tab.domId, workspaceId: tab.workspaceId, pending: tab.pending }
+    : null;
+}
+
+function resetActionsState() {
+  tabState.currentTabHasParent = false;
+  tabState.childTabCount = 0;
+  tabState.siblingTabCount = 0;
+  tabState.parentTabCount = 0;
+  tabState.domainCount = 0;
+  tabState.unvisitedTabCount = 0;
+  tabState.duplicateGroupCount = 0;
+  tabState.recentlyClosedCount = 0;
+  tabState.parentTabPreview = null;
+  tabState.previousTabPreview = null;
+  tabState.backPreview = null;
+  tabState.forwardPreview = null;
+  tabState.nextVerticalPreview = null;
+  tabState.prevVerticalPreview = null;
+  tabState.selectedTabCount = 0;
+  tabState.workspaceTabCounts = {};
+}
+
 async function showActionsMenu() {
   ui.currentView = "actions";
 
-  // Fetch tab info for disabling unavailable actions and previews
+  // Run all 5 cross-process fetches in parallel. Each is independent —
+  // running them serially burned 3 round-trips of latency on every open.
+  let allTabs, closed, navHist, selectedDomIds;
   try {
-    const allTabs = await ext.runtime.sendMessage({ type: "get-all-tabs" });
-    const activeTab = allTabs.find((t) => t.active);
-    tabState.currentTabHasParent = !!(activeTab && activeTab.openerTabDomId);
-    tabState.childTabCount = activeTab ? allTabs.filter((t) => t.openerTabDomId === activeTab.domId).length : 0;
-    tabState.siblingTabCount = (activeTab && activeTab.openerTabDomId)
-      ? allTabs.filter((t) => t.openerTabDomId === activeTab.openerTabDomId && t.domId !== activeTab.domId).length
-      : 0;
-    tabState.unvisitedTabCount = allTabs.filter((t) => t.unread).length;
-    const childOpeners = new Set(allTabs.filter((t) => t.openerTabDomId).map((t) => t.openerTabDomId));
-    tabState.parentTabCount = allTabs.filter((t) => childOpeners.has(t.domId)).length;
-    const domainSet = new Set();
-    for (const t of allTabs) { try { domainSet.add(new URL(t.url).hostname); } catch (e) {} }
-    domainSet.delete("");
-    tabState.domainCount = domainSet.size;
-
-    // Workspace tab counts
-    tabState.workspaceTabCounts = {};
-    for (const t of allTabs) {
-      if (t.workspaceId) tabState.workspaceTabCounts[t.workspaceId] = (tabState.workspaceTabCounts[t.workspaceId] || 0) + 1;
-    }
-
-    // Duplicate groups count
-    const urlCounts = {};
-    for (const t of allTabs) {
-      if (t.url && t.url !== "about:newtab" && t.url !== "about:blank") {
-        urlCounts[t.url] = (urlCounts[t.url] || 0) + 1;
-      }
-    }
-    tabState.duplicateGroupCount = Object.values(urlCounts).filter((c) => c > 1).length;
-
-    try {
-      const closed = await ext.runtime.sendMessage({ type: "get-recently-closed" });
-      tabState.recentlyClosedCount = Array.isArray(closed) ? closed.length : 0;
-    } catch (e) {
-      tabState.recentlyClosedCount = 0;
-    }
-
-    // Parent tab preview
-    if (tabState.currentTabHasParent) {
-      const parent = allTabs.find((t) => t.domId === activeTab.openerTabDomId);
-      tabState.parentTabPreview = parent ? { title: parent.title, favIconUrl: parent.favIconUrl, domId: parent.domId, workspaceId: parent.workspaceId, pending: parent.pending } : null;
-    } else {
-      tabState.parentTabPreview = null;
-    }
-
-    // Previous tab preview — most recently accessed tab excluding current and split siblings
-    const visibleDomIds = new Set();
-    if (activeTab) visibleDomIds.add(activeTab.domId);
-    if (activeTab?.splitGroupId) {
-      allTabs.filter((t) => t.splitGroupId === activeTab.splitGroupId).forEach((t) => visibleDomIds.add(t.domId));
-    }
-    const candidates = allTabs
-      .filter((t) => !visibleDomIds.has(t.domId) && !t.unread)
-      .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-    tabState.previousTabPreview = candidates.length > 0
-      ? { title: candidates[0].title, favIconUrl: candidates[0].favIconUrl, domId: candidates[0].domId, workspaceId: candidates[0].workspaceId, pending: candidates[0].pending }
-      : null;
-
-    // Vertical-bar neighbors (above/below the current tab in the sidebar,
-    // same workspace). Reuses the DOM order in allTabs.
-    if (activeTab) {
-      const sameWs = allTabs.filter((t) => t.workspaceId === activeTab.workspaceId);
-      const vIdx = sameWs.findIndex((t) => t.domId === activeTab.domId);
-      const buildTabPreview = (tab) => tab
-        ? { title: tab.title, favIconUrl: tab.favIconUrl, domId: tab.domId, workspaceId: tab.workspaceId, pending: tab.pending }
-        : null;
-      tabState.prevVerticalPreview = vIdx > 0 ? buildTabPreview(sameWs[vIdx - 1]) : null;
-      tabState.nextVerticalPreview = vIdx >= 0 && vIdx < sameWs.length - 1 ? buildTabPreview(sameWs[vIdx + 1]) : null;
-    } else {
-      tabState.prevVerticalPreview = null;
-      tabState.nextVerticalPreview = null;
-    }
-
-    // Back/forward previews from the active tab's session history.
-    try {
-      const navHist = await ext.runtime.sendMessage({ type: "get-navigation-history" });
-      if (navHist && Array.isArray(navHist.entries)) {
-        const i = navHist.index;
-        tabState.backPreview = i > 0
-          ? { title: navHist.entries[i - 1].title, url: navHist.entries[i - 1].url, isHistory: true }
-          : null;
-        tabState.forwardPreview = i < navHist.entries.length - 1
-          ? { title: navHist.entries[i + 1].title, url: navHist.entries[i + 1].url, isHistory: true }
-          : null;
-      } else {
-        tabState.backPreview = null;
-        tabState.forwardPreview = null;
-      }
-    } catch (e) {
-      tabState.backPreview = null;
-      tabState.forwardPreview = null;
-    }
-
-    // Fetch selected tab count and workspace map in parallel
-    try {
-      const [selectedDomIds] = await Promise.all([
-        ext.runtime.sendMessage({ type: "get-selected-tab-dom-ids" }),
-        fetchWorkspaceMap(),
-      ]);
-      tabState.selectedTabCount = selectedDomIds.length;
-    } catch (e) {
-      tabState.selectedTabCount = 0;
-    }
+    [allTabs, closed, navHist, selectedDomIds] = await Promise.all([
+      ext.runtime.sendMessage({ type: "get-all-tabs" }),
+      ext.runtime.sendMessage({ type: "get-recently-closed" }).catch(() => []),
+      ext.runtime.sendMessage({ type: "get-navigation-history" }).catch(() => null),
+      ext.runtime.sendMessage({ type: "get-selected-tab-dom-ids" }).catch(() => []),
+      fetchWorkspaceMap(),
+    ]);
   } catch (e) {
-    tabState.currentTabHasParent = false;
-    tabState.childTabCount = 0;
-    tabState.siblingTabCount = 0;
-    tabState.parentTabCount = 0;
-    tabState.domainCount = 0;
-    tabState.unvisitedTabCount = 0;
-    tabState.duplicateGroupCount = 0;
-    tabState.recentlyClosedCount = 0;
-    tabState.parentTabPreview = null;
-    tabState.previousTabPreview = null;
+    resetActionsState();
+    if (!initialView) {
+      renderActions(getActions(), null);
+      hideSidebar();
+    }
+    return;
+  }
+
+  // Single-pass aggregation. The previous code did 11 separate filter / map /
+  // sort passes over allTabs. With 500+ tabs each pass allocated an
+  // intermediate array; this version makes two passes total — pass 1 finds
+  // activeTab and gathers tab-independent metrics, pass 2 computes the
+  // metrics that depend on activeTab.
+
+  // ----- Pass 1: tab-independent aggregates -----
+  let activeTab = null;
+  let unvisitedTabCount = 0;
+  const childOpeners = new Set();    // domIds that are someone's parent
+  const urlCounts = new Map();
+  const domainSet = new Set();
+  const workspaceTabCounts = {};
+
+  for (let i = 0; i < allTabs.length; i++) {
+    const t = allTabs[i];
+    if (t.active) activeTab = t;
+    if (t.unread) unvisitedTabCount++;
+    if (t.openerTabDomId) childOpeners.add(t.openerTabDomId);
+    const url = t.url;
+    if (url) {
+      const d = extractDomain(url);
+      if (d) domainSet.add(d);
+      if (url !== "about:newtab" && url !== "about:blank") {
+        urlCounts.set(url, (urlCounts.get(url) || 0) + 1);
+      }
+    }
+    if (t.workspaceId) {
+      workspaceTabCounts[t.workspaceId] = (workspaceTabCounts[t.workspaceId] || 0) + 1;
+    }
+  }
+
+  let duplicateGroupCount = 0;
+  for (const c of urlCounts.values()) if (c > 1) duplicateGroupCount++;
+
+  // ----- Pass 2: activeTab-dependent aggregates -----
+  const activeOpener = activeTab?.openerTabDomId || null;
+  const activeWs = activeTab?.workspaceId || null;
+  const activeSplitGroupId = activeTab?.splitGroupId || null;
+  const activeDomId = activeTab?.domId || null;
+
+  let childTabCount = 0;
+  let siblingTabCount = 0;
+  let parentTabCount = 0;
+  let parentTab = null;
+  let prevBest = null;          // most-recently-accessed non-self non-split-sibling non-unread tab
+  let prevBestAccess = -Infinity;
+  const sameWsTabs = activeWs ? [] : null;
+  let vIdx = -1;
+
+  for (let i = 0; i < allTabs.length; i++) {
+    const t = allTabs[i];
+
+    if (childOpeners.has(t.domId)) parentTabCount++;
+
+    if (activeTab) {
+      if (t.openerTabDomId === activeDomId) childTabCount++;
+      if (activeOpener && t.openerTabDomId === activeOpener && t.domId !== activeDomId) siblingTabCount++;
+      if (activeOpener && t.domId === activeOpener) parentTab = t;
+
+      if (sameWsTabs && t.workspaceId === activeWs) {
+        if (t.domId === activeDomId) vIdx = sameWsTabs.length;
+        sameWsTabs.push(t);
+      }
+
+      // Previous-tab preview candidate: not active, not split sibling, not unread.
+      // Track the running argmax instead of collecting + sorting an intermediate.
+      const isActive = t.domId === activeDomId;
+      const isSplitSibling = activeSplitGroupId != null && t.splitGroupId === activeSplitGroupId;
+      if (!isActive && !isSplitSibling && !t.unread) {
+        const access = t.lastAccessed || 0;
+        if (access > prevBestAccess) {
+          prevBestAccess = access;
+          prevBest = t;
+        }
+      }
+    }
+  }
+
+  // ----- Write derived state -----
+  tabState.currentTabHasParent = !!activeOpener;
+  tabState.childTabCount = childTabCount;
+  tabState.siblingTabCount = siblingTabCount;
+  tabState.unvisitedTabCount = unvisitedTabCount;
+  tabState.parentTabCount = parentTabCount;
+  tabState.domainCount = domainSet.size;
+  tabState.workspaceTabCounts = workspaceTabCounts;
+  tabState.duplicateGroupCount = duplicateGroupCount;
+  tabState.recentlyClosedCount = Array.isArray(closed) ? closed.length : 0;
+  tabState.selectedTabCount = Array.isArray(selectedDomIds) ? selectedDomIds.length : 0;
+
+  tabState.parentTabPreview = activeOpener ? buildTabPreview(parentTab) : null;
+  tabState.previousTabPreview = buildTabPreview(prevBest);
+
+  if (activeTab && sameWsTabs) {
+    tabState.prevVerticalPreview = vIdx > 0 ? buildTabPreview(sameWsTabs[vIdx - 1]) : null;
+    tabState.nextVerticalPreview = vIdx >= 0 && vIdx < sameWsTabs.length - 1
+      ? buildTabPreview(sameWsTabs[vIdx + 1])
+      : null;
+  } else {
+    tabState.prevVerticalPreview = null;
+    tabState.nextVerticalPreview = null;
+  }
+
+  if (navHist && Array.isArray(navHist.entries)) {
+    const i = navHist.index;
+    tabState.backPreview = i > 0
+      ? { title: navHist.entries[i - 1].title, url: navHist.entries[i - 1].url, isHistory: true }
+      : null;
+    tabState.forwardPreview = i < navHist.entries.length - 1
+      ? { title: navHist.entries[i + 1].title, url: navHist.entries[i + 1].url, isHistory: true }
+      : null;
+  } else {
     tabState.backPreview = null;
     tabState.forwardPreview = null;
-    tabState.nextVerticalPreview = null;
-    tabState.prevVerticalPreview = null;
-    tabState.selectedTabCount = 0;
   }
 
   if (!initialView) {
