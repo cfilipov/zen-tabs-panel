@@ -64,6 +64,16 @@ Press `Ctrl+Cmd+.` to open the palette (configurable via `about:addons` > Manage
 | `U` | Unload tab |
 | `,` | Settings |
 
+**Chord shortcuts** - the same keys work as leader-key chords. Press `Ctrl+Cmd+.` then a panel key within ~400 ms to fire the action without the menu appearing:
+
+- `Ctrl+Cmd+. P` - jump to previous tab, no menu shown
+- `Ctrl+Cmd+. T` - jump to parent tab, no menu shown
+- `Ctrl+Cmd+. D` - open the Duplicates submenu directly, skipping the main menu
+- `Ctrl+Cmd+. O 1` - sort tabs by recent (any of the 1-9 reorder options work after `O`)
+- `Ctrl+Cmd+. S` / `E` / `L` / `U` / `,` - move to start/end, scroll to current, unload, settings
+
+If you don't press a follow-up key, the main menu opens after the timeout. Pressing any unrecognized key or Escape during the chord window cancels silently. Toolbar clicks bypass the chord and open the menu immediately.
+
 **Workspace filtering** - In tab list views, a footer bar shows workspace icons. Use the QWERTY row keys (Q=1st workspace, W=2nd, etc.) to filter by workspace, or backtick (`` ` ``) to toggle between all and current workspace. Tab/Shift-Tab moves focus between the list and the footer.
 
 **Settings** (accessible from the palette or `about:addons` › Extensions › Zen Tabs Panel › Preferences):

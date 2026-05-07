@@ -181,15 +181,164 @@ async function moveTabToEnd() {
   }
 }
 
-browser.commands.onCommand.addListener((command) => {
-  if (command === "open-palette") {
-    browser.zenWorkspaces.showPalette();
+async function scrollToCurrentTab() {
+  await browser.zenWorkspaces.scrollCurrentTabIntoView();
+}
+
+async function unloadActiveTab() {
+  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (!activeTab) return;
+
+  const parentResult = await browser.zenWorkspaces.goToParentTab();
+  if (!parentResult) {
+    await browser.zenWorkspaces.goToPreviousTab();
+  }
+
+  try {
+    await browser.tabs.discard(activeTab.id);
+  } catch (e) {}
+}
+
+async function openOptions() {
+  browser.runtime.openOptionsPage();
+}
+
+const SORT_ACTIONS = new Set([
+  "sort-tabs-recent-desc",
+  "sort-tabs-recent-asc",
+  "sort-tabs-domain-alpha",
+  "sort-tabs-domain-pop",
+  "sort-tabs-age-asc",
+  "sort-tabs-age-desc",
+  "sort-tabs-inactive-bottom",
+  "sort-tabs-most-visited",
+  "sort-tabs-group-dups",
+]);
+
+async function runSortAction(actionId) {
+  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+  const allTabs = await browser.tabs.query({ currentWindow: true });
+  const essentialIds = new Set(await browser.zenWorkspaces.getEssentialTabIds());
+  const operateOnPinned = activeTab?.pinned && !essentialIds.has(activeTab?.id);
+
+  let tabs, startIndex;
+  if (operateOnPinned) {
+    const essentialCount = allTabs.filter((t) => essentialIds.has(t.id)).length;
+    tabs = allTabs.filter((t) => t.pinned && !essentialIds.has(t.id));
+    startIndex = essentialCount;
+  } else {
+    const pinnedCount = allTabs.filter((t) => t.pinned).length;
+    tabs = allTabs.filter((t) => !t.pinned);
+    startIndex = pinnedCount;
+  }
+
+  const getDomain = (url) => { try { return new URL(url).hostname; } catch (e) { return ""; } };
+
+  switch (actionId) {
+    case "sort-tabs-recent-desc":
+      tabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
+      break;
+    case "sort-tabs-recent-asc":
+      tabs.sort((a, b) => a.lastAccessed - b.lastAccessed);
+      break;
+    case "sort-tabs-domain-alpha":
+      tabs.sort((a, b) => getDomain(a.url).localeCompare(getDomain(b.url)) || b.lastAccessed - a.lastAccessed);
+      break;
+    case "sort-tabs-domain-pop": {
+      const domainCounts = {};
+      for (const t of tabs) {
+        const d = getDomain(t.url);
+        domainCounts[d] = (domainCounts[d] || 0) + 1;
+      }
+      tabs.sort((a, b) => (domainCounts[getDomain(b.url)] || 0) - (domainCounts[getDomain(a.url)] || 0) || b.lastAccessed - a.lastAccessed);
+      break;
+    }
+    case "sort-tabs-age-asc":
+      tabs.sort((a, b) => a.id - b.id);
+      break;
+    case "sort-tabs-age-desc":
+      tabs.sort((a, b) => b.id - a.id);
+      break;
+    case "sort-tabs-inactive-bottom":
+      tabs.sort((a, b) => (a.discarded ? 1 : 0) - (b.discarded ? 1 : 0));
+      break;
+    case "sort-tabs-most-visited": {
+      const uniqueUrls = [...new Set(tabs.map((t) => t.url))];
+      const visitCounts = {};
+      await Promise.all(uniqueUrls.map((url) =>
+        browser.history.getVisits({ url }).then(
+          (visits) => { visitCounts[url] = visits.length; },
+          () => { visitCounts[url] = 0; }
+        )
+      ));
+      tabs.sort((a, b) => (visitCounts[b.url] || 0) - (visitCounts[a.url] || 0));
+      break;
+    }
+    case "sort-tabs-group-dups": {
+      const urlCount = {};
+      for (const t of tabs) urlCount[t.url] = (urlCount[t.url] || 0) + 1;
+      const dups = [];
+      const nonDups = [];
+      for (const t of tabs) {
+        if (urlCount[t.url] > 1) {
+          dups.push(t);
+        } else {
+          nonDups.push(t);
+        }
+      }
+      dups.sort((a, b) => a.url.localeCompare(b.url));
+      tabs.length = 0;
+      tabs.push(...dups, ...nonDups);
+      break;
+    }
+  }
+
+  await browser.tabs.move(tabs.map((t) => t.id), { index: startIndex });
+}
+
+// Run an action that was triggered via a chord shortcut. The palette never
+// opened in this path, so we skip the hidePalette() call that the message
+// handlers below use.
+async function runChordAction(actionId) {
+  switch (actionId) {
+    case "go-to-previous-tab":
+      await browser.zenWorkspaces.goToPreviousTab();
+      return;
+    case "go-to-parent-tab":
+      await browser.zenWorkspaces.goToParentTab();
+      return;
+    case "move-tab-to-start":
+      await moveTabToStart();
+      return;
+    case "move-tab-to-end":
+      await moveTabToEnd();
+      return;
+    case "scroll-to-current-tab":
+      await scrollToCurrentTab();
+      return;
+    case "unload-tab":
+      await unloadActiveTab();
+      return;
+    case "open-options":
+      await openOptions();
+      return;
+  }
+  if (SORT_ACTIONS.has(actionId)) {
+    await runSortAction(actionId);
+  }
+}
+
+browser.commands.onCommand.addListener(async (command) => {
+  if (command !== "open-palette") return;
+  const result = await browser.zenWorkspaces.showPalette();
+  if (result && result.kind === "chord-action") {
+    await runChordAction(result.actionId);
   }
 });
 
-// Toolbar icon click opens the palette
+// Toolbar icon click opens the palette immediately, bypassing chord-arming.
 browser.browserAction.onClicked.addListener(() => {
-  browser.zenWorkspaces.showPalette();
+  browser.zenWorkspaces.showPalette({ skipChord: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -211,8 +360,10 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
 
     case "open-options":
-      browser.zenWorkspaces.hidePalette();
-      browser.runtime.openOptionsPage();
+      (async () => {
+        await browser.zenWorkspaces.hidePalette();
+        await openOptions();
+      })();
       break;
 
     case "activate-tab":
@@ -268,27 +419,16 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "scroll-to-current-tab":
       (async () => {
         await browser.zenWorkspaces.hidePalette();
-        await browser.zenWorkspaces.scrollCurrentTabIntoView();
+        await scrollToCurrentTab();
       })();
       break;
 
-    case "unload-tab": {
+    case "unload-tab":
       (async () => {
         await browser.zenWorkspaces.hidePalette();
-        const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-        if (!activeTab) return;
-
-        const parentResult = await browser.zenWorkspaces.goToParentTab();
-        if (!parentResult) {
-          await browser.zenWorkspaces.goToPreviousTab();
-        }
-
-        try {
-          await browser.tabs.discard(activeTab.id);
-        } catch (e) {}
+        await unloadActiveTab();
       })();
       break;
-    }
 
     case "get-navigation-history":
       return browser.zenWorkspaces.getNavigationHistory();
@@ -335,90 +475,12 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "sort-tabs-age-desc":
     case "sort-tabs-inactive-bottom":
     case "sort-tabs-most-visited":
-    case "sort-tabs-group-dups": {
+    case "sort-tabs-group-dups":
       (async () => {
         await browser.zenWorkspaces.hidePalette();
-        const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-        const allTabs = await browser.tabs.query({ currentWindow: true });
-        const essentialIds = new Set(await browser.zenWorkspaces.getEssentialTabIds());
-        const operateOnPinned = activeTab?.pinned && !essentialIds.has(activeTab?.id);
-
-        let tabs, startIndex;
-        if (operateOnPinned) {
-          const essentialCount = allTabs.filter((t) => essentialIds.has(t.id)).length;
-          tabs = allTabs.filter((t) => t.pinned && !essentialIds.has(t.id));
-          startIndex = essentialCount;
-        } else {
-          const pinnedCount = allTabs.filter((t) => t.pinned).length;
-          tabs = allTabs.filter((t) => !t.pinned);
-          startIndex = pinnedCount;
-        }
-
-        const getDomain = (url) => { try { return new URL(url).hostname; } catch (e) { return ""; } };
-
-        switch (message.type) {
-          case "sort-tabs-recent-desc":
-            tabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
-            break;
-          case "sort-tabs-recent-asc":
-            tabs.sort((a, b) => a.lastAccessed - b.lastAccessed);
-            break;
-          case "sort-tabs-domain-alpha":
-            tabs.sort((a, b) => getDomain(a.url).localeCompare(getDomain(b.url)) || b.lastAccessed - a.lastAccessed);
-            break;
-          case "sort-tabs-domain-pop": {
-            const domainCounts = {};
-            for (const t of tabs) {
-              const d = getDomain(t.url);
-              domainCounts[d] = (domainCounts[d] || 0) + 1;
-            }
-            tabs.sort((a, b) => (domainCounts[getDomain(b.url)] || 0) - (domainCounts[getDomain(a.url)] || 0) || b.lastAccessed - a.lastAccessed);
-            break;
-          }
-          case "sort-tabs-age-asc":
-            tabs.sort((a, b) => a.id - b.id);
-            break;
-          case "sort-tabs-age-desc":
-            tabs.sort((a, b) => b.id - a.id);
-            break;
-          case "sort-tabs-inactive-bottom":
-            tabs.sort((a, b) => (a.discarded ? 1 : 0) - (b.discarded ? 1 : 0));
-            break;
-          case "sort-tabs-most-visited": {
-            const uniqueUrls = [...new Set(tabs.map((t) => t.url))];
-            const visitCounts = {};
-            await Promise.all(uniqueUrls.map((url) =>
-              browser.history.getVisits({ url }).then(
-                (visits) => { visitCounts[url] = visits.length; },
-                () => { visitCounts[url] = 0; }
-              )
-            ));
-            tabs.sort((a, b) => (visitCounts[b.url] || 0) - (visitCounts[a.url] || 0));
-            break;
-          }
-          case "sort-tabs-group-dups": {
-            const urlCount = {};
-            for (const t of tabs) urlCount[t.url] = (urlCount[t.url] || 0) + 1;
-            const dups = [];
-            const nonDups = [];
-            for (const t of tabs) {
-              if (urlCount[t.url] > 1) {
-                dups.push(t);
-              } else {
-                nonDups.push(t);
-              }
-            }
-            dups.sort((a, b) => a.url.localeCompare(b.url));
-            tabs.length = 0;
-            tabs.push(...dups, ...nonDups);
-            break;
-          }
-        }
-
-        await browser.tabs.move(tabs.map((t) => t.id), { index: startIndex });
+        await runSortAction(message.type);
       })();
       break;
-    }
 
     case "sort-tabs-by-recent": {
       (async () => {

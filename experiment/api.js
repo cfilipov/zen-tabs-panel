@@ -81,6 +81,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Clean up on extension unload
     context.callOnClose({
       close() {
+        try { disarmChord(); } catch (e) {}
         const w = Services.wm.getMostRecentWindow("navigator:browser");
         if (!w) return;
         const overlay = w.document.getElementById("zen-tabs-panel-overlay");
@@ -300,11 +301,67 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "move-to-workspace":  { width: 600, height: 604 },
     };
 
+    // Chord/leader-key shortcut tree. After the leader (MacCtrl+Cmd+.) fires,
+    // a chrome-window-level keydown listener runs the user's next key against
+    // this tree. Matched terminals fire actions or open submenus directly,
+    // skipping the main palette menu. Mirrors the hotkey table in popup.js.
+    const CHORD_ROOT_TIMEOUT_MS = 400;
+    const CHORD_PREFIX_TIMEOUT_MS = 600;
+    const CHORD_TREE = {
+      children: {
+        "P": { type: "action", actionId: "go-to-previous-tab" },
+        "T": { type: "action", actionId: "go-to-parent-tab" },
+        "Shift+T": { type: "open-view", view: "parent-tabs" },
+        "C": { type: "open-view", view: "child-tabs" },
+        "B": { type: "open-view", view: "sibling-tabs" },
+        "H": { type: "open-view", view: "navigation" },
+        "Shift+N": { type: "open-view", view: "unvisited-tabs" },
+        "R": { type: "open-view", view: "last-visited" },
+        "X": { type: "open-view", view: "recently-closed" },
+        "D": { type: "open-view", view: "duplicates" },
+        "Shift+D": { type: "open-view", view: "domains" },
+        "I": { type: "open-view", view: "tab-info" },
+        "A": { type: "open-view", view: "tabs-by-age" },
+        "V": { type: "open-view", view: "most-visited" },
+        "M": { type: "open-view", view: "move-to-workspace" },
+        "S": { type: "action", actionId: "move-tab-to-start" },
+        "E": { type: "action", actionId: "move-tab-to-end" },
+        "L": { type: "action", actionId: "scroll-to-current-tab" },
+        "U": { type: "action", actionId: "unload-tab" },
+        ",": { type: "action", actionId: "open-options" },
+        "O": {
+          type: "prefix",
+          timeoutMs: CHORD_PREFIX_TIMEOUT_MS,
+          onTimeout: { type: "open-view", view: "reorder-tabs" },
+          children: {
+            "1": { type: "action", actionId: "sort-tabs-recent-desc" },
+            "2": { type: "action", actionId: "sort-tabs-recent-asc" },
+            "3": { type: "action", actionId: "sort-tabs-domain-alpha" },
+            "4": { type: "action", actionId: "sort-tabs-domain-pop" },
+            "5": { type: "action", actionId: "sort-tabs-age-asc" },
+            "6": { type: "action", actionId: "sort-tabs-age-desc" },
+            "7": { type: "action", actionId: "sort-tabs-inactive-bottom" },
+            "8": { type: "action", actionId: "sort-tabs-most-visited" },
+            "9": { type: "action", actionId: "sort-tabs-group-dups" },
+          },
+        },
+      },
+    };
+
     let pendingView = null;
     let pendingParams = {};
     let navStack = [];
     let currentViewName = null;
     let morphGeneration = 0;
+
+    // Chord engine state.
+    let chordState = null;          // null | "armed-root" | "armed-prefix"
+    let chordCurrentNode = null;
+    let chordTimer = null;
+    let chordKeyListener = null;
+    let chordBlurListener = null;
+    let chordResolve = null;        // resolver for the showPalette() promise
+    let chordPrefixOnTimeout = null;
 
     function getPaletteURL() {
       const isDark = getWin()?.document?.documentElement?.getAttribute("zen-should-be-dark-mode") === "true";
@@ -502,6 +559,153 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!w) return false;
       const overlay = w.document.getElementById(OVERLAY_ID);
       return overlay && !overlay.dataset.closing;
+    }
+
+    // -----------------------------------------------------------------------
+    // Chord engine
+    // -----------------------------------------------------------------------
+
+    // Map a keydown event to a chord-tree key string, or null if it should be
+    // ignored (pure modifier press, or non-Shift modifier held — those fall
+    // through to the OS/browser).
+    function chordKeyFor(e) {
+      if (e.key === "Meta" || e.key === "Control" || e.key === "Alt" || e.key === "Shift") return null;
+      if (e.metaKey || e.ctrlKey || e.altKey) return null;
+      if (e.key === "Escape") return "Escape";
+      if (e.key.length === 1 && /[a-z]/i.test(e.key)) {
+        const upper = e.key.toUpperCase();
+        return e.shiftKey ? "Shift+" + upper : upper;
+      }
+      return e.key;
+    }
+
+    function disarmChord() {
+      const w = getWin();
+      if (chordTimer !== null && w) {
+        w.clearTimeout(chordTimer);
+      }
+      if (chordKeyListener && w) {
+        w.removeEventListener("keydown", chordKeyListener, true);
+      }
+      if (chordBlurListener && w) {
+        w.removeEventListener("blur", chordBlurListener, true);
+      }
+      chordTimer = null;
+      chordKeyListener = null;
+      chordBlurListener = null;
+      chordState = null;
+      chordCurrentNode = null;
+      chordPrefixOnTimeout = null;
+    }
+
+    function openOverlayWithView(view) {
+      pendingView = view || null;
+      pendingParams = {};
+      createOverlay();
+      pendingView = null;
+      pendingParams = {};
+    }
+
+    function onChordKey(e) {
+      const k = chordKeyFor(e);
+      // Ignore pure-modifier keydowns and modifier-co-pressed keys: leave them
+      // alone so the OS/browser can handle Cmd+P etc. The chord arm still
+      // stays live for these — but in practice the leader's modifiers have
+      // released by the time the user presses a chord key, so this rarely
+      // matters. We don't disarm here either; the chord just continues to
+      // wait until a real candidate or timeout.
+      if (k === null) return;
+
+      if (k === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        const resolve = chordResolve;
+        chordResolve = null;
+        disarmChord();
+        if (resolve) resolve({ kind: "chord-cancelled" });
+        return;
+      }
+
+      const node = chordCurrentNode?.children?.[k];
+      if (!node) {
+        // Unknown key: cancel chord silently — no panel.
+        e.preventDefault();
+        e.stopPropagation();
+        const resolve = chordResolve;
+        chordResolve = null;
+        disarmChord();
+        if (resolve) resolve({ kind: "chord-cancelled" });
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (node.type === "action") {
+        const resolve = chordResolve;
+        chordResolve = null;
+        disarmChord();
+        if (resolve) resolve({ kind: "chord-action", actionId: node.actionId });
+        return;
+      }
+
+      if (node.type === "open-view") {
+        const resolve = chordResolve;
+        chordResolve = null;
+        disarmChord();
+        openOverlayWithView(node.view);
+        if (resolve) resolve({ kind: "opened" });
+        return;
+      }
+
+      if (node.type === "prefix") {
+        const w = getWin();
+        if (chordTimer !== null && w) w.clearTimeout(chordTimer);
+        chordCurrentNode = node;
+        chordPrefixOnTimeout = node.onTimeout || null;
+        chordState = "armed-prefix";
+        chordTimer = w ? w.setTimeout(onChordTimeout, node.timeoutMs ?? CHORD_PREFIX_TIMEOUT_MS) : null;
+      }
+    }
+
+    function onChordTimeout() {
+      const resolve = chordResolve;
+      chordResolve = null;
+      const onTimeout = chordPrefixOnTimeout;
+      disarmChord();
+
+      if (onTimeout && onTimeout.type === "open-view") {
+        openOverlayWithView(onTimeout.view);
+      } else {
+        openOverlayWithView(null); // root timeout → main actions menu
+      }
+      if (resolve) resolve({ kind: "opened" });
+    }
+
+    function onChordBlur() {
+      const resolve = chordResolve;
+      chordResolve = null;
+      disarmChord();
+      if (resolve) resolve({ kind: "chord-cancelled" });
+    }
+
+    function armChord(resolve) {
+      const w = getWin();
+      if (!w) {
+        resolve({ kind: "chord-cancelled" });
+        return;
+      }
+      chordResolve = resolve;
+      chordCurrentNode = CHORD_TREE;
+      chordState = "armed-root";
+      chordKeyListener = onChordKey;
+      chordBlurListener = onChordBlur;
+      // Capture-phase keydown on the chrome window catches keys regardless of
+      // whether chrome or content has focus, because the chrome window owns
+      // the XUL <browser> element wrapping the active tab.
+      w.addEventListener("keydown", chordKeyListener, true);
+      w.addEventListener("blur", chordBlurListener, true);
+      chordTimer = w.setTimeout(onChordTimeout, CHORD_ROOT_TIMEOUT_MS);
     }
 
     return {
@@ -942,18 +1146,52 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         },
 
-        // Palette management
-        async showPalette(view) {
+        // Palette management.
+        //
+        // Returns a discriminated object describing what happened:
+        //   {kind: "opened"}            — overlay opened (with main menu or a view)
+        //   {kind: "closed"}            — overlay was already open and got closed (toggle)
+        //   {kind: "chord-action",      — chord resolved to an action; caller should
+        //          actionId}              dispatch it via runChordAction
+        //   {kind: "chord-cancelled"}   — chord aborted (unknown key, Escape, blur)
+        //
+        // Callers:
+        //   - commands.onCommand passes no arg → routes through chord engine
+        //   - browserAction.onClicked passes {skipChord:true} → opens immediately
+        //   - any caller can pass a view string to open directly to a submenu
+        async showPalette(viewOrOpts) {
+          let view = null;
+          let skipChord = false;
+          if (typeof viewOrOpts === "string") {
+            view = viewOrOpts;
+            skipChord = true;
+          } else if (viewOrOpts && typeof viewOrOpts === "object") {
+            view = viewOrOpts.view || null;
+            skipChord = !!viewOrOpts.skipChord;
+          }
+
           if (isOverlayOpen()) {
             destroyOverlay();
-            return false;
+            return { kind: "closed" };
           }
-          pendingView = view || null;
-          pendingParams = {};
-          createOverlay();
-          pendingView = null;
-          pendingParams = {};
-          return true;
+
+          // Double-tap of the leader (or a click while chord is armed):
+          // cancel the in-flight chord and open immediately.
+          if (chordState !== null) {
+            const resolve = chordResolve;
+            chordResolve = null;
+            disarmChord();
+            openOverlayWithView(view);
+            if (resolve) resolve({ kind: "opened" });
+            return { kind: "opened" };
+          }
+
+          if (skipChord) {
+            openOverlayWithView(view);
+            return { kind: "opened" };
+          }
+
+          return new Promise((resolve) => armChord(resolve));
         },
 
         async hidePalette() {

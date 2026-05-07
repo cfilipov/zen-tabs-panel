@@ -195,9 +195,9 @@
         "name": "showPalette",
         "type": "function",
         "async": true,
-        "description": "Toggle the command palette overlay. Returns true if opened, false if closed.",
+        "description": "Toggle the command palette overlay. Without args, arms the chord engine for 250ms then opens the main menu on timeout. Pass a view name string or {view, skipChord} object to open immediately. Returns a discriminated object: {kind:'opened'|'closed'|'chord-action'|'chord-cancelled', actionId?: string}.",
         "parameters": [
-          { "name": "view", "type": "string", "optional": true }
+          { "name": "viewOrOpts", "type": "any", "optional": true }
         ]
       },
       {
