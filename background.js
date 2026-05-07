@@ -3,15 +3,39 @@
 const api = browser.zenWorkspaces;
 
 // ---------------------------------------------------------------------------
-// Auto-move to top — delayed move of the active tab to index 0
+// In-memory settings cache
 //
-// NOTE: We track the "last user-activated" tab ID so that workspace switches
-// (which also fire onActivated) don't trigger auto-move for the tab that
-// Zen automatically selects when switching workspaces.
+// Avoids hitting browser.storage.local on every tab activation (and from the
+// 5-minute auto-close alarm). Populated once at startup, kept in sync via
+// storage.onChanged. The cache also gates whether the auto-close alarm even
+// exists — disabled means no idle work at all.
+// ---------------------------------------------------------------------------
+
+const settings = Object.assign({}, STORAGE_DEFAULTS);
+
+async function loadSettings() {
+  const stored = await browser.storage.local.get(STORAGE_DEFAULTS);
+  Object.assign(settings, stored);
+  syncAutoCloseAlarm();
+}
+
+browser.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") return;
+  let autoCloseTouched = false;
+  for (const key of Object.keys(changes)) {
+    if (key in STORAGE_DEFAULTS) {
+      settings[key] = changes[key].newValue ?? STORAGE_DEFAULTS[key];
+      if (key === "autoCloseEnabled") autoCloseTouched = true;
+    }
+  }
+  if (autoCloseTouched) syncAutoCloseAlarm();
+});
+
+// ---------------------------------------------------------------------------
+// Auto-move to top — delayed move of the active tab to index 0
 // ---------------------------------------------------------------------------
 
 let autoMoveTimeout = null;
-let lastActiveTabId = null;
 
 function cancelAutoMove() {
   if (autoMoveTimeout !== null) {
@@ -62,11 +86,6 @@ const THRESHOLD_MS = {
 };
 
 async function autoCloseSweep() {
-  const settings = await browser.storage.local.get({
-    autoCloseEnabled: STORAGE_DEFAULTS.autoCloseEnabled,
-    autoCloseThreshold: STORAGE_DEFAULTS.autoCloseThreshold,
-  });
-
   if (!settings.autoCloseEnabled) return;
 
   const threshold = THRESHOLD_MS[settings.autoCloseThreshold] || THRESHOLD_MS["48h"];
@@ -94,8 +113,17 @@ async function autoCloseSweep() {
   }
 }
 
-// Set up alarm for auto-close sweep (every 5 minutes)
-browser.alarms.create("auto-close-sweep", { periodInMinutes: 5 });
+// Create the alarm only when auto-close is enabled — when disabled (the
+// default) we want zero idle CPU. The alarm is added/removed in response to
+// settings changes via the storage.onChanged listener above.
+function syncAutoCloseAlarm() {
+  if (settings.autoCloseEnabled) {
+    browser.alarms.create("auto-close-sweep", { periodInMinutes: 5 });
+  } else {
+    browser.alarms.clear("auto-close-sweep");
+  }
+}
+
 browser.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "auto-close-sweep") {
     autoCloseSweep();
@@ -106,15 +134,7 @@ browser.alarms.onAlarm.addListener((alarm) => {
 // Tab event listeners
 // ---------------------------------------------------------------------------
 
-browser.tabs.onActivated.addListener(async (activeInfo) => {
-  lastActiveTabId = activeInfo.tabId;
-
-  // Auto-move logic
-  const settings = await browser.storage.local.get({
-    autoMoveEnabled: STORAGE_DEFAULTS.autoMoveEnabled,
-    autoMoveDelay: STORAGE_DEFAULTS.autoMoveDelay,
-  });
-
+browser.tabs.onActivated.addListener((activeInfo) => {
   if (settings.autoMoveEnabled) {
     scheduleAutoMove(activeInfo.tabId, settings.autoMoveDelay);
   } else {
@@ -495,9 +515,11 @@ browser.menus.onClicked.addListener(async (info) => {
 });
 
 // ---------------------------------------------------------------------------
-// Initialize — trigger experiment API load (it's lazy, only loads on first access)
+// Initialize — populate the settings cache, trigger experiment API load
+// (it's lazy, only loads on first access), and start the duplicate sync.
 // ---------------------------------------------------------------------------
 
+loadSettings();
 api.getActiveWorkspaceId().catch(() => {});
 api.syncDuplicates().catch(() => {});
 
