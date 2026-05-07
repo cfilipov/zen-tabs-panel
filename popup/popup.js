@@ -573,17 +573,8 @@ function createTabElement(tab, badge) {
   el.className = "list-item" + (tab.pending ? " tab-pending" : "");
   el.dataset.domId = tab.domId;
 
-  let domain = "";
-  try {
-    domain = new URL(tab.url).hostname;
-  } catch (e) {}
-
-  // Unwrap moz-remote-image:// and filter chrome:// URLs
-  let favicon = tab.favIconUrl || "";
-  if (favicon.startsWith("moz-remote-image://")) {
-    try { favicon = new URL(favicon).searchParams.get("url") || ""; } catch (e) { favicon = ""; }
-  }
-  const canLoadFavicon = favicon && !favicon.startsWith("chrome://");
+  const domain = extractDomain(tab.url);
+  const favicon = extractFavicon(tab.favIconUrl);
 
   let wsHtml = "";
   if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
@@ -605,7 +596,7 @@ function createTabElement(tab, badge) {
     : `<span class="item-badge-placeholder"></span>`;
 
   el.innerHTML = `
-    ${canLoadFavicon
+    ${favicon
       ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
       : `<span class="item-icon-placeholder">○</span>`}
     <span class="item-text">
@@ -628,73 +619,6 @@ function createTabElement(tab, badge) {
   el.addEventListener("mouseleave", () => {
     ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
   });
-  return el;
-}
-
-function createDuplicateTabElement(tab) {
-  const el = document.createElement("div");
-  el.className = "list-item duplicate-item" + (tab.pending ? " tab-pending" : "");
-  el.dataset.domId = tab.domId;
-
-  let domain = "";
-  try { domain = new URL(tab.url).hostname; } catch (e) {}
-
-  let dupFavicon = tab.favIconUrl || "";
-  if (dupFavicon.startsWith("moz-remote-image://")) {
-    try { dupFavicon = new URL(dupFavicon).searchParams.get("url") || ""; } catch (e) { dupFavicon = ""; }
-  }
-  const canLoadFavicon = dupFavicon && !dupFavicon.startsWith("chrome://");
-
-  let wsHtml = "";
-  if (tab.workspaceId && tab.workspaceId !== activeWorkspaceId) {
-    const ws = workspaceMap[tab.workspaceId];
-    if (ws) {
-      const wsIcon = ws.svgContent
-        ? `<span class="row-ws-icon">${ws.svgContent}</span>`
-        : "";
-      wsHtml = `<span class="row-workspace">${wsIcon}${escapeHtml(ws.name)}</span>`;
-    }
-  }
-
-  const subtitleHtml = domain
-    ? `<span class="item-subtitle"><span class="subtitle-domain">${escapeHtml(domain)}</span></span>`
-    : "";
-
-  el.innerHTML = `
-    ${canLoadFavicon
-      ? `<img class="item-icon" src="${escapeAttr(dupFavicon)}">`
-      : `<span class="item-icon-placeholder">○</span>`}
-    <span class="item-text">
-      <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
-      ${subtitleHtml}
-    </span>
-    <span class="item-right">
-      ${wsHtml}
-      <span class="duplicate-close" title="Close tab">✕</span>
-    </span>
-  `;
-
-  const img = el.querySelector("img.item-icon");
-  if (img) {
-    img.addEventListener("error", () => { img.style.display = "none"; });
-  }
-
-  el.querySelector(".duplicate-close").addEventListener("click", (e) => {
-    e.stopPropagation();
-    ext.runtime.sendMessage({ type: "close-tab", domId: tab.domId }).catch(() => {});
-    el.remove();
-  });
-
-  el.addEventListener("click", () => activateTab(tab.domId));
-
-  el.addEventListener("mouseenter", () => {
-    ext.runtime.sendMessage({ type: "preview-tab", domId: tab.domId }).catch(() => {});
-  });
-
-  el.addEventListener("mouseleave", () => {
-    ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
-  });
-
   return el;
 }
 
