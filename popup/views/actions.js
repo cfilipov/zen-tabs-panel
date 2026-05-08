@@ -68,9 +68,6 @@ function getActions() {
     actionFromRegistry("go-to-next-workspace",  { ...compact, iconHtml: nextWsIconHtml }),
     { type: "workspaces" },
 
-    { type: "section", label: "Other", column: true, stack: true },
-    actionFromRegistry("open-options", compact),
-
     // ----- Page 2 -----
     { type: "section", label: "Navigate", page: 2, navigateGrid: true },
     // Column-first 2x2 fill order:
@@ -108,6 +105,9 @@ function getActions() {
     actionFromRegistry("view-page-info",    compact),
     actionFromRegistry("take-screenshot",   compact),
     actionFromRegistry("copy-url-markdown", compact),
+
+    { type: "section", label: "Other", page: 2, column: true, stack: true },
+    actionFromRegistry("open-options", compact),
   ];
 }
 function isActionDisabled(action) {

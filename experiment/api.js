@@ -431,8 +431,31 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let chordResolve = null;        // resolver for the showPalette() promise
     let chordPrefixOnTimeout = null;
 
+    // Mirror whatever theme Zen's URL-bar dropdown (Cmd+T) uses. The
+    // chrome root's resolved `color-scheme` is the same signal that dialog
+    // reads, and it disagrees with both the `zen-should-be-dark-mode`
+    // attribute and the inline `--toolbar-color-scheme` variable in some
+    // workspaces (gradient-themed workspaces set the variable to "dark"
+    // while the user's preferred mode is light, and the attribute can be
+    // stale in either direction). Fall back to matchMedia when the
+    // computed value is ambiguous ("light dark", "normal", etc.).
+    function isChromeDark() {
+      const w = getWin();
+      const root = w?.document?.documentElement;
+      if (!root || !w) return false;
+      try {
+        const cs = w.getComputedStyle(root).colorScheme;
+        if (cs === "dark") return true;
+        if (cs === "light") return false;
+        if (w.matchMedia) {
+          return w.matchMedia("(prefers-color-scheme: dark)").matches;
+        }
+      } catch (e) {}
+      return false;
+    }
+
     function getPaletteURL() {
-      const isDark = getWin()?.document?.documentElement?.getAttribute("zen-should-be-dark-mode") === "true";
+      const isDark = isChromeDark();
       let url = context.extension.getURL("popup/popup.html") + "?theme=" + (isDark ? "dark" : "light");
       if (pendingView) url += "&view=" + encodeURIComponent(pendingView);
       if (pendingParams) {
