@@ -95,8 +95,12 @@ this.ZEN_KEYBINDINGS = [
   { id: "toggle-browser-toolbox", kind: "action", chord: "Shift+B", label: "Browser toolbox", icon: "svg:wrench",   page: 2 },
 
   // Page 2 — Browser
-  { id: "open-downloads",     kind: "action", chord: "Shift+W", label: "Downloads", icon: "svg:download", page: 2 },
-  { id: "open-addons",        kind: "action", chord: "Shift+A", label: "Add-ons",   icon: "svg:puzzle",   page: 2 },
+  { id: "open-downloads",     kind: "action", chord: "Shift+W", label: "Downloads",     icon: "svg:download", page: 2 },
+  { id: "open-addons",        kind: "action", chord: "Shift+A", label: "Add-ons",       icon: "svg:puzzle",   page: 2 },
+  { id: "open-firefox-view",  kind: "action", chord: "Shift+H", label: "Firefox View",  icon: "svg:eye",      page: 2 },
+
+  // Page 2 — Page tools (additions)
+  { id: "copy-url",           kind: "action", chord: "Shift+Y", label: "Copy URL",      icon: "svg:copy",     page: 2 },
 
   // Page 1 — Organize (new)
   { id: "move-to-folder",     kind: "open-view", chord: "Shift+O", view: "move-to-folder", label: "Move to folder", icon: "svg:folder" },

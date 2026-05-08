@@ -109,6 +109,8 @@ this.MSG = Object.freeze({
   TOGGLE_BROWSER_TOOLBOX:         "toggle-browser-toolbox",
   OPEN_DOWNLOADS:                 "open-downloads",
   OPEN_ADDONS:                    "open-addons",
+  OPEN_FIREFOX_VIEW:              "open-firefox-view",
+  COPY_URL:                       "copy-url",
   UNVISITED_NEWEST:               "unvisited-newest",
   UNVISITED_OLDEST:               "unvisited-oldest",
   MOVE_TAB_TO_FOLDER:             "move-tab-to-folder",

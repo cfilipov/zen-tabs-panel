@@ -495,6 +495,20 @@
         "parameters": []
       },
       {
+        "name": "openFirefoxView",
+        "type": "function",
+        "async": true,
+        "description": "Open the Firefox View page",
+        "parameters": []
+      },
+      {
+        "name": "copyCurrentUrl",
+        "type": "function",
+        "async": true,
+        "description": "Copy the current tab's URL to the clipboard",
+        "parameters": []
+      },
+      {
         "name": "activateUnvisitedNewest",
         "type": "function",
         "async": true,

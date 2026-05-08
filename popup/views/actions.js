@@ -97,13 +97,15 @@ function getActions() {
     actionFromRegistry("toggle-browser-toolbox", compact),
 
     { type: "section", label: "Browser", page: 2, column: true, stack: true },
-    actionFromRegistry("open-downloads", compact),
-    actionFromRegistry("open-addons",    compact),
+    actionFromRegistry("open-downloads",    compact),
+    actionFromRegistry("open-addons",       compact),
+    actionFromRegistry("open-firefox-view", compact),
 
     { type: "section", label: "Page tools", page: 2, column: true },
     actionFromRegistry("view-page-source",  compact),
     actionFromRegistry("view-page-info",    compact),
     actionFromRegistry("take-screenshot",   compact),
+    actionFromRegistry("copy-url",          compact),
     actionFromRegistry("copy-url-markdown", compact),
 
     { type: "section", label: "Other", page: 2, column: true, stack: true },

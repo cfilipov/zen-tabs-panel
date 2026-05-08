@@ -1656,6 +1656,39 @@ this.zenWorkspaces = class extends ExtensionAPI {
           catch (e) { return false; }
         },
 
+        async openFirefoxView() {
+          const w = getWin();
+          if (!w) return false;
+          try {
+            if (w.FirefoxViewHandler && typeof w.FirefoxViewHandler.openTab === "function") {
+              w.FirefoxViewHandler.openTab();
+              return true;
+            }
+          } catch (e) {}
+          try {
+            w.gBrowser.loadOneTab("about:firefoxview", { inBackground: false });
+            return true;
+          } catch (e) {
+            return false;
+          }
+        },
+
+        async copyCurrentUrl() {
+          const w = getWin();
+          if (!w || !w.gBrowser) return false;
+          const tab = w.gBrowser.selectedTab;
+          if (!tab) return false;
+          const url = tab.linkedBrowser?.currentURI?.spec || "";
+          if (!url) return false;
+          try {
+            const clip = Cc["@mozilla.org/widget/clipboardhelper;1"].getService(Ci.nsIClipboardHelper);
+            clip.copyString(url);
+            return true;
+          } catch (e) {
+            return false;
+          }
+        },
+
         // Activate the most-recently-accessed unread tab (newest unvisited).
         async activateUnvisitedNewest() {
           return activateUnvisitedByOrder("newest");
