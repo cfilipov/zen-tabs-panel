@@ -327,14 +327,12 @@ function chordFromEvent(e) {
 // Build a popup menu item from a registry entry, merging runtime-computed
 // fields (preview, count). Layout flags (compact, etc.) are added by callers.
 // Used by getActions() in views/actions.js.
-// Workspace-switcher rows in the actions menu use the .list-item class for
-// styling, but they are NOT registered in ui.items (they're rendered ad-hoc
-// by renderWorkspaceSwitcher). When using ui.selectedIndex / sectionStarts
-// to index into the live DOM we must filter them out, otherwise indices
-// shift by the number of workspaces and Tab/arrow nav lands on the wrong
-// row. All ui.items-indexed lookups go through this helper.
+// All `.list-item` rows in the popup are arrow-key-navigable. Workspace
+// switcher rows used to be excluded here because they weren't in ui.items;
+// renderWorkspaceSwitcher now pushes a synthetic ui.items entry per
+// workspace so the index alignment holds and the filter is unnecessary.
 function navigableListItems() {
-  return listEl.querySelectorAll(".list-item:not([data-workspace-switch-id])");
+  return listEl.querySelectorAll(".list-item");
 }
 
 function actionFromRegistry(id, extra) {
@@ -663,6 +661,15 @@ const RESTOREABLE_VIEWS = new Set(["recently-closed"]);
 // closes every row visible in the current list (e.g. close all children).
 const CLOSE_ALL_VIEWS = new Set(["child-tabs"]);
 
+// Rows that arrow-key navigation should skip over: explicitly disabled
+// rows (no chord/click target) plus the active workspace switcher (you
+// can't switch to the workspace you're already in — its row also has no
+// click handler).
+function isUnselectableRow(el) {
+  if (!el) return false;
+  return el.classList.contains("disabled") || el.classList.contains("ws-active");
+}
+
 function refreshCurrentView() {
   ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
   if (!REFRESHABLE_VIEWS.has(ui.currentView)) return;
@@ -694,10 +701,10 @@ function moveSelection(delta) {
     ui.selectedIndex = wrap(ui.selectedIndex + delta);
   }
 
-  // Skip disabled rows within the current range only.
+  // Skip unselectable rows (disabled / active-workspace) within the current range.
   const startIndex = ui.selectedIndex;
   const listItems = navigableListItems();
-  while (listItems[ui.selectedIndex]?.classList.contains("disabled")) {
+  while (isUnselectableRow(listItems[ui.selectedIndex])) {
     ui.selectedIndex = wrap(ui.selectedIndex + delta);
     if (ui.selectedIndex === startIndex) break;
   }
@@ -764,11 +771,11 @@ function jumpToSection(delta) {
 
   ui.selectedIndex = sections[targetSection];
 
-  // Skip disabled items, wrapping within the page's range.
+  // Skip unselectable rows, wrapping within the page's range.
   const listItems = navigableListItems();
   const startIndex = ui.selectedIndex;
   const range = pageEnd - pageStart;
-  while (listItems[ui.selectedIndex]?.classList.contains("disabled")) {
+  while (isUnselectableRow(listItems[ui.selectedIndex])) {
     ui.selectedIndex = pageStart + ((ui.selectedIndex - pageStart + 1) % range);
     if (ui.selectedIndex === startIndex) break;
   }
@@ -807,10 +814,12 @@ function activateSelected() {
 
   const item = ui.items[ui.selectedIndex];
   const listItems = navigableListItems();
-  if (listItems[ui.selectedIndex]?.classList.contains("disabled")) return;
+  if (isUnselectableRow(listItems[ui.selectedIndex])) return;
 
   if (item.navIndex !== undefined && !item.isCurrent) {
     ext.runtime.sendMessage({ type: "navigate-to-history-index", index: item.navIndex }).catch(() => {});
+  } else if (item.workspaceSwitchId) {
+    ext.runtime.sendMessage({ type: "switch-workspace", workspaceId: item.workspaceSwitchId }).catch(() => {});
   } else if (item.id && typeof item.hotkey !== "undefined") {
     activateAction(item);
   } else if (item.reorderAction) {

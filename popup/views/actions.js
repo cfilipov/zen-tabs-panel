@@ -63,7 +63,7 @@ function getActions() {
     actionFromRegistry("scroll-to-current-tab", compact),
     actionFromRegistry("split-view",            compact),
 
-    { type: "section", label: "Workspaces", column: true },
+    { type: "section", label: "Workspaces", column: true, scrollable: true },
     actionFromRegistry("go-to-prev-workspace",  { ...compact, iconHtml: prevWsIconHtml }),
     actionFromRegistry("go-to-next-workspace",  { ...compact, iconHtml: nextWsIconHtml }),
     { type: "workspaces" },
@@ -216,7 +216,10 @@ function buildNavigateCell(action) {
 
 function renderActions(actions, title) {
   actions = actions.filter(Boolean);
-  ui.items = actions.filter((a) => a.type !== "separator" && a.type !== "workspaces" && a.type !== "section");
+  // ui.items is built incrementally below so the workspaces marker can
+  // expand into N synthetic entries (one per workspace) — that's what
+  // makes arrow-key nav reach workspace switcher rows.
+  ui.items = [];
   ui.selectedIndex = -1;
   ui.sectionStarts = [0];
 
@@ -242,7 +245,6 @@ function renderActions(actions, title) {
   listEl.appendChild(pager);
 
   ui.pageBounds = [];
-  let itemIndex = 0;
 
   for (const pageNum of pages) {
     const pageEl = document.createElement("div");
@@ -250,13 +252,14 @@ function renderActions(actions, title) {
     pageEl.dataset.page = String(pageNum);
     pager.appendChild(pageEl);
 
-    const pageStart = itemIndex;
+    const pageStart = ui.items.length;
     let gridContainer = null;
     let columnsContainer = null;
     let currentColumn = null;
+    let currentScrollTarget = null; // set when a section is scrollable
     let navigateGrid = null;
 
-    const closeColumns = () => { columnsContainer = null; currentColumn = null; };
+    const closeColumns = () => { columnsContainer = null; currentColumn = null; currentScrollTarget = null; };
     const closeNavigateGrid = () => { navigateGrid = null; };
 
     for (const action of buckets.get(pageNum)) {
@@ -285,13 +288,39 @@ function renderActions(actions, title) {
             currentColumn.className = "section-column";
             currentColumn.appendChild(header);
             columnsContainer.appendChild(currentColumn);
+            currentScrollTarget = null;
+          }
+
+          // If the section opts into scrolling, build a scroll wrapper and
+          // a fade-overlay sibling now. Subsequent items in this section are
+          // appended into the scroll wrapper (via currentScrollTarget) rather
+          // than the column directly. The fade overlay is shown only when
+          // there's overflow AND the user isn't already scrolled to bottom.
+          if (action.scrollable) {
+            currentColumn.classList.add("scrollable-column");
+            const scrollEl = document.createElement("div");
+            scrollEl.className = "section-scroll";
+            currentColumn.appendChild(scrollEl);
+            const fadeEl = document.createElement("div");
+            fadeEl.className = "section-scroll-fade";
+            currentColumn.appendChild(fadeEl);
+            currentScrollTarget = scrollEl;
+            const colEl = currentColumn;
+            const updateFade = () => {
+              const overflowing = scrollEl.scrollHeight > scrollEl.clientHeight + 1;
+              const atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 1;
+              colEl.classList.toggle("has-overflow", overflowing && !atBottom);
+            };
+            scrollEl.addEventListener("scroll", updateFade);
+            // Defer until layout settles so scrollHeight is real.
+            requestAnimationFrame(updateFade);
           }
         } else {
           closeColumns();
           closeNavigateGrid();
           pageEl.appendChild(header);
         }
-        ui.sectionStarts.push(itemIndex);
+        ui.sectionStarts.push(ui.items.length);
         continue;
       }
 
@@ -302,24 +331,29 @@ function renderActions(actions, title) {
         const sep = document.createElement("div");
         sep.className = "list-separator";
         pageEl.appendChild(sep);
-        ui.sectionStarts.push(itemIndex);
+        ui.sectionStarts.push(ui.items.length);
         continue;
       }
 
       if (action.type === "workspaces") {
         gridContainer = null;
-        if (currentColumn) {
-          renderWorkspaceSwitcher(currentColumn, "single");
-        } else {
-          renderWorkspaceSwitcher(pageEl, "grid");
-        }
+        const target = currentScrollTarget || currentColumn || pageEl;
+        renderWorkspaceSwitcher(target);
+        // Auto-scroll the active workspace into view once layout settles.
+        // If the parent is the scrollable wrapper, scrollIntoView on the
+        // active row scrolls just that container; otherwise it's a no-op
+        // (only matters when the section has scrollable: true).
+        requestAnimationFrame(() => {
+          const active = target.querySelector(".ws-active");
+          if (active) active.scrollIntoView({ block: "nearest" });
+        });
         continue;
       }
 
       if (navigateGrid) {
         const cell = buildNavigateCell(action);
         navigateGrid.appendChild(cell);
-        itemIndex++;
+        ui.items.push(action);
         continue;
       }
 
@@ -370,7 +404,7 @@ function renderActions(actions, title) {
 
       if (currentColumn) {
         gridContainer = null;
-        currentColumn.appendChild(el);
+        (currentScrollTarget || currentColumn).appendChild(el);
       } else if (action.compact) {
         if (!gridContainer) {
           gridContainer = document.createElement("div");
@@ -383,10 +417,10 @@ function renderActions(actions, title) {
         closeColumns();
         pageEl.appendChild(el);
       }
-      itemIndex++;
+      ui.items.push(action);
     }
 
-    ui.pageBounds.push([pageStart, itemIndex]);
+    ui.pageBounds.push([pageStart, ui.items.length]);
   }
 
   applyPagerTransformInstant();
@@ -609,19 +643,14 @@ async function showActionsMenu() {
     hideSidebar();
   }
 }
-function renderWorkspaceSwitcher(container, layout = "grid") {
+// Render the workspace switcher rows directly into `parent` (the caller is
+// responsible for placing parent inside a scroll container if scrolling is
+// desired — the actions menu uses the section's .section-scroll wrapper).
+// Pushes a synthetic item per workspace into `ui.items` so arrow-key
+// navigation reaches them like any other row.
+function renderWorkspaceSwitcher(parent) {
   const allWorkspaces = Object.entries(wsState.workspaceMap);
   if (allWorkspaces.length === 0) return;
-
-  let target;
-  if (layout === "single") {
-    target = container;
-  } else {
-    const grid = document.createElement("div");
-    grid.className = "actions-grid";
-    container.appendChild(grid);
-    target = grid;
-  }
 
   for (let i = 0; i < allWorkspaces.length; i++) {
     const [uuid, ws] = allWorkspaces[i];
@@ -655,7 +684,13 @@ function renderWorkspaceSwitcher(container, layout = "grid") {
       });
     }
 
-    target.appendChild(el);
+    parent.appendChild(el);
+
+    ui.items.push({
+      workspaceSwitchId: uuid,
+      label: ws.name,
+      isActiveWorkspace: isActive,
+    });
   }
 }
 

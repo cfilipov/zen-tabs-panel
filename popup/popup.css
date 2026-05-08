@@ -765,6 +765,62 @@ html, body {
   margin-top: 8px;
 }
 
+/* Section-column with `scrollable: true`: the area below the header
+   scrolls independently so the column lays out flush with siblings even
+   when content overflows. Used by the Workspaces section so it can grow
+   to many workspaces without unbalancing the menu height. */
+.section-column.scrollable-column {
+  position: relative;
+  min-height: 0;
+}
+
+.section-column.scrollable-column .section-scroll {
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.section-column.scrollable-column .section-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Bottom fade overlay + chevron. Renders only when there's overflow and
+   the user isn't already scrolled to the bottom. The renderActions loop
+   toggles `.has-overflow` on the column based on scroll math. */
+.section-column.scrollable-column .section-scroll-fade {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 32px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    light-dark(rgba(244, 244, 244, 0.85), rgba(31, 31, 31, 0.85)) 70%,
+    light-dark(rgb(244, 244, 244), rgb(31, 31, 31)) 100%
+  );
+}
+
+.section-column.scrollable-column .section-scroll-fade::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid var(--ztt-text-muted);
+  border-bottom: 1.5px solid var(--ztt-text-muted);
+  transform: translateX(-50%) rotate(45deg);
+  opacity: 0.7;
+}
+
+.section-column.scrollable-column.has-overflow .section-scroll-fade {
+  opacity: 1;
+}
+
 /* Empty state */
 .empty-state {
   padding: 24px 16px;
