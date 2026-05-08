@@ -149,7 +149,8 @@ function buildPreviewHtml(preview) {
     }
   }
   const pendingCls = preview.pending ? " tab-pending" : "";
-  return `<span class="action-preview${pendingCls}">${iconHtml}<span class="preview-title">${previewTitle}</span>${wsLabel}</span>`;
+  const indicatorHtml = renderTabIndicators(preview);
+  return `<span class="action-preview${pendingCls}">${iconHtml}<span class="preview-title">${indicatorHtml}${previewTitle}</span>${wsLabel}</span>`;
 }
 
 function buildNavigateCell(action) {
@@ -173,7 +174,8 @@ function buildNavigateCell(action) {
   // Always emit the title span (empty when no preview) so it flex-grows
   // and keeps the hotkey badge anchored to the right edge of the cell.
   const titleText = action.preview ? (action.preview.title || "Untitled") : "";
-  const titleHtml = `<span class="navigate-cell-title">${inlineFaviconHtml}${escapeHtml(titleText)}</span>`;
+  const indicatorHtml = action.preview && !action.preview.isHistory ? renderTabIndicators(action.preview) : "";
+  const titleHtml = `<span class="navigate-cell-title">${inlineFaviconHtml}${indicatorHtml}${escapeHtml(titleText)}</span>`;
   let trailingHtml = "";
   if (action.preview) {
     if (action.preview.isHistory) {
@@ -443,10 +445,19 @@ async function fetchWorkspaceMap() {
   }
 }
 // Build the lightweight preview shape passed into `getActions` for any
-// tab-style preview slot (parent, previous, vertical neighbors).
+// tab-style preview slot (parent, previous, vertical neighbors). Carries
+// pinned/essential through so the preview row can show the indicator.
 function buildTabPreview(tab) {
   return tab
-    ? { title: tab.title, favIconUrl: tab.favIconUrl, domId: tab.domId, workspaceId: tab.workspaceId, pending: tab.pending }
+    ? {
+        title: tab.title,
+        favIconUrl: tab.favIconUrl,
+        domId: tab.domId,
+        workspaceId: tab.workspaceId,
+        pending: tab.pending,
+        pinned: tab.pinned,
+        essential: tab.essential,
+      }
     : null;
 }
 

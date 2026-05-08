@@ -124,7 +124,7 @@ function renderTabsByAge(groups) {
           ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
           : `<span class="item-icon-placeholder">○</span>`}
         <span class="item-text">
-          <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
+          <span class="item-title">${renderTabIndicators(tab)}${escapeHtml(tab.title || "Untitled")}</span>
           <span class="item-subtitle">${subtitleParts}</span>
         </span>
         <span class="item-right">

@@ -50,6 +50,20 @@ function updateHeader(title, hint) {
   }
 }
 
+// Build the inline pinned/essential indicator HTML for a tab row. Returns
+// an empty string for ordinary tabs. Essential tabs are also pinned in
+// Zen, so the essential indicator wins when both are true. Used by every
+// tab-rendering codepath so the marker shows up consistently.
+function renderTabIndicators(tab) {
+  if (tab?.essential) {
+    return `<span class="tab-indicator essential" title="Essential">${getIcon("svg:star")}</span>`;
+  }
+  if (tab?.pinned) {
+    return `<span class="tab-indicator pinned" title="Pinned">${getIcon("svg:pin")}</span>`;
+  }
+  return "";
+}
+
 // Build a tab row element. Click / hover / image-error are handled by the
 // single set of delegated listeners installed on listEl from popup.js, so
 // rows are pure data-bearing markup with zero per-row listeners.
@@ -84,12 +98,14 @@ function createTabElement(tab, badge, opts) {
     ? renderBadge(badge)
     : `<span class="item-badge-placeholder"></span>`;
 
+  const indicatorHtml = renderTabIndicators(tab);
+
   el.innerHTML = `
     ${favicon
       ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
       : `<span class="item-icon-placeholder">○</span>`}
     <span class="item-text">
-      <span class="item-title">${escapeHtml(tab.title || "Untitled")}</span>
+      <span class="item-title">${indicatorHtml}${escapeHtml(tab.title || "Untitled")}</span>
       ${subtitleHtml}
     </span>
     <span class="item-right">${wsHtml}<span class="item-badge-stack">${badgeHtml}<span class="item-close" title="Close tab">✕</span></span></span>

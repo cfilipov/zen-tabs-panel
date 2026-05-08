@@ -765,6 +765,34 @@ html, body {
   margin-top: 8px;
 }
 
+/* Pinned / Essential indicator shown inline before a tab's title text in
+   every tab-rendering codepath (createTabElement, age view, info dups,
+   recently-closed, close-and-select previews, and the navigate-cell tab
+   previews). Essentials win over pinned when both flags are set. */
+.tab-indicator {
+  display: inline-block;
+  margin-right: 4px;
+  flex-shrink: 0;
+  opacity: 0.65;
+  color: var(--ztt-text-muted);
+  /* `.item-title` is inline-flex with align-items:center, so the icon
+     centers to the line-box rather than the optical middle of the text
+     (text glyphs sit above center because of line-height padding). Shift
+     down ~2px so the icon lines up with the visible cap-to-baseline range. */
+  transform: translateY(2px);
+}
+
+.tab-indicator svg {
+  width: 11px !important;
+  height: 11px !important;
+  display: block;
+}
+
+.tab-indicator.essential {
+  color: light-dark(#d4a017, #f4c14b);
+  opacity: 1;
+}
+
 /* Section-column with `scrollable: true`: the area below the header
    scrolls independently so the column lays out flush with siblings even
    when content overflows. Used by the Workspaces section so it can grow

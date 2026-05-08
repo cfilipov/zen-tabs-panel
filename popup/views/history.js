@@ -146,7 +146,7 @@ function renderRecentlyClosedList(entries) {
         ? `<img class="item-icon" src="${escapeAttr(favicon)}">`
         : `<span class="item-icon-placeholder">○</span>`}
       <span class="item-text">
-        <span class="item-title">${escapeHtml(entry.title || entry.url || "Untitled")}</span>
+        <span class="item-title">${renderTabIndicators(entry)}${escapeHtml(entry.title || entry.url || "Untitled")}</span>
         ${domain ? `<span class="item-subtitle"><span class="subtitle-domain">${escapeHtml(domain)}</span></span>` : ""}
       </span>
       <span class="item-right"><span class="item-badge-stack">${badgeHtml}<span class="item-restore" title="Restore tab (keeps menu open)">↺</span></span></span>

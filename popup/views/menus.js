@@ -112,7 +112,7 @@ async function showCloseAndSelect() {
   }
 
   const buildPreview = (tab) => tab
-    ? { title: tab.title, favIconUrl: tab.favIconUrl, domId: tab.domId, workspaceId: tab.workspaceId, pending: tab.pending }
+    ? { title: tab.title, favIconUrl: tab.favIconUrl, domId: tab.domId, workspaceId: tab.workspaceId, pending: tab.pending, pinned: tab.pinned, essential: tab.essential }
     : null;
 
   // Previous: most-recently-accessed tab excluding current (and split siblings)
@@ -215,7 +215,8 @@ async function showCloseAndSelect() {
         }
       }
       const pendingCls = opt.preview.pending ? " tab-pending" : "";
-      previewHtml = `<span class="action-preview${pendingCls}">${iconHtml}<span class="preview-title">${previewTitle}</span>${wsLabel}</span>`;
+      const indicatorHtml = renderTabIndicators(opt.preview);
+      previewHtml = `<span class="action-preview${pendingCls}">${iconHtml}<span class="preview-title">${indicatorHtml}${previewTitle}</span>${wsLabel}</span>`;
     }
 
     el.innerHTML = `

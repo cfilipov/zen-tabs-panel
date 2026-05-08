@@ -1379,6 +1379,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
               url: tab.linkedBrowser?.currentURI?.spec || "",
               workspaceId: tab.getAttribute("zen-workspace-id") || null,
               pinned: tab.pinned || false,
+              essential: tab.hasAttribute("zen-essential"),
               active: tab.selected || false,
               lastAccessed: tab.lastAccessed || 0,
               favIconUrl: unwrapFavicon(tab.image),

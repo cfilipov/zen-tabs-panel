@@ -278,7 +278,7 @@ function renderTabInfo(info, visits, duplicates) {
         : (dup.workspaceId === wsState.activeWorkspaceId) ? `<span class="dup-ws-note">(this workspace)</span>` : "";
       html += `<div class="info-duplicate-row${isSelf ? " dup-self" : ""}" data-dom-id="${escapeAttr(dup.domId)}">`;
       html += `<span class="dup-index">${i + 1}</span>`;
-      html += `<span class="dup-workspace">${wsIcon}${wsName}${wsNote}</span>`;
+      html += `<span class="dup-workspace">${renderTabIndicators(dup)}${wsIcon}${wsName}${wsNote}</span>`;
       html += `<span class="dup-age">open for ${dupAge}</span>`;
       if (!isSelf) {
         html += `<span class="dup-close" title="Close tab">✕</span>`;

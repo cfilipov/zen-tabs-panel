@@ -340,6 +340,10 @@ function getRecentlyClosed() {
         title: s.tab.title || "",
         url: s.tab.url || "",
         favIconUrl: s.tab.favIconUrl || "",
+        // sessions.getRecentlyClosed surfaces the original pinned state
+        // (when available) but never the Zen `zen-essential` attribute,
+        // so essentials show as merely pinned in the recently-closed list.
+        pinned: !!s.tab.pinned,
         lastModified: s.lastModified || 0,
       }))
   );
