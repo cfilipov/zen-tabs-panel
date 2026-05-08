@@ -239,6 +239,20 @@ function closeSelectedRow() {
   if (row && row.dataset.domId) closeRowAndReindex(row);
 }
 
+// Close every tab currently visible in the list (e.g. "Close all children"
+// from the child-tabs view). Awaits each close so the subsequent refresh
+// reads the post-close state, not stale cache.
+async function closeAllRowsInView() {
+  if (ui.items.length === 0) return;
+  const domIds = ui.items.map((it) => it && it.domId).filter(Boolean);
+  if (domIds.length === 0) return;
+  await Promise.all(domIds.map((domId) =>
+    ext.runtime.sendMessage({ type: "close-tab", domId }).catch(() => {})
+  ));
+  invalidateAllTabsCache();
+  refreshCurrentView();
+}
+
 // Restore the closed-session row without dismissing the palette. Mirrors
 // closeRowAndReindex: removes the row in place, renumbers the 1-9 badges,
 // adjusts selection, and shows the empty state when the list runs out.
@@ -539,6 +553,14 @@ function renderSidebar(sortOptions, opts) {
     sidebarEl.appendChild(hint);
   }
 
+  if (CLOSE_ALL_VIEWS.has(ui.currentView)) {
+    const hint = document.createElement("div");
+    hint.className = "sidebar-close-all-hint";
+    hint.innerHTML = `<span class="sidebar-ws-name">Close all</span> ${renderBadge("⇧W")}`;
+    hint.addEventListener("click", closeAllRowsInView);
+    sidebarEl.appendChild(hint);
+  }
+
   if (RESTOREABLE_VIEWS.has(ui.currentView)) {
     const hint = document.createElement("div");
     hint.className = "sidebar-restore-hint hidden";
@@ -636,6 +658,10 @@ const CLOSEABLE_VIEWS = new Set([
 // the palette. The existing click / Enter / 1-9 paths are unchanged and
 // still flow through the dismissing RESTORE_CLOSED_TAB action.
 const RESTOREABLE_VIEWS = new Set(["recently-closed"]);
+
+// View ids where the sidebar should expose a "Close all" action that
+// closes every row visible in the current list (e.g. close all children).
+const CLOSE_ALL_VIEWS = new Set(["child-tabs"]);
 
 function refreshCurrentView() {
   ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});

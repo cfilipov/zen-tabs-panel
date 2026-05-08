@@ -1255,6 +1255,23 @@ html, body {
   background: var(--ztt-bg-hover);
 }
 
+/* "Close all" hint — child-tabs view. Unlike sidebar-close-hint this one
+   is always visible (the action doesn't depend on a selected row). */
+.sidebar-close-all-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--ztt-text-muted);
+  transition: background 0.08s ease;
+}
+
+.sidebar-close-all-hint:hover {
+  background: var(--ztt-bg-hover);
+}
+
 /* "o Restore tab" hint — recently-closed view. */
 .sidebar-restore-hint {
   display: flex;
