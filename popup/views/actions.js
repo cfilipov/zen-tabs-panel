@@ -73,8 +73,13 @@ function getActions() {
 
     // ----- Page 2 -----
     { type: "section", label: "Navigate", page: 2, navigateGrid: true },
+    // Column-first 2x2 fill order:
+    // [Back   ] [Newest unvisited]
+    // [Forward] [Oldest unvisited]
     actionFromRegistry("go-back-in-tab",    { preview: tabState.backPreview }),
     actionFromRegistry("go-forward-in-tab", { preview: tabState.forwardPreview }),
+    actionFromRegistry("unvisited-newest",  { preview: tabState.newestUnvisitedPreview }),
+    actionFromRegistry("unvisited-oldest",  { preview: tabState.oldestUnvisitedPreview }),
 
     { type: "section", label: "This page", page: 2, column: true },
     actionFromRegistry("reload-tab",         compact),
@@ -89,10 +94,6 @@ function getActions() {
     actionFromRegistry("reset-pinned-tab",   compact),
     actionFromRegistry("add-to-essentials",  compact),
     actionFromRegistry("open-in-container",  compact),
-
-    { type: "section", label: "All tabs", page: 2, column: true, stack: true },
-    actionFromRegistry("unvisited-newest",   compact),
-    actionFromRegistry("unvisited-oldest",   compact),
 
     { type: "section", label: "Developer", page: 2, column: true },
     actionFromRegistry("toggle-devtools",        compact),
@@ -157,22 +158,22 @@ function buildNavigateCell(action) {
   cell.className = "navigate-cell list-item compact-item" + (disabled ? " disabled" : "");
   cell.dataset.id = action.id;
 
-  // Icon: favicon if preview has one (and it's a tab, not history), else fall
-  // back to the action's own icon.
-  let iconHtml = "";
+  // Leading icon is always the action's own vector icon — never the favicon.
+  // Favicon (if available) lives inline next to the tab title.
+  const iconHtml = `<span class="item-icon-placeholder">${getIcon(action.icon)}</span>`;
+
+  // Inline favicon: only for non-history previews that have one.
+  let inlineFaviconHtml = "";
   if (action.preview && !action.preview.isHistory) {
     const fav = extractFavicon(action.preview.favIconUrl);
-    if (fav) iconHtml = `<img class="item-icon" src="${escapeAttr(fav)}">`;
-  }
-  if (!iconHtml) {
-    iconHtml = `<span class="item-icon-placeholder">${getIcon(action.icon)}</span>`;
+    if (fav) inlineFaviconHtml = `<img class="navigate-cell-favicon" src="${escapeAttr(fav)}">`;
   }
 
   // Inline tab/page title + workspace-or-domain badge.
   // Always emit the title span (empty when no preview) so it flex-grows
   // and keeps the hotkey badge anchored to the right edge of the cell.
   const titleText = action.preview ? (action.preview.title || "Untitled") : "";
-  const titleHtml = `<span class="navigate-cell-title">${escapeHtml(titleText)}</span>`;
+  const titleHtml = `<span class="navigate-cell-title">${inlineFaviconHtml}${escapeHtml(titleText)}</span>`;
   let trailingHtml = "";
   if (action.preview) {
     if (action.preview.isHistory) {
@@ -195,7 +196,7 @@ function buildNavigateCell(action) {
     ${renderBadge(displayKey(action.hotkey))}
   `;
 
-  const img = cell.querySelector("img.item-icon");
+  const img = cell.querySelector("img.navigate-cell-favicon");
   if (img) img.addEventListener("error", () => { img.style.display = "none"; });
 
   if (!disabled) {
@@ -432,6 +433,8 @@ function resetActionsState() {
   tabState.forwardPreview = null;
   tabState.nextVerticalPreview = null;
   tabState.prevVerticalPreview = null;
+  tabState.newestUnvisitedPreview = null;
+  tabState.oldestUnvisitedPreview = null;
   tabState.selectedTabCount = 0;
   tabState.workspaceTabCounts = {};
 }
@@ -468,6 +471,10 @@ async function showActionsMenu() {
   // ----- Pass 1: tab-independent aggregates -----
   let activeTab = null;
   let unvisitedTabCount = 0;
+  let newestUnvisited = null;
+  let newestUnvisitedAccess = -Infinity;
+  let oldestUnvisited = null;
+  let oldestUnvisitedAccess = Infinity;
   const childOpeners = new Set();    // domIds that are someone's parent
   const urlCounts = new Map();
   const domainSet = new Set();
@@ -476,7 +483,18 @@ async function showActionsMenu() {
   for (let i = 0; i < allTabs.length; i++) {
     const t = allTabs[i];
     if (t.active) activeTab = t;
-    if (t.unread) unvisitedTabCount++;
+    if (t.unread) {
+      unvisitedTabCount++;
+      const access = t.lastAccessed || 0;
+      if (access > newestUnvisitedAccess) {
+        newestUnvisitedAccess = access;
+        newestUnvisited = t;
+      }
+      if (access < oldestUnvisitedAccess) {
+        oldestUnvisitedAccess = access;
+        oldestUnvisited = t;
+      }
+    }
     if (t.openerTabDomId) childOpeners.add(t.openerTabDomId);
     const url = t.url;
     if (url) {
@@ -553,6 +571,13 @@ async function showActionsMenu() {
 
   tabState.parentTabPreview = activeOpener ? buildTabPreview(parentTab) : null;
   tabState.previousTabPreview = buildTabPreview(prevBest);
+  tabState.newestUnvisitedPreview = buildTabPreview(newestUnvisited);
+  // If only one unread tab exists, newest and oldest collapse to the same tab.
+  // Hide the oldest preview so the cell shows as disabled rather than echoing
+  // the same tab twice.
+  tabState.oldestUnvisitedPreview = (oldestUnvisited && oldestUnvisited !== newestUnvisited)
+    ? buildTabPreview(oldestUnvisited)
+    : null;
 
   if (activeTab && sameWsTabs) {
     tabState.prevVerticalPreview = vIdx > 0 ? buildTabPreview(sameWsTabs[vIdx - 1]) : null;

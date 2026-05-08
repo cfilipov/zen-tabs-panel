@@ -146,18 +146,35 @@ async function showCloseAndSelect() {
   const nextVerticalLocal = (vIdx >= 0 && vIdx < wsTabs.length - 1) ? buildPreview(wsTabs[vIdx + 1]) : null;
   const prevVerticalLocal = (vIdx > 0) ? buildPreview(wsTabs[vIdx - 1]) : null;
 
+  // Newest / oldest unvisited (across all workspaces, by lastAccessed). Skip
+  // the active tab so closing-and-jumping never targets the tab being closed.
+  const unread = allTabs.filter((t) => t.unread && t.domId !== activeTab?.domId);
+  let newestUnread = null, newestAccess = -Infinity;
+  let oldestUnread = null, oldestAccess = Infinity;
+  for (const t of unread) {
+    const a = t.lastAccessed || 0;
+    if (a > newestAccess) { newestAccess = a; newestUnread = t; }
+    if (a < oldestAccess) { oldestAccess = a; oldestUnread = t; }
+  }
+  const newestUnreadPreview = buildPreview(newestUnread);
+  const oldestUnreadPreview = (oldestUnread && oldestUnread !== newestUnread)
+    ? buildPreview(oldestUnread)
+    : null;
+
   const defaultPreview = defaultCloseTargetDomId
     ? buildPreview(allTabs.find((t) => t.domId === defaultCloseTargetDomId))
     : null;
 
   const previewByActionId = {
-    "close-and-select-default":       defaultPreview,
-    "close-and-select-previous":      previousPreview,
-    "close-and-select-parent":        parentPreview,
-    "close-and-select-next-sibling":  nextSiblingPreview,
-    "close-and-select-prev-sibling":  prevSiblingPreview,
-    "close-and-select-next-vertical": nextVerticalLocal,
-    "close-and-select-prev-vertical": prevVerticalLocal,
+    "close-and-select-default":           defaultPreview,
+    "close-and-select-previous":          previousPreview,
+    "close-and-select-parent":            parentPreview,
+    "close-and-select-next-sibling":      nextSiblingPreview,
+    "close-and-select-prev-sibling":      prevSiblingPreview,
+    "close-and-select-next-vertical":     nextVerticalLocal,
+    "close-and-select-prev-vertical":     prevVerticalLocal,
+    "close-and-select-unvisited-newest":  newestUnreadPreview,
+    "close-and-select-unvisited-oldest":  oldestUnreadPreview,
   };
   const options = kbChildrenOf("close-and-select").map((c) => ({
     label: c.label,
@@ -307,15 +324,22 @@ async function showOpenInContainer() {
     // cookieStoreId is "firefox-container-N"; extract the int for userContextId.
     const m = /^firefox-container-(\d+)$/.exec(c.cookieStoreId || "");
     const userContextId = m ? parseInt(m[1], 10) : 0;
-    const colorDot = c.colorCode
-      ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escapeAttr(c.colorCode)};margin-right:8px"></span>`
-      : "";
+
+    // Firefox ships container icons as black SVGs at resource://usercontext-
+    // content/<icon>.svg. We tint them by using the SVG as a CSS mask on a
+    // span whose background is the container's colorCode — that way the icon
+    // matches what Zen shows in the tab strip.
+    const color = c.colorCode || "currentColor";
+    const iconUrl = c.iconUrl || "";
+    const iconHtml = iconUrl
+      ? `<span class="container-icon" style="background-color:${escapeAttr(color)};mask-image:url(${escapeAttr(iconUrl)});-webkit-mask-image:url(${escapeAttr(iconUrl)})"></span>`
+      : `<span class="item-icon-placeholder"></span>`;
 
     const el = document.createElement("div");
     el.className = "list-item";
     el.dataset.userContextId = String(userContextId);
     el.innerHTML = `
-      <span class="item-icon-placeholder">${colorDot}${getIcon("svg:layers")}</span>
+      ${iconHtml}
       <span class="item-text"><span class="item-title">${escapeHtml(c.name)}</span></span>
       <span class="item-right">${badge ? renderBadge(badge) : ""}</span>
     `;

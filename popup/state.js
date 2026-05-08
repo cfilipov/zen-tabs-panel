@@ -30,12 +30,14 @@ const tabState = {
   currentTabIsPinned: false,
   childTabCount: 0,
   unvisitedTabCount: 0,
-  parentTabPreview: null,    // { title, favIconUrl }
-  previousTabPreview: null,  // { title, favIconUrl }
-  backPreview: null,         // { title, url, isHistory: true }
-  forwardPreview: null,      // { title, url, isHistory: true }
-  nextVerticalPreview: null, // { title, favIconUrl, domId, workspaceId }
-  prevVerticalPreview: null, // same shape
+  parentTabPreview: null,         // { title, favIconUrl }
+  previousTabPreview: null,       // { title, favIconUrl }
+  backPreview: null,              // { title, url, isHistory: true }
+  forwardPreview: null,           // { title, url, isHistory: true }
+  nextVerticalPreview: null,      // { title, favIconUrl, domId, workspaceId }
+  prevVerticalPreview: null,      // same shape
+  newestUnvisitedPreview: null,   // tab preview shape — most recently accessed unread tab
+  oldestUnvisitedPreview: null,   // tab preview shape — least recently accessed unread tab
   selectedTabCount: 0,
   duplicateGroupCount: 0,
   siblingTabCount: 0,

@@ -35,8 +35,8 @@ this.ZEN_KEYBINDINGS = [
   { id: "go-to-parent-tab",   kind: "action", chord: "T", label: "Parent",   icon: "svg:move-up", needsParent: true },
   { id: "go-back-in-tab",          kind: "action", chord: "[", label: "Back",     icon: "svg:arrow-left", page: 2 },
   { id: "go-forward-in-tab",       kind: "action", chord: "]", label: "Forward",  icon: "svg:arrow-right", page: 2 },
-  { id: "go-to-prev-vertical-tab", kind: "action", chord: "<", label: "Above",    icon: "svg:arrow-up" },
-  { id: "go-to-next-vertical-tab", kind: "action", chord: ">", label: "Below",    icon: "svg:arrow-down" },
+  { id: "go-to-prev-vertical-tab", kind: "action", chord: "J", label: "Above",    icon: "svg:arrow-up" },
+  { id: "go-to-next-vertical-tab", kind: "action", chord: "K", label: "Below",    icon: "svg:arrow-down" },
 
   // Browse views
   { id: "child-tabs",      kind: "open-view", chord: "C",       view: "child-tabs",      label: "Children",        icon: "svg:move-down",     needsChildren: true },
@@ -87,8 +87,8 @@ this.ZEN_KEYBINDINGS = [
   { id: "open-in-container",  kind: "open-view", chord: "Shift+N", view: "open-in-container", label: "New container tab", icon: "svg:layers", page: 2 },
 
   // Page 2 — All tabs
-  { id: "unvisited-newest",   kind: "action", chord: "G", label: "Newest unvisited",  icon: "svg:circle-dot",    page: 2, needsUnvisited: true },
-  { id: "unvisited-oldest",   kind: "action", chord: "J", label: "Oldest unvisited",  icon: "svg:circle-dot",    page: 2, needsUnvisited: true },
+  { id: "unvisited-newest",   kind: "action", chord: "G",       label: "Newest unvisited", icon: "svg:circle-dot", page: 2, needsUnvisited: true },
+  { id: "unvisited-oldest",   kind: "action", chord: "Shift+G", label: "Oldest unvisited", icon: "svg:circle-dot", page: 2, needsUnvisited: true },
 
   // Page 2 — Developer
   { id: "toggle-devtools",        kind: "action", chord: "Shift+J", label: "DevTools",        icon: "svg:terminal", page: 2 },
@@ -99,13 +99,13 @@ this.ZEN_KEYBINDINGS = [
   { id: "open-addons",        kind: "action", chord: "Shift+A", label: "Add-ons",   icon: "svg:puzzle",   page: 2 },
 
   // Page 1 — Organize (new)
-  { id: "move-to-folder",     kind: "open-view", chord: "Shift+G", view: "move-to-folder", label: "Move to folder", icon: "svg:folder" },
+  { id: "move-to-folder",     kind: "open-view", chord: "Shift+O", view: "move-to-folder", label: "Move to folder", icon: "svg:folder" },
 
   // Split-view submenu
   {
     id: "split-view",
     kind: "prefix",
-    chord: "K",
+    chord: "\\",
     view: "split-view",
     label: "Split",
     icon: "svg:columns",
@@ -150,10 +150,12 @@ this.ZEN_KEYBINDINGS = [
       { id: "close-and-select-default",       kind: "action", chord: "W",       label: "Default",             icon: "svg:x-circle" },
       { id: "close-and-select-previous",      kind: "action", chord: "P",       label: "Previous",            icon: "svg:arrow-left-right" },
       { id: "close-and-select-parent",        kind: "action", chord: "T",       label: "Parent",              icon: "svg:move-up" },
-      { id: "close-and-select-next-sibling",  kind: "action", chord: "C",       label: "Next child",          icon: "svg:git-branch" },
-      { id: "close-and-select-prev-sibling",  kind: "action", chord: "Shift+C", label: "Previous child",      icon: "svg:git-branch" },
-      { id: "close-and-select-next-vertical", kind: "action", chord: "N",       label: "Next in sidebar",     icon: "svg:arrow-down" },
-      { id: "close-and-select-prev-vertical", kind: "action", chord: "Shift+N", label: "Previous in sidebar", icon: "svg:arrow-up" },
+      { id: "close-and-select-next-sibling",  kind: "action", chord: "C",       label: "Next sibling",        icon: "svg:git-branch" },
+      { id: "close-and-select-prev-sibling",  kind: "action", chord: "Shift+C", label: "Previous sibling",    icon: "svg:git-branch" },
+      { id: "close-and-select-next-vertical",   kind: "action", chord: "N",       label: "Next in sidebar",     icon: "svg:arrow-down" },
+      { id: "close-and-select-prev-vertical",   kind: "action", chord: "Shift+N", label: "Previous in sidebar", icon: "svg:arrow-up" },
+      { id: "close-and-select-unvisited-newest", kind: "action", chord: "G",       label: "Newest unvisited",   icon: "svg:circle-dot" },
+      { id: "close-and-select-unvisited-oldest", kind: "action", chord: "Shift+G", label: "Oldest unvisited",   icon: "svg:circle-dot" },
     ],
   },
 ];

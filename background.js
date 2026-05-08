@@ -224,13 +224,15 @@ async function unloadActiveTab() {
 const CLOSE_AND_SELECT_NAVS = {
   // No-op navigation: just close the active tab and let the browser pick
   // the successor (matches default Cmd+W behavior).
-  [MSG.CLOSE_AND_SELECT_DEFAULT]:        () => Promise.resolve(true),
-  [MSG.CLOSE_AND_SELECT_PREVIOUS]:       () => api.goToPreviousTab(),
-  [MSG.CLOSE_AND_SELECT_PARENT]:         () => api.goToParentTab(),
-  [MSG.CLOSE_AND_SELECT_NEXT_SIBLING]:   () => api.goToNextSibling(),
-  [MSG.CLOSE_AND_SELECT_PREV_SIBLING]:   () => api.goToPrevSibling(),
-  [MSG.CLOSE_AND_SELECT_NEXT_VERTICAL]:  () => api.goToNextVerticalTab(),
-  [MSG.CLOSE_AND_SELECT_PREV_VERTICAL]:  () => api.goToPrevVerticalTab(),
+  [MSG.CLOSE_AND_SELECT_DEFAULT]:           () => Promise.resolve(true),
+  [MSG.CLOSE_AND_SELECT_PREVIOUS]:          () => api.goToPreviousTab(),
+  [MSG.CLOSE_AND_SELECT_PARENT]:            () => api.goToParentTab(),
+  [MSG.CLOSE_AND_SELECT_NEXT_SIBLING]:      () => api.goToNextSibling(),
+  [MSG.CLOSE_AND_SELECT_PREV_SIBLING]:      () => api.goToPrevSibling(),
+  [MSG.CLOSE_AND_SELECT_NEXT_VERTICAL]:     () => api.goToNextVerticalTab(),
+  [MSG.CLOSE_AND_SELECT_PREV_VERTICAL]:     () => api.goToPrevVerticalTab(),
+  [MSG.CLOSE_AND_SELECT_UNVISITED_NEWEST]:  () => api.activateUnvisitedNewest(),
+  [MSG.CLOSE_AND_SELECT_UNVISITED_OLDEST]:  () => api.activateUnvisitedOldest(),
 };
 
 async function closeAndSelect(actionId) {
@@ -376,8 +378,10 @@ const ACTIONS = Object.freeze({
   [MSG.CLOSE_AND_SELECT_PARENT]:          (m) => closeAndSelect(m.type),
   [MSG.CLOSE_AND_SELECT_NEXT_SIBLING]:    (m) => closeAndSelect(m.type),
   [MSG.CLOSE_AND_SELECT_PREV_SIBLING]:    (m) => closeAndSelect(m.type),
-  [MSG.CLOSE_AND_SELECT_NEXT_VERTICAL]:   (m) => closeAndSelect(m.type),
-  [MSG.CLOSE_AND_SELECT_PREV_VERTICAL]:   (m) => closeAndSelect(m.type),
+  [MSG.CLOSE_AND_SELECT_NEXT_VERTICAL]:    (m) => closeAndSelect(m.type),
+  [MSG.CLOSE_AND_SELECT_PREV_VERTICAL]:    (m) => closeAndSelect(m.type),
+  [MSG.CLOSE_AND_SELECT_UNVISITED_NEWEST]: (m) => closeAndSelect(m.type),
+  [MSG.CLOSE_AND_SELECT_UNVISITED_OLDEST]: (m) => closeAndSelect(m.type),
 
   // Sort actions — all dispatch through runSortAction(actionId).
   [MSG.SORT_TABS_RECENT_DESC]:            (m) => runSortAction(m.type),

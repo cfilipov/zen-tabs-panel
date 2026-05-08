@@ -368,6 +368,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "reorder-tabs":       { width: 600, height: 604 },
       "move-to-workspace":  { width: 600, height: 604 },
       "close-and-select":   { width: 600, height: 604 },
+      "move-to-folder":     { width: 360, height: 604 },
+      "open-in-container":  { width: 320, height: 604 },
     };
 
     // Chord/leader-key shortcut tree. After the leader (MacCtrl+Cmd+.) fires,

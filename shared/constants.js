@@ -66,6 +66,8 @@ this.MSG = Object.freeze({
   CLOSE_AND_SELECT_PREV_SIBLING:  "close-and-select-prev-sibling",
   CLOSE_AND_SELECT_NEXT_VERTICAL: "close-and-select-next-vertical",
   CLOSE_AND_SELECT_PREV_VERTICAL: "close-and-select-prev-vertical",
+  CLOSE_AND_SELECT_UNVISITED_NEWEST: "close-and-select-unvisited-newest",
+  CLOSE_AND_SELECT_UNVISITED_OLDEST: "close-and-select-unvisited-oldest",
 
   // Workspace navigation
   GO_TO_NEXT_WORKSPACE:           "go-to-next-workspace",
