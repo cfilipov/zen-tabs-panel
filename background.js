@@ -427,6 +427,13 @@ const SYNC_HANDLERS = Object.freeze({
   [MSG.PREVIEW_TAB]:     (m) => api.previewTab(m.domId),
   [MSG.CLEAR_PREVIEW]:   ()  => api.clearPreview(),
   [MSG.CLOSE_TAB]:       (m) => api.closeTabByDomId(m.domId),
+  [MSG.RESTORE_CLOSED_TAB_KEEP_OPEN]: async (m) => {
+    await browser.sessions.restore(m.sessionId).catch(() => {});
+    // sessions.restore activates the new tab and steals focus; bring
+    // focus back to the popup <browser> so arrow keys keep navigating
+    // the menu and the user can chain more restores.
+    await api.focusPalette().catch(() => {});
+  },
 });
 
 // Hide palette, then run an action. Used by the message handler to keep

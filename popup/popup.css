@@ -383,6 +383,29 @@ html, body {
   background: var(--ztt-bg-hover);
 }
 
+.item-restore {
+  font-size: 14px;
+  color: var(--ztt-text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease, background 0.1s ease, color 0.1s ease;
+}
+
+.list-item:hover .item-badge-stack .item-restore,
+.list-item.selected .item-badge-stack .item-restore {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.item-restore:hover {
+  color: var(--ztt-text);
+  background: var(--ztt-bg-hover);
+}
+
 /* Duplicate tabs in tab info */
 .info-section-header {
   display: flex;
@@ -1144,6 +1167,26 @@ html, body {
 }
 
 .sidebar-close-hint:hover {
+  background: var(--ztt-bg-hover);
+}
+
+/* "o Restore tab" hint — recently-closed view. */
+.sidebar-restore-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--ztt-text-muted);
+  transition: background 0.08s ease;
+}
+
+.sidebar-restore-hint.hidden {
+  display: none;
+}
+
+.sidebar-restore-hint:hover {
   background: var(--ztt-bg-hover);
 }
 

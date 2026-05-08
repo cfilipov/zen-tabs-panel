@@ -320,6 +320,13 @@
         "parameters": []
       },
       {
+        "name": "focusPalette",
+        "type": "function",
+        "async": true,
+        "description": "Refocus the popup browser inside the overlay (used after actions that activate a different tab and steal keyboard focus).",
+        "parameters": []
+      },
+      {
         "name": "navigateToView",
         "type": "function",
         "async": true,

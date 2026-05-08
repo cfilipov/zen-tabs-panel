@@ -1510,6 +1510,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
           destroyOverlay();
         },
 
+        // Refocus the popup <browser> after an action that activates a
+        // different tab (e.g. sessions.restore). Without this, keyboard
+        // focus stays on the newly-activated tab, so arrow keys scroll
+        // the page instead of navigating the menu.
+        async focusPalette() {
+          const w = getWin();
+          if (!w) return;
+          const br = w.document.getElementById(BROWSER_ID);
+          if (br) br.focus();
+        },
+
         async navigateToView(view, params) {
           if (!isOverlayOpen()) return;
           const parsed = params ? JSON.parse(params) : {};

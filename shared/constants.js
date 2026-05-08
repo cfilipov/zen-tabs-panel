@@ -55,6 +55,7 @@ this.MSG = Object.freeze({
   COPY_URL_MARKDOWN:              "copy-url-markdown",
   RESTORE_LAST_CLOSED_TAB:        "restore-last-closed-tab",
   RESTORE_CLOSED_TAB:             "restore-closed-tab",
+  RESTORE_CLOSED_TAB_KEEP_OPEN:   "restore-closed-tab-keep-open",
   NAVIGATE_TO_HISTORY_INDEX:      "navigate-to-history-index",
 
   // Close-and-select submenu

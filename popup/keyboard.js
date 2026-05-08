@@ -125,6 +125,17 @@ function handleListViewKey(e) {
     return;
   }
 
+  // O: restore the currently-selected closed-session row without
+  // dismissing the palette (recently-closed view). Bare letter only;
+  // existing click / Enter / 1-9 keep their dismissing behavior.
+  if ((e.key === "o" || e.key === "O") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    if (RESTOREABLE_VIEWS.has(ui.currentView) && ui.selectedIndex >= 0) {
+      e.preventDefault();
+      restoreSelectedRow();
+    }
+    return;
+  }
+
   // B/F: step navigation history
   if (ui.currentView === "navigation") {
     const upper = e.key.toUpperCase();

@@ -186,6 +186,42 @@ function closeSelectedRow() {
   if (row && row.dataset.domId) closeRowAndReindex(row);
 }
 
+// Restore the closed-session row without dismissing the palette. Mirrors
+// closeRowAndReindex: removes the row in place, renumbers the 1-9 badges,
+// adjusts selection, and shows the empty state when the list runs out.
+// Used by the ↺ icon click handler and by the O key shortcut.
+function restoreRowAndReindex(row) {
+  const sessionId = row.dataset.sessionId;
+  if (!sessionId) return;
+  ext.runtime.sendMessage({ type: "restore-closed-tab-keep-open", sessionId }).catch(() => {});
+
+  const idx = ui.items.findIndex((t) => t && t.sessionId === sessionId);
+  if (idx >= 0) ui.items.splice(idx, 1);
+
+  row.remove();
+  reassignBadges();
+
+  if (ui.items.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">No recently closed tabs</div>`;
+    ui.selectedIndex = -1;
+    updateSelection();
+  } else {
+    if (ui.selectedIndex >= ui.items.length) {
+      ui.selectedIndex = ui.items.length - 1;
+    }
+    updateSelection();
+  }
+
+  invalidateAllTabsCache();
+}
+
+function restoreSelectedRow() {
+  if (ui.selectedIndex < 0 || ui.items.length === 0) return;
+  const listItems = listEl.querySelectorAll(".list-item");
+  const row = listItems[ui.selectedIndex];
+  if (row && row.dataset.sessionId) restoreRowAndReindex(row);
+}
+
 // ---------------------------------------------------------------------------
 // Keybindings registry (loaded by popup.html before this script)
 // ---------------------------------------------------------------------------
@@ -320,9 +356,17 @@ function updateSelection() {
     ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
   }
 
-  // Sidebar "w" close hint is only meaningful with an active selection.
+  // Sidebar action hints are only meaningful with an active selection.
+  // In hints-only views (recently-closed), the whole sidebar collapses
+  // when nothing is selected so the empty rail doesn't reserve space.
+  const noSelection = ui.selectedIndex < 0;
   const closeHint = sidebarEl.querySelector(".sidebar-close-hint");
-  if (closeHint) closeHint.classList.toggle("hidden", ui.selectedIndex < 0);
+  if (closeHint) closeHint.classList.toggle("hidden", noSelection);
+  const restoreHint = sidebarEl.querySelector(".sidebar-restore-hint");
+  if (restoreHint) restoreHint.classList.toggle("hidden", noSelection);
+  if (sidebarEl.classList.contains("sidebar-hints-only")) {
+    sidebarEl.classList.toggle("hidden", noSelection);
+  }
 }
 
 function filterByWorkspace(tabs) {
@@ -330,8 +374,9 @@ function filterByWorkspace(tabs) {
   return tabs.filter((t) => t.workspaceId === wsState.workspaceFilter);
 }
 
-function renderSidebar(sortOptions) {
+function renderSidebar(sortOptions, opts) {
   sidebarEl.innerHTML = "";
+  sidebarEl.classList.remove("sidebar-hints-only");
 
   if (CLOSEABLE_VIEWS.has(ui.currentView)) {
     const hint = document.createElement("div");
@@ -339,6 +384,24 @@ function renderSidebar(sortOptions) {
     hint.innerHTML = `<span class="sidebar-ws-name">Close tab</span> ${renderBadge("W")}`;
     hint.addEventListener("click", closeSelectedRow);
     sidebarEl.appendChild(hint);
+  }
+
+  if (RESTOREABLE_VIEWS.has(ui.currentView)) {
+    const hint = document.createElement("div");
+    hint.className = "sidebar-restore-hint hidden";
+    hint.innerHTML = `<span class="sidebar-ws-name">Restore tab</span> ${renderBadge("O")}`;
+    hint.addEventListener("click", restoreSelectedRow);
+    sidebarEl.appendChild(hint);
+  }
+
+  // Hints-only views (currently just recently-closed) suppress the
+  // workspace filter list since closed sessions have no live workspace.
+  // The whole sidebar disappears when no row is selected so the view
+  // doesn't reserve empty space; updateSelection re-shows it.
+  if (opts?.hintsOnly) {
+    sidebarEl.classList.add("sidebar-hints-only");
+    sidebarEl.classList.toggle("hidden", ui.selectedIndex < 0);
+    return;
   }
 
   if (sortOptions) {
@@ -414,6 +477,12 @@ const CLOSEABLE_VIEWS = new Set([
   "child-tabs", "sibling-tabs", "parent-tabs", "unvisited",
   "last-visited", "domain-tabs", "most-visited", "tabs-by-age",
 ]);
+
+// View ids where rows represent a closed session that can be restored in
+// place via the ↺ button (mouse) or O key (selection) without dismissing
+// the palette. The existing click / Enter / 1-9 paths are unchanged and
+// still flow through the dismissing RESTORE_CLOSED_TAB action.
+const RESTOREABLE_VIEWS = new Set(["recently-closed"]);
 
 function refreshCurrentView() {
   ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
