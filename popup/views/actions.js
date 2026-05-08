@@ -514,13 +514,17 @@ async function showActionsMenu() {
   // metrics that depend on activeTab.
 
   // ----- Pass 1: tab-independent aggregates -----
+  // Parent-child uses panelTabUuid / panelParentUuid (persisted across browser
+  // restart). openerTabDomId is the runtime fallback for tabs not yet stamped.
   let activeTab = null;
   let unvisitedTabCount = 0;
   let newestUnvisited = null;
   let newestUnvisitedAccess = -Infinity;
   let oldestUnvisited = null;
   let oldestUnvisitedAccess = Infinity;
-  const childOpeners = new Set();    // domIds that are someone's parent
+  const parentUuidSet = new Set();   // UUIDs of tabs that are someone's parent
+  const parentDomIdSet = new Set();  // fallback: domIds (for un-stamped tabs)
+  const uuidToTab = new Map();       // panelTabUuid -> tab (for fast parent lookup)
   const urlCounts = new Map();
   const domainSet = new Set();
   const workspaceTabCounts = {};
@@ -540,7 +544,9 @@ async function showActionsMenu() {
         oldestUnvisited = t;
       }
     }
-    if (t.openerTabDomId) childOpeners.add(t.openerTabDomId);
+    if (t.panelTabUuid) uuidToTab.set(t.panelTabUuid, t);
+    if (t.panelParentUuid) parentUuidSet.add(t.panelParentUuid);
+    else if (t.openerTabDomId) parentDomIdSet.add(t.openerTabDomId);
     const url = t.url;
     if (url) {
       const d = extractDomain(url);
@@ -558,15 +564,23 @@ async function showActionsMenu() {
   for (const c of urlCounts.values()) if (c > 1) duplicateGroupCount++;
 
   // ----- Pass 2: activeTab-dependent aggregates -----
+  const activeParentUuid = activeTab?.panelParentUuid || null;
   const activeOpener = activeTab?.openerTabDomId || null;
+  const activeUuid = activeTab?.panelTabUuid || null;
   const activeWs = activeTab?.workspaceId || null;
   const activeSplitGroupId = activeTab?.splitGroupId || null;
   const activeDomId = activeTab?.domId || null;
+  const hasParent = !!(activeParentUuid || activeOpener);
+
+  let parentTab = null;
+  if (activeParentUuid) parentTab = uuidToTab.get(activeParentUuid) || null;
+  if (!parentTab && activeOpener) {
+    for (const t of allTabs) { if (t.domId === activeOpener) { parentTab = t; break; } }
+  }
 
   let childTabCount = 0;
   let siblingTabCount = 0;
   let parentTabCount = 0;
-  let parentTab = null;
   let prevBest = null;          // most-recently-accessed non-self non-split-sibling non-unread tab
   let prevBestAccess = -Infinity;
   const sameWsTabs = activeWs ? [] : null;
@@ -575,12 +589,18 @@ async function showActionsMenu() {
   for (let i = 0; i < allTabs.length; i++) {
     const t = allTabs[i];
 
-    if (childOpeners.has(t.domId)) parentTabCount++;
+    if ((t.panelTabUuid && parentUuidSet.has(t.panelTabUuid)) || parentDomIdSet.has(t.domId)) {
+      parentTabCount++;
+    }
 
     if (activeTab) {
-      if (t.openerTabDomId === activeDomId) childTabCount++;
-      if (activeOpener && t.openerTabDomId === activeOpener && t.domId !== activeDomId) siblingTabCount++;
-      if (activeOpener && t.domId === activeOpener) parentTab = t;
+      const isChildByUuid = activeUuid && t.panelParentUuid === activeUuid;
+      const isChildByDom = !t.panelParentUuid && t.openerTabDomId === activeDomId;
+      if (isChildByUuid || isChildByDom) childTabCount++;
+
+      const isSiblingByUuid = activeParentUuid && t.panelParentUuid === activeParentUuid && t.domId !== activeDomId;
+      const isSiblingByDom = !activeParentUuid && !t.panelParentUuid && activeOpener && t.openerTabDomId === activeOpener && t.domId !== activeDomId;
+      if (isSiblingByUuid || isSiblingByDom) siblingTabCount++;
 
       if (sameWsTabs && t.workspaceId === activeWs) {
         if (t.domId === activeDomId) vIdx = sameWsTabs.length;
@@ -602,7 +622,7 @@ async function showActionsMenu() {
   }
 
   // ----- Write derived state -----
-  tabState.currentTabHasParent = !!activeOpener;
+  tabState.currentTabHasParent = hasParent;
   tabState.currentTabIsPinned = !!activeTab?.pinned;
   tabState.childTabCount = childTabCount;
   tabState.siblingTabCount = siblingTabCount;
@@ -614,7 +634,7 @@ async function showActionsMenu() {
   tabState.recentlyClosedCount = Array.isArray(closed) ? closed.length : 0;
   tabState.selectedTabCount = Array.isArray(selectedDomIds) ? selectedDomIds.length : 0;
 
-  tabState.parentTabPreview = activeOpener ? buildTabPreview(parentTab) : null;
+  tabState.parentTabPreview = parentTab ? buildTabPreview(parentTab) : null;
   tabState.previousTabPreview = buildTabPreview(prevBest);
   tabState.newestUnvisitedPreview = buildTabPreview(newestUnvisited);
   // If only one unread tab exists, newest and oldest collapse to the same tab.

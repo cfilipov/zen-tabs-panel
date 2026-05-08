@@ -45,7 +45,7 @@ function isDelegateSkipped(row) {
 listEl.addEventListener("click", (e) => {
   const row = e.target.closest("[data-dom-id]");
   if (!row || row.classList.contains("disabled") || isDelegateSkipped(row)) return;
-  if (e.target.classList.contains("item-close")) {
+  if (e.target.closest(".item-close")) {
     e.stopPropagation();
     closeRowAndReindex(row);
     return;

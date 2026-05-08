@@ -6,6 +6,11 @@
 // references (ui/tabState/wsState, DOM refs, render.js helpers, popup.js
 // helpers, shared/dom-utils.js) resolve via the shared script-global scope.
 
+// Parent-child relationships are persisted via panelTabUuid / panelParentUuid
+// (see experiment/api.js). Tab DOM ids regenerate on browser restart, but
+// UUIDs ride along in SessionStore extData. We fall back to openerTabDomId for
+// transitional safety on tabs the new persistence layer hasn't stamped yet.
+
 async function showChildTabs(animate) {
   ui.currentView = "child-tabs";
 
@@ -23,7 +28,10 @@ async function showChildTabs(animate) {
     return;
   }
 
-  const children = filterByWorkspace(allTabs.filter((t) => t.openerTabDomId === activeTab.domId));
+  const children = filterByWorkspace(allTabs.filter((t) =>
+    (activeTab.panelTabUuid && t.panelParentUuid === activeTab.panelTabUuid) ||
+    (!t.panelParentUuid && t.openerTabDomId === activeTab.domId)
+  ));
   renderTabList(children, "Children");
   renderSidebar();
 }
@@ -40,12 +48,24 @@ async function showSiblingTabs(animate) {
   }
 
   const activeTab = allTabs.find((t) => t.active);
-  if (!activeTab || !activeTab.openerTabDomId) {
+  if (!activeTab) {
+    renderTabList([], "Siblings");
+    return;
+  }
+  const hasUuidParent = !!activeTab.panelParentUuid;
+  const hasDomOpener = !!activeTab.openerTabDomId;
+  if (!hasUuidParent && !hasDomOpener) {
     renderTabList([], "Siblings");
     return;
   }
 
-  const siblings = filterByWorkspace(allTabs.filter((t) => t.openerTabDomId === activeTab.openerTabDomId && t.domId !== activeTab.domId));
+  const siblings = filterByWorkspace(allTabs.filter((t) => {
+    if (t.panelTabUuid && activeTab.panelTabUuid && t.panelTabUuid === activeTab.panelTabUuid) return false;
+    if (t.domId === activeTab.domId) return false;
+    if (hasUuidParent && t.panelParentUuid === activeTab.panelParentUuid) return true;
+    if (!t.panelParentUuid && hasDomOpener && t.openerTabDomId === activeTab.openerTabDomId) return true;
+    return false;
+  }));
   renderTabList(siblings, "Siblings");
   renderSidebar();
 }
@@ -61,8 +81,16 @@ async function showParentTabs(animate) {
     return;
   }
 
-  const childOpeners = new Set(allTabs.filter((t) => t.openerTabDomId).map((t) => t.openerTabDomId));
-  const parents = filterByWorkspace(allTabs.filter((t) => childOpeners.has(t.domId)));
+  const parentUuids = new Set();
+  const parentDomIds = new Set();
+  for (const t of allTabs) {
+    if (t.panelParentUuid) parentUuids.add(t.panelParentUuid);
+    else if (t.openerTabDomId) parentDomIds.add(t.openerTabDomId);
+  }
+  const parents = filterByWorkspace(allTabs.filter((t) =>
+    (t.panelTabUuid && parentUuids.has(t.panelTabUuid)) ||
+    parentDomIds.has(t.domId)
+  ));
   renderTabList(parents, "Parent tabs");
   renderSidebar();
 }

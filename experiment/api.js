@@ -87,6 +87,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         try { disarmChord(); } catch (e) {}
         try { uninstallGestureListener(); } catch (e) {}
         try { cancelSyncDuplicates(); } catch (e) {}
+        try { teardownTabTracking(); } catch (e) {}
         const w = Services.wm.getMostRecentWindow("navigator:browser");
         if (!w) return;
         const overlay = w.document.getElementById("zen-tabs-panel-overlay");
@@ -132,6 +133,368 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       if (!w || !w.document) return [];
       return Array.from(w.document.querySelectorAll(".tabbrowser-tab"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Persistent per-tab metadata (rides SessionStore.extData; survives restart)
+    //
+    // SessionStore.{set,get}TabValue writes into the tab's extData blob, which
+    // Zen serializes into zen-sessions.jsonlz4 and restores when the tab is
+    // restored. Tab DOM IDs regenerate on restart, so we anchor identity on a
+    // stable per-tab UUID (panelTabUuid). Parent links store the parent's UUID
+    // (panelParentUuid). Unread state and stats are stored under their own keys.
+    // -----------------------------------------------------------------------
+
+    let SS = null;
+    let SS_GET = null;
+    let SS_SET = null;
+    try {
+      SS = ChromeUtils.importESModule(
+        "resource:///modules/sessionstore/SessionStore.sys.mjs"
+      ).SessionStore;
+      // Recent Firefox/Zen builds renamed get/setTabValue to get/setCustomTabValue.
+      SS_GET = SS && (SS.getCustomTabValue || SS.getTabValue) || null;
+      SS_SET = SS && (SS.setCustomTabValue || SS.setTabValue) || null;
+    } catch (e) {
+      SS = null;
+    }
+
+    const tabMemoryStore = new WeakMap();
+    const STATS_VERSION = 1;
+    const STATS_DEFAULT = Object.freeze({
+      v: STATS_VERSION,
+      focusCount: 0,
+      focusDurationSeconds: 0,
+      createdAt: 0,
+      openerType: "unknown",
+    });
+
+    function readTabValue(tab, key) {
+      try {
+        if (SS_GET) {
+          const raw = SS_GET.call(SS, tab, key);
+          if (raw === undefined || raw === null || raw === "") return undefined;
+          try { return JSON.parse(raw); } catch (e) { return raw; }
+        }
+      } catch (e) {}
+      const mem = tabMemoryStore.get(tab);
+      return mem ? mem[key] : undefined;
+    }
+
+    function writeTabValue(tab, key, value) {
+      try {
+        if (SS_SET) {
+          SS_SET.call(SS, tab, key, JSON.stringify(value));
+          return;
+        }
+      } catch (e) {}
+      let mem = tabMemoryStore.get(tab);
+      if (!mem) { mem = {}; tabMemoryStore.set(tab, mem); }
+      mem[key] = value;
+    }
+
+    function generateUuid() {
+      try {
+        const w = getWin();
+        if (w && w.crypto && typeof w.crypto.randomUUID === "function") {
+          return w.crypto.randomUUID();
+        }
+      } catch (e) {}
+      try {
+        return Services.uuid.generateUUID().toString().slice(1, -1);
+      } catch (e) {
+        return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+      }
+    }
+
+    function ensureTabUuid(tab) {
+      let uuid = readTabValue(tab, "panelTabUuid");
+      if (!uuid) {
+        uuid = generateUuid();
+        writeTabValue(tab, "panelTabUuid", uuid);
+      }
+      return uuid;
+    }
+
+    function readTabStats(tab) {
+      const stored = readTabValue(tab, "panelStats");
+      if (!stored || typeof stored !== "object") return { ...STATS_DEFAULT };
+      if (stored.v !== STATS_VERSION) {
+        return { ...STATS_DEFAULT, ...stored, v: STATS_VERSION };
+      }
+      return stored;
+    }
+
+    function writeTabStats(tab, patch) {
+      const current = readTabStats(tab);
+      writeTabValue(tab, "panelStats", { ...current, ...patch, v: STATS_VERSION });
+    }
+
+    // Focus tracking — chrome-side in-memory; deltas are flushed to panelStats
+    // on switch / pause / close, never on a timer.
+    //
+    // Carry sub-second remainders in tabAccumMs (per-tab) so rapid intervals
+    // accumulate across visits instead of each rounding to 0. Zen's workspace
+    // switching can bounce TabSelect several times during a single user click.
+    let focusState = { tab: null, startedAt: 0, paused: false };
+    const tabAccumMs = new WeakMap();
+
+    function recordInterval() {
+      if (!focusState.tab || focusState.paused) return;
+      const elapsed = Math.max(0, Date.now() - focusState.startedAt);
+      if (elapsed === 0) return;
+      const tab = focusState.tab;
+      const total = (tabAccumMs.get(tab) || 0) + elapsed;
+      const wholeSec = Math.floor(total / 1000);
+      if (wholeSec > 0) {
+        const stats = readTabStats(tab);
+        stats.focusDurationSeconds = (stats.focusDurationSeconds || 0) + wholeSec;
+        writeTabStats(tab, stats);
+      }
+      tabAccumMs.set(tab, total - wholeSec * 1000);
+      focusState.startedAt = Date.now();
+    }
+
+    function endFocus() {
+      recordInterval();
+      focusState = { tab: null, startedAt: 0, paused: false };
+    }
+
+    function beginFocus(tab) {
+      if (!tab) return;
+      if (focusState.tab === tab && !focusState.paused) return;
+      endFocus();
+      try {
+        ensureTabUuid(tab);
+        const stats = readTabStats(tab);
+        stats.focusCount = (stats.focusCount || 0) + 1;
+        writeTabStats(tab, stats);
+      } catch (e) {}
+      focusState = { tab, startedAt: Date.now(), paused: false };
+    }
+
+    function pauseFocus() {
+      if (!focusState.tab || focusState.paused) return;
+      recordInterval();
+      focusState.paused = true;
+    }
+
+    function resumeFocus() {
+      if (!focusState.tab || !focusState.paused) return;
+      focusState.startedAt = Date.now();
+      focusState.paused = false;
+    }
+
+    // openerType detection: a short-lived hint flag set by chrome-side hooks
+    // into the Places UI gets consumed by the next TabOpen event.
+    let openerHint = null;
+    let openerHintTimer = null;
+
+    function setOpenerHint(hint) {
+      openerHint = hint;
+      const w = getWin();
+      if (openerHintTimer && w) {
+        try { w.clearTimeout(openerHintTimer); } catch (e) {}
+      }
+      if (w) {
+        try {
+          openerHintTimer = w.setTimeout(() => { openerHint = null; openerHintTimer = null; }, 500);
+        } catch (e) {}
+      }
+    }
+
+    function consumeOpenerHint() {
+      const h = openerHint;
+      openerHint = null;
+      const w = getWin();
+      if (openerHintTimer && w) {
+        try { w.clearTimeout(openerHintTimer); } catch (e) {}
+        openerHintTimer = null;
+      }
+      return h;
+    }
+
+    let placesHooksInstalled = false;
+    function installPlacesHooks() {
+      if (placesHooksInstalled) return;
+      const w = getWin();
+      if (!w) return;
+      // Bookmarks toolbar / menu clicks
+      try {
+        const handler = w.BookmarksEventHandler;
+        if (handler && typeof handler.onCommand === "function" && !handler.__zenTabsPanelHooked) {
+          const orig = handler.onCommand;
+          handler.onCommand = function (...args) {
+            try { setOpenerHint("bookmark"); } catch (e) {}
+            return orig.apply(this, args);
+          };
+          handler.__zenTabsPanelHooked = true;
+        }
+      } catch (e) {}
+      // Generic Places UI opening (covers history menu, sidebar, library)
+      try {
+        const pui = w.PlacesUIUtils;
+        if (pui && typeof pui.openNodeWithEvent === "function" && !pui.__zenTabsPanelHooked) {
+          const orig = pui.openNodeWithEvent;
+          pui.openNodeWithEvent = function (node, event, ...rest) {
+            try {
+              const itemId = node && node.itemId;
+              if (typeof itemId === "number") {
+                if (itemId > 0) setOpenerHint("bookmark");
+                else if (itemId === -1 && node.uri) setOpenerHint("history");
+              }
+            } catch (e) {}
+            return orig.call(this, node, event, ...rest);
+          };
+          pui.__zenTabsPanelHooked = true;
+        }
+      } catch (e) {}
+      placesHooksInstalled = true;
+    }
+
+    function detectOpenerType(tab) {
+      // Priority: hint (bookmark/history from Places hooks) > openerTab > window-blur (external) > manual.
+      // Note: URL at TabOpen time is unreliable (often about:blank pre-navigation),
+      // so we don't classify by URL — tabs from the URL bar and new-tab button
+      // both fall through to "manual" since they're indistinguishable user actions.
+      const hint = consumeOpenerHint();
+      if (hint) return hint;
+      try { if (tab.openerTab) return "tab"; } catch (e) {}
+      try {
+        const w = getWin();
+        if (w && w.document && !w.document.hasFocus()) return "external";
+      } catch (e) {}
+      return "manual";
+    }
+
+    function onTabOpen(tab) {
+      try {
+        ensureTabUuid(tab);
+        const openerType = detectOpenerType(tab);
+        let parentUuid = null;
+        try { if (tab.openerTab) parentUuid = ensureTabUuid(tab.openerTab); } catch (e) {}
+        if (parentUuid) writeTabValue(tab, "panelParentUuid", parentUuid);
+        writeTabValue(tab, "panelUnread", true);
+        writeTabStats(tab, {
+          createdAt: Date.now(),
+          openerType,
+          focusCount: 0,
+          focusDurationSeconds: 0,
+        });
+      } catch (e) {}
+    }
+
+    function onTabSelect(tab) {
+      try { beginFocus(tab); } catch (e) {}
+    }
+
+    function onTabClose(tab) {
+      try { if (focusState.tab === tab) endFocus(); } catch (e) {}
+    }
+
+    function findTabByUuid(uuid) {
+      if (!uuid) return null;
+      const tabs = getAllTabElements();
+      for (const t of tabs) {
+        if (readTabValue(t, "panelTabUuid") === uuid) return t;
+      }
+      return null;
+    }
+
+    // Resolve a tab's parent: prefer runtime openerTab (live, no scan needed),
+    // fall back to the persisted panelParentUuid lookup (survives restart).
+    function resolveParentTab(tab) {
+      if (!tab) return null;
+      try { if (tab.openerTab) return tab.openerTab; } catch (e) {}
+      const parentUuid = readTabValue(tab, "panelParentUuid");
+      if (!parentUuid) return null;
+      return findTabByUuid(parentUuid);
+    }
+
+    // Resolve all sibling tabs (including self) for a tab. Sibling = same parent.
+    // Uses panelParentUuid first; falls back to openerTab object identity.
+    function resolveSiblingTabs(tab) {
+      if (!tab) return [];
+      const parentUuid = readTabValue(tab, "panelParentUuid");
+      const allTabs = getAllTabElements();
+      if (parentUuid) {
+        return allTabs.filter((t) => readTabValue(t, "panelParentUuid") === parentUuid);
+      }
+      try {
+        if (tab.openerTab) {
+          return allTabs.filter((t) => t.openerTab === tab.openerTab);
+        }
+      } catch (e) {}
+      return [];
+    }
+
+    // Install our event listeners on the chrome window's tabContainer. Stash
+    // the handler bag on the window itself so a re-install (extension reload
+    // without a full close) can tear down the previous registration — relying
+    // on context.callOnClose alone leaks listeners across disable+enable.
+    const HANDLER_BAG_KEY = "__zenTabsPanelTabHandlers";
+    let tabTrackingInstalled = false;
+    let tabTrackingListeners = null;
+    function ensureTabTracking() {
+      if (tabTrackingInstalled) return;
+      const w = getWin();
+      if (!w || !w.gBrowser || !w.gBrowser.tabContainer) return;
+      try {
+        const prior = w[HANDLER_BAG_KEY];
+        if (prior && prior.container) {
+          try {
+            prior.container.removeEventListener("TabOpen", prior.onOpen);
+            prior.container.removeEventListener("TabSelect", prior.onSelect);
+            prior.container.removeEventListener("TabClose", prior.onClose);
+          } catch (e) {}
+        }
+        const onOpen = (e) => onTabOpen(e.target);
+        const onSelect = (e) => onTabSelect(e.target);
+        const onClose = (e) => onTabClose(e.target);
+        w.gBrowser.tabContainer.addEventListener("TabOpen", onOpen);
+        w.gBrowser.tabContainer.addEventListener("TabSelect", onSelect);
+        w.gBrowser.tabContainer.addEventListener("TabClose", onClose);
+        const bag = { container: w.gBrowser.tabContainer, onOpen, onSelect, onClose };
+        w[HANDLER_BAG_KEY] = bag;
+        tabTrackingListeners = bag;
+        // Seed focus tracker with the currently selected tab so its duration
+        // accumulates from now without incrementing focusCount.
+        if (w.gBrowser.selectedTab) {
+          ensureTabUuid(w.gBrowser.selectedTab);
+          focusState = { tab: w.gBrowser.selectedTab, startedAt: Date.now(), paused: false };
+        }
+        // Re-apply the unread DOM attribute from our persisted state. Firefox
+        // doesn't restore [unread] across session restore, but our companion
+        // mod's blue dot reads that attribute. Walk all tabs once at install.
+        try {
+          for (const tab of getAllTabElements()) {
+            const persistedUnread = readTabValue(tab, "panelUnread");
+            if (persistedUnread === true && !tab.hasAttribute("unread")) {
+              tab.setAttribute("unread", "true");
+            }
+          }
+        } catch (e) {}
+        installPlacesHooks();
+        tabTrackingInstalled = true;
+      } catch (e) {}
+    }
+
+    function teardownTabTracking() {
+      try { recordInterval(); } catch (e) {}
+      if (tabTrackingListeners) {
+        try {
+          const { container, onOpen, onSelect, onClose } = tabTrackingListeners;
+          container.removeEventListener("TabOpen", onOpen);
+          container.removeEventListener("TabSelect", onSelect);
+          container.removeEventListener("TabClose", onClose);
+        } catch (e) {}
+        const w = getWin();
+        if (w && w[HANDLER_BAG_KEY] === tabTrackingListeners) {
+          delete w[HANDLER_BAG_KEY];
+        }
+        tabTrackingListeners = null;
+      }
+      tabTrackingInstalled = false;
     }
 
     async function changeWorkspaceByOffset(offset) {
@@ -959,33 +1322,43 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return activateNativeTab(candidates[0]);
         },
 
+        // Resolve parent tab using the persisted UUID first (survives restart),
+        // falling back to the runtime openerTab reference. Returns null if
+        // neither is available.
+        // (function is hoisted closure-scope above)
+
         async goToParentTab() {
+          ensureTabTracking();
           const w = getWin();
           if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
-
           const currentTab = w.gBrowser.selectedTab;
-          if (!currentTab || !currentTab.openerTab) return false;
-
-          return activateNativeTab(currentTab.openerTab);
+          if (!currentTab) return false;
+          const parent = resolveParentTab(currentTab);
+          if (!parent) return false;
+          return activateNativeTab(parent);
         },
 
         async goToNextSibling() {
+          ensureTabTracking();
           const w = getWin();
           if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
           const currentTab = w.gBrowser.selectedTab;
-          if (!currentTab || !currentTab.openerTab) return false;
-          const siblings = getAllTabElements().filter((t) => t.openerTab === currentTab.openerTab);
+          if (!currentTab) return false;
+          const siblings = resolveSiblingTabs(currentTab);
+          if (!siblings.length) return false;
           const idx = siblings.indexOf(currentTab);
           if (idx < 0 || idx === siblings.length - 1) return false;
           return activateNativeTab(siblings[idx + 1]);
         },
 
         async goToPrevSibling() {
+          ensureTabTracking();
           const w = getWin();
           if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
           const currentTab = w.gBrowser.selectedTab;
-          if (!currentTab || !currentTab.openerTab) return false;
-          const siblings = getAllTabElements().filter((t) => t.openerTab === currentTab.openerTab);
+          if (!currentTab) return false;
+          const siblings = resolveSiblingTabs(currentTab);
+          if (!siblings.length) return false;
           const idx = siblings.indexOf(currentTab);
           if (idx <= 0) return false;
           return activateNativeTab(siblings[idx - 1]);
@@ -1353,6 +1726,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         // Get ALL tabs across ALL workspaces.
         async getAllTabs() {
+          ensureTabTracking();
+          // Commit any in-progress focus duration so the popup sees fresh stats
+          // for the currently-focused tab without waiting for a tab switch.
+          try { recordInterval(); } catch (e) {}
           const tabElements = getAllTabElements();
           const w = getWin();
           const results = [];
@@ -1371,6 +1748,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
           for (const tab of tabElements) {
             const extId = getExtTabId(tab);
+            const panelTabUuid = ensureTabUuid(tab);
+            const panelParentUuid = readTabValue(tab, "panelParentUuid") || null;
+            const persistedUnread = readTabValue(tab, "panelUnread");
+            const panelStats = readTabStats(tab);
 
             results.push({
               id: extId,
@@ -1383,11 +1764,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
               active: tab.selected || false,
               lastAccessed: tab.lastAccessed || 0,
               favIconUrl: unwrapFavicon(tab.image),
-              unread: tab.hasAttribute("unread"),
+              unread: tab.hasAttribute("unread") || persistedUnread === true,
               openerTabDomId: tab.openerTab?.id || null,
               splitView: tab.hasAttribute("split-view"),
               splitGroupId: tabToGroupId.get(tab.id) || null,
               pending: tab.hasAttribute("pending"),
+              panelTabUuid,
+              panelParentUuid,
+              panelStats,
             });
           }
           return results;
@@ -1496,7 +1880,53 @@ this.zenWorkspaces = class extends ExtensionAPI {
           scheduleSyncDuplicates();
         },
 
+        // ---------------------------------------------------------------
+        // Persistent tab metadata controls
+        // ---------------------------------------------------------------
+
+        async initTabTracking() {
+          ensureTabTracking();
+          return true;
+        },
+
+        async markTabVisitedByExtId(extId) {
+          ensureTabTracking();
+          const w = getWin();
+          if (!w || !w.gBrowser) return false;
+          let tab = null;
+          try {
+            tab = context.extension.tabManager.get(extId)?.nativeTab || null;
+          } catch (e) {}
+          if (!tab) return false;
+          if (readTabValue(tab, "panelUnread") !== false) {
+            writeTabValue(tab, "panelUnread", false);
+          }
+          if (tab.hasAttribute("unread")) {
+            try { tab.removeAttribute("unread"); } catch (e) {}
+          }
+          return true;
+        },
+
+        async pauseFocusTracking() {
+          ensureTabTracking();
+          pauseFocus();
+        },
+
+        async resumeFocusTracking() {
+          ensureTabTracking();
+          resumeFocus();
+        },
+
+        async getTabUuid(domId) {
+          ensureTabTracking();
+          const tab = findTabByDomId(domId);
+          if (!tab) return null;
+          return ensureTabUuid(tab);
+        },
+
         async getTabInfo(domId) {
+          ensureTabTracking();
+          try { recordInterval(); } catch (e) {}
           const w = getWin();
           if (!w || !w.gBrowser) return null;
           const tab = findTabByDomId(domId);
@@ -1540,6 +1970,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
             .filter(t => (t.linkedBrowser?.currentURI?.spec || "") === url)
             .map(t => t.id);
 
+          // Persisted metadata
+          const panelTabUuid = ensureTabUuid(tab);
+          const panelParentUuid = readTabValue(tab, "panelParentUuid") || null;
+          const panelStats = readTabStats(tab);
+          let parentTitle = null;
+          let parentDomId = null;
+          let parentFavIconUrl = null;
+          if (panelParentUuid) {
+            const parentTab = findTabByUuid(panelParentUuid);
+            if (parentTab) {
+              parentTitle = parentTab.label || "";
+              parentDomId = parentTab.id;
+              parentFavIconUrl = unwrapFavicon(parentTab.image);
+            }
+          }
+
           return {
             domId,
             title: tab.label || "",
@@ -1553,6 +1999,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
             memory,
             cpuTime,
             duplicateDomIds,
+            panelTabUuid,
+            panelParentUuid,
+            panelStats,
+            parentTitle,
+            parentDomId,
+            parentFavIconUrl,
           };
         },
 

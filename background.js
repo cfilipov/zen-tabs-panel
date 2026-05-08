@@ -140,6 +140,17 @@ browser.tabs.onActivated.addListener((activeInfo) => {
   } else {
     cancelAutoMove();
   }
+  api.markTabVisitedByExtId(activeInfo.tabId).catch(() => {});
+});
+
+// Pause focus-duration accumulation while the browser window is unfocused, so
+// time spent in another app doesn't inflate any tab's focusDurationSeconds.
+browser.windows.onFocusChanged.addListener((windowId) => {
+  if (windowId === browser.windows.WINDOW_ID_NONE) {
+    api.pauseFocusTracking().catch(() => {});
+  } else {
+    api.resumeFocusTracking().catch(() => {});
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -560,6 +571,7 @@ browser.menus.onClicked.addListener(async (info) => {
 loadSettings();
 api.getActiveWorkspaceId().catch(() => {});
 api.syncDuplicates().catch(() => {});
+api.initTabTracking().catch(() => {});
 
 // Show welcome page on first install
 browser.runtime.onInstalled.addListener(async (details) => {

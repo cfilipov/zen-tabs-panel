@@ -263,6 +263,45 @@
         "parameters": []
       },
       {
+        "name": "initTabTracking",
+        "type": "function",
+        "async": true,
+        "description": "Initialize chrome-side tab tracking listeners (called once at extension startup)",
+        "parameters": []
+      },
+      {
+        "name": "markTabVisitedByExtId",
+        "type": "function",
+        "async": true,
+        "description": "Clear the persisted unread flag for a tab (called when the tab is activated)",
+        "parameters": [
+          { "name": "extId", "type": "integer" }
+        ]
+      },
+      {
+        "name": "pauseFocusTracking",
+        "type": "function",
+        "async": true,
+        "description": "Pause focus-duration accumulation (called when the browser window loses focus)",
+        "parameters": []
+      },
+      {
+        "name": "resumeFocusTracking",
+        "type": "function",
+        "async": true,
+        "description": "Resume focus-duration accumulation (called when the browser window regains focus)",
+        "parameters": []
+      },
+      {
+        "name": "getTabUuid",
+        "type": "function",
+        "async": true,
+        "description": "Return the stable per-tab UUID, assigning one if missing",
+        "parameters": [
+          { "name": "domId", "type": "string" }
+        ]
+      },
+      {
         "name": "getTabInfo",
         "type": "function",
         "async": true,

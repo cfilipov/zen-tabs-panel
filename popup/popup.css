@@ -439,12 +439,33 @@ html, body {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.1s ease, background 0.1s ease, color 0.1s ease;
+  /* Stretch to fill the badge-stack grid cell so clicks anywhere in the
+     22px slot land on the X when it's interactive. Without this the close
+     span is narrower than the cell and clicks at the edges fall through. */
+  justify-self: stretch;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  box-sizing: border-box;
 }
 
 .list-item:hover .item-badge-stack .item-close,
 .list-item.selected .item-badge-stack .item-close {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* When the X is interactive, the underlying badge/placeholder (which share
+   the same grid cell) must not eat clicks at the right edge — the X span is
+   narrower than the 22px badge slot, and without this the click falls
+   through to whichever sibling is below in stacking order. */
+.list-item:hover .item-badge-stack .item-badge,
+.list-item:hover .item-badge-stack .item-badge-placeholder,
+.list-item.selected .item-badge-stack .item-badge,
+.list-item.selected .item-badge-stack .item-badge-placeholder {
+  pointer-events: none;
 }
 
 .list-item:hover .item-badge-stack .item-badge,
@@ -1064,6 +1085,35 @@ html, body {
   display: flex;
   flex-direction: column;
   padding: 5px 0;
+}
+
+.info-cell-clickable {
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 0 -6px;
+  padding: 5px 6px;
+}
+
+.info-cell-clickable:hover {
+  background: var(--ztt-hover);
+}
+
+.info-cell-clickable .info-value {
+  color: var(--ztt-link, var(--ztt-text));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.info-cell-favicon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  object-fit: contain;
+  vertical-align: middle;
+  margin-right: 6px;
+  position: relative;
+  top: -1px;
 }
 
 .info-label {

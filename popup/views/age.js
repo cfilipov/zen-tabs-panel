@@ -182,22 +182,14 @@ async function showMostVisited(animate) {
 
   const filtered = filterByWorkspace(allTabs.filter((t) => t.url && !t.url.startsWith("about:")));
 
-  const uniqueUrls = [...new Set(filtered.map((t) => t.url))];
-  const visitCounts = {};
-  try {
-    const results = await Promise.all(
-      uniqueUrls.map((url) => ext.runtime.sendMessage({ type: "get-history-visits", url }).then(
-        (visits) => ({ url, count: visits.length }),
-        () => ({ url, count: 0 })
-      ))
-    );
-    for (const r of results) visitCounts[r.url] = r.count;
-  } catch (e) {}
-
-  filtered.sort((a, b) => (visitCounts[b.url] || 0) - (visitCounts[a.url] || 0));
+  // Sort by per-tab focus count from our own persisted stats (panelStats),
+  // not by the Places history visit count for the URL — focus count tracks
+  // how many times the user actually switched to *this tab*.
+  const focusCount = (t) => (t.panelStats && t.panelStats.focusCount) || 0;
+  filtered.sort((a, b) => focusCount(b) - focusCount(a));
 
   renderTabList(filtered, "Most visited", null, {
-    subtitleSuffix: (tab) => `<span class="subtitle-age">${visitCounts[tab.url] || 0} visits</span>`,
+    subtitleSuffix: (tab) => `<span class="subtitle-age">${focusCount(tab)} focuses</span>`,
   });
   renderSidebar();
 }

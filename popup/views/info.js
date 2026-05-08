@@ -235,9 +235,13 @@ function renderTabInfo(info, visits, duplicates) {
   // Stats grid (two columns)
   html += `<div class="info-grid">`;
 
-  // Tab age from domId timestamp
-  const createdTs = parseInt(info.domId.split("-")[0]);
-  if (createdTs > 1e12) {
+  // Tab age — prefer the persisted createdAt (survives restart) over the
+  // domId timestamp (regenerates on restart).
+  const persistedCreated = info.panelStats && info.panelStats.createdAt;
+  const fallbackCreated = parseInt(info.domId.split("-")[0]);
+  const createdTs = (persistedCreated && persistedCreated > 1e12) ? persistedCreated
+                  : (fallbackCreated > 1e12 ? fallbackCreated : 0);
+  if (createdTs > 0) {
     html += `<div class="info-cell"><span class="info-label">Tab age</span><span class="info-value">${formatDuration(now - createdTs)}</span></div>`;
   }
 
@@ -258,6 +262,36 @@ function renderTabInfo(info, visits, duplicates) {
 
   if (duplicates && duplicates.length > 1) {
     html += `<div class="info-cell"><span class="info-label">Duplicates</span><span class="info-value">${duplicates.length}</span></div>`;
+  }
+
+  // Per-tab focus stats (persisted across restart via SessionStore extData).
+  const stats = info.panelStats;
+  if (stats && stats.focusCount > 0) {
+    html += `<div class="info-cell"><span class="info-label">Times focused</span><span class="info-value">${stats.focusCount}</span></div>`;
+  }
+  if (stats && stats.focusDurationSeconds > 0) {
+    html += `<div class="info-cell"><span class="info-label">Time focused</span><span class="info-value">${formatDuration(stats.focusDurationSeconds * 1000)}</span></div>`;
+  }
+  const openerLabels = {
+    tab:      "Another tab",
+    bookmark: "Bookmark",
+    history:  "History",
+    external: "External app",
+    manual:   "URL bar / new tab",
+  };
+  if (stats && openerLabels[stats.openerType]) {
+    let openerValue = openerLabels[stats.openerType];
+    if (stats.openerType === "tab" && info.parentTitle) {
+      openerValue += `: ${escapeHtml(info.parentTitle)}`;
+    }
+    html += `<div class="info-cell"><span class="info-label">Opened from</span><span class="info-value">${openerValue}</span></div>`;
+  }
+  if (info.parentDomId && info.parentTitle) {
+    const parentFavicon = extractFavicon(info.parentFavIconUrl);
+    const parentFaviconHtml = parentFavicon
+      ? `<img class="info-cell-favicon" src="${escapeAttr(parentFavicon)}">`
+      : "";
+    html += `<div class="info-cell info-cell-clickable" data-parent-dom-id="${escapeAttr(info.parentDomId)}"><span class="info-label">Parent tab</span><span class="info-value">${parentFaviconHtml}${escapeHtml(info.parentTitle)}</span></div>`;
   }
 
   html += `</div>`;
@@ -351,6 +385,23 @@ function renderTabInfo(info, visits, duplicates) {
   const img = listEl.querySelector("img.info-favicon");
   if (img) {
     img.addEventListener("error", () => { img.style.display = "none"; });
+  }
+
+  // Parent tab cell — click activates the parent.
+  const parentCell = listEl.querySelector(".info-cell-clickable[data-parent-dom-id]");
+  if (parentCell) {
+    const parentDomId = parentCell.dataset.parentDomId;
+    parentCell.addEventListener("click", () => activateTab(parentDomId));
+    parentCell.addEventListener("mouseenter", () => {
+      ext.runtime.sendMessage({ type: "preview-tab", domId: parentDomId }).catch(() => {});
+    });
+    parentCell.addEventListener("mouseleave", () => {
+      ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+    });
+    const parentFav = parentCell.querySelector("img.info-cell-favicon");
+    if (parentFav) {
+      parentFav.addEventListener("error", () => { parentFav.style.display = "none"; });
+    }
   }
 
   updateHeader("Tab info");
