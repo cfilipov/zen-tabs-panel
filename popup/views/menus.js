@@ -236,7 +236,102 @@ async function showCloseAndSelect() {
   updateHeader("Close & select…");
 }
 
+// Move-to-folder: list Zen tab-group folders. Selecting one moves the
+// active tab into that group.
+async function showMoveToFolder() {
+  ui.currentView = "move-to-folder";
+  ui.sectionStarts = [0];
+
+  let folders = [];
+  try { folders = await ext.runtime.sendMessage({ type: "get-folders" }) || []; }
+  catch (e) {}
+
+  ui.items = folders.map((f) => ({ folderId: f.id, label: f.name, workspaceId: f.workspaceId }));
+  ui.selectedIndex = -1;
+  listEl.innerHTML = "";
+
+  if (folders.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">No folders</div>`;
+    updateHeader("Move to folder");
+    return;
+  }
+
+  for (let i = 0; i < folders.length; i++) {
+    const f = folders[i];
+    const badge = i + 1 <= 9 ? String(i + 1) : null;
+    const wsLabel = f.workspaceId && f.workspaceId !== wsState.activeWorkspaceId
+      ? `<span class="row-workspace">${escapeHtml(wsState.workspaceMap[f.workspaceId]?.name || "")}</span>`
+      : "";
+
+    const el = document.createElement("div");
+    el.className = "list-item";
+    el.dataset.folderId = f.id;
+    el.innerHTML = `
+      <span class="item-icon-placeholder">${getIcon("svg:folder")}</span>
+      <span class="item-text"><span class="item-title">${escapeHtml(f.name)}</span></span>
+      <span class="item-right">${wsLabel}${badge ? renderBadge(badge) : ""}</span>
+    `;
+    el.addEventListener("click", () => {
+      ext.runtime.sendMessage({ type: "move-tab-to-folder", folderId: f.id }).catch(() => {});
+    });
+    listEl.appendChild(el);
+  }
+
+  updateSelection();
+  updateHeader("Move to folder");
+}
+
+// Open-in-container: list the user's contextual identities (containers).
+// Selecting one reopens the active tab in that container.
+async function showOpenInContainer() {
+  ui.currentView = "open-in-container";
+  ui.sectionStarts = [0];
+
+  let identities = [];
+  try { identities = await ext.contextualIdentities.query({}) || []; }
+  catch (e) {}
+
+  ui.items = identities.map((c) => ({ userContextId: c.cookieStoreId, label: c.name }));
+  ui.selectedIndex = -1;
+  listEl.innerHTML = "";
+
+  if (identities.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">No containers configured</div>`;
+    updateHeader("New container tab");
+    return;
+  }
+
+  for (let i = 0; i < identities.length; i++) {
+    const c = identities[i];
+    const badge = i + 1 <= 9 ? String(i + 1) : null;
+    // cookieStoreId is "firefox-container-N"; extract the int for userContextId.
+    const m = /^firefox-container-(\d+)$/.exec(c.cookieStoreId || "");
+    const userContextId = m ? parseInt(m[1], 10) : 0;
+    const colorDot = c.colorCode
+      ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escapeAttr(c.colorCode)};margin-right:8px"></span>`
+      : "";
+
+    const el = document.createElement("div");
+    el.className = "list-item";
+    el.dataset.userContextId = String(userContextId);
+    el.innerHTML = `
+      <span class="item-icon-placeholder">${colorDot}${getIcon("svg:layers")}</span>
+      <span class="item-text"><span class="item-title">${escapeHtml(c.name)}</span></span>
+      <span class="item-right">${badge ? renderBadge(badge) : ""}</span>
+    `;
+    el.addEventListener("click", () => {
+      ext.runtime.sendMessage({ type: "reopen-in-container", userContextId }).catch(() => {});
+    });
+    listEl.appendChild(el);
+  }
+
+  updateSelection();
+  updateHeader("New container tab");
+}
+
 // View registry
-VIEWS["reorder-tabs"]      = () => showReorderTabs();
-VIEWS["split-view"]        = () => showSplitView();
-VIEWS["close-and-select"]  = () => showCloseAndSelect();
+VIEWS["reorder-tabs"]       = () => showReorderTabs();
+VIEWS["split-view"]         = () => showSplitView();
+VIEWS["close-and-select"]   = () => showCloseAndSelect();
+VIEWS["move-to-folder"]     = () => showMoveToFolder();
+VIEWS["open-in-container"]  = () => showOpenInContainer();

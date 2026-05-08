@@ -90,6 +90,29 @@ this.MSG = Object.freeze({
   SORT_TABS_MOST_VISITED:         "sort-tabs-most-visited",
   SORT_TABS_GROUP_DUPS:           "sort-tabs-group-dups",
 
+  // Page 2 actions — this-page operations
+  RELOAD_TAB:                     "reload-tab",
+  RELOAD_SKIP_CACHE:              "reload-skip-cache",
+  DUPLICATE_TAB:                  "duplicate-tab",
+  TOGGLE_READER_MODE:             "toggle-reader-mode",
+  VIEW_PAGE_SOURCE:               "view-page-source",
+  VIEW_PAGE_INFO:                 "view-page-info",
+  TOGGLE_MUTE:                    "toggle-mute",
+  RESET_PINNED_TAB:               "reset-pinned-tab",
+  ADD_TO_ESSENTIALS:              "add-to-essentials",
+  TAKE_SCREENSHOT:                "take-screenshot",
+  TOGGLE_PIP:                     "toggle-pip",
+  TOGGLE_FULLSCREEN:              "toggle-fullscreen",
+  TOGGLE_DEVTOOLS:                "toggle-devtools",
+  TOGGLE_BROWSER_TOOLBOX:         "toggle-browser-toolbox",
+  OPEN_DOWNLOADS:                 "open-downloads",
+  OPEN_ADDONS:                    "open-addons",
+  UNVISITED_NEWEST:               "unvisited-newest",
+  UNVISITED_OLDEST:               "unvisited-oldest",
+  MOVE_TAB_TO_FOLDER:             "move-tab-to-folder",
+  REOPEN_IN_CONTAINER:            "reopen-in-container",
+  GET_FOLDERS:                    "get-folders",
+
   // Companion mods
   CHECK_COMPANION_MOD:            "check-companion-mod",
   INSTALL_COMPANION_MOD:          "install-companion-mod",
@@ -128,6 +151,8 @@ this.VIEW_IDS = new Set([
   "split-view",
   "move-to-workspace",
   "close-and-select",
+  "move-to-folder",
+  "open-in-container",
 ]);
 
 // Node test shim — let lib/ tests import constants without a browser context.

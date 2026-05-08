@@ -19,7 +19,8 @@ const KEY_HANDLERS = Object.create(null);
 KEY_HANDLERS["ArrowDown"] = (e) => {
   e.preventDefault();
   if (e.metaKey && !ui.sidebarFocused) {
-    ui.selectedIndex = ui.items.length - 1;
+    const [, end] = currentPageBounds();
+    ui.selectedIndex = end - 1;
     updateSelection();
   } else if (ui.sidebarFocused) {
     moveSidebarSelection(1);
@@ -31,7 +32,8 @@ KEY_HANDLERS["ArrowDown"] = (e) => {
 KEY_HANDLERS["ArrowUp"] = (e) => {
   e.preventDefault();
   if (e.metaKey && !ui.sidebarFocused) {
-    ui.selectedIndex = 0;
+    const [start] = currentPageBounds();
+    ui.selectedIndex = start;
     updateSelection();
   } else if (ui.sidebarFocused) {
     moveSidebarSelection(-1);
@@ -65,6 +67,16 @@ KEY_HANDLERS["Enter"] = (e) => {
 
 KEY_HANDLERS["Escape"] = () => closePalette();
 
+// Space cycles the actions menu page. Shift+Space cycles backward. Both wrap.
+// Active only on the actions view — other views never bind Space, so a hidden
+// quirk where a list view consumes Space won't fire by accident.
+KEY_HANDLERS[" "] = (e) => {
+  if (ui.currentView !== "actions") return;
+  if (ui.pageCount <= 1) return;
+  e.preventDefault();
+  cycleActionsPage(e.shiftKey ? -1 : 1);
+};
+
 KEY_HANDLERS["Backspace"] = (e) => {
   if (ui.currentView !== "actions") {
     e.preventDefault();
@@ -93,7 +105,7 @@ function handleActionsKey(e) {
   const idx = ui.items.findIndex((item) => item.hotkey === key);
   if (idx < 0) return;
 
-  const listItems = listEl.querySelectorAll(".list-item");
+  const listItems = navigableListItems();
   if (listItems[idx]?.classList.contains("disabled")) return;
 
   e.preventDefault();

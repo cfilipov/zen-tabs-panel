@@ -342,6 +342,157 @@
         "async": true,
         "description": "Navigate back in the palette view stack, or close if at root",
         "parameters": []
+      },
+      {
+        "name": "reloadTab",
+        "type": "function",
+        "async": true,
+        "description": "Reload the active tab",
+        "parameters": []
+      },
+      {
+        "name": "reloadTabSkipCache",
+        "type": "function",
+        "async": true,
+        "description": "Reload the active tab bypassing the cache (hard reload)",
+        "parameters": []
+      },
+      {
+        "name": "duplicateTab",
+        "type": "function",
+        "async": true,
+        "description": "Duplicate the active tab",
+        "parameters": []
+      },
+      {
+        "name": "toggleReaderMode",
+        "type": "function",
+        "async": true,
+        "description": "Toggle reader mode on the active tab",
+        "parameters": []
+      },
+      {
+        "name": "viewPageSource",
+        "type": "function",
+        "async": true,
+        "description": "Open the View Source viewer for the active tab",
+        "parameters": []
+      },
+      {
+        "name": "viewPageInfo",
+        "type": "function",
+        "async": true,
+        "description": "Open the Page Info dialog for the active tab",
+        "parameters": []
+      },
+      {
+        "name": "toggleMute",
+        "type": "function",
+        "async": true,
+        "description": "Toggle mute state of the active tab's audio",
+        "parameters": []
+      },
+      {
+        "name": "resetPinnedTab",
+        "type": "function",
+        "async": true,
+        "description": "Reset the active pinned tab to its original pinned URL",
+        "parameters": []
+      },
+      {
+        "name": "addToEssentials",
+        "type": "function",
+        "async": true,
+        "description": "Add the active tab to Zen Essentials",
+        "parameters": []
+      },
+      {
+        "name": "takeScreenshot",
+        "type": "function",
+        "async": true,
+        "description": "Open the Firefox screenshot tool on the active page",
+        "parameters": []
+      },
+      {
+        "name": "togglePictureInPicture",
+        "type": "function",
+        "async": true,
+        "description": "Toggle picture-in-picture for the focused video",
+        "parameters": []
+      },
+      {
+        "name": "toggleFullScreen",
+        "type": "function",
+        "async": true,
+        "description": "Enter or exit browser full-screen mode",
+        "parameters": []
+      },
+      {
+        "name": "toggleDevTools",
+        "type": "function",
+        "async": true,
+        "description": "Open or focus the page DevTools",
+        "parameters": []
+      },
+      {
+        "name": "toggleBrowserToolbox",
+        "type": "function",
+        "async": true,
+        "description": "Open the chrome-process Browser Toolbox",
+        "parameters": []
+      },
+      {
+        "name": "openDownloads",
+        "type": "function",
+        "async": true,
+        "description": "Open the Downloads view",
+        "parameters": []
+      },
+      {
+        "name": "openAddons",
+        "type": "function",
+        "async": true,
+        "description": "Open the Add-ons Manager",
+        "parameters": []
+      },
+      {
+        "name": "activateUnvisitedNewest",
+        "type": "function",
+        "async": true,
+        "description": "Activate the most recently accessed unread tab",
+        "parameters": []
+      },
+      {
+        "name": "activateUnvisitedOldest",
+        "type": "function",
+        "async": true,
+        "description": "Activate the least recently accessed unread tab",
+        "parameters": []
+      },
+      {
+        "name": "getFolders",
+        "type": "function",
+        "async": true,
+        "description": "List all Zen tab-group folders",
+        "parameters": []
+      },
+      {
+        "name": "moveTabToFolder",
+        "type": "function",
+        "async": true,
+        "description": "Move the active tab into the specified folder (tab group)",
+        "parameters": [
+          { "name": "folderId", "type": "string" }
+        ]
+      },
+      {
+        "name": "reopenInContainer",
+        "type": "function",
+        "async": true,
+        "description": "Reopen the active tab in a different contextual identity (container)",
+        "parameters": [
+          { "name": "userContextId", "type": "integer" }
+        ]
       }
     ],
     "events": [

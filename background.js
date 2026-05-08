@@ -389,6 +389,28 @@ const ACTIONS = Object.freeze({
   [MSG.SORT_TABS_INACTIVE_BOTTOM]:        (m) => runSortAction(m.type),
   [MSG.SORT_TABS_MOST_VISITED]:           (m) => runSortAction(m.type),
   [MSG.SORT_TABS_GROUP_DUPS]:             (m) => runSortAction(m.type),
+
+  // Page 2 — this-page operations (chrome scope via experiment API)
+  [MSG.RELOAD_TAB]:                       ()  => api.reloadTab(),
+  [MSG.RELOAD_SKIP_CACHE]:                ()  => api.reloadTabSkipCache(),
+  [MSG.DUPLICATE_TAB]:                    ()  => api.duplicateTab(),
+  [MSG.TOGGLE_READER_MODE]:               ()  => api.toggleReaderMode(),
+  [MSG.VIEW_PAGE_SOURCE]:                 ()  => api.viewPageSource(),
+  [MSG.VIEW_PAGE_INFO]:                   ()  => api.viewPageInfo(),
+  [MSG.TOGGLE_MUTE]:                      ()  => api.toggleMute(),
+  [MSG.RESET_PINNED_TAB]:                 ()  => api.resetPinnedTab(),
+  [MSG.ADD_TO_ESSENTIALS]:                ()  => api.addToEssentials(),
+  [MSG.TAKE_SCREENSHOT]:                  ()  => api.takeScreenshot(),
+  [MSG.TOGGLE_PIP]:                       ()  => api.togglePictureInPicture(),
+  [MSG.TOGGLE_FULLSCREEN]:                ()  => api.toggleFullScreen(),
+  [MSG.TOGGLE_DEVTOOLS]:                  ()  => api.toggleDevTools(),
+  [MSG.TOGGLE_BROWSER_TOOLBOX]:           ()  => api.toggleBrowserToolbox(),
+  [MSG.OPEN_DOWNLOADS]:                   ()  => api.openDownloads(),
+  [MSG.OPEN_ADDONS]:                      ()  => api.openAddons(),
+  [MSG.UNVISITED_NEWEST]:                 ()  => api.activateUnvisitedNewest(),
+  [MSG.UNVISITED_OLDEST]:                 ()  => api.activateUnvisitedOldest(),
+  [MSG.MOVE_TAB_TO_FOLDER]:               (m) => api.moveTabToFolder(m.folderId),
+  [MSG.REOPEN_IN_CONTAINER]:              (m) => api.reopenInContainer(m.userContextId),
 });
 
 // Reply-style queries — listener returns the promise so the popup awaits
@@ -405,6 +427,7 @@ const QUERIES = Object.freeze({
   [MSG.GET_SELECTED_TAB_DOM_IDS]:      ()  => api.getSelectedTabDomIds(),
   [MSG.GET_SELECTED_TAB_URLS]:         ()  => api.getSelectedTabUrls(),
   [MSG.GET_WORKSPACES_WITH_ICONS]:     ()  => api.getWorkspacesWithIcons(),
+  [MSG.GET_FOLDERS]:                   ()  => api.getFolders(),
   [MSG.CHECK_COMPANION_MOD]:           ()  => api.getCompanionMods(),
   [MSG.INSTALL_COMPANION_MOD]:         (m) => api.installCompanionMod(m.modId),
   [MSG.REMOVE_COMPANION_MOD]:          (m) => api.removeCompanionMod(m.modId),

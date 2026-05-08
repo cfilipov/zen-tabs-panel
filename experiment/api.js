@@ -148,6 +148,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
       catch (e) { return false; }
     }
 
+    // Activate the unread tab with the highest (newest) or lowest (oldest)
+    // lastAccessed timestamp across all tabs. Crosses workspaces using the
+    // existing activateNativeTab helper.
+    async function activateUnvisitedByOrder(order) {
+      const tabs = getAllTabElements().filter((t) => t.hasAttribute("unread"));
+      if (tabs.length === 0) return false;
+      tabs.sort((a, b) => (a.lastAccessed || 0) - (b.lastAccessed || 0));
+      const target = order === "newest" ? tabs[tabs.length - 1] : tabs[0];
+      return activateNativeTab(target);
+    }
+
     const DUP_INDICATOR_CSS = `
         .tabbrowser-tab[zen-tabs-panel-duplicate] .tab-content {
           position: relative !important;
@@ -1095,6 +1106,207 @@ this.zenWorkspaces = class extends ExtensionAPI {
           try {
             if (!w.gBrowser.canGoForward) return false;
             w.gBrowser.goForward();
+            return true;
+          } catch (e) { return false; }
+        },
+
+        // ---------------------------------------------------------------
+        // Page-2 actions: per-tab/page operations.
+        //
+        // Most of these dispatch chrome `<command>` or `<key>` elements
+        // because the underlying functions (BrowserViewSource, etc.) are
+        // defined in browser.js as scoped vars, not window properties, so
+        // they aren't reachable via w.BrowserViewSource. Activating the
+        // command element runs the same logic the menu uses.
+        // ---------------------------------------------------------------
+
+        async reloadTab() {
+          const w = getWin();
+          if (!w?.gBrowser) return false;
+          try { w.gBrowser.reloadTab(w.gBrowser.selectedTab); return true; }
+          catch (e) { return false; }
+        },
+
+        async reloadTabSkipCache() {
+          const w = getWin();
+          if (!w?.gBrowser) return false;
+          try {
+            // Bypass cache: include FLAG_BYPASS_CACHE | FLAG_BYPASS_PROXY.
+            const flags = Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE
+                        | Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_PROXY;
+            w.gBrowser.reloadTab(w.gBrowser.selectedTab, flags);
+            return true;
+          } catch (e) { return false; }
+        },
+
+        async duplicateTab() {
+          const w = getWin();
+          if (!w?.gBrowser) return false;
+          try { w.gBrowser.duplicateTab(w.gBrowser.selectedTab); return true; }
+          catch (e) { return false; }
+        },
+
+        async toggleReaderMode() {
+          const w = getWin();
+          const cmd = w?.document.getElementById("View:ReaderView");
+          if (!cmd) return false;
+          try { cmd.doCommand(); return true; }
+          catch (e) { return false; }
+        },
+
+        async viewPageSource() {
+          const w = getWin();
+          const key = w?.document.getElementById("key_viewSource");
+          if (!key) return false;
+          try {
+            // <key> elements respond to .click() to dispatch their oncommand.
+            // doCommand() works for <command> elements but not all <key>s.
+            (key.doCommand ? key.doCommand() : key.click());
+            return true;
+          } catch (e) { return false; }
+        },
+
+        async viewPageInfo() {
+          const w = getWin();
+          const cmd = w?.document.getElementById("View:PageInfo");
+          if (!cmd) return false;
+          try { cmd.doCommand(); return true; }
+          catch (e) { return false; }
+        },
+
+        async toggleMute() {
+          const w = getWin();
+          const tab = w?.gBrowser?.selectedTab;
+          if (!tab) return false;
+          try { tab.toggleMuteAudio(); return true; }
+          catch (e) { return false; }
+        },
+
+        async resetPinnedTab() {
+          const w = getWin();
+          const cmd = w?.document.getElementById("cmd_zenPinnedTabReset");
+          if (!cmd) return false;
+          try { cmd.doCommand(); return true; }
+          catch (e) { return false; }
+        },
+
+        async addToEssentials() {
+          const w = getWin();
+          const cmd = w?.document.getElementById("cmd_contextZenAddToEssentials");
+          if (!cmd) return false;
+          try { cmd.doCommand(); return true; }
+          catch (e) { return false; }
+        },
+
+        async takeScreenshot() {
+          const w = getWin();
+          const cmd = w?.document.getElementById("Browser:Screenshot");
+          if (!cmd) return false;
+          try { cmd.doCommand(); return true; }
+          catch (e) { return false; }
+        },
+
+        async togglePictureInPicture() {
+          const w = getWin();
+          const cmd = w?.document.getElementById("View:PictureInPicture");
+          if (!cmd) return false;
+          try { cmd.doCommand(); return true; }
+          catch (e) { return false; }
+        },
+
+        async toggleFullScreen() {
+          const w = getWin();
+          const cmd = w?.document.getElementById("View:FullScreen");
+          if (!cmd) return false;
+          try { cmd.doCommand(); return true; }
+          catch (e) { return false; }
+        },
+
+        async toggleDevTools() {
+          const w = getWin();
+          const key = w?.document.getElementById("key_toggleToolbox");
+          if (!key) return false;
+          try {
+            (key.doCommand ? key.doCommand() : key.click());
+            return true;
+          } catch (e) { return false; }
+        },
+
+        async toggleBrowserToolbox() {
+          const w = getWin();
+          const key = w?.document.getElementById("key_browserToolbox");
+          if (!key) return false;
+          try {
+            (key.doCommand ? key.doCommand() : key.click());
+            return true;
+          } catch (e) { return false; }
+        },
+
+        async openDownloads() {
+          const w = getWin();
+          const cmd = w?.document.getElementById("Tools:Downloads");
+          if (!cmd) return false;
+          try { cmd.doCommand(); return true; }
+          catch (e) { return false; }
+        },
+
+        async openAddons() {
+          const w = getWin();
+          const cmd = w?.document.getElementById("Tools:Addons");
+          if (!cmd) return false;
+          try { cmd.doCommand(); return true; }
+          catch (e) { return false; }
+        },
+
+        // Activate the most-recently-accessed unread tab (newest unvisited).
+        async activateUnvisitedNewest() {
+          return activateUnvisitedByOrder("newest");
+        },
+
+        async activateUnvisitedOldest() {
+          return activateUnvisitedByOrder("oldest");
+        },
+
+        // List Zen folders (tab groups) for the move-to-folder menu.
+        // Folders are tab groups under gBrowser; gZenFolders adds the
+        // workspace-aware UI on top, but the data lives on gBrowser.
+        async getFolders() {
+          const w = getWin();
+          if (!w?.gBrowser?.getAllTabGroups) return [];
+          try {
+            const groups = w.gBrowser.getAllTabGroups() || [];
+            return groups.map((g) => ({
+              id: g.id || "",
+              name: g.label || g.name || "Folder",
+              workspaceId: g.getAttribute?.("zen-workspace-id") || null,
+            }));
+          } catch (e) { return []; }
+        },
+
+        async moveTabToFolder(folderId) {
+          const w = getWin();
+          if (!w?.gBrowser) return false;
+          try {
+            const tab = w.gBrowser.selectedTab;
+            const group = w.gBrowser.getTabGroupById?.(folderId);
+            if (!tab || !group || !w.gBrowser.moveTabToExistingGroup) return false;
+            w.gBrowser.moveTabToExistingGroup(tab, group);
+            return true;
+          } catch (e) { return false; }
+        },
+
+        // Reopen the active tab in the given contextual identity (container).
+        async reopenInContainer(userContextId) {
+          const w = getWin();
+          if (!w?.gBrowser) return false;
+          try {
+            const oldTab = w.gBrowser.selectedTab;
+            const url = oldTab.linkedBrowser?.currentURI?.spec || "about:newtab";
+            const newTab = w.gBrowser.addTab(url, {
+              userContextId,
+              triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+            });
+            w.gBrowser.selectedTab = newTab;
             return true;
           } catch (e) { return false; }
         },

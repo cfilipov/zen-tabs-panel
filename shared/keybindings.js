@@ -21,13 +21,20 @@
 //   open-view  — opens the named popup view immediately
 //   prefix     — top-level only; consumes the next chord key, opens `view`
 //                on timeout. Children are nested entries.
+//
+// Page assignment (`page`, optional, default 1):
+//   The actions menu paginates horizontally. Top-level entries with `page: 2`
+//   render on the second page (Space cycles pages). Chord lookup is global —
+//   pressing a page-2 chord while page 1 is showing fires the action with no
+//   page flip. Chord namespace is shared across pages, so collisions across
+//   pages are not allowed.
 
 this.ZEN_KEYBINDINGS = [
   // Tab navigation
   { id: "go-to-previous-tab", kind: "action", chord: "P", label: "Previous", icon: "svg:arrow-left-right" },
   { id: "go-to-parent-tab",   kind: "action", chord: "T", label: "Parent",   icon: "svg:move-up", needsParent: true },
-  { id: "go-back-in-tab",          kind: "action", chord: "[", label: "Back",     icon: "svg:arrow-left" },
-  { id: "go-forward-in-tab",       kind: "action", chord: "]", label: "Forward",  icon: "svg:arrow-right" },
+  { id: "go-back-in-tab",          kind: "action", chord: "[", label: "Back",     icon: "svg:arrow-left", page: 2 },
+  { id: "go-forward-in-tab",       kind: "action", chord: "]", label: "Forward",  icon: "svg:arrow-right", page: 2 },
   { id: "go-to-prev-vertical-tab", kind: "action", chord: "<", label: "Above",    icon: "svg:arrow-up" },
   { id: "go-to-next-vertical-tab", kind: "action", chord: ">", label: "Below",    icon: "svg:arrow-down" },
 
@@ -59,8 +66,40 @@ this.ZEN_KEYBINDINGS = [
 
   // Quick tab tools
   { id: "toggle-pin-tab",          kind: "action", chord: "F", label: "Pin/unpin tab",      icon: "svg:pin" },
-  { id: "copy-url-markdown",       kind: "action", chord: "Y", label: "Copy URL as MD", icon: "svg:link" },
+  { id: "copy-url-markdown",       kind: "action", chord: "Y", label: "Copy URL as MD", icon: "svg:link", page: 2 },
   { id: "restore-last-closed-tab", kind: "action", chord: "Z", label: "Restore closed tab", icon: "svg:rotate-ccw" },
+
+  // Page 2 — This page
+  { id: "reload-tab",         kind: "action", chord: "Shift+R", label: "Reload",            icon: "svg:rotate-ccw",       page: 2 },
+  { id: "reload-skip-cache",  kind: "action", chord: "Shift+L", label: "Hard reload",       icon: "svg:rotate-ccw",       page: 2 },
+  { id: "duplicate-tab",      kind: "action", chord: "Shift+D", label: "Duplicate",         icon: "svg:copy",             page: 2 },
+  { id: "toggle-reader-mode", kind: "action", chord: "Shift+M", label: "Reader mode",       icon: "svg:book-open",        page: 2 },
+  { id: "view-page-source",   kind: "action", chord: "Shift+U", label: "View source",       icon: "svg:code",             page: 2 },
+  { id: "view-page-info",     kind: "action", chord: "Shift+I", label: "Page info",         icon: "svg:info",             page: 2 },
+  { id: "toggle-mute",        kind: "action", chord: "Shift+V", label: "Mute/unmute",       icon: "svg:volume-x",         page: 2 },
+  { id: "reset-pinned-tab",   kind: "action", chord: "Shift+P", label: "Reset pinned",      icon: "svg:pin",              page: 2, needsPinnedTab: true },
+  { id: "add-to-essentials",  kind: "action", chord: "Shift+E", label: "Add to essentials", icon: "svg:star",             page: 2 },
+  { id: "take-screenshot",    kind: "action", chord: "Shift+S", label: "Screenshot",        icon: "svg:camera",           page: 2 },
+  { id: "toggle-pip",         kind: "action", chord: ";",       label: "Picture-in-picture", icon: "svg:picture-in-picture", page: 2 },
+  { id: "toggle-fullscreen",  kind: "action", chord: "Shift+F", label: "Full screen",       icon: "svg:maximize",         page: 2 },
+
+  // Page 2 — Tab actions
+  { id: "open-in-container",  kind: "open-view", chord: "Shift+N", view: "open-in-container", label: "New container tab", icon: "svg:layers", page: 2 },
+
+  // Page 2 — All tabs
+  { id: "unvisited-newest",   kind: "action", chord: "G", label: "Newest unvisited",  icon: "svg:circle-dot",    page: 2, needsUnvisited: true },
+  { id: "unvisited-oldest",   kind: "action", chord: "J", label: "Oldest unvisited",  icon: "svg:circle-dot",    page: 2, needsUnvisited: true },
+
+  // Page 2 — Developer
+  { id: "toggle-devtools",        kind: "action", chord: "Shift+J", label: "DevTools",        icon: "svg:terminal", page: 2 },
+  { id: "toggle-browser-toolbox", kind: "action", chord: "Shift+B", label: "Browser toolbox", icon: "svg:wrench",   page: 2 },
+
+  // Page 2 — Browser
+  { id: "open-downloads",     kind: "action", chord: "Shift+W", label: "Downloads", icon: "svg:download", page: 2 },
+  { id: "open-addons",        kind: "action", chord: "Shift+A", label: "Add-ons",   icon: "svg:puzzle",   page: 2 },
+
+  // Page 1 — Organize (new)
+  { id: "move-to-folder",     kind: "open-view", chord: "Shift+G", view: "move-to-folder", label: "Move to folder", icon: "svg:folder" },
 
   // Split-view submenu
   {

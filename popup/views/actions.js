@@ -24,13 +24,11 @@ function getActions() {
 
   return [
     { type: "section", label: "Navigate", navigateGrid: true },
-    // 3 columns × 2 rows in column-first DOM order:
-    // [Previous] [Back   ] [Above]
-    // [Parent  ] [Forward] [Below]
+    // 2 columns × 2 rows in column-first DOM order:
+    // [Previous] [Above]
+    // [Parent  ] [Below]
     actionFromRegistry("go-to-previous-tab",      { preview: tabState.previousTabPreview }),
     actionFromRegistry("go-to-parent-tab",        { preview: tabState.parentTabPreview }),
-    actionFromRegistry("go-back-in-tab",          { preview: tabState.backPreview }),
-    actionFromRegistry("go-forward-in-tab",       { preview: tabState.forwardPreview }),
     actionFromRegistry("go-to-prev-vertical-tab", { preview: tabState.prevVerticalPreview }),
     actionFromRegistry("go-to-next-vertical-tab", { preview: tabState.nextVerticalPreview }),
 
@@ -41,7 +39,6 @@ function getActions() {
     actionFromRegistry("sibling-tabs",    { count: tabState.siblingTabCount, ...compact }),
 
     { type: "section", label: "Tab actions", column: true, stack: true },
-    actionFromRegistry("copy-url-markdown",       compact),
     actionFromRegistry("restore-last-closed-tab", compact),
     actionFromRegistry("unload-tab",              compact),
     actionFromRegistry("close-and-select",        compact),
@@ -62,6 +59,7 @@ function getActions() {
     actionFromRegistry("move-tab-to-end",       compact),
     actionFromRegistry("reorder-tabs",          compact),
     actionFromRegistry("move-to-workspace",     { count: tabState.selectedTabCount > 1 ? tabState.selectedTabCount : 0, ...compact }),
+    actionFromRegistry("move-to-folder",        compact),
     actionFromRegistry("scroll-to-current-tab", compact),
     actionFromRegistry("split-view",            compact),
 
@@ -72,6 +70,43 @@ function getActions() {
 
     { type: "section", label: "Other", column: true, stack: true },
     actionFromRegistry("open-options", compact),
+
+    // ----- Page 2 -----
+    { type: "section", label: "Navigate", page: 2, navigateGrid: true },
+    actionFromRegistry("go-back-in-tab",    { preview: tabState.backPreview }),
+    actionFromRegistry("go-forward-in-tab", { preview: tabState.forwardPreview }),
+
+    { type: "section", label: "This page", page: 2, column: true },
+    actionFromRegistry("reload-tab",         compact),
+    actionFromRegistry("reload-skip-cache",  compact),
+    actionFromRegistry("duplicate-tab",      compact),
+    actionFromRegistry("toggle-reader-mode", compact),
+    actionFromRegistry("toggle-mute",        compact),
+    actionFromRegistry("toggle-fullscreen",  compact),
+    actionFromRegistry("toggle-pip",         compact),
+
+    { type: "section", label: "Tab", page: 2, column: true },
+    actionFromRegistry("reset-pinned-tab",   compact),
+    actionFromRegistry("add-to-essentials",  compact),
+    actionFromRegistry("open-in-container",  compact),
+
+    { type: "section", label: "All tabs", page: 2, column: true, stack: true },
+    actionFromRegistry("unvisited-newest",   compact),
+    actionFromRegistry("unvisited-oldest",   compact),
+
+    { type: "section", label: "Developer", page: 2, column: true },
+    actionFromRegistry("toggle-devtools",        compact),
+    actionFromRegistry("toggle-browser-toolbox", compact),
+
+    { type: "section", label: "Browser", page: 2, column: true, stack: true },
+    actionFromRegistry("open-downloads", compact),
+    actionFromRegistry("open-addons",    compact),
+
+    { type: "section", label: "Page tools", page: 2, column: true },
+    actionFromRegistry("view-page-source",  compact),
+    actionFromRegistry("view-page-info",    compact),
+    actionFromRegistry("take-screenshot",   compact),
+    actionFromRegistry("copy-url-markdown", compact),
   ];
 }
 function isActionDisabled(action) {
@@ -82,6 +117,7 @@ function isActionDisabled(action) {
   if (action.needsParentTabs && tabState.parentTabCount === 0) return true;
   if (action.needsDuplicates && tabState.duplicateGroupCount === 0) return true;
   if (action.needsRecentlyClosed && tabState.recentlyClosedCount === 0) return true;
+  if (action.needsPinnedTab && !tabState.currentTabIsPinned) return true;
   // Tab-history view is only useful when there's somewhere to navigate. With
   // 0 entries it's empty; with 1 entry it's just the current page (no back/
   // forward to choose from), so disable in both cases.
@@ -183,145 +219,177 @@ function renderActions(actions, title) {
   ui.selectedIndex = -1;
   ui.sectionStarts = [0];
 
+  // Bucket sections + items by page. A section's page (default 1) sets the
+  // bucket for itself and all following non-section entries until the next
+  // section. This lets getActions() interleave page-1 and page-2 content
+  // by simply tagging the section header with `page: 2`.
+  const buckets = new Map(); // pageNumber -> array of entries
+  let currentSectionPage = 1;
+  for (const a of actions) {
+    if (a.type === "section") currentSectionPage = a.page || 1;
+    const target = a.type === "section" ? (a.page || 1) : currentSectionPage;
+    if (!buckets.has(target)) buckets.set(target, []);
+    buckets.get(target).push(a);
+  }
+  const pages = [...buckets.keys()].sort((a, b) => a - b);
+  ui.pageCount = pages.length;
+  if (ui.currentPage > ui.pageCount) ui.currentPage = 1;
+
   listEl.innerHTML = "";
-  let gridContainer = null;
-  let columnsContainer = null;
-  let currentColumn = null;
-  let navigateGrid = null;
+  const pager = document.createElement("div");
+  pager.className = "actions-pager";
+  listEl.appendChild(pager);
+
+  ui.pageBounds = [];
   let itemIndex = 0;
 
-  const closeColumns = () => { columnsContainer = null; currentColumn = null; };
-  const closeNavigateGrid = () => { navigateGrid = null; };
+  for (const pageNum of pages) {
+    const pageEl = document.createElement("div");
+    pageEl.className = "actions-page";
+    pageEl.dataset.page = String(pageNum);
+    pager.appendChild(pageEl);
 
-  for (const action of actions) {
-    if (action.type === "section") {
-      gridContainer = null;
-      const header = document.createElement("div");
-      header.className = "list-section-header";
-      header.textContent = action.label;
-      if (action.navigateGrid) {
-        closeColumns();
-        listEl.appendChild(header);
-        navigateGrid = document.createElement("div");
-        navigateGrid.className = "navigate-grid";
-        listEl.appendChild(navigateGrid);
-      } else if (action.column) {
-        closeNavigateGrid();
-        if (!columnsContainer) {
-          columnsContainer = document.createElement("div");
-          columnsContainer.className = "sections-row";
-          listEl.appendChild(columnsContainer);
-        }
-        if (action.stack && currentColumn) {
-          // Stack this section in the existing column rather than starting a new one
-          currentColumn.appendChild(header);
+    const pageStart = itemIndex;
+    let gridContainer = null;
+    let columnsContainer = null;
+    let currentColumn = null;
+    let navigateGrid = null;
+
+    const closeColumns = () => { columnsContainer = null; currentColumn = null; };
+    const closeNavigateGrid = () => { navigateGrid = null; };
+
+    for (const action of buckets.get(pageNum)) {
+      if (action.type === "section") {
+        gridContainer = null;
+        const header = document.createElement("div");
+        header.className = "list-section-header";
+        header.textContent = action.label;
+        if (action.navigateGrid) {
+          closeColumns();
+          pageEl.appendChild(header);
+          navigateGrid = document.createElement("div");
+          navigateGrid.className = "navigate-grid";
+          pageEl.appendChild(navigateGrid);
+        } else if (action.column) {
+          closeNavigateGrid();
+          if (!columnsContainer) {
+            columnsContainer = document.createElement("div");
+            columnsContainer.className = "sections-row";
+            pageEl.appendChild(columnsContainer);
+          }
+          if (action.stack && currentColumn) {
+            currentColumn.appendChild(header);
+          } else {
+            currentColumn = document.createElement("div");
+            currentColumn.className = "section-column";
+            currentColumn.appendChild(header);
+            columnsContainer.appendChild(currentColumn);
+          }
         } else {
-          currentColumn = document.createElement("div");
-          currentColumn.className = "section-column";
-          currentColumn.appendChild(header);
-          columnsContainer.appendChild(currentColumn);
+          closeColumns();
+          closeNavigateGrid();
+          pageEl.appendChild(header);
         }
-      } else {
+        ui.sectionStarts.push(itemIndex);
+        continue;
+      }
+
+      if (action.type === "separator") {
+        gridContainer = null;
         closeColumns();
         closeNavigateGrid();
-        listEl.appendChild(header);
+        const sep = document.createElement("div");
+        sep.className = "list-separator";
+        pageEl.appendChild(sep);
+        ui.sectionStarts.push(itemIndex);
+        continue;
       }
-      ui.sectionStarts.push(itemIndex);
-      continue;
-    }
 
-    if (action.type === "separator") {
-      gridContainer = null;
-      closeColumns();
-      closeNavigateGrid();
-      const sep = document.createElement("div");
-      sep.className = "list-separator";
-      listEl.appendChild(sep);
-      ui.sectionStarts.push(itemIndex);
-      continue;
-    }
+      if (action.type === "workspaces") {
+        gridContainer = null;
+        if (currentColumn) {
+          renderWorkspaceSwitcher(currentColumn, "single");
+        } else {
+          renderWorkspaceSwitcher(pageEl, "grid");
+        }
+        continue;
+      }
 
-    if (action.type === "workspaces") {
-      gridContainer = null;
+      if (navigateGrid) {
+        const cell = buildNavigateCell(action);
+        navigateGrid.appendChild(cell);
+        itemIndex++;
+        continue;
+      }
+
+      const disabled = isActionDisabled(action);
+
+      const el = document.createElement("div");
+      el.className = "list-item" + (disabled ? " disabled" : "") + (action.compact ? " compact-item" : "");
+      el.dataset.id = action.id;
+
+      const previewHtml = (action.preview && !disabled) ? buildPreviewHtml(action.preview) : "";
+
+      // Build count badge
+      let countHtml = "";
+      if (typeof action.count === "number" && action.count > 0) {
+        countHtml = `<span class="item-count">${action.count}</span>`;
+      }
+
+      const rightContent = `
+        ${previewHtml}
+        ${renderBadge(displayKey(action.hotkey))}
+        <span class="item-arrow">${action.isView ? "›" : ""}</span>
+      `;
+
+      el.innerHTML = `
+        <span class="item-icon-placeholder">${action.iconHtml || getIcon(action.icon)}</span>
+        <span class="item-text">
+          <span class="item-title">${action.label}${countHtml}</span>
+        </span>
+        <span class="item-right">${rightContent}</span>
+      `;
+
+      const img = el.querySelector("img.preview-icon");
+      if (img) {
+        img.addEventListener("error", () => { img.style.display = "none"; });
+      }
+
+      if (!disabled) {
+        el.addEventListener("click", () => activateAction(action));
+        if (action.preview?.domId) {
+          el.addEventListener("mouseenter", () => {
+            ext.runtime.sendMessage({ type: "preview-tab", domId: action.preview.domId }).catch(() => {});
+          });
+          el.addEventListener("mouseleave", () => {
+            ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+          });
+        }
+      }
+
       if (currentColumn) {
-        renderWorkspaceSwitcher(currentColumn, "single");
+        gridContainer = null;
+        currentColumn.appendChild(el);
+      } else if (action.compact) {
+        if (!gridContainer) {
+          gridContainer = document.createElement("div");
+          gridContainer.className = "actions-grid";
+          pageEl.appendChild(gridContainer);
+        }
+        gridContainer.appendChild(el);
       } else {
-        renderWorkspaceSwitcher(listEl, "grid");
+        gridContainer = null;
+        closeColumns();
+        pageEl.appendChild(el);
       }
-      continue;
-    }
-
-    if (navigateGrid) {
-      const cell = buildNavigateCell(action);
-      navigateGrid.appendChild(cell);
       itemIndex++;
-      continue;
     }
 
-    const disabled = isActionDisabled(action);
-
-    const el = document.createElement("div");
-    el.className = "list-item" + (disabled ? " disabled" : "") + (action.compact ? " compact-item" : "");
-    el.dataset.id = action.id;
-
-    const previewHtml = (action.preview && !disabled) ? buildPreviewHtml(action.preview) : "";
-
-    // Build count badge
-    let countHtml = "";
-    if (typeof action.count === "number" && action.count > 0) {
-      countHtml = `<span class="item-count">${action.count}</span>`;
-    }
-
-    const rightContent = `
-      ${previewHtml}
-      ${renderBadge(displayKey(action.hotkey))}
-      <span class="item-arrow">${action.isView ? "›" : ""}</span>
-    `;
-
-    el.innerHTML = `
-      <span class="item-icon-placeholder">${action.iconHtml || getIcon(action.icon)}</span>
-      <span class="item-text">
-        <span class="item-title">${action.label}${countHtml}</span>
-      </span>
-      <span class="item-right">${rightContent}</span>
-    `;
-
-    // Handle preview icon errors
-    const img = el.querySelector("img.preview-icon");
-    if (img) {
-      img.addEventListener("error", () => { img.style.display = "none"; });
-    }
-
-    if (!disabled) {
-      el.addEventListener("click", () => activateAction(action));
-      if (action.preview?.domId) {
-        el.addEventListener("mouseenter", () => {
-          ext.runtime.sendMessage({ type: "preview-tab", domId: action.preview.domId }).catch(() => {});
-        });
-        el.addEventListener("mouseleave", () => {
-          ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
-        });
-      }
-    }
-
-    if (currentColumn) {
-      gridContainer = null;
-      currentColumn.appendChild(el);
-    } else if (action.compact) {
-      if (!gridContainer) {
-        gridContainer = document.createElement("div");
-        gridContainer.className = "actions-grid";
-        listEl.appendChild(gridContainer);
-      }
-      gridContainer.appendChild(el);
-    } else {
-      gridContainer = null;
-      closeColumns();
-      listEl.appendChild(el);
-    }
-    itemIndex++;
+    ui.pageBounds.push([pageStart, itemIndex]);
   }
 
+  applyPagerTransformInstant();
+  renderPageIndicator();
   updateSelection();
   updateHeader(title);
 }
@@ -349,6 +417,7 @@ function buildTabPreview(tab) {
 
 function resetActionsState() {
   tabState.currentTabHasParent = false;
+  tabState.currentTabIsPinned = false;
   tabState.childTabCount = 0;
   tabState.siblingTabCount = 0;
   tabState.parentTabCount = 0;
@@ -471,6 +540,7 @@ async function showActionsMenu() {
 
   // ----- Write derived state -----
   tabState.currentTabHasParent = !!activeOpener;
+  tabState.currentTabIsPinned = !!activeTab?.pinned;
   tabState.childTabCount = childTabCount;
   tabState.siblingTabCount = siblingTabCount;
   tabState.unvisitedTabCount = unvisitedTabCount;

@@ -21,7 +21,8 @@
     "sessions",
     "menus",
     "clipboardWrite",
-    "history"
+    "history",
+    "contextualIdentities"
   ],
 
   "experiment_apis": {

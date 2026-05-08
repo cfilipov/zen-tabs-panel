@@ -15,11 +15,19 @@ const ui = {
   sectionStarts: [],
   sidebarFocused: false,
   sidebarSelectedIndex: -1,
+
+  // Actions menu paging. Set by renderActions when laying out per-page panes.
+  // pageBounds is parallel to currentPage: pageBounds[page-1] = [startInclusive,
+  // endExclusive] in ui.items, so arrow-key wrapping can clamp to one page.
+  currentPage: 1,
+  pageCount: 1,
+  pageBounds: [],
 };
 
 // Per-tab counts and previews shown in the actions menu.
 const tabState = {
   currentTabHasParent: false,
+  currentTabIsPinned: false,
   childTabCount: 0,
   unvisitedTabCount: 0,
   parentTabPreview: null,    // { title, favIconUrl }

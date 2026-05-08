@@ -14,6 +14,7 @@ const backButton = document.getElementById("back-button");
 const viewTitle = document.getElementById("view-title");
 const headerHint = document.getElementById("header-hint");
 const sidebarEl = document.getElementById("sidebar");
+const pageIndicatorEl = document.getElementById("page-indicator");
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
@@ -78,6 +79,58 @@ listEl.addEventListener("error", (e) => {
     t.style.display = "none";
   }
 }, true);
+
+// ---------------------------------------------------------------------------
+// Actions menu paging — gestures
+//
+// Trackpad horizontal swipe surfaces as a wheel event with non-zero deltaX.
+// Touch swipe lands as touchstart/touchmove/touchend. Both target #list and
+// only act on the actions view. Each gesture is rate-limited so a single
+// inertial flick doesn't multi-page.
+// ---------------------------------------------------------------------------
+
+const PAGE_SWIPE_PX = 60;          // touch threshold
+const PAGE_WHEEL_PX = 50;          // wheel deltaX threshold
+const PAGE_GESTURE_COOLDOWN = 350; // ms between consecutive page changes
+let _lastPageGesture = 0;
+
+function tryPageGesture(delta) {
+  if (ui.currentView !== "actions") return;
+  const now = Date.now();
+  if (now - _lastPageGesture < PAGE_GESTURE_COOLDOWN) return;
+  _lastPageGesture = now;
+  cycleActionsPage(delta);
+}
+
+listEl.addEventListener("wheel", (e) => {
+  if (ui.currentView !== "actions") return;
+  if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return; // vertical scroll wins
+  if (Math.abs(e.deltaX) < PAGE_WHEEL_PX) return;
+  e.preventDefault();
+  tryPageGesture(e.deltaX > 0 ? 1 : -1);
+}, { passive: false });
+
+let _touchStartX = null;
+let _touchStartY = null;
+listEl.addEventListener("touchstart", (e) => {
+  if (ui.currentView !== "actions") return;
+  if (e.touches.length !== 1) { _touchStartX = null; return; }
+  _touchStartX = e.touches[0].clientX;
+  _touchStartY = e.touches[0].clientY;
+}, { passive: true });
+
+listEl.addEventListener("touchend", (e) => {
+  if (ui.currentView !== "actions") return;
+  if (_touchStartX == null) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - _touchStartX;
+  const dy = t.clientY - _touchStartY;
+  _touchStartX = null;
+  _touchStartY = null;
+  if (Math.abs(dx) < PAGE_SWIPE_PX) return;
+  if (Math.abs(dy) > Math.abs(dx)) return; // vertical drag wins
+  tryPageGesture(dx < 0 ? 1 : -1);
+}, { passive: true });
 
 // Fire-and-forget — don't await since the overlay destruction kills our context
 function closePalette() {
@@ -260,6 +313,16 @@ function chordFromEvent(e) {
 // Build a popup menu item from a registry entry, merging runtime-computed
 // fields (preview, count). Layout flags (compact, etc.) are added by callers.
 // Used by getActions() in views/actions.js.
+// Workspace-switcher rows in the actions menu use the .list-item class for
+// styling, but they are NOT registered in ui.items (they're rendered ad-hoc
+// by renderWorkspaceSwitcher). When using ui.selectedIndex / sectionStarts
+// to index into the live DOM we must filter them out, otherwise indices
+// shift by the number of workspaces and Tab/arrow nav lands on the wrong
+// row. All ui.items-indexed lookups go through this helper.
+function navigableListItems() {
+  return listEl.querySelectorAll(".list-item:not([data-workspace-switch-id])");
+}
+
 function actionFromRegistry(id, extra) {
   const entry = kbById(id);
   if (!entry) return null;
@@ -269,11 +332,89 @@ function actionFromRegistry(id, extra) {
     icon: entry.icon,
     hotkey: entry.chord,
     isView: entry.kind === "open-view" || entry.kind === "prefix",
+    page: entry.page || 1,
   };
-  for (const flag of ["needsParent", "needsChildren", "needsSiblings", "needsParentTabs", "needsUnvisited", "needsDuplicates", "needsRecentlyClosed", "needsHistory"]) {
+  for (const flag of ["needsParent", "needsChildren", "needsSiblings", "needsParentTabs", "needsUnvisited", "needsDuplicates", "needsRecentlyClosed", "needsHistory", "needsPinnedTab"]) {
     if (entry[flag]) base[flag] = true;
   }
   return Object.assign(base, extra);
+}
+
+// ---------------------------------------------------------------------------
+// Actions menu paging — horizontal swipe between pages of the main menu.
+// State (`ui.currentPage`, `ui.pageCount`, `ui.pageBounds`) is set by
+// renderActions in views/actions.js. The pager is the .actions-pager element
+// inside #list; translateX moves between pages.
+// ---------------------------------------------------------------------------
+
+function applyPagerTransform() {
+  const pager = listEl.querySelector(".actions-pager");
+  if (!pager) return;
+  const offset = (ui.currentPage - 1) * 100;
+  pager.style.transform = `translateX(-${offset}%)`;
+}
+
+// Set transform without firing the slide animation — used on first render
+// so the popup doesn't visibly snap to page 1. The class is removed in the
+// next frame so subsequent page changes animate normally.
+function applyPagerTransformInstant() {
+  const pager = listEl.querySelector(".actions-pager");
+  if (!pager) return;
+  pager.classList.add("no-anim");
+  applyPagerTransform();
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => pager.classList.remove("no-anim"));
+  });
+}
+
+function renderPageIndicator() {
+  if (!pageIndicatorEl) return;
+  if (ui.currentView !== "actions" || ui.pageCount <= 1) {
+    pageIndicatorEl.classList.add("hidden");
+    pageIndicatorEl.innerHTML = "";
+    return;
+  }
+  pageIndicatorEl.classList.remove("hidden");
+  pageIndicatorEl.innerHTML = "";
+  for (let i = 1; i <= ui.pageCount; i++) {
+    const dot = document.createElement("span");
+    dot.className = "page-dot" + (i === ui.currentPage ? " active" : "");
+    dot.dataset.page = String(i);
+    dot.addEventListener("click", () => setActionsPage(i));
+    pageIndicatorEl.appendChild(dot);
+  }
+}
+
+function setActionsPage(targetPage) {
+  if (ui.currentView !== "actions") return;
+  if (ui.pageCount <= 1) return;
+  // Wrap in both directions.
+  let p = targetPage;
+  if (p < 1) p = ui.pageCount;
+  if (p > ui.pageCount) p = 1;
+  if (p === ui.currentPage) return;
+  ui.currentPage = p;
+  ui.selectedIndex = -1;
+  applyPagerTransform();
+  renderPageIndicator();
+  updateSelection();
+  ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
+}
+
+function cycleActionsPage(delta) {
+  if (ui.pageCount <= 1) return;
+  setActionsPage(ui.currentPage + delta);
+}
+
+// Compute the [start, end) range in ui.items that belongs to the current
+// actions page. Used by moveSelection / jumpToSection to wrap within a page.
+// Falls back to the full ui.items range outside the actions view.
+function currentPageBounds() {
+  if (ui.currentView !== "actions" || !Array.isArray(ui.pageBounds) || ui.pageBounds.length === 0) {
+    return [0, ui.items.length];
+  }
+  const idx = ui.currentPage - 1;
+  return ui.pageBounds[idx] || [0, ui.items.length];
 }
 
 // ---------------------------------------------------------------------------
@@ -313,6 +454,18 @@ const SVG_ICONS = {
   "rows": `<svg ${SVG_ATTRS}><path d="M3 12h18v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v7H3z"/></svg>`,
   "plus": `<svg ${SVG_ATTRS}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   "gear": `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`,
+  "book-open": `<svg ${SVG_ATTRS}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
+  "code": `<svg ${SVG_ATTRS}><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
+  "volume-x": `<svg ${SVG_ATTRS}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`,
+  "camera": `<svg ${SVG_ATTRS}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
+  "picture-in-picture": `<svg ${SVG_ATTRS}><path d="M21 9V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/><rect x="13" y="13" width="8" height="6" rx="1"/></svg>`,
+  "maximize": `<svg ${SVG_ATTRS}><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>`,
+  "layers": `<svg ${SVG_ATTRS}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
+  "terminal": `<svg ${SVG_ATTRS}><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`,
+  "wrench": `<svg ${SVG_ATTRS}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`,
+  "download": `<svg ${SVG_ATTRS}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+  "puzzle": `<svg ${SVG_ATTRS}><path d="M19 11h2a2 2 0 0 1 0 4h-2v4a2 2 0 0 1-2 2h-4v-2a2 2 0 0 0-4 0v2H5a2 2 0 0 1-2-2v-4h2a2 2 0 0 0 0-4H3V7a2 2 0 0 1 2-2h4V3a2 2 0 0 1 4 0v2h4a2 2 0 0 1 2 2z"/></svg>`,
+  "folder": `<svg ${SVG_ATTRS}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
 };
 
 function getIcon(icon) {
@@ -330,7 +483,7 @@ function getIcon(icon) {
 // ---------------------------------------------------------------------------
 
 function updateSelection() {
-  const listItems = listEl.querySelectorAll(".list-item");
+  const listItems = navigableListItems();
   listItems.forEach((el, i) => {
     el.classList.toggle("selected", i === ui.selectedIndex);
   });
@@ -497,20 +650,29 @@ function refreshCurrentView() {
 // ---------------------------------------------------------------------------
 
 function moveSelection(delta) {
-  const count = ui.items.length;
-  if (count === 0) return;
+  const totalCount = ui.items.length;
+  if (totalCount === 0) return;
 
-  if (ui.selectedIndex === -1) {
-    ui.selectedIndex = delta > 0 ? 0 : count - 1;
+  // On the actions menu, wrap selection within the current page so Space is
+  // the only thing that crosses pages. Other views use the full ui.items
+  // range as before.
+  const [start, end] = currentPageBounds();
+  const range = end - start;
+  if (range <= 0) return;
+
+  const wrap = (i) => start + ((i - start) % range + range) % range;
+
+  if (ui.selectedIndex < start || ui.selectedIndex >= end) {
+    ui.selectedIndex = delta > 0 ? start : end - 1;
   } else {
-    ui.selectedIndex = (ui.selectedIndex + delta + count) % count;
+    ui.selectedIndex = wrap(ui.selectedIndex + delta);
   }
 
-  // Skip disabled ui.items
+  // Skip disabled rows within the current range only.
   const startIndex = ui.selectedIndex;
-  const listItems = listEl.querySelectorAll(".list-item");
+  const listItems = navigableListItems();
   while (listItems[ui.selectedIndex]?.classList.contains("disabled")) {
-    ui.selectedIndex = (ui.selectedIndex + delta + count) % count;
+    ui.selectedIndex = wrap(ui.selectedIndex + delta);
     if (ui.selectedIndex === startIndex) break;
   }
 
@@ -546,27 +708,42 @@ function jumpToSection(delta) {
     return;
   }
 
-  // Find which section current selection is in
-  let currentSection = 0;
-  for (let i = ui.sectionStarts.length - 1; i >= 0; i--) {
-    if (ui.selectedIndex >= ui.sectionStarts[i]) {
+  // Restrict section-jump to the current page on the actions view, so Tab
+  // doesn't sneak past a page boundary. Filter sectionStarts to those that
+  // fall inside the current page's item range.
+  const [pageStart, pageEnd] = currentPageBounds();
+  const sections = ui.sectionStarts.filter((s) => s >= pageStart && s < pageEnd);
+  if (sections.length === 0) return;
+
+  // Find which section the current selection is in (within this page).
+  // Use -1 to represent "no current section" so the first Tab from an
+  // empty selection lands on sections[0] (first section), not sections[1].
+  let currentSection = -1;
+  for (let i = sections.length - 1; i >= 0; i--) {
+    if (ui.selectedIndex >= sections[i]) {
       currentSection = i;
       break;
     }
   }
 
-  // Move to next/previous section
-  let targetSection = currentSection + delta;
-  if (targetSection < 0) targetSection = ui.sectionStarts.length - 1;
-  if (targetSection >= ui.sectionStarts.length) targetSection = 0;
+  let targetSection;
+  if (currentSection === -1) {
+    // No selection yet — Tab goes to the first section, Shift+Tab to last.
+    targetSection = delta > 0 ? 0 : sections.length - 1;
+  } else {
+    targetSection = currentSection + delta;
+    if (targetSection < 0) targetSection = sections.length - 1;
+    if (targetSection >= sections.length) targetSection = 0;
+  }
 
-  ui.selectedIndex = ui.sectionStarts[targetSection];
+  ui.selectedIndex = sections[targetSection];
 
-  // Skip disabled ui.items forward
-  const listItems = listEl.querySelectorAll(".list-item");
+  // Skip disabled items, wrapping within the page's range.
+  const listItems = navigableListItems();
   const startIndex = ui.selectedIndex;
+  const range = pageEnd - pageStart;
   while (listItems[ui.selectedIndex]?.classList.contains("disabled")) {
-    ui.selectedIndex = (ui.selectedIndex + 1) % count;
+    ui.selectedIndex = pageStart + ((ui.selectedIndex - pageStart + 1) % range);
     if (ui.selectedIndex === startIndex) break;
   }
 
@@ -603,7 +780,7 @@ function activateSelected() {
   if (ui.selectedIndex < 0 || ui.items.length === 0) return;
 
   const item = ui.items[ui.selectedIndex];
-  const listItems = listEl.querySelectorAll(".list-item");
+  const listItems = navigableListItems();
   if (listItems[ui.selectedIndex]?.classList.contains("disabled")) return;
 
   if (item.navIndex !== undefined && !item.isCurrent) {
