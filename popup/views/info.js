@@ -176,6 +176,34 @@ function formatTime(ts) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" }) + ` ${time}`;
 }
 
+// After a duplicate row is removed from the DOM, sync the rest of the tab-info
+// surface: the section header count, the "Duplicates" stat in the info-grid,
+// and the section itself if only the self row remains.
+function refreshTabInfoDuplicates() {
+  const remaining = listEl.querySelectorAll(".info-duplicate-row").length;
+
+  const section = listEl.querySelector(".info-duplicates-section");
+  const statCell = [...listEl.querySelectorAll(".info-cell")]
+    .find((c) => c.querySelector(".info-label")?.textContent === "Duplicates");
+
+  if (remaining <= 1) {
+    section?.remove();
+    statCell?.remove();
+    return;
+  }
+
+  const headerTitle = section?.querySelector(".info-section-title");
+  if (headerTitle) headerTitle.textContent = `Duplicate tabs (${remaining})`;
+
+  const valueEl = statCell?.querySelector(".info-value");
+  if (valueEl) valueEl.textContent = String(remaining);
+
+  listEl.querySelectorAll(".info-duplicate-row").forEach((row, i) => {
+    const idx = row.querySelector(".dup-index");
+    if (idx) idx.textContent = String(i + 1);
+  });
+}
+
 function renderTabInfo(info, visits, duplicates) {
   listEl.innerHTML = "";
 
@@ -296,6 +324,8 @@ function renderTabInfo(info, visits, duplicates) {
         e.stopPropagation();
         ext.runtime.sendMessage({ type: "close-tab", domId }).catch(() => {});
         row.remove();
+        invalidateAllTabsCache();
+        refreshTabInfoDuplicates();
       });
       row.addEventListener("mouseenter", () => {
         ext.runtime.sendMessage({ type: "preview-tab", domId }).catch(() => {});
@@ -312,7 +342,8 @@ function renderTabInfo(info, visits, duplicates) {
           ext.runtime.sendMessage({ type: "close-tab", domId: dup.domId }).catch(() => {});
         }
         listEl.querySelectorAll(".info-duplicate-row:not(.dup-self)").forEach((r) => r.remove());
-        closeOthers.remove();
+        invalidateAllTabsCache();
+        refreshTabInfoDuplicates();
       });
     }
   }
