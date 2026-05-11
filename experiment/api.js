@@ -733,6 +733,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "close-and-select":   { width: 600, height: 604 },
       "move-to-folder":     { width: 360, height: 604 },
       "open-in-container":  { width: 320, height: 604 },
+      "extension-popup":    { width: 360, height: 500 },
     };
 
     // Chord/leader-key shortcut tree. After the leader (MacCtrl+Cmd+.) fires,
@@ -833,7 +834,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return VIEW_SIZES[view] || VIEW_SIZES["actions"];
     }
 
-    function createBrowserElement(w, size) {
+    function createBrowserElement(w, size, opts) {
       const br = w.document.createXULElement("browser");
       br.id = BROWSER_ID;
       br.setAttribute("type", "content");
@@ -843,9 +844,84 @@ this.zenWorkspaces = class extends ExtensionAPI {
       br.setAttribute("messagemanagergroup", "webext-browsers");
       br.setAttribute("webextension-view-type", "popup");
       br.setAttribute("transparent", "true");
-      br.setAttribute("src", getPaletteURL());
+      if (opts?.remoteType) br.setAttribute("remoteType", opts.remoteType);
+      br.setAttribute("src", opts?.src || getPaletteURL());
       br.style.cssText = "width:" + size.width + "px;height:" + size.height + "px;border:none;opacity:1";
       return br;
+    }
+
+    // Resolve foreign extension popup URL and pick a suitable icon size from
+    // the manifest's default_icon (which is either a string or an object
+    // keyed by pixel size).
+    function pickIconUrl(icon) {
+      if (!icon) return null;
+      if (typeof icon === "string") return icon;
+      const sizes = Object.keys(icon).map((n) => parseInt(n, 10)).filter((n) => !isNaN(n));
+      if (sizes.length === 0) return null;
+      sizes.sort((a, b) => a - b);
+      const ge32 = sizes.find((n) => n >= 32);
+      const chosen = ge32 ?? sizes[sizes.length - 1];
+      return icon[chosen] || icon[String(chosen)];
+    }
+
+    // Fetch a moz-extension:// icon URL and convert to a data: URL so the
+    // popup content process (a different extension origin) can render it
+    // without cross-extension web_accessible_resources.
+    async function fetchIconAsDataUrl(url) {
+      const w = getWin();
+      if (!w || !url) return null;
+      try {
+        const resp = await w.fetch(url);
+        if (!resp.ok) return null;
+        const blob = await resp.blob();
+        return await new Promise((resolve, reject) => {
+          const reader = new w.FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        return null;
+      }
+    }
+
+    let extensionListCache = null;
+    async function buildExtensionList() {
+      const { ExtensionParent } = ChromeUtils.importESModule(
+        "resource://gre/modules/ExtensionParent.sys.mjs"
+      );
+      const w = getWin();
+      const isPrivate = w?.PrivateBrowsingUtils?.isWindowPrivate?.(w) || false;
+      const ownId = context.extension.id;
+
+      const items = [];
+      for (const [id, ext] of ExtensionParent.GlobalManager.extensionMap) {
+        if (id === ownId) continue;
+        const action = ext.manifest.action || ext.manifest.browser_action;
+        const popupPath = action?.default_popup;
+        if (!popupPath) continue;
+        if (isPrivate && !ext.privateBrowsingAllowed) continue;
+
+        // default_popup may be a relative path; resolve against the extension's baseURL.
+        let popupUrl = popupPath;
+        if (!/^moz-extension:\/\//.test(popupPath)) {
+          popupUrl = ext.baseURL + popupPath.replace(/^\/+/, "");
+        }
+        const iconRaw = pickIconUrl(action.default_icon || ext.manifest.icons);
+        let iconResolved = iconRaw;
+        if (iconRaw && !/^moz-extension:\/\//.test(iconRaw)) {
+          iconResolved = ext.baseURL + iconRaw.replace(/^\/+/, "");
+        }
+        const iconDataUrl = await fetchIconAsDataUrl(iconResolved);
+        items.push({
+          id,
+          name: ext.manifest.name || id,
+          popupUrl,
+          iconDataUrl,
+        });
+      }
+      items.sort((a, b) => a.name.localeCompare(b.name));
+      return items;
     }
 
     function createOverlay() {
@@ -967,15 +1043,28 @@ this.zenWorkspaces = class extends ExtensionAPI {
         panel.style.width = targetSize.width + "px";
         panel.style.maxHeight = targetSize.height + "px";
 
-        pendingView = view === "actions" ? null : view;
-        pendingParams = params || {};
-        const newBr = createBrowserElement(w, targetSize);
+        let newBr;
+        if (view === "extension-popup" && params?.popupUrl) {
+          newBr = createBrowserElement(w, targetSize, {
+            src: params.popupUrl,
+            remoteType: "extension",
+          });
+        } else {
+          pendingView = view === "actions" ? null : view;
+          pendingParams = params || {};
+          newBr = createBrowserElement(w, targetSize);
+          pendingView = null;
+          pendingParams = {};
+        }
         newBr.style.opacity = "0";
-        pendingView = null;
-        pendingParams = {};
 
         oldBrowser.remove();
         panel.appendChild(newBr);
+
+        if (view === "extension-popup") {
+          wireForeignPopupResizing(newBr, panel, gen);
+          wireForeignPopupAutoClose(newBr);
+        }
 
         w.setTimeout(() => {
           if (gen !== morphGeneration) return;
@@ -987,6 +1076,99 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }, 50);
         }, 160);
       }, 80);
+    }
+
+    // Resize the panel and browser to match the popup body's natural size.
+    // Foreign extension popups set their own body dimensions; without this
+    // they're letterboxed or cropped inside our default 360x500.
+    //
+    // Fission blocks chrome from reading the content-process `contentDocument`,
+    // so we run the measurement inside the content process via a frame
+    // script that posts dimensions back over the messageManager. The
+    // frameLoader doesn't exist immediately after `appendChild`, so we wait
+    // for the browser's load event before attaching.
+    function wireForeignPopupResizing(br, panel, gen) {
+      const FOREIGN_POPUP_MAX_W = 800;
+      const FOREIGN_POPUP_MAX_H = 700;
+      const FOREIGN_POPUP_MIN_W = 200;
+      const FOREIGN_POPUP_MIN_H = 120;
+
+      const applySize = (rawW, rawH) => {
+        if (gen !== morphGeneration) return;
+        const cw = Math.max(FOREIGN_POPUP_MIN_W, Math.min(FOREIGN_POPUP_MAX_W, rawW || 0));
+        const ch = Math.max(FOREIGN_POPUP_MIN_H, Math.min(FOREIGN_POPUP_MAX_H, rawH || 0));
+        if (!cw || !ch) return;
+        panel.style.width = cw + "px";
+        panel.style.maxHeight = ch + "px";
+        br.style.width = cw + "px";
+        br.style.height = ch + "px";
+      };
+
+      // Why this script is shaped the way it is:
+      //
+      // - We must run the measurement INSIDE the content process. Fission
+      //   blocks chrome from reading `br.contentDocument` for a remote
+      //   browser, so we ship the size-reporter into the page via a frame
+      //   script and have it post results back over the messageManager.
+      //
+      // - We prefer body.scrollWidth/scrollHeight over documentElement.
+      //   documentElement reports the iframe's current width — for popups
+      //   that want less than our default (e.g. uBlock at 252px) it lies
+      //   and we'd never shrink. Fall back to documentElement only when
+      //   body isn't present yet.
+      //
+      // - A self-guard (`content.__zttResizeWired`) makes the script
+      //   idempotent within a given content window. wireOnce gets called
+      //   multiple times (XULFrameLoaderCreated event + setTimeout cascade
+      //   + initial sync attach) to survive process switches, and each
+      //   call must use a unique URL (Firefox dedupes loadFrameScript
+      //   by URL). Without this guard, every successful load created a
+      //   fresh ResizeObserver in the page, so popups with paint-time
+      //   animations (e.g. Bitwarden's vault) ended up with 4-6 ROs all
+      //   firing in parallel and racing to set the panel size — the
+      //   panel visibly oscillated.
+      const FRAME_SCRIPT_BODY =
+        '(()=>{if(content.__zttResizeWired)return;content.__zttResizeWired=true;let observed=false;const send=()=>{const d=content.document;const b=d.body;const r=d.documentElement;let w,h;if(b&&b.scrollWidth){w=b.scrollWidth;h=b.scrollHeight;}else if(r){w=r.scrollWidth;h=r.scrollHeight;}if(!w||!h)return;sendAsyncMessage("ztt:popup-size",{w,h});};const observe=()=>{if(observed)return;const b=content.document.body;if(!b)return;observed=true;try{const ro=new content.ResizeObserver(send);ro.observe(b);ro.observe(content.document.documentElement);}catch(e){}};const tick=()=>{observe();send();};tick();content.addEventListener("DOMContentLoaded",tick,{once:true});content.addEventListener("load",tick,{once:true});})();';
+
+      const w = getWin();
+      // We listen on each XULFrameLoaderCreated firing because remoteType=
+      // "extension" forces a process switch that destroys the placeholder
+      // frameLoader (and its messageManager + any listeners we attached
+      // to it). The setTimeout cascade is a belt for any case where the
+      // event fires before frameLoader.messageManager is readable. Each
+      // load uses a unique data: URL (cache-buster lives as a JS comment
+      // INSIDE the body — the body of a data:URL is JS, so an unescaped
+      // `&` query string is a syntax error). The content-side
+      // __zttResizeWired guard inside FRAME_SCRIPT_BODY ensures only one
+      // ResizeObserver gets installed regardless of how many times the
+      // script lands in the same content window.
+      const wireOnce = () => {
+        if (gen !== morphGeneration) return;
+        let mm;
+        try { mm = br.frameLoader?.messageManager; } catch (e) {}
+        if (!mm) return;
+        try {
+          mm.addMessageListener("ztt:popup-size", (m) => {
+            const d = m.data || {};
+            if (d.w && d.h) applySize(d.w, d.h);
+          });
+        } catch (e) {}
+        const url = "data:," + encodeURIComponent("/*" + Date.now() + "_" + Math.random() + "*/" + FRAME_SCRIPT_BODY);
+        try { mm.loadFrameScript(url, false); } catch (e) {}
+      };
+      br.addEventListener("XULFrameLoaderCreated", wireOnce);
+      wireOnce();
+      [200, 600, 1500].forEach((d) => w.setTimeout(wireOnce, d));
+    }
+
+    // Many popups dismiss themselves via window.close(). Watch for that
+    // signal on our hosted browser's content window and tear down the
+    // overlay in response.
+    function wireForeignPopupAutoClose(br) {
+      br.addEventListener("DOMWindowClose", (e) => {
+        e.preventDefault();
+        destroyOverlay();
+      }, { capture: true });
     }
 
     function destroyOverlay() {
@@ -2295,6 +2477,29 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const prev = navStack.pop();
           currentViewName = prev.view;
           morphToView(prev.view, prev.params);
+        },
+
+        // Enumerate installed extensions with a browser_action popup and
+        // return their id, name, popup URL, and icon as a data URL the
+        // popup content process can render.
+        async listBrowserActionExtensions() {
+          if (!extensionListCache) {
+            extensionListCache = await buildExtensionList();
+          }
+          return extensionListCache;
+        },
+
+        // Swap the palette into a foreign extension's popup.
+        async openExtensionPopup(extensionId) {
+          if (!isOverlayOpen()) return;
+          if (!extensionListCache) {
+            extensionListCache = await buildExtensionList();
+          }
+          const found = extensionListCache.find((x) => x.id === extensionId);
+          if (!found) return;
+          navStack.push({ view: currentViewName, params: {} });
+          currentViewName = "extension-popup";
+          morphToView("extension-popup", { popupUrl: found.popupUrl, extensionId });
         },
 
       },

@@ -562,6 +562,22 @@
         "parameters": [
           { "name": "name", "type": "string" }
         ]
+      },
+      {
+        "name": "listBrowserActionExtensions",
+        "type": "function",
+        "async": true,
+        "description": "Enumerate installed WebExtensions that declare a browser_action popup, returning their id, name, popup URL, and base64 data-URL icon.",
+        "parameters": []
+      },
+      {
+        "name": "openExtensionPopup",
+        "type": "function",
+        "async": true,
+        "description": "Open another extension's popup inside our palette overlay. extensionId is the WebExtension id (matches the result from listBrowserActionExtensions).",
+        "parameters": [
+          { "name": "extensionId", "type": "string" }
+        ]
       }
     ],
     "events": [

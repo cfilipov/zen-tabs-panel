@@ -65,6 +65,13 @@ const profileState = {
   profileList: [],         // [{ name, rootPath, isCurrent, isDefault }]
 };
 
+// Foreign extensions with a browser_action popup. Populated when the
+// actions menu opens; rendered as the page-1 footer strip with Shift+1..9
+// hotkeys mapped to indices 0..8.
+const extState = {
+  list: [],                // [{ id, name, popupUrl, iconDataUrl }]
+};
+
 // View registry — populated by popup/views/*.js. Each entry maps a view id
 // (the same string used in URL ?view=, init(), and ui.currentView) to a
 // thunk `(params) => Promise<void>`. Object.create(null) for prototype-

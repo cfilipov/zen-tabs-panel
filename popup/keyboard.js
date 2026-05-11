@@ -93,6 +93,21 @@ KEY_HANDLERS["Backspace"] = (e) => {
 // activates a workspace switch row, and a single letter matches an
 // item.hotkey. These views never display tabs as numbered rows.
 function handleActionsKey(e) {
+  // Shift+1..9 inside the actions view opens the Nth extension's popup
+  // in our overlay (mirrors the page-1 footer strip). Bare 1..9 still
+  // switches workspaces below.
+  if (e.shiftKey && ui.currentView === "actions" && e.code && e.code.startsWith("Digit")) {
+    const n = parseInt(e.code.slice(5), 10);
+    if (n >= 1 && n <= 9) {
+      const target = extState.list?.[n - 1];
+      if (target) {
+        e.preventDefault();
+        ext.runtime.sendMessage({ type: "open-extension-popup", extensionId: target.id }).catch(() => {});
+        return;
+      }
+    }
+  }
+
   const num = parseInt(e.key, 10);
   if (!isNaN(num) && num >= 1 && num <= 9) {
     const wsItems = listEl.querySelectorAll(".list-item[data-workspace-switch-id]");

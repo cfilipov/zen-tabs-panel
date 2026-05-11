@@ -456,6 +456,7 @@ const QUERIES = Object.freeze({
   [MSG.INSTALL_COMPANION_MOD]:         (m) => api.installCompanionMod(m.modId),
   [MSG.REMOVE_COMPANION_MOD]:          (m) => api.removeCompanionMod(m.modId),
   [MSG.GET_PROFILES]:                  ()  => api.getProfiles(),
+  [MSG.LIST_EXTENSIONS]:               ()  => api.listBrowserActionExtensions(),
 });
 
 // Synchronous fire-and-forget messages that do NOT hide the palette
@@ -482,6 +483,7 @@ const SYNC_HANDLERS = Object.freeze({
     // the menu and the user can chain more restores.
     await api.focusPalette().catch(() => {});
   },
+  [MSG.OPEN_EXTENSION_POPUP]: (m) => api.openExtensionPopup(m.extensionId),
 });
 
 // Hide palette, then run an action. Used by the message handler to keep

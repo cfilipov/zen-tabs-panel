@@ -68,6 +68,11 @@ function getActions() {
     actionFromRegistry("go-to-next-workspace",  { ...compact, iconHtml: nextWsIconHtml }),
     { type: "workspaces" },
 
+    // Horizontal strip of foreign-extension icons rendered at the bottom of
+    // page 1, below the columns. Shift+1..9 inside the palette opens the
+    // corresponding extension's popup in our overlay.
+    { type: "extensions-strip" },
+
     // ----- Page 2 -----
     { type: "section", label: "Navigate", page: 2, navigateGrid: true },
     // Column-first 2x2 fill order:
@@ -364,6 +369,14 @@ function renderActions(actions, title) {
         continue;
       }
 
+      if (action.type === "extensions-strip") {
+        gridContainer = null;
+        closeColumns();
+        closeNavigateGrid();
+        renderExtensionsStrip(pageEl);
+        continue;
+      }
+
       if (navigateGrid) {
         const cell = buildNavigateCell(action);
         navigateGrid.appendChild(cell);
@@ -465,6 +478,15 @@ async function fetchProfileList() {
     profileState.profileList = [];
   }
 }
+
+async function fetchExtensionList() {
+  try {
+    const list = await ext.runtime.sendMessage({ type: "list-extensions" });
+    extState.list = Array.isArray(list) ? list : [];
+  } catch (e) {
+    extState.list = [];
+  }
+}
 // Build the lightweight preview shape passed into `getActions` for any
 // tab-style preview slot (parent, previous, vertical neighbors). Carries
 // pinned/essential through so the preview row can show the indicator.
@@ -519,6 +541,7 @@ async function showActionsMenu() {
       ext.runtime.sendMessage({ type: "get-selected-tab-dom-ids" }).catch(() => []),
       fetchWorkspaceMap(),
       fetchProfileList(),
+      fetchExtensionList(),
     ]);
   } catch (e) {
     resetActionsState();
@@ -696,6 +719,44 @@ async function showActionsMenu() {
     hideSidebar();
   }
 }
+// Render the page-1 footer strip of foreign-extension icons. Each button
+// opens the corresponding extension's popup inside our overlay (via the
+// experiment API). Indices 0..8 also bind to Shift+1..9 hotkeys handled
+// in popup/keyboard.js. The strip is not arrow-navigable on purpose —
+// it's a fixed quick-launch row, not a list.
+function renderExtensionsStrip(parent) {
+  const exts = extState.list;
+  if (!exts || exts.length === 0) return;
+
+  const strip = document.createElement("div");
+  strip.className = "extensions-strip";
+  strip.style.cssText = "display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 8px 4px;margin-top:4px;width:100%;box-sizing:border-box;";
+
+  for (let i = 0; i < exts.length; i++) {
+    const e = exts[i];
+    const btn = document.createElement("button");
+    btn.className = "extension-icon-button";
+    btn.type = "button";
+    btn.dataset.extensionId = e.id;
+    btn.title = e.name;
+
+    const iconHtml = e.iconDataUrl
+      ? `<img class="extension-icon" src="${escapeAttr(e.iconDataUrl)}" alt="">`
+      : `<span class="extension-icon-fallback">${escapeHtml(e.name.slice(0, 1).toUpperCase())}</span>`;
+    const badge = i < 9
+      ? `<span class="item-badge badge-wide extension-icon-badge">⇧${i + 1}</span>`
+      : "";
+
+    btn.innerHTML = iconHtml + badge;
+    btn.addEventListener("click", () => {
+      ext.runtime.sendMessage({ type: "open-extension-popup", extensionId: e.id }).catch(() => {});
+    });
+    strip.appendChild(btn);
+  }
+
+  parent.appendChild(strip);
+}
+
 // Render the workspace switcher rows directly into `parent` (the caller is
 // responsible for placing parent inside a scroll container if scrolling is
 // desired — the actions menu uses the section's .section-scroll wrapper).

@@ -125,6 +125,10 @@ this.MSG = Object.freeze({
   // Profiles
   GET_PROFILES:                   "get-profiles",
   LAUNCH_PROFILE:                 "launch-profile",
+
+  // Foreign extension popup hosting
+  LIST_EXTENSIONS:                "list-extensions",
+  OPEN_EXTENSION_POPUP:           "open-extension-popup",
 });
 
 // Default values for browser.storage.local. Pass to storage.get() to read
@@ -161,6 +165,7 @@ this.VIEW_IDS = new Set([
   "close-and-select",
   "move-to-folder",
   "open-in-container",
+  "extension-popup",
 ]);
 
 // Node test shim — let lib/ tests import constants without a browser context.
