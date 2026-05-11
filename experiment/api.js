@@ -858,9 +858,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (typeof icon === "string") return icon;
       const sizes = Object.keys(icon).map((n) => parseInt(n, 10)).filter((n) => !isNaN(n));
       if (sizes.length === 0) return null;
+      // Pick the largest available source — we render at 24×24 CSS pixels
+      // which is 48 device pixels on a 2× display, so scaling DOWN from a
+      // larger source is always crisper than scaling up from a 32px PNG.
       sizes.sort((a, b) => a - b);
-      const ge32 = sizes.find((n) => n >= 32);
-      const chosen = ge32 ?? sizes[sizes.length - 1];
+      const chosen = sizes[sizes.length - 1];
       return icon[chosen] || icon[String(chosen)];
     }
 
@@ -886,6 +888,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     let extensionListCache = null;
+    // Per-extension natural-size cache, keyed by extension id. Once a
+    // popup reports its body dimensions, subsequent opens skip the
+    // 360×500 default and morph straight to the remembered size, so
+    // the user sees one transition instead of two.
+    const extensionPopupSizeCache = Object.create(null);
     async function buildExtensionList() {
       const { ExtensionParent } = ChromeUtils.importESModule(
         "resource://gre/modules/ExtensionParent.sys.mjs"
@@ -1032,7 +1039,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!panel || !oldBrowser) return;
 
       const gen = ++morphGeneration;
-      const targetSize = getViewSize(view);
+      // For extension-popup view, prefer the cached natural size from a
+      // previous open so we morph straight there. For the first open
+      // of a given extension we have no idea what size the popup wants,
+      // so we leave the panel at its previous size and let
+      // wireForeignPopupResizing transition it once the body reports
+      // (the browser inside is opacity:0 during this period so the
+      // mismatched layout isn't visible — the user just sees one
+      // smooth panel resize after the popup loads).
+      const cachedSize = view === "extension-popup" && params?.extensionId
+        ? extensionPopupSizeCache[params.extensionId]
+        : null;
+      const targetSize = cachedSize || getViewSize(view);
+      const skipPanelResize = view === "extension-popup" && !cachedSize;
 
       oldBrowser.style.transition = "opacity 0.08s ease-out";
       oldBrowser.style.opacity = "0";
@@ -1040,8 +1059,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       w.setTimeout(() => {
         if (gen !== morphGeneration) return;
 
-        panel.style.width = targetSize.width + "px";
-        panel.style.maxHeight = targetSize.height + "px";
+        if (!skipPanelResize) {
+          panel.style.width = targetSize.width + "px";
+          panel.style.maxHeight = targetSize.height + "px";
+        }
 
         let newBr;
         if (view === "extension-popup" && params?.popupUrl) {
@@ -1062,7 +1083,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         panel.appendChild(newBr);
 
         if (view === "extension-popup") {
-          wireForeignPopupResizing(newBr, panel, gen);
+          wireForeignPopupResizing(newBr, panel, gen, params?.extensionId);
           wireForeignPopupAutoClose(newBr);
         }
 
@@ -1085,28 +1106,68 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Measurement runs in the content process via a frame script that
     // posts dimensions back over the messageManager (Fission blocks
     // chrome from reading `br.contentDocument` directly).
-    function wireForeignPopupResizing(br, panel, gen) {
+    function wireForeignPopupResizing(br, panel, gen, extensionId) {
       const FOREIGN_POPUP_MAX_W = 800;
       const FOREIGN_POPUP_MAX_H = 700;
       const FOREIGN_POPUP_MIN_W = 200;
       const FOREIGN_POPUP_MIN_H = 120;
+      const DEBOUNCE_MS = 500;
+      const w = getWin();
 
+      // applySize coalesces a flurry of size reports into at most two
+      // visible transitions: the first one fires immediately (so the
+      // popup gets sized as soon as it reports a size) and any
+      // subsequent reports within DEBOUNCE_MS reset a timer. When the
+      // timer fires we apply only the final size if it differs.
+      //
+      // This kills Bitwarden's three-step load animation: its body
+      // briefly grows from 480×500 → 480×600 → 480×500 over ~1s, and
+      // without debounce the panel visibly wobbles through each.
+      let currentSize = null;
+      let pendingSize = null;
+      let debounceTimer = null;
+      const apply = (cw, ch) => {
+        panel.style.width = cw + "px";
+        panel.style.maxHeight = ch + "px";
+        br.style.width = cw + "px";
+        br.style.height = ch + "px";
+        currentSize = { w: cw, h: ch };
+        if (extensionId) extensionPopupSizeCache[extensionId] = { width: cw, height: ch };
+      };
+      const flush = () => {
+        debounceTimer = null;
+        if (gen !== morphGeneration) return;
+        if (pendingSize && currentSize &&
+            (pendingSize.w !== currentSize.w || pendingSize.h !== currentSize.h)) {
+          apply(pendingSize.w, pendingSize.h);
+        }
+        pendingSize = null;
+      };
       const applySize = (rawW, rawH) => {
         if (gen !== morphGeneration) return;
         const cw = Math.max(FOREIGN_POPUP_MIN_W, Math.min(FOREIGN_POPUP_MAX_W, rawW || 0));
         const ch = Math.max(FOREIGN_POPUP_MIN_H, Math.min(FOREIGN_POPUP_MAX_H, rawH || 0));
         if (!cw || !ch) return;
-        panel.style.width = cw + "px";
-        panel.style.maxHeight = ch + "px";
-        br.style.width = cw + "px";
-        br.style.height = ch + "px";
+        pendingSize = { w: cw, h: ch };
+        if (!currentSize) {
+          apply(cw, ch);
+        }
+        if (debounceTimer) w.clearTimeout(debounceTimer);
+        debounceTimer = w.setTimeout(flush, DEBOUNCE_MS);
       };
 
-      // body.scrollWidth/Height is preferred over documentElement —
-      // documentElement reports the iframe's current width, so popups
-      // smaller than our default (uBlock at 252px) would never shrink.
-      // ResizeObserver keeps the panel in sync with later layout changes
-      // (e.g. a popup expanding a collapsible section).
+      // The frame script does double duty:
+      //   1. Reports body size back over the messageManager so the
+      //      panel/browser get sized to the foreign popup's natural
+      //      dimensions (body.scrollWidth wins over documentElement —
+      //      documentElement just echoes the iframe's current width,
+      //      which would prevent popups smaller than our default from
+      //      shrinking).
+      //   2. Listens for Esc inside the content process and posts an
+      //      "ztt:popup-escape" message so the chrome side can dismiss
+      //      the overlay. A chrome-window keydown listener can't see
+      //      this because Fission keeps content keystrokes in the
+      //      content process — the parent only gets what we forward.
       const SCRIPT_BODY =
         '(()=>{const send=()=>{' +
         'const d=content.document;const b=d.body;const r=d.documentElement;' +
@@ -1117,24 +1178,60 @@ this.zenWorkspaces = class extends ExtensionAPI {
         'try{const ro=new content.ResizeObserver(send);ro.observe(b);' +
         'ro.observe(content.document.documentElement);}catch(e){}return true;};' +
         'if(!observe())content.addEventListener("DOMContentLoaded",observe,{once:true});' +
-        'send();})();';
+        'send();' +
+        'content.addEventListener("keydown",(e)=>{' +
+        'if(e.key==="Escape")sendAsyncMessage("ztt:popup-escape",{});' +
+        '},true);' +
+        '})();';
 
-      // Wait until the remoteType=extension process switch has settled
-      // before loading the measurement script. Scripts queued at
-      // XULFrameLoaderCreated time are silently dropped — the frame
-      // loader is mid-creation and the load doesn't take. 500ms is
-      // well clear of the switch and well under any user-perceptible
-      // latency.
-      getWin().setTimeout(() => {
+      // Load the measurement script as soon as the foreign popup's
+      // content has finished loading. Earlier timing (sync after
+      // appendChild, or at XULFrameLoaderCreated) drops the load on
+      // the floor while the remoteType=extension process switch is
+      // mid-flight. A webProgress listener at STATE_STOP fires exactly
+      // once when the popup document is interactive — typically
+      // 50–150ms after morph, vs the previous 500ms blind setTimeout.
+      const Ci = Components.interfaces;
+      const STATE_STOP_DOC =
+        Ci.nsIWebProgressListener.STATE_STOP |
+        Ci.nsIWebProgressListener.STATE_IS_WINDOW;
+      let armed = false;
+      const arm = () => {
+        if (armed) return;
         if (gen !== morphGeneration) return;
         const mm = br.frameLoader?.messageManager;
         if (!mm) return;
+        armed = true;
         mm.addMessageListener("ztt:popup-size", (m) => {
           const d = m.data || {};
           if (d.w && d.h) applySize(d.w, d.h);
         });
+        mm.addMessageListener("ztt:popup-escape", () => {
+          if (gen !== morphGeneration) return;
+          destroyOverlay();
+        });
         mm.loadFrameScript("data:," + encodeURIComponent(SCRIPT_BODY), false);
-      }, 500);
+      };
+      const progressListener = {
+        QueryInterface: ChromeUtils.generateQI([
+          "nsIWebProgressListener",
+          "nsISupportsWeakReference",
+        ]),
+        onStateChange(_progress, _request, flag) {
+          if ((flag & STATE_STOP_DOC) !== STATE_STOP_DOC) return;
+          try { br.removeProgressListener(progressListener); } catch (e) {}
+          arm();
+        },
+        onLocationChange() {}, onProgressChange() {},
+        onStatusChange() {}, onSecurityChange() {}, onContentBlockingEvent() {},
+      };
+      try {
+        br.addProgressListener(progressListener, Ci.nsIWebProgress.NOTIFY_STATE_NETWORK);
+      } catch (e) {}
+      // Belt-and-suspenders: if the progress listener never fires for
+      // some reason (unusual error path, popup that never finishes
+      // loading), arm anyway at 800ms so the panel still gets sized.
+      w.setTimeout(arm, 800);
     }
 
     // Many popups dismiss themselves via window.close(). Watch for that
@@ -1164,6 +1261,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (panel) panel.style.animation = "ztt-panel-out 0.12s ease-in forwards";
 
       overlay.addEventListener("animationend", () => overlay.remove(), { once: true });
+      // Backup removal: if animationend doesn't fire (we've observed this
+      // when destroyOverlay is invoked from a messageManager callback
+      // while the parent process is busy — the animation property is
+      // set but the animation never progresses), force-remove after the
+      // animation's nominal duration.
+      w.setTimeout(() => {
+        if (overlay.isConnected) overlay.remove();
+      }, 150);
     }
 
     function isOverlayOpen() {

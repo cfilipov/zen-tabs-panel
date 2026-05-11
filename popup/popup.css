@@ -173,69 +173,55 @@ html, body {
 }
 
 /* Page-1 footer strip: row of foreign-extension launch icons. Each button
-   opens that extension's popup inside our overlay. Sized to mirror palette
-   buttons; the badge in the corner shows the Shift+digit hotkey. */
+   opens that extension's popup inside our overlay. Just the raw icon with
+   the standard hotkey badge underneath — matches the badge styling used
+   on every other menu row. */
 .extensions-strip {
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 14px;
   padding: 8px 8px 4px;
-  margin-top: 4px;
+  margin-top: 20px;
   width: 100%;
   box-sizing: border-box;
 }
 
 .extension-icon-button {
-  position: relative;
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--ztt-border);
-  border-radius: 8px;
-  background: var(--ztt-badge-bg);
-  cursor: pointer;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
   padding: 0;
-  transition: background 0.08s ease, transform 0.08s ease;
+  cursor: pointer;
   color: var(--ztt-text);
+  opacity: 0.85;
+  transition: opacity 0.08s ease;
 }
 
 .extension-icon-button:hover {
-  background: var(--ztt-bg-hover);
-  transform: translateY(-1px);
-}
-
-.extension-icon-button:active {
-  transform: translateY(0);
+  opacity: 1;
 }
 
 .extension-icon-button .extension-icon {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
   pointer-events: none;
 }
 
 .extension-icon-button .extension-icon-fallback {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 14px;
   font-weight: 600;
   color: var(--ztt-text-muted);
-}
-
-.extension-icon-button .extension-icon-badge {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  font-size: 10px;
-  padding: 1px 3px;
-  min-width: 0;
-  border: 1px solid var(--ztt-border);
-  background: light-dark(rgb(244, 244, 244), rgb(31, 31, 31));
-  border-radius: 4px;
-  pointer-events: none;
 }
 
 /* iOS-style page indicator dots, only shown on the actions menu */

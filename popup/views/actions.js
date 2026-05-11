@@ -730,7 +730,10 @@ function renderExtensionsStrip(parent) {
 
   const strip = document.createElement("div");
   strip.className = "extensions-strip";
-  strip.style.cssText = "display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 8px 4px;margin-top:4px;width:100%;box-sizing:border-box;";
+  // Inline styles in addition to the matching CSS class — popup CSS gets
+  // cached aggressively across addon reloads in dev, and these layout
+  // rules are load-bearing.
+  strip.style.cssText = "display:flex;justify-content:center;align-items:flex-start;flex-wrap:wrap;gap:14px;padding:8px 8px 4px;margin-top:20px;width:100%;box-sizing:border-box;";
 
   for (let i = 0; i < exts.length; i++) {
     const e = exts[i];
@@ -739,15 +742,16 @@ function renderExtensionsStrip(parent) {
     btn.type = "button";
     btn.dataset.extensionId = e.id;
     btn.title = e.name;
+    btn.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:8px;background:transparent;border:none;padding:0;cursor:pointer;color:inherit;opacity:0.85;";
 
     const iconHtml = e.iconDataUrl
-      ? `<img class="extension-icon" src="${escapeAttr(e.iconDataUrl)}" alt="">`
-      : `<span class="extension-icon-fallback">${escapeHtml(e.name.slice(0, 1).toUpperCase())}</span>`;
-    const badge = i < 9
-      ? `<span class="item-badge badge-wide extension-icon-badge">⇧${i + 1}</span>`
-      : "";
+      ? `<img class="extension-icon" src="${escapeAttr(e.iconDataUrl)}" alt="" style="width:24px;height:24px;object-fit:contain;pointer-events:none;">`
+      : `<span class="extension-icon-fallback" style="width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;">${escapeHtml(e.name.slice(0, 1).toUpperCase())}</span>`;
+    const badgeHtml = i < 9 ? renderBadge(displayKey("Shift+" + (i + 1))) : "";
 
-    btn.innerHTML = iconHtml + badge;
+    btn.innerHTML = iconHtml + badgeHtml;
+    btn.addEventListener("mouseenter", () => { btn.style.opacity = "1"; });
+    btn.addEventListener("mouseleave", () => { btn.style.opacity = "0.85"; });
     btn.addEventListener("click", () => {
       ext.runtime.sendMessage({ type: "open-extension-popup", extensionId: e.id }).catch(() => {});
     });
