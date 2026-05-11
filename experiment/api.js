@@ -928,7 +928,43 @@ this.zenWorkspaces = class extends ExtensionAPI {
         });
       }
       items.sort((a, b) => a.name.localeCompare(b.name));
+      // Mirror the popup's Shift+1..9 quick-launch into the chord
+      // engine's CHORD_TREE so the same shortcut works from outside
+      // an open palette too (leader chord → Shift+N opens the Nth
+      // extension's popup directly, just like clicking the icon does).
+      for (let i = 0; i < Math.min(items.length, 9); i++) {
+        CHORD_TREE.children["Shift+" + (i + 1)] = {
+          type: "open-extension-popup",
+          extensionId: items[i].id,
+        };
+      }
       return items;
+    }
+
+    // Eagerly populate the extension list at api startup so chord
+    // shortcuts (leader-chord → Shift+N) work without the user having
+    // to open the palette first. Fire-and-forget — chord lookups
+    // before this resolves just fall through to "unknown key", which
+    // is no worse than the pre-existing behavior.
+    buildExtensionList()
+      .then((list) => { extensionListCache = list; })
+      .catch(() => {});
+
+    // Open a foreign extension's popup, creating the overlay first if
+    // needed. Both the in-palette icon click (via openExtensionPopup
+    // API method) and the chord-engine shortcut path route through here.
+    async function openExtensionPopupInternal(extensionId) {
+      if (!extensionListCache) {
+        extensionListCache = await buildExtensionList();
+      }
+      const found = extensionListCache.find((x) => x.id === extensionId);
+      if (!found) return;
+      if (!isOverlayOpen()) {
+        openOverlayWithView(null);
+      }
+      navStack.push({ view: currentViewName, params: {} });
+      currentViewName = "extension-popup";
+      morphToView("extension-popup", { popupUrl: found.popupUrl, extensionId });
     }
 
     function createOverlay() {
@@ -1432,6 +1468,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
         chordResolve = null;
         disarmChord();
         openOverlayWithView(node.view);
+        if (resolve) resolve({ kind: "opened" });
+        return;
+      }
+
+      if (node.type === "open-extension-popup") {
+        const resolve = chordResolve;
+        chordResolve = null;
+        disarmChord();
+        openExtensionPopupInternal(node.extensionId);
         if (resolve) resolve({ kind: "opened" });
         return;
       }
@@ -2570,17 +2615,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return extensionListCache;
         },
 
-        // Swap the palette into a foreign extension's popup.
+        // Swap the palette into a foreign extension's popup. Opens
+        // the overlay first if it isn't already open so the chord
+        // shortcut path can use the same entry point.
         async openExtensionPopup(extensionId) {
-          if (!isOverlayOpen()) return;
-          if (!extensionListCache) {
-            extensionListCache = await buildExtensionList();
-          }
-          const found = extensionListCache.find((x) => x.id === extensionId);
-          if (!found) return;
-          navStack.push({ view: currentViewName, params: {} });
-          currentViewName = "extension-popup";
-          morphToView("extension-popup", { popupUrl: found.popupUrl, extensionId });
+          await openExtensionPopupInternal(extensionId);
         },
 
       },
