@@ -1726,6 +1726,40 @@ this.zenWorkspaces = class extends ExtensionAPI {
           } catch (e) { return false; }
         },
 
+        // Enumerate Firefox/Zen profiles from the toolkit profile service.
+        // Same source `about:profiles` reads — rootDir is the unique key
+        // (names can technically collide), so identity checks use it.
+        async getProfiles() {
+          const ps = Cc["@mozilla.org/toolkit/profile-service;1"]
+            .getService(Ci.nsIToolkitProfileService);
+          const current = ps.currentProfile;
+          const def = ps.defaultProfile;
+          const out = [];
+          for (const p of ps.profiles) {
+            out.push({
+              name: p.name,
+              rootPath: p.rootDir.path,
+              isCurrent: current ? p.rootDir.equals(current.rootDir) : false,
+              isDefault: def ? p.rootDir.equals(def.rootDir) : false,
+            });
+          }
+          return out;
+        },
+
+        // Launch a new Zen instance against the given profile — same call the
+        // "Launch profile in new browser" button on about:profiles uses.
+        async launchProfile(name) {
+          const ps = Cc["@mozilla.org/toolkit/profile-service;1"]
+            .getService(Ci.nsIToolkitProfileService);
+          for (const p of ps.profiles) {
+            if (p.name === name) {
+              Services.startup.createInstanceWithProfile(p);
+              return true;
+            }
+          }
+          throw new Error(`Profile not found: ${name}`);
+        },
+
         // Reopen the active tab in the given contextual identity (container).
         async reopenInContainer(userContextId) {
           const w = getWin();

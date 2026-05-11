@@ -432,6 +432,9 @@ const ACTIONS = Object.freeze({
   [MSG.UNVISITED_OLDEST]:                 ()  => api.activateUnvisitedOldest(),
   [MSG.MOVE_TAB_TO_FOLDER]:               (m) => api.moveTabToFolder(m.folderId),
   [MSG.REOPEN_IN_CONTAINER]:              (m) => api.reopenInContainer(m.userContextId),
+
+  // Profiles
+  [MSG.LAUNCH_PROFILE]:                   (m) => api.launchProfile(m.name),
 });
 
 // Reply-style queries — listener returns the promise so the popup awaits
@@ -452,6 +455,7 @@ const QUERIES = Object.freeze({
   [MSG.CHECK_COMPANION_MOD]:           ()  => api.getCompanionMods(),
   [MSG.INSTALL_COMPANION_MOD]:         (m) => api.installCompanionMod(m.modId),
   [MSG.REMOVE_COMPANION_MOD]:          (m) => api.removeCompanionMod(m.modId),
+  [MSG.GET_PROFILES]:                  ()  => api.getProfiles(),
 });
 
 // Synchronous fire-and-forget messages that do NOT hide the palette

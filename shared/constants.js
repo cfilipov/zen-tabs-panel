@@ -121,6 +121,10 @@ this.MSG = Object.freeze({
   CHECK_COMPANION_MOD:            "check-companion-mod",
   INSTALL_COMPANION_MOD:          "install-companion-mod",
   REMOVE_COMPANION_MOD:           "remove-companion-mod",
+
+  // Profiles
+  GET_PROFILES:                   "get-profiles",
+  LAUNCH_PROFILE:                 "launch-profile",
 });
 
 // Default values for browser.storage.local. Pass to storage.get() to read

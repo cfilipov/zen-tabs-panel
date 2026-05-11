@@ -92,6 +92,9 @@ function getActions() {
     actionFromRegistry("add-to-essentials",  compact),
     actionFromRegistry("open-in-container",  compact),
 
+    { type: "section", label: "Profiles", page: 2, column: true, stack: true },
+    { type: "profiles" },
+
     { type: "section", label: "Developer", page: 2, column: true },
     actionFromRegistry("toggle-devtools",        compact),
     actionFromRegistry("toggle-browser-toolbox", compact),
@@ -354,6 +357,13 @@ function renderActions(actions, title) {
         continue;
       }
 
+      if (action.type === "profiles") {
+        gridContainer = null;
+        const target = currentScrollTarget || currentColumn || pageEl;
+        renderProfileSwitcher(target);
+        continue;
+      }
+
       if (navigateGrid) {
         const cell = buildNavigateCell(action);
         navigateGrid.appendChild(cell);
@@ -446,6 +456,15 @@ async function fetchWorkspaceMap() {
     wsState.activeWorkspaceId = null;
   }
 }
+
+async function fetchProfileList() {
+  try {
+    const profiles = await ext.runtime.sendMessage({ type: "get-profiles" });
+    profileState.profileList = Array.isArray(profiles) ? profiles : [];
+  } catch (e) {
+    profileState.profileList = [];
+  }
+}
 // Build the lightweight preview shape passed into `getActions` for any
 // tab-style preview slot (parent, previous, vertical neighbors). Carries
 // pinned/essential through so the preview row can show the indicator.
@@ -489,7 +508,7 @@ function resetActionsState() {
 async function showActionsMenu() {
   ui.currentView = "actions";
 
-  // Run all 5 cross-process fetches in parallel. Each is independent —
+  // Run all cross-process fetches in parallel. Each is independent —
   // running them serially burned 3 round-trips of latency on every open.
   let allTabs, closed, navHist, selectedDomIds;
   try {
@@ -499,6 +518,7 @@ async function showActionsMenu() {
       ext.runtime.sendMessage({ type: "get-navigation-history" }).catch(() => null),
       ext.runtime.sendMessage({ type: "get-selected-tab-dom-ids" }).catch(() => []),
       fetchWorkspaceMap(),
+      fetchProfileList(),
     ]);
   } catch (e) {
     resetActionsState();
@@ -723,6 +743,57 @@ function renderWorkspaceSwitcher(parent) {
       workspaceSwitchId: uuid,
       label: ws.name,
       isActiveWorkspace: isActive,
+    });
+  }
+}
+
+// Render one row per profile from profileState.profileList. The currently
+// running profile is shown disabled with a "Current" badge; arrow-key
+// navigation skips it because isUnselectableRow filters .disabled rows.
+// Other profiles activate via launch-profile, spawning a new Zen instance.
+function renderProfileSwitcher(parent) {
+  const profiles = profileState.profileList;
+  if (!profiles || profiles.length === 0) return;
+
+  const iconHtml = `<span class="item-icon-placeholder">${getIcon("svg:user")}</span>`;
+
+  for (const profile of profiles) {
+    const el = document.createElement("div");
+    el.className = "list-item compact-item" + (profile.isCurrent ? " disabled" : "");
+
+    let badgeHtml = "";
+    if (profile.isCurrent) {
+      badgeHtml = `<span class="item-badge">Current</span>`;
+    } else if (profile.isDefault) {
+      badgeHtml = `<span class="item-badge">Default</span>`;
+    }
+
+    el.innerHTML = `
+      ${iconHtml}
+      <span class="item-text">
+        <span class="item-title">${escapeHtml(profile.name)}</span>
+      </span>
+      <span class="item-right">
+        ${badgeHtml}
+        <span class="item-arrow"></span>
+      </span>
+    `;
+
+    if (!profile.isCurrent) {
+      el.addEventListener("click", () => {
+        ext.runtime.sendMessage({ type: "launch-profile", name: profile.name }).catch(() => {});
+      });
+    }
+
+    parent.appendChild(el);
+
+    // Push a ui.items entry for every row (including the disabled current
+    // profile) so list-item indices stay aligned with ui.items. The
+    // .disabled class causes isUnselectableRow to skip the current row.
+    ui.items.push({
+      launchProfileName: profile.isCurrent ? null : profile.name,
+      label: profile.name,
+      isCurrentProfile: profile.isCurrent,
     });
   }
 }

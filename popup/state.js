@@ -58,6 +58,11 @@ const wsState = {
   workspaceFilter: "all",
 };
 
+// Profile state — populated when the actions menu opens.
+const profileState = {
+  profileList: [],         // [{ name, rootPath, isCurrent, isDefault }]
+};
+
 // View registry — populated by popup/views/*.js. Each entry maps a view id
 // (the same string used in URL ?view=, init(), and ui.currentView) to a
 // thunk `(params) => Promise<void>`. Object.create(null) for prototype-

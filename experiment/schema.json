@@ -546,6 +546,22 @@
         "parameters": [
           { "name": "userContextId", "type": "integer" }
         ]
+      },
+      {
+        "name": "getProfiles",
+        "type": "function",
+        "async": true,
+        "description": "Enumerate Firefox/Zen profiles from the toolkit profile service",
+        "parameters": []
+      },
+      {
+        "name": "launchProfile",
+        "type": "function",
+        "async": true,
+        "description": "Launch a new Zen instance against the named profile",
+        "parameters": [
+          { "name": "name", "type": "string" }
+        ]
       }
     ],
     "events": [

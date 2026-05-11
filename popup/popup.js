@@ -479,6 +479,7 @@ const SVG_ICONS = {
   "puzzle": `<svg ${SVG_ATTRS}><path d="M19 11h2a2 2 0 0 1 0 4h-2v4a2 2 0 0 1-2 2h-4v-2a2 2 0 0 0-4 0v2H5a2 2 0 0 1-2-2v-4h2a2 2 0 0 0 0-4H3V7a2 2 0 0 1 2-2h4V3a2 2 0 0 1 4 0v2h4a2 2 0 0 1 2 2z"/></svg>`,
   "folder": `<svg ${SVG_ATTRS}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
   "eye": `<svg ${SVG_ATTRS}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  "user": `<svg ${SVG_ATTRS}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
 };
 
 function getIcon(icon) {
@@ -821,6 +822,8 @@ function activateSelected() {
     ext.runtime.sendMessage({ type: "navigate-to-history-index", index: item.navIndex }).catch(() => {});
   } else if (item.workspaceSwitchId) {
     ext.runtime.sendMessage({ type: "switch-workspace", workspaceId: item.workspaceSwitchId }).catch(() => {});
+  } else if (item.launchProfileName) {
+    ext.runtime.sendMessage({ type: "launch-profile", name: item.launchProfileName }).catch(() => {});
   } else if (item.id && typeof item.hotkey !== "undefined") {
     activateAction(item);
   } else if (item.reorderAction) {
