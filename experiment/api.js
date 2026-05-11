@@ -1079,14 +1079,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     // Resize the panel and browser to match the popup body's natural size.
-    // Foreign extension popups set their own body dimensions; without this
-    // they're letterboxed or cropped inside our default 360x500.
+    // Foreign extension popups set their own body dimensions; without
+    // this they're letterboxed or cropped inside our default 360×500.
     //
-    // Fission blocks chrome from reading the content-process `contentDocument`,
-    // so we run the measurement inside the content process via a frame
-    // script that posts dimensions back over the messageManager. The
-    // frameLoader doesn't exist immediately after `appendChild`, so we wait
-    // for the browser's load event before attaching.
+    // Measurement runs in the content process via a frame script that
+    // posts dimensions back over the messageManager (Fission blocks
+    // chrome from reading `br.contentDocument` directly).
     function wireForeignPopupResizing(br, panel, gen) {
       const FOREIGN_POPUP_MAX_W = 800;
       const FOREIGN_POPUP_MAX_H = 700;
@@ -1104,61 +1102,39 @@ this.zenWorkspaces = class extends ExtensionAPI {
         br.style.height = ch + "px";
       };
 
-      // Why this script is shaped the way it is:
-      //
-      // - We must run the measurement INSIDE the content process. Fission
-      //   blocks chrome from reading `br.contentDocument` for a remote
-      //   browser, so we ship the size-reporter into the page via a frame
-      //   script and have it post results back over the messageManager.
-      //
-      // - We prefer body.scrollWidth/scrollHeight over documentElement.
-      //   documentElement reports the iframe's current width — for popups
-      //   that want less than our default (e.g. uBlock at 252px) it lies
-      //   and we'd never shrink. Fall back to documentElement only when
-      //   body isn't present yet.
-      //
-      // - A self-guard (`content.__zttResizeWired`) makes the script
-      //   idempotent within a given content window. wireOnce gets called
-      //   multiple times (XULFrameLoaderCreated event + setTimeout cascade
-      //   + initial sync attach) to survive process switches, and each
-      //   call must use a unique URL (Firefox dedupes loadFrameScript
-      //   by URL). Without this guard, every successful load created a
-      //   fresh ResizeObserver in the page, so popups with paint-time
-      //   animations (e.g. Bitwarden's vault) ended up with 4-6 ROs all
-      //   firing in parallel and racing to set the panel size — the
-      //   panel visibly oscillated.
-      const FRAME_SCRIPT_BODY =
-        '(()=>{if(content.__zttResizeWired)return;content.__zttResizeWired=true;let observed=false;const send=()=>{const d=content.document;const b=d.body;const r=d.documentElement;let w,h;if(b&&b.scrollWidth){w=b.scrollWidth;h=b.scrollHeight;}else if(r){w=r.scrollWidth;h=r.scrollHeight;}if(!w||!h)return;sendAsyncMessage("ztt:popup-size",{w,h});};const observe=()=>{if(observed)return;const b=content.document.body;if(!b)return;observed=true;try{const ro=new content.ResizeObserver(send);ro.observe(b);ro.observe(content.document.documentElement);}catch(e){}};const tick=()=>{observe();send();};tick();content.addEventListener("DOMContentLoaded",tick,{once:true});content.addEventListener("load",tick,{once:true});})();';
+      // body.scrollWidth/Height is preferred over documentElement —
+      // documentElement reports the iframe's current width, so popups
+      // smaller than our default (uBlock at 252px) would never shrink.
+      // ResizeObserver keeps the panel in sync with later layout changes
+      // (e.g. a popup expanding a collapsible section).
+      const SCRIPT_BODY =
+        '(()=>{const send=()=>{' +
+        'const d=content.document;const b=d.body;const r=d.documentElement;' +
+        'let w,h;if(b&&b.scrollWidth){w=b.scrollWidth;h=b.scrollHeight;}' +
+        'else if(r){w=r.scrollWidth;h=r.scrollHeight;}' +
+        'if(!w||!h)return;sendAsyncMessage("ztt:popup-size",{w,h});};' +
+        'const observe=()=>{const b=content.document.body;if(!b)return false;' +
+        'try{const ro=new content.ResizeObserver(send);ro.observe(b);' +
+        'ro.observe(content.document.documentElement);}catch(e){}return true;};' +
+        'if(!observe())content.addEventListener("DOMContentLoaded",observe,{once:true});' +
+        'send();})();';
 
-      const w = getWin();
-      // We listen on each XULFrameLoaderCreated firing because remoteType=
-      // "extension" forces a process switch that destroys the placeholder
-      // frameLoader (and its messageManager + any listeners we attached
-      // to it). The setTimeout cascade is a belt for any case where the
-      // event fires before frameLoader.messageManager is readable. Each
-      // load uses a unique data: URL (cache-buster lives as a JS comment
-      // INSIDE the body — the body of a data:URL is JS, so an unescaped
-      // `&` query string is a syntax error). The content-side
-      // __zttResizeWired guard inside FRAME_SCRIPT_BODY ensures only one
-      // ResizeObserver gets installed regardless of how many times the
-      // script lands in the same content window.
-      const wireOnce = () => {
+      // Wait until the remoteType=extension process switch has settled
+      // before loading the measurement script. Scripts queued at
+      // XULFrameLoaderCreated time are silently dropped — the frame
+      // loader is mid-creation and the load doesn't take. 500ms is
+      // well clear of the switch and well under any user-perceptible
+      // latency.
+      getWin().setTimeout(() => {
         if (gen !== morphGeneration) return;
-        let mm;
-        try { mm = br.frameLoader?.messageManager; } catch (e) {}
+        const mm = br.frameLoader?.messageManager;
         if (!mm) return;
-        try {
-          mm.addMessageListener("ztt:popup-size", (m) => {
-            const d = m.data || {};
-            if (d.w && d.h) applySize(d.w, d.h);
-          });
-        } catch (e) {}
-        const url = "data:," + encodeURIComponent("/*" + Date.now() + "_" + Math.random() + "*/" + FRAME_SCRIPT_BODY);
-        try { mm.loadFrameScript(url, false); } catch (e) {}
-      };
-      br.addEventListener("XULFrameLoaderCreated", wireOnce);
-      wireOnce();
-      [200, 600, 1500].forEach((d) => w.setTimeout(wireOnce, d));
+        mm.addMessageListener("ztt:popup-size", (m) => {
+          const d = m.data || {};
+          if (d.w && d.h) applySize(d.w, d.h);
+        });
+        mm.loadFrameScript("data:," + encodeURIComponent(SCRIPT_BODY), false);
+      }, 500);
     }
 
     // Many popups dismiss themselves via window.close(). Watch for that
