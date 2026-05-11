@@ -116,7 +116,7 @@ function renderTabsByAge(groups) {
 
       const subtitleParts = [
         domain ? `<span class="subtitle-domain">${escapeHtml(domain)}</span>` : "",
-        `<span class="subtitle-age">${age}</span>`,
+        `<span class="subtitle-age subtitle-pill">${age}</span>`,
       ].filter(Boolean).join("");
 
       el.innerHTML = `
@@ -189,7 +189,7 @@ async function showMostVisited(animate) {
   filtered.sort((a, b) => focusCount(b) - focusCount(a));
 
   renderTabList(filtered, "Most visited", null, {
-    subtitleSuffix: (tab) => `<span class="subtitle-age">${focusCount(tab)} focuses</span>`,
+    subtitleSuffix: (tab) => `<span class="subtitle-age subtitle-pill">${focusCount(tab)} focuses</span>`,
   });
   renderSidebar();
 }

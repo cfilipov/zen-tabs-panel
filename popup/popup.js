@@ -50,6 +50,11 @@ listEl.addEventListener("click", (e) => {
     closeRowAndReindex(row);
     return;
   }
+  if (e.target.closest('[data-action="drill-children"]')) {
+    e.stopPropagation();
+    navigateToView("child-tabs", { parentDomId: row.dataset.domId });
+    return;
+  }
   activateTab(row.dataset.domId);
 });
 
@@ -237,6 +242,13 @@ function closeSelectedRow() {
   const listItems = listEl.querySelectorAll(".list-item");
   const row = listItems[ui.selectedIndex];
   if (row && row.dataset.domId) closeRowAndReindex(row);
+}
+
+function drillIntoSelectedParent() {
+  if (ui.selectedIndex < 0 || ui.items.length === 0) return;
+  const parent = ui.items[ui.selectedIndex];
+  if (!parent || !parent.domId) return;
+  navigateToView("child-tabs", { parentDomId: parent.domId });
 }
 
 // Close every tab currently visible in the list (e.g. "Close all children"
@@ -531,6 +543,16 @@ function updateSelection() {
   if (closeHint) closeHint.classList.toggle("hidden", noSelection);
   const restoreHint = sidebarEl.querySelector(".sidebar-restore-hint");
   if (restoreHint) restoreHint.classList.toggle("hidden", noSelection);
+  const childrenHint = sidebarEl.querySelector(".sidebar-children-hint");
+  if (childrenHint) childrenHint.classList.toggle("hidden", noSelection);
+
+  // Drop the divider too when nothing above it is still visible — otherwise
+  // selection-dependent hints leave behind a stray leading rule.
+  const sep = sidebarEl.querySelector(".sidebar-sep");
+  if (sep) {
+    const anyVisibleHint = sidebarEl.querySelector(".sidebar-close-hint:not(.hidden), .sidebar-close-all-hint, .sidebar-restore-hint:not(.hidden), .sidebar-children-hint:not(.hidden)");
+    sep.classList.toggle("hidden", !anyVisibleHint);
+  }
   if (sidebarEl.classList.contains("sidebar-hints-only")) {
     sidebarEl.classList.toggle("hidden", noSelection);
   }
@@ -545,12 +567,19 @@ function renderSidebar(sortOptions, opts) {
   sidebarEl.innerHTML = "";
   sidebarEl.classList.remove("sidebar-hints-only");
 
+  // Track whether we emitted any action hints (Close, Show children, Restore).
+  // Sort toggles don't count — they're filtering controls, like the workspace
+  // list, so they group with the workspace section rather than separating
+  // from it.
+  let hasHintsAbove = false;
+
   if (CLOSEABLE_VIEWS.has(ui.currentView)) {
     const hint = document.createElement("div");
     hint.className = "sidebar-close-hint hidden";
     hint.innerHTML = `<span class="sidebar-ws-name">Close tab</span> ${renderBadge("W")}`;
     hint.addEventListener("click", closeSelectedRow);
     sidebarEl.appendChild(hint);
+    hasHintsAbove = true;
   }
 
   if (CLOSE_ALL_VIEWS.has(ui.currentView)) {
@@ -559,6 +588,7 @@ function renderSidebar(sortOptions, opts) {
     hint.innerHTML = `<span class="sidebar-ws-name">Close all</span> ${renderBadge("⇧W")}`;
     hint.addEventListener("click", closeAllRowsInView);
     sidebarEl.appendChild(hint);
+    hasHintsAbove = true;
   }
 
   if (RESTOREABLE_VIEWS.has(ui.currentView)) {
@@ -567,6 +597,16 @@ function renderSidebar(sortOptions, opts) {
     hint.innerHTML = `<span class="sidebar-ws-name">Restore tab</span> ${renderBadge("O")}`;
     hint.addEventListener("click", restoreSelectedRow);
     sidebarEl.appendChild(hint);
+    hasHintsAbove = true;
+  }
+
+  if (DRILL_CHILDREN_VIEWS.has(ui.currentView)) {
+    const hint = document.createElement("div");
+    hint.className = "sidebar-children-hint hidden";
+    hint.innerHTML = `<span class="sidebar-ws-name">Show children</span> ${renderBadge("→")}`;
+    hint.addEventListener("click", drillIntoSelectedParent);
+    sidebarEl.appendChild(hint);
+    hasHintsAbove = true;
   }
 
   // Hints-only views (currently just recently-closed) suppress the
@@ -579,6 +619,18 @@ function renderSidebar(sortOptions, opts) {
     return;
   }
 
+  if (hasHintsAbove) {
+    const sep = document.createElement("div");
+    sep.className = "sidebar-sep";
+    // updateSelection runs before renderSidebar inside the renderTabList
+    // flow, so the toggle there can't see this element. Bake the initial
+    // hidden state in based on the same condition; updateSelection will
+    // re-evaluate on every selection change.
+    const anyVisibleHint = sidebarEl.querySelector(".sidebar-close-hint:not(.hidden), .sidebar-close-all-hint, .sidebar-restore-hint:not(.hidden), .sidebar-children-hint:not(.hidden)");
+    if (!anyVisibleHint) sep.classList.add("hidden");
+    sidebarEl.appendChild(sep);
+  }
+
   if (sortOptions) {
     for (const opt of sortOptions) {
       const el = document.createElement("div");
@@ -587,10 +639,12 @@ function renderSidebar(sortOptions, opts) {
       el.addEventListener("click", opt.onClick);
       sidebarEl.appendChild(el);
     }
-    const sep = document.createElement("div");
-    sep.className = "sidebar-sep";
-    sidebarEl.appendChild(sep);
   }
+
+  const heading = document.createElement("div");
+  heading.className = "sidebar-heading";
+  heading.textContent = "Filter by workspace";
+  sidebarEl.appendChild(heading);
 
   const allEl = document.createElement("div");
   allEl.className = "sidebar-item" + (wsState.workspaceFilter === "all" ? " active" : "");
@@ -662,6 +716,11 @@ const RESTOREABLE_VIEWS = new Set(["recently-closed"]);
 // View ids where the sidebar should expose a "Close all" action that
 // closes every row visible in the current list (e.g. close all children).
 const CLOSE_ALL_VIEWS = new Set(["child-tabs"]);
+
+// View ids whose rows lead to a deeper view via the sidebar "Show children"
+// hint (→). Today only Parent tabs supports drilling, but the wiring is
+// kept generic.
+const DRILL_CHILDREN_VIEWS = new Set(["parent-tabs"]);
 
 // Rows that arrow-key navigation should skip over: explicitly disabled
 // rows (no chord/click target) plus the active workspace switcher (you
@@ -900,6 +959,7 @@ document.documentElement.style.colorScheme = theme;
 const initialView = urlParams.get("view");
 const paramDomain = urlParams.get("domain");
 const paramWorkspace = urlParams.get("workspace");
+const paramParentDomId = urlParams.get("parentDomId");
 
 async function init() {
   if (paramWorkspace) wsState.workspaceFilter = paramWorkspace;
@@ -912,7 +972,7 @@ async function init() {
 
   await fetchWorkspaceMap();
   const handler = VIEWS[initialView];
-  if (handler) await handler({ domain: paramDomain });
+  if (handler) await handler({ domain: paramDomain, parentDomId: paramParentDomId });
 }
 
 init();

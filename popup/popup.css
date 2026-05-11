@@ -1262,6 +1262,23 @@ html, body {
   flex-shrink: 0;
 }
 
+.subtitle-pill {
+  background: var(--ztt-badge-bg);
+  color: var(--ztt-text-muted);
+  padding: 1px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.subtitle-children {
+  cursor: pointer;
+}
+
+.subtitle-children:hover {
+  background: var(--ztt-bg-hover);
+  color: var(--ztt-text);
+}
+
 /* Tabs by age group headers in list context */
 #list > .info-date-details {
   padding: 0 6px;
@@ -1354,6 +1371,18 @@ html, body {
   margin: 2px 4px;
 }
 
+.sidebar-sep.hidden {
+  display: none;
+}
+
+.sidebar-heading {
+  padding: 8px 8px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--ztt-badge-text), AccentColor 12%);
+  cursor: default;
+}
+
 .sidebar-sort {
   display: flex;
   align-items: center;
@@ -1423,6 +1452,26 @@ html, body {
 }
 
 .sidebar-restore-hint:hover {
+  background: var(--ztt-bg-hover);
+}
+
+/* "→ Show children" hint — parent-tabs view. */
+.sidebar-children-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--ztt-text-muted);
+  transition: background 0.08s ease;
+}
+
+.sidebar-children-hint.hidden {
+  display: none;
+}
+
+.sidebar-children-hint:hover {
   background: var(--ztt-bg-hover);
 }
 

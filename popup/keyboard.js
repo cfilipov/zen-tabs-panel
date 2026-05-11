@@ -49,7 +49,12 @@ KEY_HANDLERS["Tab"] = (e) => {
 
 KEY_HANDLERS["ArrowRight"] = (e) => {
   e.preventDefault();
-  if (!ui.sidebarFocused && ui.selectedIndex >= 0 && ui.items[ui.selectedIndex]?.isView) {
+  if (ui.sidebarFocused || ui.selectedIndex < 0) return;
+  if (DRILL_CHILDREN_VIEWS.has(ui.currentView)) {
+    drillIntoSelectedParent();
+    return;
+  }
+  if (ui.items[ui.selectedIndex]?.isView) {
     activateSelected();
   }
 };

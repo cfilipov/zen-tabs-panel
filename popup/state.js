@@ -46,6 +46,8 @@ const tabState = {
   recentlyClosedCount: 0,
   navigationHistoryCount: 0,
   currentDomain: null,
+  childParentDomId: null,        // when set, child-tabs view shows children of this parent instead of the active tab
+
   tabsByAgeNewestFirst: false,
   domainsSortAlpha: false,
   workspaceTabCounts: {},
