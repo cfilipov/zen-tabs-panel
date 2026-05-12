@@ -842,7 +842,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
       br.setAttribute("maychangeremoteness", "true");
       br.setAttribute("disableglobalhistory", "true");
       br.setAttribute("messagemanagergroup", "webext-browsers");
-      br.setAttribute("webextension-view-type", "popup");
+      // webextension-view-type controls what browser.extension.getViews({type})
+      // reports for this browser. Default "popup" matches the toolbar BAP
+      // popup, which is right for our icon-strip flow. For windows.create
+      // interception we want to mimic a real popout window — those have
+      // no view-type set, and extensions (Bitwarden in particular) use
+      // getViews({type:"popup"}).length === 0 to detect popout mode and
+      // hide the "Pop out into new window" button.
+      const viewType = opts && "viewType" in opts ? opts.viewType : "popup";
+      if (viewType !== null) br.setAttribute("webextension-view-type", viewType);
       br.setAttribute("transparent", "true");
       if (opts?.remoteType) br.setAttribute("remoteType", opts.remoteType);
       br.setAttribute("src", opts?.src || getPaletteURL());
@@ -1006,12 +1014,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
     async function openExtensionPopupByUrl(popupUrl) {
       const resolved = findExtensionByUrl(popupUrl);
       if (!resolved) return;
+      // Popups commonly call window.close() on themselves right after
+      // windows.create() to dismiss the originating instance. If we're
+      // intercepting and that originating instance is the one inside
+      // our overlay (case: user clicked "pop out" from a popup we're
+      // already hosting), the close() would otherwise tear down our
+      // overlay before the morph swaps in the new popup URL. Suppress
+      // the DOMWindowClose handler for long enough that the morph
+      // removes the old browser (and its listener) first.
+      suppressAutoCloseUntil = Date.now() + 500;
       if (!isOverlayOpen()) {
         openOverlayWithView(null);
       }
       navStack.push({ view: currentViewName, params: {} });
       currentViewName = "extension-popup";
-      morphToView("extension-popup", { popupUrl, extensionId: resolved.id });
+      // viewType: null so the hosted browser presents as a popout window
+      // (no `webextension-view-type` attribute) — see createBrowserElement
+      // for the reasoning. The icon-strip path stays at the default "popup".
+      morphToView("extension-popup", { popupUrl, extensionId: resolved.id, viewType: null });
     }
 
     // Two-condition filter: features must look popup-style AND the args
@@ -1237,6 +1257,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
           newBr = createBrowserElement(w, targetSize, {
             src: params.popupUrl,
             remoteType: "extension",
+            // params.viewType is null for windows.create intercepts so the
+            // hosted browser mimics a real popout (no webextension-view-type
+            // attribute → not registered as a popup view → extensions that
+            // gate UI on getViews({type:"popup"}) treat us as popout).
+            // Falls back to "popup" for icon-strip clicks.
+            viewType: "viewType" in (params || {}) ? params.viewType : "popup",
           });
         } else {
           pendingView = view === "actions" ? null : view;
@@ -1404,10 +1430,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     // Many popups dismiss themselves via window.close(). Watch for that
     // signal on our hosted browser's content window and tear down the
-    // overlay in response.
+    // overlay in response — except during a windows.create intercept,
+    // where the calling popup also closes itself as part of its
+    // pop-out handoff and we want the overlay to stay open through
+    // the morph instead of being dismissed.
+    let suppressAutoCloseUntil = 0;
     function wireForeignPopupAutoClose(br) {
       br.addEventListener("DOMWindowClose", (e) => {
         e.preventDefault();
+        if (Date.now() < suppressAutoCloseUntil) return;
         destroyOverlay();
       }, { capture: true });
     }
