@@ -785,6 +785,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let navStack = [];
     let currentViewName = null;
     let morphGeneration = 0;
+    // Set by createOverlay to the function that flips the (initially hidden)
+    // overlay to visible and starts the in animations. Stays non-null until
+    // the overlay is revealed or destroyed. When the chord engine prerenders
+    // during its wait window, this is what onChordTimeout calls to surface
+    // the already-loaded popup with no further delay.
+    let pendingReveal = null;
 
     // Chord engine state.
     let chordState = null;          // null | "armed-root" | "armed-prefix"
@@ -1125,17 +1131,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       if (w.document.getElementById(OVERLAY_ID)) return null;
 
-      if (!w.document.getElementById("zen-tabs-panel-anim-styles")) {
-        const animStyle = w.document.createElement("style");
+      // Always refresh contents so CSS changes take effect on the next
+      // open after an extension reload (otherwise the cached <style> from
+      // the previous load wins and code edits go unnoticed).
+      let animStyle = w.document.getElementById("zen-tabs-panel-anim-styles");
+      if (!animStyle) {
+        animStyle = w.document.createElement("style");
         animStyle.id = "zen-tabs-panel-anim-styles";
-        animStyle.textContent = `
+        w.document.documentElement.appendChild(animStyle);
+      }
+      animStyle.textContent = `
           @keyframes ztt-overlay-in {
             from { opacity: 0; }
             to { opacity: 1; }
           }
           @keyframes ztt-panel-in {
-            from { opacity: 0; transform: scale(0.96) translateY(-8px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
+            0%   { opacity: 0; transform: scale(0); }
+            25%  { opacity: 1; }
+            100% { opacity: 1; transform: scale(1); }
           }
           @keyframes ztt-overlay-out {
             from { opacity: 1; }
@@ -1146,21 +1159,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
             to { opacity: 0; transform: scale(0.96) translateY(-8px); }
           }
         `;
-        w.document.documentElement.appendChild(animStyle);
-      }
 
-      if (!w.document.getElementById("zen-tabs-panel-preview-styles")) {
-        const previewStyle = w.document.createElement("style");
+      let previewStyle = w.document.getElementById("zen-tabs-panel-preview-styles");
+      if (!previewStyle) {
+        previewStyle = w.document.createElement("style");
         previewStyle.id = "zen-tabs-panel-preview-styles";
-        previewStyle.textContent = `
+        w.document.documentElement.appendChild(previewStyle);
+      }
+      previewStyle.textContent = `
           .tabbrowser-tab[zen-tabs-panel-preview] .tab-stack {
             outline: 3px solid color-mix(in srgb, var(--zen-primary-color, AccentColor), white 60%) !important;
             outline-offset: -3px;
             border-radius: 10px;
           }
         `;
-        w.document.documentElement.appendChild(previewStyle);
-      }
 
       const viewName = pendingView || "actions";
       const size = getViewSize(viewName);
@@ -1181,7 +1193,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "align-items: center",
         "justify-content: center",
         "background: rgba(0, 0, 0, 0.25)",
-        "animation: ztt-overlay-in 0.15s ease-out",
+        // Start fully hidden. The popup browser still loads (visibility
+        // doesn't gate network/JS), so when the chord engine prerenders
+        // during its wait the popup is ready by the time we reveal.
+        // Reveal animations are applied in pendingReveal below — both
+        // backdrop and panel start their fades together so the dim doesn't
+        // appear ahead of the panel.
+        "visibility: hidden",
       ].join(";");
 
       const panel = w.document.createElement("div");
@@ -1196,7 +1214,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "overflow: hidden",
         "display: flex",
         "flex-direction: column",
-        "animation: ztt-panel-in 0.15s ease-out",
         "transition: width 0.15s ease-out, max-height 0.15s ease-out",
       ].join(";");
 
@@ -1212,11 +1229,21 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       w.document.documentElement.appendChild(overlay);
 
-      w.setTimeout(() => {
+      const reveal = () => {
+        if (pendingReveal !== reveal) return;
+        pendingReveal = null;
+        overlay.style.visibility = "visible";
+        overlay.style.animation = "ztt-overlay-in 0.22s ease-out";
+        panel.style.animation = "ztt-panel-in 0.22s cubic-bezier(0.25, 1, 0.5, 1)";
         br.focus();
-      }, 50);
+      };
+      pendingReveal = reveal;
 
       return overlay;
+    }
+
+    function revealOverlay() {
+      if (pendingReveal) pendingReveal();
     }
 
     function morphToView(view, params) {
@@ -1455,6 +1482,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       navStack = [];
       currentViewName = null;
 
+      // Prerender that never revealed (chord cancelled, action fired, view
+      // mismatch on timeout). The overlay is invisible — skip the exit
+      // animation and remove immediately so a follow-up open isn't racing
+      // an exit anim on the previous prerender.
+      if (pendingReveal) {
+        pendingReveal = null;
+        overlay.remove();
+        return;
+      }
+
       const panel = w.document.getElementById(PANEL_ID);
       overlay.style.animation = "ztt-overlay-out 0.12s ease-in forwards";
       if (panel) panel.style.animation = "ztt-panel-out 0.12s ease-in forwards";
@@ -1474,7 +1511,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       if (!w) return false;
       const overlay = w.document.getElementById(OVERLAY_ID);
-      return overlay && !overlay.dataset.closing;
+      // A still-hidden prerender (chord wait) isn't really open — callers
+      // like showPalette's toggle and isOverlayOpen-guarded paths shouldn't
+      // treat the chord-wait phantom as a visible panel.
+      return overlay && !overlay.dataset.closing && !pendingReveal;
     }
 
     // -----------------------------------------------------------------------
@@ -1587,6 +1627,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       createOverlay();
       pendingView = null;
       pendingParams = {};
+      revealOverlay();
     }
 
     function onChordKey(e) {
@@ -1605,6 +1646,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const resolve = chordResolve;
         chordResolve = null;
         disarmChord();
+        if (pendingReveal) destroyOverlay();
         if (resolve) resolve({ kind: "chord-cancelled" });
         return;
       }
@@ -1617,6 +1659,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const resolve = chordResolve;
         chordResolve = null;
         disarmChord();
+        if (pendingReveal) destroyOverlay();
         if (resolve) resolve({ kind: "chord-cancelled" });
         return;
       }
@@ -1628,6 +1671,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const resolve = chordResolve;
         chordResolve = null;
         disarmChord();
+        if (pendingReveal) destroyOverlay();
         if (resolve) resolve({ kind: "chord-action", actionId: node.actionId });
         return;
       }
@@ -1636,6 +1680,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const resolve = chordResolve;
         chordResolve = null;
         disarmChord();
+        // Prerender (if any) was for the actions menu — different view, so
+        // discard it silently and open fresh.
+        if (pendingReveal) destroyOverlay();
         openOverlayWithView(node.view);
         if (resolve) resolve({ kind: "opened" });
         return;
@@ -1645,6 +1692,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const resolve = chordResolve;
         chordResolve = null;
         disarmChord();
+        if (pendingReveal) destroyOverlay();
         openExtensionPopupInternal(node.extensionId);
         if (resolve) resolve({ kind: "opened" });
         return;
@@ -1655,6 +1703,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const resolve = chordResolve;
         chordResolve = null;
         disarmChord();
+        if (pendingReveal) destroyOverlay();
         if (w?.gZenWorkspaces) {
           const list = w.gZenWorkspaces.getWorkspaces();
           const ws = Array.isArray(list) ? list[node.index] : null;
@@ -1683,7 +1732,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       disarmChord();
 
       if (onTimeout && onTimeout.type === "open-view") {
+        // Prerender (if any) was for the actions menu — different view, so
+        // discard it silently and create fresh.
+        if (pendingReveal) destroyOverlay();
         openOverlayWithView(onTimeout.view);
+      } else if (pendingReveal) {
+        // Common path: the prerender is the actions menu we want. Just reveal.
+        revealOverlay();
       } else {
         openOverlayWithView(null); // root timeout → main actions menu
       }
@@ -1694,6 +1749,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const resolve = chordResolve;
       chordResolve = null;
       disarmChord();
+      if (pendingReveal) destroyOverlay();
       if (resolve) resolve({ kind: "chord-cancelled" });
     }
 
@@ -1714,6 +1770,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
       w.addEventListener("keydown", chordKeyListener, true);
       w.addEventListener("blur", chordBlurListener, true);
       chordTimer = w.setTimeout(onChordTimeout, CHORD_ROOT_TIMEOUT_MS);
+
+      // Prerender the actions menu off-screen so the popup loads during the
+      // chord wait. If a chord matches, onChordKey paths below tear this down
+      // before reveal; if the chord times out, onChordTimeout reveals it
+      // instantly with content already painted.
+      pendingView = null;
+      pendingParams = {};
+      createOverlay();
     }
 
     installGestureListener();
@@ -2722,12 +2786,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
 
           // Double-tap of the leader (or a click while chord is armed):
-          // cancel the in-flight chord and open immediately.
+          // cancel the in-flight chord and open immediately. If the chord
+          // already prerendered the actions menu and that's what the caller
+          // wants, reveal it rather than churning a fresh overlay.
           if (chordState !== null) {
             const resolve = chordResolve;
             chordResolve = null;
             disarmChord();
-            openOverlayWithView(view);
+            if (pendingReveal && !view) {
+              revealOverlay();
+            } else {
+              if (pendingReveal) destroyOverlay();
+              openOverlayWithView(view);
+            }
             if (resolve) resolve({ kind: "opened" });
             return { kind: "opened" };
           }
