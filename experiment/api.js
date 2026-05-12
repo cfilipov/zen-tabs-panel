@@ -1329,6 +1329,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const upper = e.key.toUpperCase();
         return e.shiftKey ? "Shift+" + upper : upper;
       }
+      // Shift+digit produces a layout-dependent symbol via e.key
+      // (Shift+1 = "!", Shift+4 = "$" on US, etc.), so use e.code to
+      // recover the digit for the extension-popup quick-launch chords.
+      if (e.shiftKey && e.code && /^Digit[1-9]$/.test(e.code)) {
+        return "Shift+" + e.code.slice(5);
+      }
       return e.key;
     }
 
