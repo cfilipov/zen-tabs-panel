@@ -780,8 +780,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       CHORD_TREE.children[WORKSPACE_DIGIT_CHORDS[i]] = { type: "switch-workspace", index: i };
     }
 
-    let pendingView = null;
-    let pendingParams = {};
     let navStack = [];
     let currentViewName = null;
     let morphGeneration = 0;
@@ -824,12 +822,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return false;
     }
 
-    function getPaletteURL() {
+    function getPaletteURL(view, params) {
       const isDark = isChromeDark();
       let url = context.extension.getURL("popup/popup.html") + "?theme=" + (isDark ? "dark" : "light");
-      if (pendingView) url += "&view=" + encodeURIComponent(pendingView);
-      if (pendingParams) {
-        for (const [k, v] of Object.entries(pendingParams)) {
+      if (view) url += "&view=" + encodeURIComponent(view);
+      if (params) {
+        for (const [k, v] of Object.entries(params)) {
           url += "&" + encodeURIComponent(k) + "=" + encodeURIComponent(v);
         }
       }
@@ -859,7 +857,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (viewType !== null) br.setAttribute("webextension-view-type", viewType);
       br.setAttribute("transparent", "true");
       if (opts?.remoteType) br.setAttribute("remoteType", opts.remoteType);
-      br.setAttribute("src", opts?.src || getPaletteURL());
+      br.setAttribute("src", opts?.src || getPaletteURL(opts?.view, opts?.params));
       // Declare the size transition up front so resizePanelToView's
       // width/height changes animate in sync with the panel's transition
       // — without it, the browser snaps to the new size on the first
@@ -1129,7 +1127,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // checked but have no effect — better than crashing the addon.
     }
 
-    function createOverlay() {
+    // Build the overlay DOM hidden. The chord engine calls this to
+    // prerender during its wait window; openOverlayWithView and the
+    // double-tap path call it for immediate opens. Either way the
+    // caller flips the visibility on via revealOverlay() (or, if the
+    // chord cancels, tears the prerender down via destroyOverlay()).
+    function createOverlay(view, params) {
       const w = getWin();
       if (!w) return null;
 
@@ -1178,7 +1181,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         `;
 
-      const viewName = pendingView || "actions";
+      const viewName = view || "actions";
       const size = getViewSize(viewName);
 
       navStack = [];
@@ -1221,7 +1224,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "transition: width 0.15s ease-out, max-height 0.15s ease-out",
       ].join(";");
 
-      const br = createBrowserElement(w, size);
+      const br = createBrowserElement(w, size, { view, params });
       panel.appendChild(br);
       overlay.appendChild(panel);
 
@@ -1302,11 +1305,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
             viewType: "viewType" in (params || {}) ? params.viewType : "popup",
           });
         } else {
-          pendingView = view === "actions" ? null : view;
-          pendingParams = params || {};
-          newBr = createBrowserElement(w, targetSize);
-          pendingView = null;
-          pendingParams = {};
+          newBr = createBrowserElement(w, targetSize, {
+            view: view === "actions" ? null : view,
+            params: params || {},
+          });
         }
         newBr.style.opacity = "0";
 
@@ -1649,11 +1651,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function openOverlayWithView(view) {
-      pendingView = view || null;
-      pendingParams = {};
-      createOverlay();
-      pendingView = null;
-      pendingParams = {};
+      createOverlay(view || null);
       revealOverlay();
     }
 
@@ -1802,8 +1800,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // chord wait. If a chord matches, onChordKey paths below tear this down
       // before reveal; if the chord times out, onChordTimeout reveals it
       // instantly with content already painted.
-      pendingView = null;
-      pendingParams = {};
       createOverlay();
     }
 
