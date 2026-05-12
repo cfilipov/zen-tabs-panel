@@ -17,18 +17,26 @@ async function loadSettings() {
   const stored = await browser.storage.local.get(STORAGE_DEFAULTS);
   Object.assign(settings, stored);
   syncAutoCloseAlarm();
+  pushInterceptSetting();
+}
+
+function pushInterceptSetting() {
+  api.setExtensionPopupIntercept(!!settings.interceptExtensionPopups).catch(() => {});
 }
 
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
   let autoCloseTouched = false;
+  let interceptTouched = false;
   for (const key of Object.keys(changes)) {
     if (key in STORAGE_DEFAULTS) {
       settings[key] = changes[key].newValue ?? STORAGE_DEFAULTS[key];
       if (key === "autoCloseEnabled") autoCloseTouched = true;
+      if (key === "interceptExtensionPopups") interceptTouched = true;
     }
   }
   if (autoCloseTouched) syncAutoCloseAlarm();
+  if (interceptTouched) pushInterceptSetting();
 });
 
 // ---------------------------------------------------------------------------

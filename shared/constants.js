@@ -139,6 +139,7 @@ this.STORAGE_DEFAULTS = Object.freeze({
   autoMoveEnabled:    false,
   autoMoveDelay:      3000,
   welcomed:           false,
+  interceptExtensionPopups: true,
 });
 
 // Whitelist of view names accepted by the navigate-view message. Mirrors

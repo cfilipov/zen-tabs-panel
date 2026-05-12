@@ -967,6 +967,138 @@ this.zenWorkspaces = class extends ExtensionAPI {
       morphToView("extension-popup", { popupUrl: found.popupUrl, extensionId });
     }
 
+    // -----------------------------------------------------------------------
+    // windows.create({type:"popup"}) interception
+    //
+    // Catches Bitwarden's biometric prompt, "Pop out into new window", and any
+    // other foreign-extension popup window before it materializes as a real
+    // OS window. We monkey-patch Services.ww.openWindow with a wrapper that
+    // checks every call for the extension-popup signature (popup-style
+    // features + a moz-extension:// URL in the args array) and routes
+    // matches into our existing overlay-morph pipeline. Misses pass through
+    // unchanged, so DevTools / view-source / sessionstore restore / etc. are
+    // unaffected.
+    //
+    // Gated by the `interceptExtensionPopups` setting — background.js
+    // pushes the current value via setExtensionPopupIntercept(...).
+    //
+    // The original openWindow is restored on addon unload (context.callOnClose
+    // below) so we don't leave a dangling wrapper in the parent process.
+    // -----------------------------------------------------------------------
+
+    // Resolve a moz-extension URL to the owning extension's id by matching
+    // the UUID host against ExtensionParent.GlobalManager.extensionMap.
+    function findExtensionByUrl(popupUrl) {
+      const m = /^moz-extension:\/\/([^/]+)\//.exec(popupUrl || "");
+      if (!m) return null;
+      const uuid = m[1];
+      try {
+        const { ExtensionParent } = ChromeUtils.importESModule(
+          "resource://gre/modules/ExtensionParent.sys.mjs"
+        );
+        for (const [id, ext] of ExtensionParent.GlobalManager.extensionMap) {
+          if (ext.uuid === uuid) return { id, ext };
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    async function openExtensionPopupByUrl(popupUrl) {
+      const resolved = findExtensionByUrl(popupUrl);
+      if (!resolved) return;
+      if (!isOverlayOpen()) {
+        openOverlayWithView(null);
+      }
+      navStack.push({ view: currentViewName, params: {} });
+      currentViewName = "extension-popup";
+      morphToView("extension-popup", { popupUrl, extensionId: resolved.id });
+    }
+
+    // Two-condition filter: features must look popup-style AND the args
+    // array's first entry must be an nsISupportsString containing a
+    // moz-extension URL. Any inspection error returns null (pass through).
+    function detectExtensionPopupCall(features, args) {
+      if (!features || typeof features !== "string") return null;
+      if (!/\bdialog\b|\bpopup\b/i.test(features)) return null;
+      try {
+        if (!args || typeof args.queryElementAt !== "function") return null;
+        const first = args.queryElementAt(0, Ci.nsISupportsString);
+        const url = first && first.data;
+        if (typeof url === "string" && url.startsWith("moz-extension://")) {
+          return url;
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    // Phantom Window returned to the caller when we intercept. A Proxy
+    // that swallows unknown property accesses with sensible defaults so
+    // ext-windows.js's downstream chain (.gBrowser.selectedBrowser etc.)
+    // doesn't crash on null. close() routes to our overlay dismissal.
+    function makePhantomPopupWindow() {
+      const stub = { closed: false, document: { title: "" } };
+      const handler = {
+        get(t, p) {
+          if (p in t) return t[p];
+          if (p === "close") return () => { stub.closed = true; destroyOverlay(); };
+          if (p === "focus" || p === "blur") return () => {};
+          if (p === "addEventListener" || p === "removeEventListener") return () => {};
+          if (p === "gBrowser" || p === "selectedBrowser" || p === "contentWindow") return proxy;
+          if (p === Symbol.toPrimitive) return () => "[phantom-extension-popup-window]";
+          return undefined;
+        },
+      };
+      const proxy = new Proxy(stub, handler);
+      return proxy;
+    }
+
+    // Default to enabled; background.js calls setExtensionPopupIntercept()
+    // with the persisted setting value shortly after api init, so any window
+    // openings between init and that first push (rare in practice) match
+    // the default-on behavior the user configured.
+    let interceptEnabled = true;
+    // Services.ww.openWindow is non-writable/non-configurable on the XPCOM
+    // wrapper, so direct assignment is silently rejected and defineProperty
+    // throws. We replace Services.ww itself with a Proxy on an empty target
+    // — the empty target dodges the Proxy invariant for non-writable own
+    // properties, and the get trap returns our wrapped openWindow while
+    // delegating everything else (registerNotification, getWindowEnumerator,
+    // setWindowCreator, …) to the original service.
+    const origWw = Services.ww;
+    const origOpenWindow = origWw.openWindow.bind(origWw);
+    const wrappedOpenWindow = function(parent, urlOrNull, name, features, args) {
+      if (interceptEnabled) {
+        const popupUrl = detectExtensionPopupCall(features, args);
+        if (popupUrl) {
+          openExtensionPopupByUrl(popupUrl).catch(() => {});
+          return makePhantomPopupWindow();
+        }
+      }
+      return origOpenWindow(parent, urlOrNull, name, features, args);
+    };
+    try {
+      const wwProxy = new Proxy(Object.create(null), {
+        get(_t, p) {
+          if (p === "openWindow") return wrappedOpenWindow;
+          const v = origWw[p];
+          return typeof v === "function" ? v.bind(origWw) : v;
+        },
+        has(_t, p) { return p in origWw; },
+      });
+      Object.defineProperty(Services, "ww", { value: wwProxy, configurable: true, writable: true });
+      context.callOnClose({
+        close() {
+          try {
+            Object.defineProperty(Services, "ww", { value: origWw, configurable: true, writable: true });
+          } catch (e) {}
+        },
+      });
+    } catch (e) {
+      // If we can't replace Services.ww in this Firefox build, the
+      // interception is silently disabled. The setting will appear
+      // checked but have no effect — better than crashing the addon.
+    }
+
     function createOverlay() {
       const w = getWin();
       if (!w) return null;
@@ -2626,6 +2758,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // shortcut path can use the same entry point.
         async openExtensionPopup(extensionId) {
           await openExtensionPopupInternal(extensionId);
+        },
+
+        // Toggle the Services.ww.openWindow monkey-patch. Background.js
+        // pushes this from the interceptExtensionPopups setting.
+        async setExtensionPopupIntercept(enabled) {
+          interceptEnabled = !!enabled;
         },
 
       },

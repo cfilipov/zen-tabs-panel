@@ -48,6 +48,15 @@
     </section>
 
     <section>
+      <h2>Extension popup windows</h2>
+      <p class="description">Catch <code>browser.windows.create({type:&nbsp;"popup"})</code> calls from any installed extension (e.g. Bitwarden's biometric prompt or "Pop out into new window") and host the popup inside this extension's overlay instead of letting Zen open a real OS window. In macOS fullscreen, real popup windows cause a Spaces switch — this keeps them in-place.</p>
+      <label class="toggle-row">
+        <input type="checkbox" id="interceptExtensionPopups">
+        <span>Intercept extension popup windows</span>
+      </label>
+    </section>
+
+    <section>
       <h2>Companion Zen Mods</h2>
       <p class="description">Optional Zen Mods installed alongside this extension. Each can be enabled or disabled independently from Zen's Mods settings.</p>
       <div id="companion-mods"></div>

@@ -578,6 +578,15 @@
         "parameters": [
           { "name": "extensionId", "type": "string" }
         ]
+      },
+      {
+        "name": "setExtensionPopupIntercept",
+        "type": "function",
+        "async": true,
+        "description": "Toggle the Services.ww.openWindow monkey-patch that catches extension-spawned popup windows and routes them into our overlay. Backed by the interceptExtensionPopups setting.",
+        "parameters": [
+          { "name": "enabled", "type": "boolean" }
+        ]
       }
     ],
     "events": [

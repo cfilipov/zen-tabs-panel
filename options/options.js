@@ -5,6 +5,7 @@ const els = {
   autoCloseThreshold: document.getElementById("autoCloseThreshold"),
   autoMoveEnabled: document.getElementById("autoMoveEnabled"),
   autoMoveDelay: document.getElementById("autoMoveDelay"),
+  interceptExtensionPopups: document.getElementById("interceptExtensionPopups"),
   status: document.getElementById("status"),
   companionMods: document.getElementById("companion-mods"),
 };
@@ -15,6 +16,7 @@ async function loadSettings() {
   els.autoCloseThreshold.value = settings.autoCloseThreshold;
   els.autoMoveEnabled.checked = settings.autoMoveEnabled;
   els.autoMoveDelay.value = String(settings.autoMoveDelay);
+  els.interceptExtensionPopups.checked = settings.interceptExtensionPopups;
 }
 
 async function loadShortcuts() {
@@ -60,6 +62,7 @@ async function saveSettings() {
     autoCloseThreshold: els.autoCloseThreshold.value,
     autoMoveEnabled: els.autoMoveEnabled.checked,
     autoMoveDelay: Number(els.autoMoveDelay.value),
+    interceptExtensionPopups: els.interceptExtensionPopups.checked,
   });
 
   els.status.classList.remove("hidden");
