@@ -860,7 +860,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       br.setAttribute("transparent", "true");
       if (opts?.remoteType) br.setAttribute("remoteType", opts.remoteType);
       br.setAttribute("src", opts?.src || getPaletteURL());
-      br.style.cssText = "width:" + size.width + "px;height:" + size.height + "px;border:none;opacity:1";
+      // Declare the size transition up front so resizePanelToView's
+      // width/height changes animate in sync with the panel's transition
+      // — without it, the browser snaps to the new size on the first
+      // navigation and the panel arrives late.
+      br.style.cssText = "width:" + size.width + "px;height:" + size.height + "px;border:none;opacity:1;transition:width 0.15s ease-out, height 0.15s ease-out";
       return br;
     }
 
@@ -1246,6 +1250,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (pendingReveal) pendingReveal();
     }
 
+    // Cross-fade the existing browser out and swap in a fresh one. Used for
+    // extension-popup transitions where the new content lives at a
+    // different URL (a foreign extension) and we have to load a new
+    // browser. Our own views never call this — they reuse the existing
+    // browser via resizePanelToView + an in-popup view switch, so the
+    // user never sees the empty load-state of a brand-new browser.
     function morphToView(view, params) {
       const w = getWin();
       if (!w) return;
@@ -1318,6 +1328,23 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }, 50);
         }, 160);
       }, 80);
+    }
+
+    // Resize the panel (and the browser inside it) to match the target
+    // view's dimensions. Used for navigation between our own views — the
+    // popup is staying in the same browser and will render the new view
+    // itself, so chrome only needs to drive the size transition.
+    function resizePanelToView(view) {
+      const w = getWin();
+      if (!w) return;
+      const panel = w.document.getElementById(PANEL_ID);
+      const br = w.document.getElementById(BROWSER_ID);
+      if (!panel || !br) return;
+      const targetSize = getViewSize(view);
+      panel.style.width = targetSize.width + "px";
+      panel.style.maxHeight = targetSize.height + "px";
+      br.style.width = targetSize.width + "px";
+      br.style.height = targetSize.height + "px";
     }
 
     // Resize the panel and browser to match the popup body's natural size.
@@ -2830,19 +2857,39 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!isOverlayOpen()) return;
           const parsed = params ? JSON.parse(params) : {};
           navStack.push({ view: currentViewName, params: {} });
+          const prevView = currentViewName;
           currentViewName = view;
-          morphToView(view, parsed);
+          // Only swap browsers when crossing between our popup and a
+          // foreign extension's popup. For our-view → our-view, we
+          // just update the nav stack here — the popup runs its
+          // cross-fade at the current panel size and calls resizePanel
+          // when it's done. That avoids reflow during the fade.
+          if (view === "extension-popup" || prevView === "extension-popup") {
+            morphToView(view, parsed);
+          }
+        },
+
+        async resizePanel(view) {
+          if (!isOverlayOpen()) return;
+          resizePanelToView(view);
         },
 
         async navigateBack() {
-          if (!isOverlayOpen()) return;
+          if (!isOverlayOpen()) return null;
           if (navStack.length === 0) {
             destroyOverlay();
-            return;
+            return null;
           }
           const prev = navStack.pop();
+          const wasInForeign = currentViewName === "extension-popup";
           currentViewName = prev.view;
-          morphToView(prev.view, prev.params);
+          if (wasInForeign) {
+            morphToView(prev.view, prev.params);
+            return null;
+          }
+          // For our-view → our-view back nav, don't resize here. The
+          // popup will cross-fade and then call resizePanel.
+          return { view: prev.view, params: prev.params || {} };
         },
 
         // Enumerate installed extensions with a browser_action popup and

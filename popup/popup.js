@@ -15,6 +15,7 @@ const viewTitle = document.getElementById("view-title");
 const headerHint = document.getElementById("header-hint");
 const sidebarEl = document.getElementById("sidebar");
 const pageIndicatorEl = document.getElementById("page-indicator");
+const contentEl = document.getElementById("content");
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 
@@ -898,13 +899,80 @@ function activateSelected() {
   }
 }
 
-function navigateToView(view, params) {
-  ext.runtime.sendMessage({ type: "navigate-view", view, params: params ? JSON.stringify(params) : undefined }).catch(() => {});
+// Run an in-popup view switch by fully rendering the new view into a
+// hidden copy of the content area, then cross-fading from the old
+// (snapshot) to the new (real children). The new view is set up
+// completely before any fade starts, and the fade is a single
+// continuous opacity blend — no fade-out gap.
+async function runViewSwitchInvisibly(handler, params) {
+  contentEl.style.position = "relative";
+
+  // Clone the current content as the "old" visual. Keep all descendant
+  // IDs so #list / #sidebar CSS rules apply to the clone identically to
+  // the original (otherwise the snapshot renders unstyled and the
+  // cross-fade looks broken). The duplicate-id window is brief and no
+  // code queries by id during it.
+  const snapshot = contentEl.cloneNode(true);
+  snapshot.removeAttribute("id");
+  Object.assign(snapshot.style, {
+    position: "absolute",
+    inset: "0",
+    pointerEvents: "none",
+    opacity: "1",
+    transition: "opacity 0.2s ease-in-out",
+  });
+
+  // Hide the real children so the handler can write the new view into
+  // them invisibly behind the snapshot.
+  const realChildren = Array.from(contentEl.children);
+  for (const child of realChildren) {
+    child.style.transition = "opacity 0.2s ease-in-out";
+    child.style.opacity = "0";
+  }
+  contentEl.appendChild(snapshot);
+
+  // Render the new view fully before starting the fade.
+  await handler(params || {});
+
+  // Cross-fade: snapshot down, real children up.
+  requestAnimationFrame(() => {
+    snapshot.style.opacity = "0";
+    for (const child of realChildren) {
+      child.style.opacity = "1";
+    }
+  });
+
+  await new Promise(r => setTimeout(r, 220));
+  snapshot.remove();
+  for (const child of realChildren) {
+    child.style.transition = "";
+    child.style.opacity = "";
+  }
 }
 
-function navigateBack() {
+async function navigateToView(view, params) {
+  if (view === "extension-popup") {
+    ext.runtime.sendMessage({ type: "navigate-view", view, params: params ? JSON.stringify(params) : undefined }).catch(() => {});
+    return;
+  }
+  const handler = VIEWS[view];
+  if (!handler) return;
+  // Tell chrome to update its nav stack (no resize yet — we want to
+  // cross-fade at the current panel size first).
+  ext.runtime.sendMessage({ type: "navigate-view", view, params: params ? JSON.stringify(params) : undefined }).catch(() => {});
+  // Cross-fade content at the old panel size — no reflow during the fade.
+  await runViewSwitchInvisibly(handler, params);
+  // Now resize the panel to the new view's target size.
+  ext.runtime.sendMessage({ type: "resize-panel", view }).catch(() => {});
+}
+
+async function navigateBack() {
   ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
-  ext.runtime.sendMessage({ type: "navigate-back" }).catch(() => {});
+  const prev = await ext.runtime.sendMessage({ type: "navigate-back" }).catch(() => null);
+  if (!prev || !prev.view) return;
+  const handler = VIEWS[prev.view];
+  if (handler) await runViewSwitchInvisibly(handler, prev.params);
+  ext.runtime.sendMessage({ type: "resize-panel", view: prev.view }).catch(() => {});
 }
 
 function activateAction(action) {

@@ -18,6 +18,7 @@ this.MSG = Object.freeze({
   HIDE_PALETTE:                   "hide-palette",
   NAVIGATE_VIEW:                  "navigate-view",
   NAVIGATE_BACK:                  "navigate-back",
+  RESIZE_PANEL:                   "resize-panel",
   OPEN_OPTIONS:                   "open-options",
 
   // Tab activation / preview

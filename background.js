@@ -492,6 +492,7 @@ const SYNC_HANDLERS = Object.freeze({
     await api.focusPalette().catch(() => {});
   },
   [MSG.OPEN_EXTENSION_POPUP]: (m) => api.openExtensionPopup(m.extensionId),
+  [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view),
 });
 
 // Hide palette, then run an action. Used by the message handler to keep
@@ -548,8 +549,10 @@ browser.runtime.onMessage.addListener((message) => {
 
   const sync = SYNC_HANDLERS[type];
   if (sync) {
-    sync(message);
-    return;
+    // Return the handler's value so callers can await results (e.g.
+    // navigate-back returns the previous view info so the popup can run
+    // its handler locally).
+    return sync(message);
   }
 });
 

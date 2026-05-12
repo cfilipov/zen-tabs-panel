@@ -376,6 +376,15 @@
         ]
       },
       {
+        "name": "resizePanel",
+        "type": "function",
+        "async": true,
+        "description": "Resize the panel/browser to a given view's natural size. Used by the popup after its in-place cross-fade so panel resize happens after content settles.",
+        "parameters": [
+          { "name": "view", "type": "string" }
+        ]
+      },
+      {
         "name": "navigateBack",
         "type": "function",
         "async": true,
