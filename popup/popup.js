@@ -140,12 +140,19 @@ listEl.addEventListener("touchend", (e) => {
 
 // Fire-and-forget — don't await since the overlay destruction kills our context
 function closePalette() {
+  if (typeof window.clearPopupRevealTimer === "function") window.clearPopupRevealTimer();
   ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
   ext.runtime.sendMessage({ type: "hide-palette" }).catch(() => {});
 }
 
 function activateTab(domId) {
-  // activate-tab handler in background.js closes the palette and switches
+  // activate-tab handler in background.js closes the palette and switches.
+  // Cancel the popup-side reveal timer first — without this, the 400ms
+  // post-dispatch timer can fire before the overlay-destroy round-trip
+  // completes, producing a brief flash where the popup reveals and is
+  // then immediately torn down. The terminal-action sendMessage is the
+  // moment we know reveal is no longer wanted.
+  if (typeof window.clearPopupRevealTimer === "function") window.clearPopupRevealTimer();
   ext.runtime.sendMessage({ type: "activate-tab", domId }).catch(() => {});
 }
 
@@ -1043,4 +1050,7 @@ async function init() {
   if (handler) await handler({ domain: paramDomain, parentDomId: paramParentDomId });
 }
 
-init();
+// Exposed for popup/keyboard.js — the bridge-replay path awaits this so the
+// view's .list-item rows are rendered before scanning for badge matches and
+// before synthetic keys are dispatched into the popup.
+window.__popupReady = init();

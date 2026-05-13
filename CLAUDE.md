@@ -61,12 +61,47 @@ This is a deliberate Firefox property, not a bug. It's also why a chrome-side JS
 
 ### Bridge handshake
 
-When an engine fires `open-view`, it transitions to `bridging` state instead of going back to idle. While bridging, the engine captures non-modifier keys and forwards them: chrome's engine pushes to a local `bridgeBuffer`; content's engine sends `ZenChord:BridgeKey` to chrome which appends to the same buffer. When `popup/keyboard.js` finishes init and sends `MSG.POPUP_READY` to background, the reply is `{ buffered, stateSnapshot }`:
+When an engine fires `open-view`, it transitions to `bridging` state instead of going back to idle. While bridging, the engine captures non-modifier keys and forwards them: chrome's engine pushes to a local `bridgeBuffer`; content's engine sends `ZenChord:BridgeKey` to chrome which appends to the same buffer.
+
+The popup is the **sole keyboard processor**. Chord chains stream keys into a popup that is created hidden (`visibility: hidden`) on chord arm. The popup's `keyboard.js` is the only place that knows what each key means in each view — chrome never duplicates view-specific logic. When `popup/keyboard.js` finishes init and sends `MSG.POPUP_READY` to background, the reply is `{ buffered, stateSnapshot, stale? }`:
 
 - `buffered`: the captured keys, replayed via `dispatchKey(makeSyntheticKeyEvent(k))` into the popup.
 - `stateSnapshot`: the chord-tree path the originating engine was at when bridging began (e.g. `["O"]` for the Reorder prefix) — currently not used by the popup (the URL `?view=` param already drives the right view), but reserved for any future popup-side chord-engine instance.
+- `stale: true`: chrome's `popupInstance` doesn't match the popup's `?inst=N` URL param. The popup bails out without draining or processing live keys — it's a soon-to-be-destroyed prerender.
 
-The popup's `chordBridgeReady` flag holds any live keys typed before the drain completes; they're replayed after the buffered ones, preserving order.
+The popup's `chordBridgeReady` flag holds any live keys (delivered via `ZenChord:DeliverKey:<gen>` post-POPUP_READY) before the drain completes; they're replayed after the buffered ones, preserving order. After POPUP_READY, chrome forwards each subsequent bridge key live to the popup's frame script (`br.messageManager.sendAsyncMessage`), which dispatches a synthetic `KeyboardEvent` on `content.document`.
+
+### Reveal timing — chrome timer + popup timer + reveal-blocked flag
+
+The popup stays invisible during a chord chain. Two timers govern reveal:
+
+- **Chrome reveal timer** (in `experiment/api.js`) — armed on `enterBridgeFromOpenView`, cleared the moment any chord key is forwarded (`forwardKeyToPopup`). Fires only if the user pauses after `open-view` without typing another chord key (e.g., `cmd+cmd, q [pause]`). If the popup hasn't drained yet when the timer fires, it sets `revealDeferred = true` and bails — `takeChordBridgeBuffer` consumes that flag and reveals one tick after POPUP_READY for empty drains.
+- **Popup reveal timer** (in `popup/keyboard.js`) — armed **after** each `dispatchKey` handler completes (not at dispatch start). For drills (`await navigateToView`) the handler takes ~470ms (220ms cross-fade + render); arming at dispatch start would fire mid-drill and reveal before the next chord-chain key could process. Each subsequent dispatch resets the timer; on pause, it sends `MSG.REVEAL_PALETTE` to chrome with its `inst`.
+
+To prevent the popup-side timer from racing the terminal-action destroy round-trip and revealing a popup that's already destroying, `destroyOverlay` sets a `revealBlocked` flag, cleared on the next `createOverlay`. `revealPalette` checks this flag — any stale timer firing during the destroy window is a no-op.
+
+Terminal-action helpers (`activateTab`, `closePalette` in `popup/popup.js`) also explicitly call `window.clearPopupRevealTimer` before sending the message, as defense in depth against `pagehide` losing the race.
+
+### Default-group blocker — stopping page keybindings
+
+System-group `preventDefault` from the chord engine suppresses the **default browser action** (character insertion), which is enough to fix the `cmd+cmd, p` character leak. It does NOT stop **custom page keydown handlers** registered by sites (e.g., Reddit's bare-`q` sidebar toggle). System group and default group propagate independently; `stopPropagation` from one doesn't reach the other.
+
+The fix is a second listener attached in **default group** capture phase at the window level (in the per-content-process frame script). When the engine is armed, it `stopPropagation`s — preventing the event from reaching page handlers on inner nodes (document/body/specific elements). Our system-group engine on the same window still fires (same node, different group); only travel to other nodes is stopped. Frame scripts run at `document_start` so this listener is registered before any page script can attach competing listeners.
+
+### Frame-script accumulation gotcha
+
+Firefox does NOT unload frame scripts on extension reload. Every `disable+enable` cycle leaves the prior frame script registered in each content process AND in `Services.mm`'s delayed-script queue. Without mitigation, every reload adds a permanent stale engine that fires on every keystroke. Two defenses:
+
+1. **Generation tagging.** Each load mints a unique `CHORD_GENERATION` string. All engine-fired IPCs include `__gen`; chrome's `isCurrentGen` filters out stale generations' messages. The `ZenChord:DeliverKey:<gen>` IPC message **name** is also gen-tagged so stale `addMessageListener` registrations never fire (they're subscribed to old names).
+2. **Aggressive teardown.** `teardownChordEngines` (registered via `context.callOnClose`) iterates `Services.mm.getDelayedFrameScripts()` and removes every chord-engine entry — not just the current generation's URL. This stops new content processes from auto-loading stale scripts. Currently-loaded stale scripts in existing processes can't be fully unloaded; they receive `ZenChord:Shutdown` broadcast which detaches their engine and sets `__shutdown=true`. Pre-shutdown-handler versions can't be cleanly stopped — a Firefox restart is the only recovery.
+
+### Popup-instance gating
+
+Each `createOverlay` increments `popupInstance` and bakes the value into the popup URL as `?inst=N`. The popup reads it and echoes it back in `POPUP_READY` and `REVEAL_PALETTE` messages. Chrome's handlers reject mismatched `inst` (the popup has since been replaced by a prerender swap). Without this, a stale destroyed popup's late `POPUP_READY` would drain the bridge buffer that the live popup is waiting for, eating the chord-chain digits.
+
+### Silent prerender swap
+
+When chord arms via `cmd+cmd`, chrome creates a hidden prerender at the default `actions` view so the popup loads during the chord wait. When the user types an `open-view` chord key, the requested view doesn't match the prerender — chrome calls `destroyOverlay({silent: true})` then a fresh `createOverlay(requestedView)`. The `silent` flag is critical: the regular destroy path calls `finishBridge` which broadcasts `ZenChord:ExitBridge`, resetting the engine's bridging state and discarding `bridgeBuffer`. For a swap, we want the bridge to survive — the new popup will drain it.
 
 ## Companion Mods
 

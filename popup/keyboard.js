@@ -144,8 +144,12 @@ function handleActionsKey(e) {
 // In list-style views (tab lists, history, domains, etc.), special keys
 // are: B/F to step navigation history, S to toggle sort, 0 to toggle
 // workspace filter, Shift+1-9 to filter to a specific workspace, and
-// 1-9 to activate the badge-numbered list item.
-function handleListViewKey(e) {
+// 1-9 to activate the badge-numbered list item (or drill, for domains).
+//
+// Async because some digit matches drill into a sub-view via
+// navigateToView, and chord chains in the bridge-replay path need to
+// await the new view's render before processing subsequent keys.
+async function handleListViewKey(e) {
   // W: close the currently-selected tab in close-supporting views.
   // Shift+W: close ALL rows in views that support it (e.g. children).
   // Bare letter — not chordable, since the targets here are the live list,
@@ -269,22 +273,39 @@ function handleListViewKey(e) {
       ext.runtime.sendMessage({ type: "restore-closed-tab", sessionId: ds.sessionId }).catch(() => {});
       return;
     }
+    // Domains view: each row carries data-domain. The click handler in
+    // popup/views/domains.js drills into "domain-tabs" with that domain;
+    // mirror that for digit selection so chord chains can navigate
+    // deeper (cmd+cmd, q, 1, 1).
+    if (ds.domain) {
+      await navigateToView("domain-tabs", { domain: ds.domain });
+      return;
+    }
     if (ds.domId) activateTab(ds.domId);
     return;
   }
 }
 
-function dispatchKey(e) {
+// Async so chord-chain replay can await each key's effect (esp. drill
+// navigation via navigateToView) before the next replay key dispatches.
+async function dispatchKey(e) {
   const handler = KEY_HANDLERS[e.key];
   if (handler) {
     handler(e);
-    return;
-  }
-  if (ACTIONS_LIKE_VIEWS.has(ui.currentView)) {
+  } else if (ACTIONS_LIKE_VIEWS.has(ui.currentView)) {
     handleActionsKey(e);
   } else {
-    handleListViewKey(e);
+    await handleListViewKey(e);
   }
+  // Arm the reveal timer AFTER the handler completes. If the handler
+  // awaited a slow drill (runViewSwitchInvisibly takes ~470ms with the
+  // 220ms cross-fade + handler render), arming at dispatch start would
+  // fire the timer mid-drill, revealing the popup before the next
+  // chord-chain key could finish processing — producing a flash on
+  // cmd+cmd, q, 1, 1 when the second 1 lands during drill. Anchoring
+  // the 400ms pause to "handler finished" means subsequent keys in
+  // the drain reset the timer before it can fire.
+  armPopupRevealTimer();
 }
 
 // Chord-bridge handshake: the chord engine in the experiment API may have
@@ -306,6 +327,67 @@ function makeSyntheticKeyEvent(d) {
   return new KeyboardEvent("keydown", { ...d, bubbles: false, cancelable: true });
 }
 
+// Serialize key dispatch through a queue. Without this, two keys typed
+// fast (or two synthetic keys delivered via the chord engine's bridge
+// after POPUP_READY) could enter dispatchKey concurrently while the
+// first is awaiting navigateToView — the second would scan a stale
+// view's items. The queue ensures each key's effect (esp. drill nav)
+// settles before the next dispatches.
+const liveDispatchQueue = [];
+let liveDispatchRunning = false;
+
+async function runLiveDispatchQueue() {
+  if (liveDispatchRunning) return;
+  liveDispatchRunning = true;
+  try {
+    while (liveDispatchQueue.length > 0) {
+      const e = liveDispatchQueue.shift();
+      await dispatchKey(e);
+    }
+  } finally {
+    liveDispatchRunning = false;
+  }
+}
+
+// Popup-side reveal-on-pause timer. After the popup has drained the bridge
+// (POPUP_READY) it owns the "user paused, reveal the menu" decision —
+// chrome's reveal timer is cleared in takeChordBridgeBuffer for non-empty
+// drains. Each key dispatched (replay or live) resets this timer. When it
+// fires we ask chrome to reveal.
+//
+// _popupInst is read from ?inst=N below. We echo it back so chrome can
+// gate against a stale popup (destroyed in a prerender swap) firing
+// reveal on its replacement.
+let _popupInst = null;
+let popupRevealTimer = null;
+function clearPopupRevealTimer() {
+  if (popupRevealTimer !== null) {
+    clearTimeout(popupRevealTimer);
+    popupRevealTimer = null;
+  }
+}
+function armPopupRevealTimer() {
+  clearPopupRevealTimer();
+  popupRevealTimer = setTimeout(() => {
+    popupRevealTimer = null;
+    _bridgeExt.runtime.sendMessage({
+      type: MSG.REVEAL_PALETTE,
+      inst: _popupInst,
+    }).catch(() => {});
+  }, 400);
+}
+
+// Stop the reveal timer if this popup is being torn down — keeps a
+// destroyed prerender popup from firing reveal on its replacement.
+window.addEventListener("pagehide", clearPopupRevealTimer);
+
+// Expose so popup.js terminal-action helpers can cancel the timer
+// before sending an activate/restore/etc. message. Without this, the
+// pagehide event can lose the race against the timer (popup destroy
+// is async via background → experiment API; the 400ms timer can fire
+// first, revealing a popup that's already destroying → brief flash).
+window.clearPopupRevealTimer = clearPopupRevealTimer;
+
 document.addEventListener("keydown", (e) => {
   if (!chordBridgeReady) {
     e.preventDefault();
@@ -313,7 +395,12 @@ document.addEventListener("keydown", (e) => {
     heldLiveKeys.push(snapshotKeyEvent(e));
     return;
   }
-  dispatchKey(e);
+  // Live keystroke after drain — user is still active. Reset reveal timer
+  // so we don't pop the menu in the middle of a chord chain that's been
+  // typed faster than the drain processes.
+  armPopupRevealTimer();
+  liveDispatchQueue.push(e);
+  runLiveDispatchQueue();
 });
 
 // keyboard.js loads before popup.js, so `ext` is in its TDZ here. Use the
@@ -321,17 +408,27 @@ document.addEventListener("keydown", (e) => {
 const _bridgeExt = typeof browser !== "undefined" ? browser : chrome;
 
 (async () => {
+  // Read the popup-instance id from URL (?inst=N) so chrome can tell
+  // whether this POPUP_READY came from the current popup or a stale one
+  // (prerender-swap during a chord chain). Stale POPUP_READYs must not
+  // drain the bridge buffer — those keys belong to the live popup.
+  const _params = new URLSearchParams(location.search);
+  const _inst = parseInt(_params.get("inst") || "", 10);
+  _popupInst = Number.isFinite(_inst) ? _inst : null;
+
   let buffered = [];
+  let isStale = false;
   try {
-    const reply = await _bridgeExt.runtime.sendMessage({ type: MSG.POPUP_READY });
-    // POPUP_READY reply shape: { buffered, stateSnapshot }. The buffered
-    // array is keys the chord engine captured during the
-    // chord-fires-open-view → popup-keyboard-attached gap. stateSnapshot
-    // is the chord-tree path the engine was at when bridging began
-    // (e.g. ["O"] for Reorder prefix); for the popup that's already
-    // implied by the opened view (URL ?view= param) and dispatchKey's
-    // handleActionsKey matches against the current view's items, so the
-    // snapshot isn't separately consumed here.
+    const reply = await _bridgeExt.runtime.sendMessage({
+      type: MSG.POPUP_READY,
+      inst: _popupInst,
+    });
+    // POPUP_READY reply shape: { buffered, stateSnapshot, stale? }. The
+    // buffered array is keys the chord engine captured during the
+    // chord-fires-open-view → popup-keyboard-attached gap. stale is set
+    // by chrome when this popup's `inst` doesn't match the current popup
+    // (a prerender-swap left us as a soon-to-be-destroyed instance).
+    if (reply && reply.stale) isStale = true;
     if (reply && Array.isArray(reply.buffered)) buffered = reply.buffered;
     else if (Array.isArray(reply)) buffered = reply; // backwards-compat
   } catch (err) {
@@ -339,17 +436,42 @@ const _bridgeExt = typeof browser !== "undefined" ? browser : chrome;
     // way, fall through and just process any held live keys.
   }
 
-  // Don't replay before popup.js's init() has had a chance to set ui state
-  // and kick off the initial view render — otherwise dispatchKey lands on
-  // an unrendered view and the buffered key is wasted. DOMContentLoaded
-  // tells us all scripts have run; one rAF lets the first paint settle.
+  // Stale instance — chrome will drain our buffer into the live popup.
+  // Don't process live keys here either; this popup is being torn down.
+  if (isStale) return;
+
+  // Wait for popup.js's init() to fully render the initial view BEFORE
+  // dispatching buffered keys. Otherwise handleListViewKey scans
+  // listEl.querySelectorAll(".list-item") before items exist and silently
+  // drops digits (the classic cmd+cmd, r, 1 fast-chain bug).
+  try { await window.__popupReady; } catch (e) { /* init failed; proceed anyway */ }
+
+  // Belt and suspenders: also wait for DOMContentLoaded + a frame in case
+  // window.__popupReady isn't yet available (script load order quirk).
   if (document.readyState === "loading") {
     await new Promise((r) => document.addEventListener("DOMContentLoaded", r, { once: true }));
   }
   await new Promise((r) => requestAnimationFrame(r));
 
-  for (const k of buffered) dispatchKey(makeSyntheticKeyEvent(k));
-  for (const k of heldLiveKeys) dispatchKey(makeSyntheticKeyEvent(k));
+  // Each replay is awaited so chord chains involving drill navigation
+  // (e.g. cmd+cmd, q, 1, 1: drill into first domain, then activate
+  // first tab) sequence correctly — handleListViewKey awaits
+  // navigateToView, so the second digit sees the new view's items.
+  //
+  // Each dispatchKey() call arms the reveal timer at dispatch time, so
+  // the last key's arm time is "wall-clock when that key arrived",
+  // anchoring the 400ms pause to user input rather than to when the
+  // drain finished. For the empty-drain case there's no per-key arm,
+  // so we arm once here as the fallback for "popup loaded into a
+  // chord-bridge but user typed nothing further" — chrome's own
+  // reveal timer covers the common case (and fires first if still
+  // armed), this is the safety net.
+  for (const k of buffered) await dispatchKey(makeSyntheticKeyEvent(k));
+  for (const k of heldLiveKeys) await dispatchKey(makeSyntheticKeyEvent(k));
   heldLiveKeys.length = 0;
   chordBridgeReady = true;
+
+  if (buffered.length === 0 && heldLiveKeys.length === 0) {
+    armPopupRevealTimer();
+  }
 })();

@@ -458,7 +458,8 @@ const QUERIES = Object.freeze({
   //                    began (e.g. ["O"] for the Reorder prefix). The popup's
   //                    chord engine initializes at that node so further chord
   //                    keys resume the in-flight chord rather than restart at root.
-  [MSG.POPUP_READY]:                   ()  => api.takeChordBridgeBuffer(),
+  [MSG.POPUP_READY]:                   (m) => api.takeChordBridgeBuffer(m && typeof m.inst === "number" ? m.inst : null),
+  [MSG.REVEAL_PALETTE]:                (m) => api.revealPalette(m && typeof m.inst === "number" ? m.inst : null),
   [MSG.GET_ALL_TABS]:                  ()  => api.getAllTabs(),
   [MSG.GET_DEFAULT_CLOSE_TARGET]:      ()  => api.getDefaultCloseTargetDomId(),
   [MSG.GET_ACTIVE_TAB_INFO]:           ()  => getActiveTabInfo(),

@@ -136,6 +136,13 @@ this.MSG = Object.freeze({
   // buffered during the chrome-to-popup handoff (so the popup can replay them
   // in order before processing any live keys it queued during the handshake).
   POPUP_READY:                    "popup-ready",
+
+  // Popup asks chrome to reveal the (currently hidden) overlay. Used when
+  // the popup's own reveal-on-pause timer fires — the popup is the
+  // authority on user activity after POPUP_READY, so chrome's reveal timer
+  // is cleared in takeChordBridgeBuffer and the popup takes over the
+  // "user paused, show the menu" decision.
+  REVEAL_PALETTE:                 "reveal-palette",
 });
 
 // Chord-engine timing constants. Defined here so the engine module
@@ -155,6 +162,18 @@ this.MSG = Object.freeze({
 this.DOUBLE_TAP_WINDOW_MS = 350;
 this.CHORD_ROOT_TIMEOUT_MS = 400;
 this.CHORD_PREFIX_TIMEOUT_MS = 600;
+// After an engine fires open-view (transitioning to bridging), chrome
+// keeps the popup invisible and waits this long without further chord
+// keys before revealing. Fast chord chains complete before this fires
+// and never show the UI; chains that pause reveal the menu at the
+// current view+context. Cleared the moment the user's next chord key
+// is forwarded to the popup (forwardKeyToPopup in api.js).
+//
+// Sized larger than CHORD_ROOT_TIMEOUT_MS / CHORD_PREFIX_TIMEOUT_MS
+// so a user typing a chord chain near the boundary (e.g. ~500ms
+// between keys) doesn't trigger a brief reveal+destroy flash for
+// fast terminal actions like cmd+cmd, r, 1.
+this.CHORD_REVEAL_TIMEOUT_MS = 700;
 
 // Default values for browser.storage.local. Pass to storage.get() to read
 // any subset; the keys used as `get`'s argument also act as the schema.

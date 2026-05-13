@@ -796,13 +796,33 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Per-content-process frame script registration handle. Populated once
     // by installContentEngineFrameScript() below.
     let contentEngineFrameScriptUrl = null;
+    // Unique generation tag for this extension-load instance. Embedded into
+    // the frame script body so each content-process engine knows its own
+    // generation. Chrome ignores incoming ZenChord:* messages whose gen
+    // doesn't match — this filters out keystrokes from stale frame scripts
+    // that Firefox left running in content processes after a prior
+    // extension reload (Firefox provides no way to unload frame scripts on
+    // extension teardown).
+    const CHORD_GENERATION = String(Date.now()) + "_" + Math.random().toString(36).slice(2, 8);
     // Chrome-side bridge buffer. Filled by either engine (chrome's engine
     // pushes via its onBridgeKey callback; content engines push via the
     // ZenChord:BridgeKey IPC). Drained by takeChordBridgeBuffer() when the
-    // popup signals POPUP_READY.
+    // popup signals POPUP_READY. After POPUP_READY, new bridge keys are
+    // forwarded directly to the popup browser's message manager rather
+    // than buffered — see forwardKeyToPopup().
     let bridgeBuffer = null;
     let bridgeTimer = null;
     const BRIDGE_TIMEOUT_MS = 1500;
+    // Reveal-on-pause: while in bridging state, chrome keeps the popup
+    // invisible so fast chord chains can navigate without showing UI.
+    // If no chord key arrives within CHORD_REVEAL_TIMEOUT_MS, the popup
+    // is revealed at its current view+context. Reset on every forwarded
+    // key (user is still actively chording).
+    let revealTimer = null;
+    // True once the popup has signaled POPUP_READY for the current chord
+    // chain. Before that, bridge keys are buffered. After, they are
+    // delivered live via the popup browser's message manager.
+    let popupReady = false;
     // The chord-tree path the engine was at when it transitioned to
     // bridging — passed to the popup on POPUP_READY so its engine
     // resumes at the same node.
@@ -811,6 +831,28 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // bridge — exit-bridge must be sent to it (and only it) when popup
     // drains. "chrome" or "content"; null when no bridge active.
     let bridgingEngineKind = null;
+    // Popup-instance counter. Incremented in createOverlay; the popup
+    // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
+    // takeChordBridgeBuffer ignores POPUP_READY whose inst doesn't match
+    // the current popup. Without this, a destroyed prerender popup's
+    // POPUP_READY (delivered to chrome after the prerender was torn down
+    // by a prerender swap) would drain the bridge buffer that the NEW
+    // popup is supposed to consume, losing the chord-chain digits.
+    let popupInstance = 0;
+    // Reveal-blocked flag: set the moment destroyOverlay starts tearing
+    // down a popup, cleared the next time createOverlay runs. Any
+    // revealPalette call landing in this window (e.g. the popup's own
+    // post-dispatch reveal timer firing right as a terminal action's
+    // destroy round-trip completes) is suppressed. Without this, the
+    // popup-side 400ms timer races against the destroy IPC chain and
+    // sometimes wins → brief flash before destroy.
+    let revealBlocked = false;
+    // Reveal-pending flag: set if the chrome reveal timer fired while
+    // popup wasn't ready yet. takeChordBridgeBuffer consumes this and
+    // reveals immediately on POPUP_READY — without it, the chrome
+    // timer would have to either fire blindly (blank panel flash) or
+    // poll, neither of which is right.
+    let revealDeferred = false;
 
     // Mirror whatever theme Zen's URL-bar dropdown (Cmd+T) uses. The
     // chrome root's resolved `color-scheme` is the same signal that dialog
@@ -838,6 +880,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function getPaletteURL(view, params) {
       const isDark = isChromeDark();
       let url = context.extension.getURL("popup/popup.html") + "?theme=" + (isDark ? "dark" : "light");
+      url += "&inst=" + popupInstance;
       if (view) url += "&view=" + encodeURIComponent(view);
       if (params) {
         for (const [k, v] of Object.entries(params)) {
@@ -1165,6 +1208,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!w) return null;
 
       if (w.document.getElementById(OVERLAY_ID)) return null;
+
+      // Each overlay gets its own instance number. The popup reads it from
+      // its URL (?inst=N) and includes it in POPUP_READY. Lets chrome
+      // ignore POPUP_READY from a popup that has since been destroyed
+      // (prerender-swap case) — otherwise the stale POPUP_READY drains
+      // the bridge buffer meant for the new popup, eating the chord-chain
+      // digits the user typed.
+      popupInstance++;
+      // A new popup is being constructed — any reveal-block from the
+      // previous destroy is no longer relevant.
+      revealBlocked = false;
 
       // Always refresh contents so CSS changes take effect on the next
       // open after an extension reload (otherwise the cached <style> from
@@ -1527,19 +1581,32 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }, { capture: true });
     }
 
-    function destroyOverlay() {
+    function destroyOverlay(opts) {
       clearPreviewState();
       const w = getWin();
       if (!w) return;
       const overlay = w.document.getElementById(OVERLAY_ID);
       if (!overlay || overlay.dataset.closing) return;
 
+      // Block reveal until the next createOverlay. The popup's own
+      // reveal timer (set in keyboard.js's dispatchKey) can fire shortly
+      // after a terminal action's sendMessage, while this destroy is
+      // still in flight — without this block, revealPalette would see
+      // pendingReveal still set and unhide the overlay right before we
+      // remove it, producing a flash.
+      revealBlocked = true;
+
       // Bridge mode can't outlive the panel it was waiting on. If a bridge
-      // is active when the overlay is being destroyed (e.g. user clicked the
-      // toolbar icon to toggle it closed mid-animation), tear it down now —
-      // otherwise the engine that owned the bridge would keep capturing
-      // keys until the safety timeout.
-      if (bridgeBuffer) {
+      // is active when the overlay is being destroyed (e.g. user clicked
+      // the toolbar icon to toggle it closed mid-animation), tear it down
+      // now — otherwise the engine that owned the bridge would keep
+      // capturing keys until the safety timeout.
+      //
+      // EXCEPT during a "silent" destroy (used by enterBridgeFromOpenView
+      // when swapping out a stale prerender to create a new popup at the
+      // requested view). In that case the bridge state was JUST set up by
+      // the caller and we want to keep it — only the overlay DOM goes.
+      if (bridgeBuffer && !(opts && opts.silent)) {
         bridgeBuffer = null;
         pendingStateSnapshot = null;
         finishBridge();
@@ -1649,44 +1716,137 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
     }
 
-    // Bridge entry: an engine fired open-view. Open the overlay at the
-    // right view, remember the state snapshot for the popup to resume at,
-    // start the bridge-safety timer.
-    function enterBridgeFromOpenView(view, stateSnapshot, kind) {
+    // Bridge entry: an engine fired open-view. Two distinct paths:
+    //   source="timeout": user passively let the chord wait expire.
+    //     Reveal the popup now at the requested view. Existing UX —
+    //     same speed as before (root timeout fires → menu appears).
+    //   source="match": user typed an explicit chord-key. Keep the popup
+    //     INVISIBLE and start a reveal-on-pause timer. If the user keeps
+    //     chording (more digits / drilling), the timer resets each key
+    //     and UI never shows. If they pause, the timer fires and the
+    //     popup is revealed at its current state.
+    function enterBridgeFromOpenView(view, stateSnapshot, kind, source) {
       bridgeBuffer = [];
       pendingStateSnapshot = stateSnapshot || [];
       bridgingEngineKind = kind;
+      popupReady = false;
       const w = getWin();
-      if (bridgeTimer !== null && w) {
-        try { w.clearTimeout(bridgeTimer); } catch (e) {}
-      }
+      clearBridgeTimer();
+      clearRevealTimer();
       bridgeTimer = w ? w.setTimeout(() => {
-        // Safety: popup never reported ready. Cancel the bridge.
         bridgeTimer = null;
         finishBridge();
       }, BRIDGE_TIMEOUT_MS) : null;
 
-      // For the "default view" case (root timeout), if we already
-      // prerendered the actions menu and the user is letting it open, just
-      // reveal what's there. Otherwise, discard prerender and open the
-      // requested view fresh.
       const requestedView = view || null;
+
+      if (source === "timeout") {
+        // User-paused open: reveal immediately. Reuse the prerender if it
+        // matches (default-view case from cmd+cmd-wait); otherwise
+        // destroy+recreate at the requested view, then reveal. The
+        // destroy is `silent` because we want the bridge state we just
+        // set up (bridgeBuffer / pendingStateSnapshot) to survive the
+        // swap — the new popup will drain it on POPUP_READY.
+        if (pendingReveal && !requestedView) {
+          revealOverlay();
+        } else {
+          if (pendingReveal) destroyOverlay({ silent: true });
+          openOverlayWithView(requestedView);
+        }
+        return;
+      }
+
+      // source === "match" (or unspecified): chord-key-driven open-view.
+      // Keep popup hidden; start reveal-on-pause timer. Same silent-swap
+      // requirement as above so the bridge state isn't torn down by the
+      // prerender-replacement destroyOverlay.
       if (pendingReveal && !requestedView) {
-        revealOverlay();
+        // Already prerendered at the right default view — keep it hidden.
       } else {
-        if (pendingReveal) destroyOverlay();
-        openOverlayWithView(requestedView);
+        if (pendingReveal) destroyOverlay({ silent: true });
+        createOverlay(requestedView);
+      }
+      armRevealTimer();
+    }
+
+    function clearBridgeTimer() {
+      const w = getWin();
+      if (bridgeTimer !== null && w) {
+        try { w.clearTimeout(bridgeTimer); } catch (e) {}
+      }
+      bridgeTimer = null;
+    }
+
+    function clearRevealTimer() {
+      const w = getWin();
+      if (revealTimer !== null && w) {
+        try { w.clearTimeout(revealTimer); } catch (e) {}
+      }
+      revealTimer = null;
+      // Reset any stale "fired-but-popup-wasn't-ready" flag. A new
+      // chord chain starts fresh.
+      revealDeferred = false;
+    }
+
+    function armRevealTimer() {
+      const w = getWin();
+      clearRevealTimer();
+      if (!w) return;
+      revealTimer = w.setTimeout(() => {
+        revealTimer = null;
+        if (!pendingReveal) return;
+        // Don't reveal an empty popup. If the popup hasn't drained yet
+        // we'd just paint a blank panel for a beat before the popup's
+        // first view rendered (visible flash). Defer the reveal — once
+        // the popup signals POPUP_READY, takeChordBridgeBuffer reveals
+        // immediately if it sees a "deferred" flag set here.
+        if (!popupReady) {
+          revealDeferred = true;
+          return;
+        }
+        revealOverlay();
+      }, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700);
+    }
+
+    // Forward a chord key to the popup's content process. If the popup
+    // has signaled POPUP_READY, deliver immediately via its message
+    // manager — the popup's frame-script-side ZenChord:DeliverKey listener
+    // dispatches a synthetic keydown on content.document. Before
+    // POPUP_READY, queue in bridgeBuffer (drained on POPUP_READY).
+    function forwardKeyToPopup(keyData) {
+      // Any chord key after the initial leader means the user is committed
+      // to a chord chain — kill chrome's reveal timer so the menu doesn't
+      // flash for fast chains where the action fires after the chrome
+      // timer would have fired (slow popup load + drill animation).
+      // From this point the popup owns the reveal-on-pause decision via
+      // its own setTimeout in keyboard.js.
+      clearRevealTimer();
+      if (!popupReady) {
+        if (bridgeBuffer) bridgeBuffer.push(keyData);
+        return;
+      }
+      const w = getWin();
+      const br = w && w.document.getElementById(BROWSER_ID);
+      if (br && br.messageManager) {
+        // Generation-tagged message name: only the frame script that
+        // matches this CHORD_GENERATION receives. Stale frame scripts
+        // from prior extension loads (Firefox doesn't unload them) listen
+        // on their old generation's name and never fire — without this,
+        // each stale script would dispatch a duplicate synthetic
+        // keydown for every chord-chain key, producing the double-fire
+        // bug (e.g. cmd+cmd, q, 1 → drill + activate as if "1, 1").
+        try { br.messageManager.sendAsyncMessage("ZenChord:DeliverKey:" + CHORD_GENERATION, keyData); } catch (e) {}
       }
     }
 
     // Called from takeChordBridgeBuffer when popup signals ready, or from
     // the safety timer, or from destroyOverlay if the bridge is aborted.
     function finishBridge() {
-      const w = getWin();
-      if (bridgeTimer !== null && w) {
-        try { w.clearTimeout(bridgeTimer); } catch (e) {}
-      }
-      bridgeTimer = null;
+      clearBridgeTimer();
+      clearRevealTimer();
+      bridgeBuffer = null;
+      pendingStateSnapshot = null;
+      popupReady = false;
       // Tell the engine that owned the bridge to exit. Either engine's
       // exitBridge() is safe to call even when not bridging (no-op).
       if (bridgingEngineKind === "chrome" && chromeEngine) {
@@ -1719,21 +1879,21 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (w && id != null) try { w.clearTimeout(id); } catch (e) {}
       },
       onArmed: () => {
-        // Prerender the actions menu off-screen so the popup loads during
-        // the chord wait window. Hidden until reveal.
+        // Prerender the popup at the default view off-screen so it loads
+        // during the chord wait window. Hidden until the reveal timer
+        // fires (slow path) or the popup itself reveals (action path).
         createOverlay();
       },
       onAction: (payload) => dispatchChordAction(payload),
-      onOpenView: (view, snapshot) => enterBridgeFromOpenView(view, snapshot, "chrome"),
+      onOpenView: (view, snapshot, source) =>
+        enterBridgeFromOpenView(view, snapshot, "chrome", source),
       onStateChange: () => {},
       onCancel: () => {
         // Chord cancelled (unknown key, Escape, blur). If a prerender is
         // still hidden, tear it down.
         if (pendingReveal) destroyOverlay();
       },
-      onBridgeKey: (k) => {
-        if (bridgeBuffer) bridgeBuffer.push(k);
-      },
+      onBridgeKey: (k) => forwardKeyToPopup(k),
     });
 
     function installChromeEngine() {
@@ -1772,14 +1932,58 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const engineURL = context.extension.getURL("shared/chord-engine.js");
       const bindingsURL = context.extension.getURL("shared/keybindings.js");
       const constantsURL = context.extension.getURL("shared/constants.js");
+      // The frame-script body runs in EVERY content process. Two paths:
+      //
+      //   1. Non-extension pages (websites): instantiate the chord engine
+      //      attached to `content`. Self-arms on cmd+cmd, detects chord
+      //      keys, fires open-view/action/cancel/bridge-key IPC to chrome.
+      //      The engine is the source of truth for chord state in this
+      //      process.
+      //
+      //   2. Extension pages (moz-extension:// — our popup and foreign-
+      //      extension popups): do NOT attach the engine (their content
+      //      handles its own keys via popup/keyboard.js). But DO listen
+      //      for ZenChord:DeliverKey messages from chrome — each one
+      //      causes a synthetic KeyboardEvent to be dispatched on
+      //      content.document, which the popup's keydown listener picks
+      //      up and routes via dispatchKey. This is how chord-chain
+      //      digits reach the popup while it's still invisible.
       const body =
         "(function(){\n" +
+        "var __GEN = " + JSON.stringify(CHORD_GENERATION) + ";\n" +
         "var __scope = {};\n" +
         "try {\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(bindingsURL) + ", __scope);\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(constantsURL) + ", __scope);\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(engineURL) + ", __scope);\n" +
         "} catch (err) { return; }\n" +
+        "function isExtensionPage(){\n" +
+        "  try { return String(content && content.location && content.location.href || '').startsWith('moz-extension://'); } catch (e) { return false; }\n" +
+        "}\n" +
+        "function tag(data){ var o = data || {}; o.__gen = __GEN; return o; }\n" +
+        // Synthetic-key dispatch into content.document for the popup
+        // (and foreign extension popups, harmlessly — they ignore unknown
+        // keys). The popup's keydown listener has no isTrusted gate and
+        // processes via dispatchKey just like a live keypress.
+        // Generation-tagged listener name. Only this generation's chrome
+        // side sends to this name; stale frame scripts from prior loads
+        // listen on their old generation's name and stay silent.
+        "addMessageListener('ZenChord:DeliverKey:' + __GEN, function(m){\n" +
+        "  if (__shutdown) return;\n" +
+        "  try {\n" +
+        "    if (!isExtensionPage() || !content || !content.document) return;\n" +
+        "    var d = (m && m.data) || {};\n" +
+        "    var ev = new content.KeyboardEvent('keydown', {\n" +
+        "      key: d.key, code: d.code,\n" +
+        "      shiftKey: !!d.shiftKey, altKey: !!d.altKey,\n" +
+        "      ctrlKey: !!d.ctrlKey, metaKey: !!d.metaKey,\n" +
+        "      bubbles: true, cancelable: true,\n" +
+        "    });\n" +
+        "    content.document.dispatchEvent(ev);\n" +
+        "  } catch(e){}\n" +
+        "});\n" +
+        // The chord-engine path runs only on non-extension pages. The popup
+        // and foreign extension popups own their own keybindings.
         "var __tree = __scope.buildChordTree(__scope.ZEN_KEYBINDINGS, __scope.ZEN_WORKSPACE_DIGIT_CHORDS, {\n" +
         "  DOUBLE_TAP_WINDOW_MS: __scope.DOUBLE_TAP_WINDOW_MS,\n" +
         "  CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS,\n" +
@@ -1791,29 +1995,62 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  filterEvent: function(){ return true; },\n" +
         "  setTimeoutFn: function(fn, ms){ return content ? content.setTimeout(fn, ms) : null; },\n" +
         "  clearTimeoutFn: function(id){ if (content && id != null) try { content.clearTimeout(id); } catch (e) {} },\n" +
-        "  onArmed: function(){ try { sendAsyncMessage('ZenChord:Armed', {}); } catch(e){} },\n" +
-        "  onAction: function(p){ try { sendAsyncMessage('ZenChord:Action', p); } catch(e){} },\n" +
-        "  onOpenView: function(v, s){ try { sendAsyncMessage('ZenChord:OpenView', { view: v, snapshot: s }); } catch(e){} },\n" +
-        "  onCancel: function(){ try { sendAsyncMessage('ZenChord:Cancel', {}); } catch(e){} },\n" +
-        "  onBridgeKey: function(k){ try { sendAsyncMessage('ZenChord:BridgeKey', k); } catch(e){} },\n" +
+        "  onArmed: function(){ try { sendAsyncMessage('ZenChord:Armed', tag({})); } catch(e){} },\n" +
+        "  onAction: function(p){ try { sendAsyncMessage('ZenChord:Action', tag(p)); } catch(e){} },\n" +
+        "  onOpenView: function(v, s, source){ try { sendAsyncMessage('ZenChord:OpenView', tag({ view: v, snapshot: s, source: source })); } catch(e){} },\n" +
+        "  onCancel: function(){ try { sendAsyncMessage('ZenChord:Cancel', tag({})); } catch(e){} },\n" +
+        "  onBridgeKey: function(k){ try { sendAsyncMessage('ZenChord:BridgeKey', tag(k)); } catch(e){} },\n" +
         "  onStateChange: function(){},\n" +
         "});\n" +
+        "var __shutdown = false;\n" +
+        // Default-group capture listener. The system-group engine listener
+        // alone can't suppress custom page handlers (e.g. Reddit's bare-q
+        // sidebar toggle): system-group preventDefault stops the default
+        // browser action (character insertion) but doesn't reach
+        // default-group listeners, and stopPropagation in one group
+        // doesn't cross to the other. Attached at the WINDOW level in
+        // default-group capture so it fires before any page listener on
+        // document/body/etc.; stopPropagation here keeps the event from
+        // reaching those inner nodes. Same-node system-group listeners
+        // (our engine) still fire — propagation-stop only blocks travel
+        // to OTHER nodes, not other listeners on the same node.
+        "function blockDefaultGroup(e){\n" +
+        "  if (__shutdown) return;\n" +
+        "  if (!__engine.isArmed()) return;\n" +
+        "  if (e.key === 'Meta' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift') return;\n" +
+        "  if (e.metaKey || e.ctrlKey || e.altKey) return;\n" +
+        "  try { e.preventDefault(); } catch(_) {}\n" +
+        "  try { e.stopPropagation(); } catch(_) {}\n" +
+        "}\n" +
         "function attach(){\n" +
         "  try {\n" +
+        "    if (__shutdown) return;\n" +
         "    if (!content) return;\n" +
-        "    // Skip extension pages (our own popup, foreign extension popups).\n" +
-        "    var href = '';\n" +
-        "    try { href = String(content.location && content.location.href || ''); } catch(e){}\n" +
-        "    if (href.startsWith('moz-extension://')) return;\n" +
+        "    // Extension pages skip engine attachment — they have their own keybindings.\n" +
+        "    if (isExtensionPage()) return;\n" +
         "    __engine.attach(content);\n" +
+        "    // Detach-then-attach the default-group blocker so duplicate\n" +
+        "    // DOMWindowCreated firings don't stack listeners.\n" +
+        "    try { content.removeEventListener('keydown', blockDefaultGroup, { capture: true }); } catch(_) {}\n" +
+        "    content.addEventListener('keydown', blockDefaultGroup, { capture: true });\n" +
         "  } catch (err) { /* ignore */ }\n" +
         "}\n" +
         "attach();\n" +
         "addEventListener('DOMWindowCreated', attach, true);\n" +
         "addMessageListener('ZenChord:ExitBridge', function(){ try { __engine.exitBridge(); } catch(e){} });\n" +
         "addMessageListener('ZenChord:Reset', function(){ try { __engine.reset(); } catch(e){} });\n" +
+        // Shutdown signal: extension reload broadcasts this. We detach the
+        // engine and stop responding so a stale frame script (which Firefox
+        // doesn't unload on extension reload) doesn't double-fire alongside
+        // the freshly-loaded frame script in the same content process.
+        "addMessageListener('ZenChord:Shutdown', function(){\n" +
+        "  __shutdown = true;\n" +
+        "  try { __engine.detach(); } catch(e){}\n" +
+        "  try { content && content.removeEventListener('keydown', blockDefaultGroup, { capture: true }); } catch(e){}\n" +
+        "});\n" +
         "addMessageListener('ZenChord:AddChord', function(m){\n" +
         "  try {\n" +
+        "    if (__shutdown) return;\n" +
         "    var d = m && m.data;\n" +
         "    if (d && d.key && d.node && __tree && __tree.children) __tree.children[d.key] = d.node;\n" +
         "  } catch(e){}\n" +
@@ -1821,7 +2058,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // Ask chrome for any dynamic chord entries that were registered
         // before this frame script loaded (e.g. Shift+1..9 extension popup
         // shortcuts added at extension startup).
-        "try { sendAsyncMessage('ZenChord:Hello', {}); } catch(e){}\n" +
+        "try { sendAsyncMessage('ZenChord:Hello', tag({})); } catch(e){}\n" +
         "})();";
       const url = "data:application/javascript;charset=utf-8," + encodeURIComponent(body);
       try {
@@ -1831,26 +2068,46 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     // ---- Cross-process message handlers --------------------------------
-    function onContentAction(m) { dispatchChordAction(m && m.data); }
-    function onContentArmed() {
-      // Content engine just self-armed. Prerender the actions menu so the
-      // popup is ready if the user lets the root timer fire.
+    //
+    // Each handler gates on the generation tag: frame scripts loaded by a
+    // PRIOR extension load (Firefox doesn't unload them on reload) send
+    // messages tagged with their old generation. Chrome only processes
+    // messages tagged with the current CHORD_GENERATION; everything else
+    // is silently dropped. This prevents stale engines from double-firing
+    // actions alongside the current engine.
+    function isCurrentGen(m) {
+      const data = m && m.data;
+      return data && data.__gen === CHORD_GENERATION;
+    }
+    function onContentAction(m) {
+      if (!isCurrentGen(m)) return;
+      dispatchChordAction(m.data);
+    }
+    function onContentArmed(m) {
+      if (!isCurrentGen(m)) return;
+      // Content engine just self-armed. Prerender the popup so it's
+      // ready if the chord chain involves a view, or if the reveal
+      // timer fires (no further chord keys typed).
       createOverlay();
     }
     function onContentOpenView(m) {
-      const data = (m && m.data) || {};
-      enterBridgeFromOpenView(data.view, data.snapshot, "content");
+      if (!isCurrentGen(m)) return;
+      const data = m.data;
+      enterBridgeFromOpenView(data.view, data.snapshot, "content", data.source);
     }
-    function onContentCancel() {
+    function onContentCancel(m) {
+      if (!isCurrentGen(m)) return;
       if (pendingReveal) destroyOverlay();
     }
     function onContentBridgeKey(m) {
-      if (bridgeBuffer && m && m.data) bridgeBuffer.push(m.data);
+      if (!isCurrentGen(m)) return;
+      forwardKeyToPopup(m.data);
     }
     function onContentHello(m) {
+      if (!isCurrentGen(m)) return;
       // A frame script just initialized; reply with the current set of
       // dynamic chord entries so it can populate its tree.
-      if (!m || !m.target || !m.target.messageManager) return;
+      if (!m.target || !m.target.messageManager) return;
       for (const entry of dynamicChordEntries) {
         try {
           m.target.messageManager.sendAsyncMessage("ZenChord:AddChord", entry);
@@ -1865,15 +2122,43 @@ this.zenWorkspaces = class extends ExtensionAPI {
     Services.mm.addMessageListener("ZenChord:Hello",     onContentHello);
 
     // Teardown helpers used by callOnClose.
+    //
+    // Frame scripts loaded via Services.mm.loadFrameScript persist in
+    // existing content processes across extension reloads (Firefox doesn't
+    // give us a way to forcibly unload them). On extension unload we
+    // broadcast ZenChord:Shutdown — content-side engines listening for
+    // this stop processing keys, so a stale frame script from a previous
+    // extension load doesn't double-fire alongside the new code's frame
+    // script. We also removeDelayedFrameScript so new content processes
+    // don't load the stale script.
     function teardownChordEngines() {
       try { if (chromeEngine) chromeEngine.detach(); } catch (e) {}
+      try { Services.mm.broadcastAsyncMessage("ZenChord:Shutdown"); } catch (e) {}
+      try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
+      // Remove every delayed chord-engine frame script we (or a prior
+      // extension load) ever registered. Firefox doesn't unload frame
+      // scripts from existing content processes, but at least we can
+      // stop them from auto-loading into new ones. Without this, every
+      // disable+enable cycle leaks a permanent stale frame script — its
+      // engine keeps firing on cmd+cmd and the accumulation eventually
+      // chokes new generations out (this is what caused the "cmd+cmd
+      // does nothing" regression).
+      try {
+        const scripts = Services.mm.getDelayedFrameScripts();
+        for (const entry of scripts) {
+          const url = entry[0];
+          if (typeof url === "string" && url.indexOf("__engine.attach") !== -1 && url.indexOf("ZenChord") !== -1) {
+            try { Services.mm.removeDelayedFrameScript(url); } catch (e) {}
+          }
+        }
+      } catch (e) {}
+      contentEngineFrameScriptUrl = null;
       try { Services.mm.removeMessageListener("ZenChord:Action",    onContentAction); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:Armed",     onContentArmed); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:OpenView",  onContentOpenView); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:Cancel",    onContentCancel); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:BridgeKey", onContentBridgeKey); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:Hello",     onContentHello); } catch (e) {}
-      try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
     }
 
     installChromeEngine();
@@ -2855,17 +3140,60 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         // Drain the chord-bridge buffer (keys captured during the gap
         // between an engine firing open-view and the popup's keyboard
-        // handler attaching) and tear down the bridge. Returns BOTH the
-        // captured keys and the engine's state snapshot at bridge entry —
-        // the popup's engine uses the snapshot to resume at the same node
-        // (e.g. inside a prefix submenu rather than at root).
-        async takeChordBridgeBuffer() {
+        // handler attaching) and mark the popup as ready. Subsequent
+        // chord keys arriving from the content engine are no longer
+        // buffered — they're forwarded live to the popup browser via
+        // ZenChord:DeliverKey messages. The bridge itself stays alive
+        // for the rest of the chord chain.
+        //
+        // Returns { buffered, stateSnapshot } — the popup replays the
+        // buffered keys via dispatchKey before processing live input.
+        // stateSnapshot is the chord-tree path the engine was at when
+        // bridging began (reserved for the popup; not currently consumed).
+        async takeChordBridgeBuffer(inst) {
+          // Stale POPUP_READY from a popup we've since destroyed (prerender
+          // swap during a chord chain). Ignore it — otherwise we drain the
+          // bridge buffer that the live popup is waiting for.
+          if (typeof inst === "number" && inst !== popupInstance) {
+            return { buffered: [], stateSnapshot: [], stale: true };
+          }
           if (!bridgeBuffer) return { buffered: [], stateSnapshot: [] };
           const drained = bridgeBuffer;
           const snapshot = pendingStateSnapshot || [];
-          bridgeBuffer = null;
-          pendingStateSnapshot = null;
-          finishBridge();
+          // Reset the bridge buffer to an empty array so future bridge
+          // keys from the engine (before forwardKeyToPopup checks
+          // popupReady) don't NPE — though after popupReady is true
+          // they get forwarded live, not buffered.
+          bridgeBuffer = [];
+          popupReady = true;
+          // The chord chain may continue (popup invisible at this view,
+          // user may drill via more digits). The reveal timer governs
+          // when the popup becomes visible. Don't finishBridge() here.
+          //
+          // If the user actually buffered chord-chain keys, they're
+          // committed to a fast chain — cancel chrome's reveal timer so
+          // the menu doesn't flash if the popup's drain runs longer than
+          // CHORD_REVEAL_TIMEOUT_MS (slow popup load + drill animation).
+          // Pause-driven reveal is then the popup's responsibility (it
+          // arms its own reveal timer in keyboard.js, since it owns
+          // post-drain state).
+          if (drained.length > 0) clearRevealTimer();
+          // If the chrome reveal timer fired during popup load (which
+          // would have painted a blank panel — visible flash), it set
+          // revealDeferred=true and waited for us. We've now drained;
+          // if there are no buffered chord keys (i.e. this is the
+          // pause case the user wanted UI for, not a fast chain),
+          // reveal now. For the buffered-keys case the user is in a
+          // chord chain and the popup will decide reveal timing.
+          if (revealDeferred) {
+            revealDeferred = false;
+            if (drained.length === 0 && pendingReveal) {
+              // Defer one tick so the popup's init() has time to
+              // render before we make it visible.
+              const w = getWin();
+              if (w) w.setTimeout(() => { if (pendingReveal) revealOverlay(); }, 0);
+            }
+          }
           return { buffered: drained, stateSnapshot: snapshot };
         },
 
@@ -2916,6 +3244,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async hidePalette() {
           destroyOverlay();
         },
+
+        // Popup-driven reveal. Called when the popup's own reveal-on-pause
+        // timer fires (it's the authority on user activity post-drain,
+        // since chord-chain keys are processed inside the popup). No-op
+        // if the popup has already become visible. The `inst` parameter
+        // gates against a stale popup (one that was created during a
+        // prerender swap and has since been destroyed) firing this and
+        // unexpectedly revealing its replacement.
+        async revealPalette(inst) {
+          if (typeof inst === "number" && inst !== popupInstance) return;
+          if (revealBlocked) return;
+          if (pendingReveal) revealOverlay();
+        },
+
 
         // Refocus the popup <browser> after an action that activates a
         // different tab (e.g. sessions.restore). Without this, keyboard

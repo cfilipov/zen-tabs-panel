@@ -179,7 +179,11 @@
       chordTimer = null;
       const snapshot = currentPath.slice();
       state = "bridging";
-      safeCall(onOpenView, null, snapshot);
+      // Source "timeout" tells the chrome handler the user passively let
+      // the chord wait expire — the menu should reveal now. Distinct from
+      // an explicit open-view chord-key match, which keeps the popup
+      // hidden so a fast chord chain can navigate without ever showing UI.
+      safeCall(onOpenView, null, snapshot, "timeout");
     }
 
     function prefixTimeout() {
@@ -188,9 +192,9 @@
       const onTo = currentNode && currentNode.onTimeout;
       state = "bridging";
       if (onTo && onTo.type === "open-view") {
-        safeCall(onOpenView, onTo.view, snapshot);
+        safeCall(onOpenView, onTo.view, snapshot, "timeout");
       } else {
-        safeCall(onOpenView, null, snapshot);
+        safeCall(onOpenView, null, snapshot, "timeout");
       }
     }
 
@@ -338,7 +342,10 @@
         currentPath = snapshot;
         state = "bridging";
         clearChordTimer();
-        safeCall(onOpenView, view, snapshot);
+        // Source "match" — explicit chord-key open-view. Chrome keeps the
+        // popup invisible and starts a reveal-on-pause timer so fast chord
+        // chains complete without ever showing UI.
+        safeCall(onOpenView, view, snapshot, "match");
         return;
       }
       if (child.type === "prefix") {
