@@ -187,18 +187,13 @@ this.STORAGE_DEFAULTS = Object.freeze({
   // the panel just appears/disappears. In-popup sub-menu cross-fades
   // (navigating between views inside an open palette) still animate.
   skipOverlayAnimations: false,
-  // When true, arming the chord shows a small HUD (key badges +
-  // progress bar) centered on screen, which morphs into the full popup
-  // on reveal. When false (default), the popup uses the legacy
-  // hidden-prerender model: invisible during the chord wait, fades
-  // in on reveal.
-  showChordHud: false,
   // Single user-facing delay for all chord timeouts: root timeout
   // (after leader, before menu reveals if no chord key), prefix
   // timeout (after descending into a prefix node), and reveal timeout
-  // (after an open-view chord match before the menu shows). Pushed to
-  // the chrome engine, content engines (via ZenChord:SetDelay), and
-  // the popup (via ?delay=N URL param).
+  // (after an open-view chord match before the menu shows). 0 means
+  // "show the menu immediately on arm" — the menu itself becomes the
+  // chord HUD. Pushed to the chrome engine, content engines (via
+  // ZenChord:SetDelay), and the popup (via ?delay=N URL param).
   chordDelayMs: 350,
 });
 

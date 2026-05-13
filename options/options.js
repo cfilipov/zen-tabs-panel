@@ -7,7 +7,6 @@ const els = {
   autoMoveDelay: document.getElementById("autoMoveDelay"),
   interceptExtensionPopups: document.getElementById("interceptExtensionPopups"),
   skipOverlayAnimations: document.getElementById("skipOverlayAnimations"),
-  showChordHud: document.getElementById("showChordHud"),
   chordDelayMs: document.getElementById("chordDelayMs"),
   status: document.getElementById("status"),
   companionMods: document.getElementById("companion-mods"),
@@ -21,7 +20,6 @@ async function loadSettings() {
   els.autoMoveDelay.value = String(settings.autoMoveDelay);
   els.interceptExtensionPopups.checked = settings.interceptExtensionPopups;
   els.skipOverlayAnimations.checked = settings.skipOverlayAnimations;
-  els.showChordHud.checked = settings.showChordHud;
   els.chordDelayMs.value = String(settings.chordDelayMs);
 }
 
@@ -70,8 +68,7 @@ async function saveSettings() {
     autoMoveDelay: Number(els.autoMoveDelay.value),
     interceptExtensionPopups: els.interceptExtensionPopups.checked,
     skipOverlayAnimations: els.skipOverlayAnimations.checked,
-    showChordHud: els.showChordHud.checked,
-    chordDelayMs: Math.max(50, Number(els.chordDelayMs.value) || 350),
+    chordDelayMs: Math.max(0, Number(els.chordDelayMs.value) || 0),
   });
 
   els.status.classList.remove("hidden");

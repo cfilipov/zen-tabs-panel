@@ -711,15 +711,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     const OVERLAY_ID = "zen-tabs-panel-overlay";
     const PANEL_ID = "zen-tabs-panel-panel";
     const BROWSER_ID = "zen-tabs-panel-browser";
-    // Chord HUD — the small badge box that appears immediately on
-    // chord arm, showing the keys typed so far and a draining
-    // progress bar over the timeout window. Morphs into the full
-    // popup on reveal.
-    const HUD_ID = "zen-tabs-panel-hud";
-    const HUD_KEYS_ID = "zen-tabs-panel-hud-keys";
-    const HUD_BAR_ID = "zen-tabs-panel-hud-bar";
-    const HUD_WIDTH = 260;
-    const HUD_HEIGHT = 60;
 
     const VIEW_SIZES = {
       actions:              { width: 960, height: 604 },
@@ -781,7 +772,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Current chord delay (for getPaletteURL's ?delay=N param, etc.).
     let chordDelayMs = CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS;
     function applyChordDelay(ms) {
-      if (typeof ms !== "number" || ms < 50) return;
+      if (typeof ms !== "number" || ms < 0) return;
       chordDelayMs = ms;
       CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS = ms;
       CHORD_CONSTANTS.CHORD_PREFIX_TIMEOUT_MS = ms;
@@ -1192,17 +1183,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // setSkipOverlayAnimations after init. Used by createOverlay's
     // reveal path and destroyOverlay's dismiss path.
     let skipOverlayAnimations = false;
-    // Whether to show the chord HUD (small badge box + progress bar)
-    // during chord arming. Default matches STORAGE_DEFAULTS.showChordHud
-    // (false → legacy hidden-prerender behavior). Background pushes the
-    // persisted value via setShowChordHud after init.
-    let showChordHud = false;
-    // HUD state — set by armChord and updated by chord-event handlers.
-    // hudLeaderLabel is the configured shortcut string (e.g.
-    // "Command+Period") passed in via armChord(label); we format it for
-    // display. hudKeys is the chord keys typed since arm.
-    let hudLeaderLabel = "";
-    let hudKeys = [];
     // Services.ww.openWindow is non-writable/non-configurable on the XPCOM
     // wrapper, so direct assignment is silently rejected and defineProperty
     // throws. We replace Services.ww itself with a Proxy on an empty target
@@ -1245,14 +1225,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // checked but have no effect — better than crashing the addon.
     }
 
-    // Build the overlay DOM. The chord engine calls this on arm to
-    // construct the small HUD that shows chord keys + progress bar;
-    // the caller flips it into the full popup later via revealOverlay
-    // (which morphs the panel from HUD dimensions to view size and
-    // cross-fades HUD → browser). openOverlayWithView and showPalette
-    // pass {noHud:true} for paths that should open straight to the
-    // full popup (toolbar icon, etc.) with no HUD phase.
-    function createOverlay(view, params, opts) {
+    // Build the overlay DOM hidden. The chord engine calls this to
+    // prerender during its wait window; openOverlayWithView and
+    // showPalette call it for immediate opens. Either way the caller
+    // flips the visibility on via revealOverlay() (or, if the chord
+    // cancels, tears the prerender down via destroyOverlay()).
+    function createOverlay(view, params) {
       const w = getWin();
       if (!w) return null;
 
@@ -1318,11 +1296,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       navStack = [];
       currentViewName = viewName;
 
-      // noHud forces a HUD-less direct open (toolbar, etc.). The
-      // showChordHud setting also forces it off — when disabled, chord
-      // arming uses the legacy hidden-prerender path with no HUD.
-      const noHud = !!(opts && opts.noHud) || !showChordHud;
-
       const overlay = w.document.createElement("div");
       overlay.id = OVERLAY_ID;
       overlay.style.cssText = [
@@ -1335,101 +1308,32 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "display: flex",
         "align-items: center",
         "justify-content: center",
-        // No dim backdrop during HUD phase — only when the full panel
-        // is revealed (set in reveal() below). For noHud paths
-        // (toolbar-icon direct opens, etc.), reveal() runs immediately
-        // after createOverlay and sets the backdrop.
-        "background: transparent",
-        "transition: background 0.12s ease-out",
-        // Overlay is visible immediately when the HUD is shown. For
-        // noHud paths the legacy hidden-prerender behavior is kept so
-        // reveal() can do its keyframe fade-in.
-        "visibility: " + (noHud ? "hidden" : "visible"),
+        "background: rgba(0, 0, 0, 0.25)",
+        // Start fully hidden. The popup browser still loads (visibility
+        // doesn't gate network/JS), so when the chord engine prerenders
+        // during its wait the popup is ready by the time we reveal.
+        // Reveal animations are applied in pendingReveal below — both
+        // backdrop and panel start their fades together so the dim
+        // doesn't appear ahead of the panel.
+        "visibility: hidden",
       ].join(";");
 
       const panel = w.document.createElement("div");
       panel.id = PANEL_ID;
       panel.style.cssText = [
-        // HUD paths start at HUD dimensions; reveal() grows to view
-        // size. noHud paths start at view size directly. Explicit
-        // height (not max-height) is required because the panel's
-        // children — HUD and browser — are absolutely positioned and
-        // contribute no intrinsic height; without an explicit value the
-        // panel would collapse to 0.
-        "width: " + (noHud ? size.width : HUD_WIDTH) + "px",
-        "height: " + (noHud ? size.height : HUD_HEIGHT) + "px",
+        "width: " + size.width + "px",
+        "height: " + size.height + "px",
         "background: var(--arrowpanel-background, light-dark(rgb(244, 244, 244), rgb(31, 31, 31)))",
         "border-radius: 12px",
         "border: 1px solid var(--zen-colors-border, light-dark(rgba(0,0,0,0.15), rgba(255,255,255,0.08)))",
         "box-shadow: 0 0 9.73px rgba(0, 0, 0, 0.25), 0 24px 60px rgba(0, 0, 0, 0.4)",
         "overflow: hidden",
-        "position: relative",
+        "display: flex",
+        "flex-direction: column",
         "transition: width 0.15s ease-out, height 0.15s ease-out",
       ].join(";");
 
-      let hud = null;
-      if (!noHud) {
-        hud = w.document.createElement("div");
-        hud.id = HUD_ID;
-        hud.style.cssText = [
-          "position: absolute",
-          "inset: 0",
-          "z-index: 2",
-          "display: flex",
-          "flex-direction: column",
-          "align-items: center",
-          "justify-content: center",
-          "gap: 10px",
-          "padding: 12px 16px",
-          "box-sizing: border-box",
-          "opacity: 1",
-          "transition: opacity 0.12s ease-out",
-          "pointer-events: none",
-        ].join(";");
-
-        const hudKeys = w.document.createElement("div");
-        hudKeys.id = HUD_KEYS_ID;
-        hudKeys.style.cssText = [
-          "display: flex",
-          "flex-direction: row",
-          "align-items: center",
-          "gap: 6px",
-          "flex: 1 1 auto",
-          "min-height: 0",
-        ].join(";");
-
-        const hudBar = w.document.createElement("div");
-        hudBar.style.cssText = [
-          "width: 100%",
-          "height: 3px",
-          "background: light-dark(rgba(0,0,0,0.08), rgba(255,255,255,0.08))",
-          "border-radius: 2px",
-          "overflow: hidden",
-          "flex: 0 0 auto",
-        ].join(";");
-        const hudBarFill = w.document.createElement("div");
-        hudBarFill.id = HUD_BAR_ID;
-        hudBarFill.style.cssText = [
-          "height: 100%",
-          "width: 100%",
-          "background: var(--zen-primary-color, AccentColor)",
-        ].join(";");
-        hudBar.appendChild(hudBarFill);
-
-        hud.appendChild(hudKeys);
-        hud.appendChild(hudBar);
-        panel.appendChild(hud);
-      }
-
-      // Browser sits behind the HUD, sized for the eventual view so its
-      // content renders at the right dimensions while invisible. The
-      // panel's overflow:hidden masks any overflow during HUD phase.
       const br = createBrowserElement(w, size, { view, params });
-      br.style.position = "absolute";
-      br.style.inset = "0";
-      br.style.opacity = noHud ? "1" : "0";
-      if (!noHud) br.style.pointerEvents = "none";
-      br.style.transition = "opacity 0.12s ease-out";
       panel.appendChild(br);
       overlay.appendChild(panel);
 
@@ -1441,47 +1345,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       w.document.documentElement.appendChild(overlay);
 
-      // Initialize HUD with whatever leader/keys we have right now.
-      if (!noHud) renderHudKeys();
-
       const reveal = () => {
         if (pendingReveal !== reveal) return;
         pendingReveal = null;
-        if (noHud) {
-          // Legacy reveal path — overlay was hidden, run the keyframe
-          // fade-in.
-          overlay.style.visibility = "visible";
-          overlay.style.background = "rgba(0, 0, 0, 0.25)";
-          if (!skipOverlayAnimations) {
-            overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
-            panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
-          }
-          br.focus();
-          return;
-        }
-        // HUD path — morph: HUD fades out, browser fades in, panel
-        // resizes to the view's target dimensions, backdrop dim fades in.
-        if (skipOverlayAnimations) {
-          if (hud) hud.style.transition = "none";
-          br.style.transition = "none";
-          overlay.style.transition = "none";
-          panel.style.transition = "none";
-        }
-        overlay.style.background = "rgba(0, 0, 0, 0.25)";
-        if (hud) hud.style.opacity = "0";
-        br.style.opacity = "1";
-        br.style.pointerEvents = "";
-        panel.style.width = size.width + "px";
-        panel.style.height = size.height + "px";
-        // After the cross-fade settles, fully detach the HUD so its
-        // (invisible) clicks/layout don't interfere with the browser.
-        const finalize = () => {
-          if (hud && hud.isConnected) hud.style.display = "none";
-        };
-        if (skipOverlayAnimations) {
-          finalize();
-        } else {
-          w.setTimeout(finalize, 150);
+        overlay.style.visibility = "visible";
+        if (!skipOverlayAnimations) {
+          overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
+          panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
         }
         br.focus();
       };
@@ -1492,114 +1362,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function revealOverlay() {
       if (pendingReveal) pendingReveal();
-    }
-
-    // -----------------------------------------------------------------------
-    // Chord HUD — keys + progress bar shown while the chord is being typed
-    // -----------------------------------------------------------------------
-
-    // Format the leader's shortcut string (from browser.commands.getAll's
-    // `shortcut` field, e.g. "Command+Period") into a compact glyph display
-    // like "⌘.". Falls back to the raw string for unrecognized tokens.
-    function formatShortcutForHud(s) {
-      if (!s) return "";
-      return s.split("+").map((p) => {
-        if (p === "Command") return "⌘";
-        if (p === "Alt") return "⌥";
-        if (p === "MacCtrl" || p === "Ctrl") return "⌃";
-        if (p === "Shift") return "⇧";
-        if (p === "Period") return ".";
-        if (p === "Comma") return ",";
-        if (p === "Space") return "␣";
-        return p;
-      }).join("");
-    }
-
-    // Rebuild the HUD key badges from hudLeaderLabel + hudKeys.
-    function renderHudKeys() {
-      const w = getWin();
-      if (!w) return;
-      const container = w.document.getElementById(HUD_KEYS_ID);
-      if (!container) return;
-      container.innerHTML = "";
-      const labels = [];
-      if (hudLeaderLabel) labels.push(formatShortcutForHud(hudLeaderLabel));
-      for (const k of hudKeys) labels.push(k);
-      for (const label of labels) {
-        const badge = w.document.createElement("span");
-        badge.style.cssText = [
-          "display: inline-flex",
-          "align-items: center",
-          "justify-content: center",
-          "min-width: 24px",
-          "height: 26px",
-          "padding: 0 8px",
-          "background: light-dark(rgba(0,0,0,0.06), rgba(255,255,255,0.08))",
-          "border: 1px solid light-dark(rgba(0,0,0,0.15), rgba(255,255,255,0.12))",
-          "border-radius: 5px",
-          "font-family: ui-monospace, monospace",
-          "font-size: 13px",
-          "font-weight: 500",
-          "color: inherit",
-        ].join(";");
-        badge.textContent = label;
-        container.appendChild(badge);
-      }
-    }
-
-    // Reset the progress bar to 100% and animate to 0% over durationMs.
-    // Called on each chord-key event so the bar visualizes the
-    // remaining-window for the next chord key.
-    function armHudProgress(durationMs) {
-      const w = getWin();
-      if (!w) return;
-      const bar = w.document.getElementById(HUD_BAR_ID);
-      if (!bar) return;
-      bar.style.transition = "none";
-      bar.style.width = "100%";
-      // Force reflow so the next transition takes effect.
-      // eslint-disable-next-line no-unused-expressions
-      bar.offsetHeight;
-      bar.style.transition = "width " + durationMs + "ms linear";
-      bar.style.width = "0%";
-    }
-
-    // Initialize HUD state from a fresh arm (chrome onArmed or content
-    // onContentArmed). Resets hudKeys, renders the leader-only badge,
-    // arms the root-timeout progress bar.
-    function hudOnArmed() {
-      hudKeys = [];
-      renderHudKeys();
-      armHudProgress(CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS || 250);
-    }
-
-    // Update HUD when the engine descends into a prefix node.
-    function hudOnStateChange(snapshot) {
-      hudKeys = Array.isArray(snapshot) ? snapshot.slice() : [];
-      renderHudKeys();
-      armHudProgress(CHORD_CONSTANTS.CHORD_PREFIX_TIMEOUT_MS || 300);
-    }
-
-    // Update HUD when the engine fires open-view (match path).
-    function hudOnOpenViewMatch(snapshot) {
-      hudKeys = Array.isArray(snapshot) ? snapshot.slice() : [];
-      renderHudKeys();
-      armHudProgress(CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 300);
-    }
-
-    // Append a bridge key to the HUD as it's forwarded.
-    function hudOnBridgeKey(keyData) {
-      const k = keyData && keyData.key;
-      if (!k) return;
-      // Same chord-key naming the engine's chordKeyFor uses: uppercase
-      // single letters, Shift+N for shifted digits.
-      let label = k;
-      if (typeof k === "string" && k.length === 1 && /[a-z]/i.test(k)) {
-        label = keyData.shiftKey ? "⇧" + k.toUpperCase() : k.toUpperCase();
-      }
-      hudKeys.push(label);
-      renderHudKeys();
-      armHudProgress(CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 300);
     }
 
     // Cross-fade the existing browser out and swap in a fresh one. Used for
@@ -2189,7 +1951,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       },
       onArmed: () => {
         createOverlay();
-        hudOnArmed();
       },
       // Any chrome-engine terminal/transition event resets content engines
       // that may have been armed in parallel (armChord arms both so a
@@ -2202,7 +1963,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       },
       onOpenView: (view, snapshot, source) => {
         try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
-        if (source === "match") hudOnOpenViewMatch(snapshot);
         enterBridgeFromOpenView(view, snapshot, "chrome", source);
       },
       onStateChange: (snapshot) => {
@@ -2212,17 +1972,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // with the default actions view. Mirror of the
         // resetChromeEngineIfArmed call in onContentStateChange.
         try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
-        hudOnStateChange(snapshot);
         prerenderPrefixView(snapshot);
       },
       onCancel: () => {
         try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
         if (pendingReveal) destroyOverlay();
       },
-      onBridgeKey: (k) => {
-        hudOnBridgeKey(k);
-        forwardKeyToPopup(k);
-      },
+      onBridgeKey: (k) => forwardKeyToPopup(k),
     });
 
     function installChromeEngine() {
@@ -2324,7 +2080,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "addMessageListener('ZenChord:SetDelay', function(m){\n" +
         "  if (__shutdown) return;\n" +
         "  var ms = m && m.data && m.data.ms;\n" +
-        "  if (typeof ms === 'number' && ms >= 50) {\n" +
+        "  if (typeof ms === 'number' && ms >= 0) {\n" +
         "    __constants.CHORD_ROOT_TIMEOUT_MS = ms;\n" +
         "    __constants.CHORD_PREFIX_TIMEOUT_MS = ms;\n" +
         "  }\n" +
@@ -2445,13 +2201,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // ready if the chord chain involves a view, or if the reveal
       // timer fires (no further chord keys typed).
       createOverlay();
-      hudOnArmed();
     }
     function onContentOpenView(m) {
       if (!isCurrentGen(m)) return;
       resetChromeEngineIfArmed();
       const data = m.data;
-      if (data && data.source === "match") hudOnOpenViewMatch(data.snapshot);
       enterBridgeFromOpenView(data.view, data.snapshot, "content", data.source);
     }
     function onContentCancel(m) {
@@ -2461,7 +2215,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function onContentBridgeKey(m) {
       if (!isCurrentGen(m)) return;
-      hudOnBridgeKey(m.data);
       forwardKeyToPopup(m.data);
     }
     function onContentStateChange(m) {
@@ -2473,7 +2226,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // intended prefix view can take over.
       resetChromeEngineIfArmed();
       const data = m.data;
-      hudOnStateChange(data && data.snapshot);
       prerenderPrefixView(data && data.snapshot);
     }
     function onContentHello(m) {
@@ -3627,11 +3379,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // focused tab's content process so its engine arms too — without
         // this the user's next chord key would reach an idle content
         // engine and leak through to the page.
-        //
-        // leaderLabel is the configured shortcut string (e.g.
-        // "Command+Period") — displayed as the first badge in the HUD.
-        async armChord(leaderLabel) {
-          hudLeaderLabel = typeof leaderLabel === "string" ? leaderLabel : "";
+        async armChord() {
           try { if (chromeEngine) chromeEngine.arm(); } catch (e) {}
           const w = getWin();
           const tab = w && w.gBrowser && w.gBrowser.selectedTab;
@@ -3733,14 +3481,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // fades inside an open palette are unaffected.
         async setSkipOverlayAnimations(skip) {
           skipOverlayAnimations = !!skip;
-        },
-
-        // Toggle the chord HUD. Background pushes this from the
-        // showChordHud setting. When off, chord arming uses the legacy
-        // hidden-prerender behavior with no visible feedback until
-        // reveal.
-        async setShowChordHud(enabled) {
-          showChordHud = !!enabled;
         },
 
         // User-facing single delay for chord timeouts. Background

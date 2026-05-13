@@ -66,20 +66,11 @@
     </section>
 
     <section>
-      <h2>Chord HUD</h2>
-      <p class="description">When arming a chord shortcut (e.g. <code>cmd+.</code>), show a small badge box centered on screen with the keys typed so far and a progress bar that drains over the timeout window. When the timeout fires or the chord matches an open-view, the HUD morphs into the full palette.</p>
-      <label class="toggle-row">
-        <input type="checkbox" id="showChordHud">
-        <span>Show chord HUD during chord arming</span>
-      </label>
-    </section>
-
-    <section>
       <h2>Chord delay</h2>
-      <p class="description">How long the chord engine waits after each key (in milliseconds) before opening the next menu. Applies to the leader pause (e.g. <code>cmd+.</code> alone), prefix pause (e.g. <code>cmd+., o</code> alone), and open-view pause (e.g. <code>cmd+., q</code> alone). Lower values feel snappier; higher values give you more time to think between keys.</p>
+      <p class="description">How long the chord engine waits after each key (in milliseconds) before opening the next menu. Applies to the leader pause (e.g. <code>cmd+.</code> alone), prefix pause (e.g. <code>cmd+., o</code> alone), and open-view pause (e.g. <code>cmd+., q</code> alone). Lower values feel snappier; higher values give you more time to think between keys. Set to <code>0</code> to show the menu immediately on every chord key — the menu effectively becomes the chord progress indicator.</p>
       <label class="toggle-row">
-        <input type="number" id="chordDelayMs" min="50" max="2000" step="50">
-        <span>milliseconds (default 350)</span>
+        <input type="number" id="chordDelayMs" min="0" max="2000" step="50">
+        <span>milliseconds (default 350, 0 to show menu immediately)</span>
       </label>
     </section>
 

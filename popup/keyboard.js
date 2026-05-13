@@ -458,7 +458,7 @@ const _bridgeExt = typeof browser !== "undefined" ? browser : chrome;
   const _inst = parseInt(_params.get("inst") || "", 10);
   _popupInst = Number.isFinite(_inst) ? _inst : null;
   const _delay = parseInt(_params.get("delay") || "", 10);
-  if (Number.isFinite(_delay) && _delay >= 50) {
+  if (Number.isFinite(_delay) && _delay >= 0) {
     _popupChordDelay = _delay;
   }
 
