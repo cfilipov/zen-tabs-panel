@@ -567,10 +567,13 @@ async function handleWarmRearm(data) {
   // doesn't inherit a stale tab outline.
   _bridgeExt.runtime.sendMessage({ type: MSG.CLEAR_PREVIEW }).catch(() => {});
 
-  // Reset selection / pagination so the rendered view starts at item 0.
+  // Reset selection / pagination so the rendered view starts on page 1
+  // with no row selected. Without this, dismissing the menu on page 2
+  // (or with a sidebar focused / row highlighted) leaks that state into
+  // the next cmd+. since the warm popup is reused.
   if (typeof ui !== "undefined") {
     ui.selectedIndex = -1;
-    ui.pageIndex = 0;
+    ui.currentPage = 1;
     ui.sidebarFocused = false;
   }
 

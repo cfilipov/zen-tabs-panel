@@ -770,7 +770,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "tabs-by-age":        { width: 720, height: 604 },
       "most-visited":       { width: 720, height: 604 },
       "reorder-tabs":       { width: 600, height: 604 },
-      "move-to-workspace":  { width: 600, height: 604 },
+      "move-to-workspace":  { width: 360, height: 604 },
       "close-and-select":   { width: 600, height: 604 },
       "move-to-folder":     { width: 360, height: 604 },
       "split-view":         { width: 360, height: 604 },
@@ -1442,22 +1442,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
       currentViewName = view || "actions";
 
       const viewName = view || "actions";
-      const size = getViewSize(viewName);
       const panel = w.document.getElementById(PANEL_ID);
       const br = w.document.getElementById(BROWSER_ID);
 
-      // Resize panel + browser to the target view (the overlay is hidden
-      // so this is invisible to the user; reveal happens at the right
-      // dimensions).
-      if (panel) {
-        panel.style.width = size.width + "px";
-        panel.style.height = size.height + "px";
-        panel.style.animation = "";
-      }
-      if (br) {
-        br.style.width = size.width + "px";
-        br.style.height = size.height + "px";
-      }
+      // Intentionally NOT resizing panel here. The popup has been alive
+      // (and at its last measured size) since extension startup;
+      // resetting to the preset 604 would cause a visible jump back-up
+      // when reveal animates, and a redundant shrink once WarmRearm
+      // re-renders and remeasures. handleWarmRearm sends a resize after
+      // its view handler runs — the size catches up there for view
+      // changes (cmd+.,o swapping to reorder, etc.). For same-view
+      // rearms (cmd+. → actions → cmd+. → actions) the size is already
+      // correct, no transition.
+      if (panel) panel.style.animation = "";
       overlay.style.animation = "";
       delete overlay.dataset.closing;
 
@@ -1986,6 +1983,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
     //     and UI never shows. If they pause, the timer fires and the
     //     popup is revealed at its current state.
     function enterBridgeFromOpenView(view, stateSnapshot, kind, source) {
+      // Dual-engine race: chrome + content engines arm in parallel for
+      // each chord arm and both run independent timers. When both fire
+      // for the same open-view (typically cmd+. + pause: each engine's
+      // root timer pops at ~350ms), the first one through this function
+      // wins. The second's IPC arrives slightly later — silently drop it
+      // so we don't destroy-and-recreate the just-revealed popup or
+      // double-fire the reveal animation.
+      if (bridgingEngineKind != null) return;
+
       bridgeBuffer = [];
       pendingStateSnapshot = stateSnapshot || [];
       bridgingEngineKind = kind;
@@ -2001,9 +2007,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const requestedView = view || null;
 
       if (source === "timeout") {
-        // User-paused open: reveal immediately. Reuse the prerender if
-        // it already matches the requested view — engine root timer
-        // (no requestedView, prerender is at actions) or prefix timer
+        // User-paused open: reveal at the requested view. Reuse the
+        // prerender if it already matches — engine root timer (no
+        // requestedView, prerender is at actions) or prefix timer
         // (requestedView equals the prefix's onTimeout view, which
         // prerenderPrefixView swapped to on descent). Otherwise
         // destroy+recreate. silent destroy preserves bridge state for
@@ -2013,7 +2019,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
           (!!requestedView && currentViewName === requestedView)
         );
         if (prerenderMatches) {
-          revealOverlay();
+          // If the popup hasn't finished rendering + measuring yet
+          // (slow showActionsMenu data fetch on a tab-heavy session),
+          // revealing now paints the panel at its preset preset height
+          // and then a moment later requestPanelResize shrinks it,
+          // producing a visible "expand-then-settle" jitter. Defer to
+          // takeChordBridgeBuffer, which reveals on POPUP_READY (after
+          // the resize has already been applied).
+          if (!popupReady) {
+            revealDeferred = true;
+          } else {
+            revealOverlay();
+          }
         } else {
           if (pendingReveal) destroyOverlay({ silent: true });
           openOverlayWithView(requestedView);
