@@ -48,43 +48,55 @@
         "name": "goToPreviousTab",
         "type": "function",
         "async": true,
-        "description": "Go to the previously activated tab (cross-workspace)",
-        "parameters": []
+        "description": "Go to the previously activated tab (cross-workspace). `excludeDomIds` skips tabs that would otherwise win — used by closeAndSelect on a multi-selection so the successor isn't part of the about-to-close set.",
+        "parameters": [
+          { "name": "excludeDomIds", "type": "array", "items": { "type": "string" }, "optional": true }
+        ]
       },
       {
         "name": "goToParentTab",
         "type": "function",
         "async": true,
-        "description": "Go to the opener tab, switching workspaces if needed",
-        "parameters": []
+        "description": "Go to the opener tab, switching workspaces if needed. Walks up the parent chain if `excludeDomIds` rejects the immediate parent.",
+        "parameters": [
+          { "name": "excludeDomIds", "type": "array", "items": { "type": "string" }, "optional": true }
+        ]
       },
       {
         "name": "goToNextSibling",
         "type": "function",
         "async": true,
-        "description": "Activate the next sibling tab (next tab sharing the same opener)",
-        "parameters": []
+        "description": "Activate the next sibling tab (next tab sharing the same opener). Skips siblings in `excludeDomIds`.",
+        "parameters": [
+          { "name": "excludeDomIds", "type": "array", "items": { "type": "string" }, "optional": true }
+        ]
       },
       {
         "name": "goToPrevSibling",
         "type": "function",
         "async": true,
-        "description": "Activate the previous sibling tab (previous tab sharing the same opener)",
-        "parameters": []
+        "description": "Activate the previous sibling tab. Skips siblings in `excludeDomIds`.",
+        "parameters": [
+          { "name": "excludeDomIds", "type": "array", "items": { "type": "string" }, "optional": true }
+        ]
       },
       {
         "name": "goToNextVerticalTab",
         "type": "function",
         "async": true,
-        "description": "Activate the tab immediately below the current one in the vertical bar (same workspace)",
-        "parameters": []
+        "description": "Activate the tab immediately below the current one in the vertical bar (same workspace). Skips tabs in `excludeDomIds`.",
+        "parameters": [
+          { "name": "excludeDomIds", "type": "array", "items": { "type": "string" }, "optional": true }
+        ]
       },
       {
         "name": "goToPrevVerticalTab",
         "type": "function",
         "async": true,
-        "description": "Activate the tab immediately above the current one in the vertical bar (same workspace)",
-        "parameters": []
+        "description": "Activate the tab immediately above the current one in the vertical bar (same workspace). Skips tabs in `excludeDomIds`.",
+        "parameters": [
+          { "name": "excludeDomIds", "type": "array", "items": { "type": "string" }, "optional": true }
+        ]
       },
       {
         "name": "getDefaultCloseTargetDomId",
@@ -223,6 +235,20 @@
         "type": "function",
         "async": true,
         "description": "Get URLs of multiselected tabs (excludes essentials)",
+        "parameters": []
+      },
+      {
+        "name": "getActionTargetDomIds",
+        "type": "function",
+        "async": true,
+        "description": "DOM ids of tabs the next action should operate on — the multi-selection if present, otherwise just the active tab.",
+        "parameters": []
+      },
+      {
+        "name": "getActionTargetExtIds",
+        "type": "function",
+        "async": true,
+        "description": "Extension tab ids (numeric) for the action-target set, for callers using the WebExtension tabs API.",
         "parameters": []
       },
       {
@@ -547,15 +573,19 @@
         "name": "activateUnvisitedNewest",
         "type": "function",
         "async": true,
-        "description": "Activate the most recently accessed unread tab",
-        "parameters": []
+        "description": "Activate the most recently accessed unread tab. Skips tabs in `excludeDomIds` (close-and-select on a multi-selection).",
+        "parameters": [
+          { "name": "excludeDomIds", "type": "array", "items": { "type": "string" }, "optional": true }
+        ]
       },
       {
         "name": "activateUnvisitedOldest",
         "type": "function",
         "async": true,
-        "description": "Activate the least recently accessed unread tab",
-        "parameters": []
+        "description": "Activate the least recently accessed unread tab. Skips tabs in `excludeDomIds`.",
+        "parameters": [
+          { "name": "excludeDomIds", "type": "array", "items": { "type": "string" }, "optional": true }
+        ]
       },
       {
         "name": "getFolders",

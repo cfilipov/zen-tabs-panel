@@ -214,39 +214,58 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
 // browser.tabs and depend on Zen's "essential" tab classification.
 // ---------------------------------------------------------------------------
 
-async function moveTabToStart() {
+// Resolve the multi-selection (or just the active tab if no multi-select)
+// to a list of tabs paired with their current state, filtered to whatever
+// pinned-status the active tab has so that move-to-start / move-to-end
+// stays within the active's section (active pinned → move pinned ones;
+// active unpinned → move unpinned ones). Essentials are always excluded.
+async function getMoveTargetSet() {
   const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (!activeTab) return;
-
-  const allTabs = await browser.tabs.query({ currentWindow: true });
+  if (!activeTab) return null;
   const essentialIds = new Set(await api.getEssentialTabIds());
+  if (essentialIds.has(activeTab.id)) return null;
+  const targetIds = new Set(await api.getActionTargetExtIds());
+  const allTabs = await browser.tabs.query({ currentWindow: true });
+  const cohort = allTabs.filter((t) =>
+    targetIds.has(t.id) &&
+    !essentialIds.has(t.id) &&
+    t.pinned === activeTab.pinned
+  );
+  return { activeTab, allTabs, essentialIds, cohort };
+}
 
+async function moveTabToStart() {
+  const ctx = await getMoveTargetSet();
+  if (!ctx || ctx.cohort.length === 0) return;
+  const { activeTab, allTabs, essentialIds, cohort } = ctx;
+  let targetIndex;
   if (activeTab.pinned) {
-    if (essentialIds.has(activeTab.id)) return;
     const firstNonEssentialPinned = allTabs.find((t) => t.pinned && !essentialIds.has(t.id));
-    const targetIndex = firstNonEssentialPinned ? firstNonEssentialPinned.index : 0;
-    await browser.tabs.move(activeTab.id, { index: targetIndex });
+    targetIndex = firstNonEssentialPinned ? firstNonEssentialPinned.index : 0;
   } else {
     const firstUnpinned = allTabs.find((t) => !t.pinned);
-    const targetIndex = firstUnpinned ? firstUnpinned.index : 0;
-    await browser.tabs.move(activeTab.id, { index: targetIndex });
+    targetIndex = firstUnpinned ? firstUnpinned.index : 0;
   }
+  // Sort by current index so relative order is preserved at the new
+  // position. browser.tabs.move accepts an array and inserts them
+  // contiguously starting at `index`.
+  const ids = cohort.sort((a, b) => a.index - b.index).map((t) => t.id);
+  await browser.tabs.move(ids, { index: targetIndex });
 }
 
 async function moveTabToEnd() {
-  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (!activeTab) return;
-
+  const ctx = await getMoveTargetSet();
+  if (!ctx || ctx.cohort.length === 0) return;
+  const { activeTab, allTabs, cohort } = ctx;
+  let targetIndex;
   if (activeTab.pinned) {
-    const essentialIds = new Set(await api.getEssentialTabIds());
-    if (essentialIds.has(activeTab.id)) return;
-    const allTabs = await browser.tabs.query({ currentWindow: true });
     const pinnedTabs = allTabs.filter((t) => t.pinned);
-    const lastPinnedIndex = pinnedTabs.length > 0 ? pinnedTabs[pinnedTabs.length - 1].index : 0;
-    await browser.tabs.move(activeTab.id, { index: lastPinnedIndex });
+    targetIndex = pinnedTabs.length > 0 ? pinnedTabs[pinnedTabs.length - 1].index : 0;
   } else {
-    await browser.tabs.move(activeTab.id, { index: -1 });
+    targetIndex = -1;
   }
+  const ids = cohort.sort((a, b) => a.index - b.index).map((t) => t.id);
+  await browser.tabs.move(ids, { index: targetIndex });
 }
 
 async function scrollToCurrentTab() {
@@ -254,41 +273,66 @@ async function scrollToCurrentTab() {
 }
 
 async function unloadActiveTab() {
+  const [targetIds, targetDomIds] = await Promise.all([
+    api.getActionTargetExtIds(),
+    api.getActionTargetDomIds(),
+  ]);
+  if (!Array.isArray(targetIds) || targetIds.length === 0) return;
   const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (!activeTab) return;
 
-  const parentResult = await api.goToParentTab();
-  if (!parentResult) {
-    await api.goToPreviousTab();
+  // Discarding the active tab needs to deactivate it first — pick a
+  // successor that's NOT in the unload set (parent first, then any
+  // most-recent non-set tab).
+  if (activeTab && targetIds.includes(activeTab.id)) {
+    const parentOk = await api.goToParentTab(targetDomIds);
+    if (!parentOk) {
+      await api.goToPreviousTab(targetDomIds);
+    }
   }
 
-  try {
-    await browser.tabs.discard(activeTab.id);
-  } catch (e) {}
+  for (const id of targetIds) {
+    try { await browser.tabs.discard(id); } catch (e) {}
+  }
 }
 
+// Each entry takes the about-to-close set's DOM ids and picks a
+// successor that's NOT in that set — used so multi-close from the
+// sidebar doesn't try to "go to next vertical" and land on the next
+// tab that's also being closed.
 const CLOSE_AND_SELECT_NAVS = {
-  // No-op navigation: just close the active tab and let the browser pick
-  // the successor (matches default Cmd+W behavior).
-  [MSG.CLOSE_AND_SELECT_DEFAULT]:           () => Promise.resolve(true),
-  [MSG.CLOSE_AND_SELECT_PREVIOUS]:          () => api.goToPreviousTab(),
-  [MSG.CLOSE_AND_SELECT_PARENT]:            () => api.goToParentTab(),
-  [MSG.CLOSE_AND_SELECT_NEXT_SIBLING]:      () => api.goToNextSibling(),
-  [MSG.CLOSE_AND_SELECT_PREV_SIBLING]:      () => api.goToPrevSibling(),
-  [MSG.CLOSE_AND_SELECT_NEXT_VERTICAL]:     () => api.goToNextVerticalTab(),
-  [MSG.CLOSE_AND_SELECT_PREV_VERTICAL]:     () => api.goToPrevVerticalTab(),
-  [MSG.CLOSE_AND_SELECT_UNVISITED_NEWEST]:  () => api.activateUnvisitedNewest(),
-  [MSG.CLOSE_AND_SELECT_UNVISITED_OLDEST]:  () => api.activateUnvisitedOldest(),
+  // No-op navigation: let the browser pick the successor (matches
+  // default Cmd+W behavior). Multi-close just removes the cohort and
+  // Firefox picks a successor for the active tab's slot.
+  [MSG.CLOSE_AND_SELECT_DEFAULT]:           ()       => Promise.resolve(true),
+  [MSG.CLOSE_AND_SELECT_PREVIOUS]:          (excl)   => api.goToPreviousTab(excl),
+  [MSG.CLOSE_AND_SELECT_PARENT]:            (excl)   => api.goToParentTab(excl),
+  [MSG.CLOSE_AND_SELECT_NEXT_SIBLING]:      (excl)   => api.goToNextSibling(excl),
+  [MSG.CLOSE_AND_SELECT_PREV_SIBLING]:      (excl)   => api.goToPrevSibling(excl),
+  [MSG.CLOSE_AND_SELECT_NEXT_VERTICAL]:     (excl)   => api.goToNextVerticalTab(excl),
+  [MSG.CLOSE_AND_SELECT_PREV_VERTICAL]:     (excl)   => api.goToPrevVerticalTab(excl),
+  [MSG.CLOSE_AND_SELECT_UNVISITED_NEWEST]:  (excl)   => api.activateUnvisitedNewest(excl),
+  [MSG.CLOSE_AND_SELECT_UNVISITED_OLDEST]:  (excl)   => api.activateUnvisitedOldest(excl),
 };
 
 async function closeAndSelect(actionId) {
   const navFn = CLOSE_AND_SELECT_NAVS[actionId];
   if (!navFn) return;
+  // The whole multi-selection is closed (active + co-selected) and the
+  // navigator excludes those when picking the successor. Falls back to
+  // the default close behavior if no surviving target exists in the
+  // requested direction.
+  const [extIds, domIds] = await Promise.all([
+    api.getActionTargetExtIds(),
+    api.getActionTargetDomIds(),
+  ]);
+  if (!Array.isArray(extIds) || extIds.length === 0) return;
+  // Pinned tabs (essentials) are excluded from action-target sets, but
+  // still guard the active tab's pinned status — closing pinned tabs
+  // is intentionally blocked.
   const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (!activeTab || activeTab.pinned) return;
-  const ok = await navFn();
-  if (!ok) return;
-  await browser.tabs.remove(activeTab.id);
+  if (activeTab?.pinned) return;
+  try { await navFn(domIds); } catch (e) {}
+  await browser.tabs.remove(extIds);
 }
 
 async function openOptions() {

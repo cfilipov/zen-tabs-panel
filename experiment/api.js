@@ -146,6 +146,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return isNewTabUrl(tab?.linkedBrowser?.currentURI?.spec || "");
     }
 
+    // Tabs the next tab-action should operate on. With a multi-selection
+    // in the sidebar this is the whole selection (Zen exposes the
+    // selection as gBrowser.selectedTabs, which always includes the
+    // active tab plus any cmd-clicked others); otherwise just the
+    // active tab. Multi-aware action handlers iterate over this list;
+    // active-only handlers (navigation, view-source/PIP/etc.) bypass
+    // it and use gBrowser.selectedTab directly.
+    function getActionTargetTabs() {
+      const w = getWin();
+      if (!w?.gBrowser) return [];
+      const sel = w.gBrowser.selectedTabs;
+      if (Array.isArray(sel) && sel.length > 0) return Array.from(sel);
+      const active = w.gBrowser.selectedTab;
+      return active ? [active] : [];
+    }
+
     // -----------------------------------------------------------------------
     // Persistent per-tab metadata (rides SessionStore.extData; survives restart)
     //
@@ -525,8 +541,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Activate the unread tab with the highest (newest) or lowest (oldest)
     // lastAccessed timestamp across all tabs. Crosses workspaces using the
     // existing activateNativeTab helper.
-    async function activateUnvisitedByOrder(order) {
-      const tabs = getAllTabElements().filter((t) => t.hasAttribute("unread"));
+    //
+    // `excludeDomIds` is a list of tab DOM ids to skip — used by
+    // closeAndSelect when the user multi-selected (so we don't pick a
+    // successor that's about to be closed alongside).
+    async function activateUnvisitedByOrder(order, excludeDomIds) {
+      const skip = new Set(Array.isArray(excludeDomIds) ? excludeDomIds : []);
+      const tabs = getAllTabElements().filter(
+        (t) => t.hasAttribute("unread") && !skip.has(t.id)
+      );
       if (tabs.length === 0) return false;
       tabs.sort((a, b) => (a.lastAccessed || 0) - (b.lastAccessed || 0));
       const target = order === "newest" ? tabs[tabs.length - 1] : tabs[0];
@@ -2548,7 +2571,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         // Go to previous tab using lastAccessed, filtering out the current
         // tab and any tabs visible in split view.
-        async goToPreviousTab() {
+        //
+        // `excludeDomIds` (optional): extra DOM ids to skip — used by
+        // closeAndSelect on a multi-selection so the successor isn't one
+        // of the tabs that are about to be closed.
+        async goToPreviousTab(excludeDomIds) {
           const w = getWin();
           if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
 
@@ -2556,9 +2583,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const currentTab = w.gBrowser.selectedTab;
           const currentDomId = currentTab?.id;
 
-          // Collect DOM IDs of tabs currently visible to the user
-          const visibleDomIds = new Set();
-          if (currentDomId) visibleDomIds.add(currentDomId);
+          // Collect DOM IDs of tabs currently visible to the user, plus any
+          // caller-specified excludes.
+          const skipDomIds = new Set(Array.isArray(excludeDomIds) ? excludeDomIds : []);
+          if (currentDomId) skipDomIds.add(currentDomId);
 
           // If current tab is in a split view, find its sibling tabs
           if (w.gZenViewSplitter?._data) {
@@ -2567,7 +2595,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             );
             if (currentGroup) {
               for (const tab of currentGroup.tabs) {
-                visibleDomIds.add(tab.id);
+                skipDomIds.add(tab.id);
               }
             }
           }
@@ -2577,7 +2605,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // navigation — landing in an empty workspace would otherwise
           // make the next cmd+.,p jump back into the wrong workspace).
           const candidates = allTabs
-            .filter((t) => !visibleDomIds.has(t.id) && !t.hasAttribute("unread") && !isNewTabElement(t))
+            .filter((t) => !skipDomIds.has(t.id) && !t.hasAttribute("unread") && !isNewTabElement(t))
             .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
 
           if (candidates.length === 0) return false;
@@ -2587,21 +2615,25 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         // Resolve parent tab using the persisted UUID first (survives restart),
         // falling back to the runtime openerTab reference. Returns null if
-        // neither is available.
-        // (function is hoisted closure-scope above)
-
-        async goToParentTab() {
+        // neither is available. `excludeDomIds` skips parents/ancestors that
+        // are in the about-to-close set (multi-close case).
+        async goToParentTab(excludeDomIds) {
           ensureTabTracking();
           const w = getWin();
           if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
           const currentTab = w.gBrowser.selectedTab;
           if (!currentTab) return false;
-          const parent = resolveParentTab(currentTab);
-          if (!parent) return false;
-          return activateNativeTab(parent);
+          const skip = new Set(Array.isArray(excludeDomIds) ? excludeDomIds : []);
+          // Walk up the parent chain to find one that survives.
+          let candidate = resolveParentTab(currentTab);
+          while (candidate && skip.has(candidate.id)) {
+            candidate = resolveParentTab(candidate);
+          }
+          if (!candidate) return false;
+          return activateNativeTab(candidate);
         },
 
-        async goToNextSibling() {
+        async goToNextSibling(excludeDomIds) {
           ensureTabTracking();
           const w = getWin();
           if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
@@ -2609,12 +2641,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!currentTab) return false;
           const siblings = resolveSiblingTabs(currentTab);
           if (!siblings.length) return false;
+          const skip = new Set(Array.isArray(excludeDomIds) ? excludeDomIds : []);
           const idx = siblings.indexOf(currentTab);
-          if (idx < 0 || idx === siblings.length - 1) return false;
-          return activateNativeTab(siblings[idx + 1]);
+          if (idx < 0) return false;
+          for (let i = idx + 1; i < siblings.length; i++) {
+            if (!skip.has(siblings[i].id)) return activateNativeTab(siblings[i]);
+          }
+          return false;
         },
 
-        async goToPrevSibling() {
+        async goToPrevSibling(excludeDomIds) {
           ensureTabTracking();
           const w = getWin();
           if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
@@ -2622,12 +2658,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!currentTab) return false;
           const siblings = resolveSiblingTabs(currentTab);
           if (!siblings.length) return false;
+          const skip = new Set(Array.isArray(excludeDomIds) ? excludeDomIds : []);
           const idx = siblings.indexOf(currentTab);
           if (idx <= 0) return false;
-          return activateNativeTab(siblings[idx - 1]);
+          for (let i = idx - 1; i >= 0; i--) {
+            if (!skip.has(siblings[i].id)) return activateNativeTab(siblings[i]);
+          }
+          return false;
         },
 
-        async goToNextVerticalTab() {
+        async goToNextVerticalTab(excludeDomIds) {
           const w = getWin();
           if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
           const currentTab = w.gBrowser.selectedTab;
@@ -2636,9 +2676,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const sameWorkspace = getAllTabElements().filter(
             (t) => t.getAttribute("zen-workspace-id") === ws
           );
+          const skip = new Set(Array.isArray(excludeDomIds) ? excludeDomIds : []);
           const idx = sameWorkspace.indexOf(currentTab);
-          if (idx < 0 || idx === sameWorkspace.length - 1) return false;
-          return activateNativeTab(sameWorkspace[idx + 1]);
+          if (idx < 0) return false;
+          for (let i = idx + 1; i < sameWorkspace.length; i++) {
+            if (!skip.has(sameWorkspace[i].id)) return activateNativeTab(sameWorkspace[i]);
+          }
+          return false;
         },
 
         // Return the DOM id of the tab that would be focused if the active
@@ -2656,7 +2700,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         },
 
-        async goToPrevVerticalTab() {
+        async goToPrevVerticalTab(excludeDomIds) {
           const w = getWin();
           if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
           const currentTab = w.gBrowser.selectedTab;
@@ -2665,9 +2709,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const sameWorkspace = getAllTabElements().filter(
             (t) => t.getAttribute("zen-workspace-id") === ws
           );
+          const skip = new Set(Array.isArray(excludeDomIds) ? excludeDomIds : []);
           const idx = sameWorkspace.indexOf(currentTab);
           if (idx <= 0) return false;
-          return activateNativeTab(sameWorkspace[idx - 1]);
+          for (let i = idx - 1; i >= 0; i--) {
+            if (!skip.has(sameWorkspace[i].id)) return activateNativeTab(sameWorkspace[i]);
+          }
+          return false;
         },
 
         async goToNextWorkspace() {
@@ -2681,29 +2729,35 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async togglePinTab() {
           const w = getWin();
           if (!w || !w.gBrowser) return false;
-          const tab = w.gBrowser.selectedTab;
-          if (!tab) return false;
-          if (tab.hasAttribute("zen-essential")) return false;
-          if (tab.pinned) {
-            w.gBrowser.unpinTab(tab);
-          } else {
-            w.gBrowser.pinTab(tab);
+          // Drop essentials — they're not pinnable in the normal sense.
+          const tabs = getActionTargetTabs().filter((t) => !t.hasAttribute("zen-essential"));
+          if (tabs.length === 0) return false;
+          // Coherent toggle for mixed selections: if anything is
+          // currently unpinned, pin everything; otherwise unpin
+          // everything. Matches macOS Finder's group-toggle behavior
+          // and avoids the "half are pinned, half aren't" ambiguity.
+          const anyUnpinned = tabs.some((t) => !t.pinned);
+          for (const tab of tabs) {
+            if (anyUnpinned) w.gBrowser.pinTab(tab);
+            else w.gBrowser.unpinTab(tab);
           }
           return true;
         },
 
         async copyCurrentUrlMarkdown() {
-          const w = getWin();
-          if (!w || !w.gBrowser) return false;
-          const tab = w.gBrowser.selectedTab;
-          if (!tab) return false;
-          const url = tab.linkedBrowser?.currentURI?.spec || "";
-          if (!url) return false;
-          const title = (tab.label || "").replace(/[\[\]]/g, "");
-          const md = "[" + title + "](" + url + ")";
+          const tabs = getActionTargetTabs();
+          if (tabs.length === 0) return false;
+          const lines = [];
+          for (const tab of tabs) {
+            const url = tab.linkedBrowser?.currentURI?.spec || "";
+            if (!url) continue;
+            const title = (tab.label || "").replace(/[\[\]]/g, "");
+            lines.push("[" + title + "](" + url + ")");
+          }
+          if (lines.length === 0) return false;
           try {
             const clip = Cc["@mozilla.org/widget/clipboardhelper;1"].getService(Ci.nsIClipboardHelper);
-            clip.copyString(md);
+            clip.copyString(lines.join("\n"));
             return true;
           } catch (e) {
             return false;
@@ -2716,7 +2770,30 @@ this.zenWorkspaces = class extends ExtensionAPI {
           try {
             const SS = ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStore.sys.mjs").SessionStore;
             if (!SS || SS.getClosedTabCount(w) === 0) return false;
-            SS.undoCloseTab(w, 0);
+
+            // When the user closes a multi-selection (cmd+.,w on N tabs),
+            // SessionStore records each closure individually with its own
+            // closedAt timestamp. Multi-close happens in <50ms, so entries
+            // from the same batch cluster tightly. Walk the closed list
+            // from index 0 and restore every entry within BATCH_WINDOW_MS
+            // of the newest — that lifts the whole group back in one
+            // undo. Tabs closed earlier (a separate session of closing)
+            // sit outside the window and stay closed.
+            const BATCH_WINDOW_MS = 500;
+            const closedData = SS.getClosedTabData(w);
+            if (!closedData || closedData.length === 0) return false;
+            const newestClosedAt = closedData[0].closedAt || 0;
+            let count = 1;
+            for (let i = 1; i < closedData.length; i++) {
+              const at = closedData[i].closedAt || 0;
+              if (newestClosedAt - at <= BATCH_WINDOW_MS) count++;
+              else break;
+            }
+            // Each undoCloseTab(0) restores the head and shifts the list,
+            // so we always pop index 0 `count` times.
+            for (let i = 0; i < count; i++) {
+              SS.undoCloseTab(w, 0);
+            }
             return true;
           } catch (e) {
             return false;
@@ -2784,27 +2861,36 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async reloadTab() {
           const w = getWin();
           if (!w?.gBrowser) return false;
-          try { w.gBrowser.reloadTab(w.gBrowser.selectedTab); return true; }
-          catch (e) { return false; }
+          const tabs = getActionTargetTabs();
+          if (tabs.length === 0) return false;
+          for (const tab of tabs) {
+            try { w.gBrowser.reloadTab(tab); } catch (e) {}
+          }
+          return true;
         },
 
         async reloadTabSkipCache() {
           const w = getWin();
           if (!w?.gBrowser) return false;
-          try {
-            // Bypass cache: include FLAG_BYPASS_CACHE | FLAG_BYPASS_PROXY.
-            const flags = Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE
-                        | Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_PROXY;
-            w.gBrowser.reloadTab(w.gBrowser.selectedTab, flags);
-            return true;
-          } catch (e) { return false; }
+          const tabs = getActionTargetTabs();
+          if (tabs.length === 0) return false;
+          const flags = Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_CACHE
+                      | Ci.nsIWebNavigation.LOAD_FLAGS_BYPASS_PROXY;
+          for (const tab of tabs) {
+            try { w.gBrowser.reloadTab(tab, flags); } catch (e) {}
+          }
+          return true;
         },
 
         async duplicateTab() {
           const w = getWin();
           if (!w?.gBrowser) return false;
-          try { w.gBrowser.duplicateTab(w.gBrowser.selectedTab); return true; }
-          catch (e) { return false; }
+          const tabs = getActionTargetTabs();
+          if (tabs.length === 0) return false;
+          for (const tab of tabs) {
+            try { w.gBrowser.duplicateTab(tab); } catch (e) {}
+          }
+          return true;
         },
 
         async toggleReaderMode() {
@@ -2836,11 +2922,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         async toggleMute() {
-          const w = getWin();
-          const tab = w?.gBrowser?.selectedTab;
-          if (!tab) return false;
-          try { tab.toggleMuteAudio(); return true; }
-          catch (e) { return false; }
+          const tabs = getActionTargetTabs();
+          if (tabs.length === 0) return false;
+          for (const tab of tabs) {
+            try { tab.toggleMuteAudio(); } catch (e) {}
+          }
+          return true;
         },
 
         async resetPinnedTab() {
@@ -2937,15 +3024,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         async copyCurrentUrl() {
-          const w = getWin();
-          if (!w || !w.gBrowser) return false;
-          const tab = w.gBrowser.selectedTab;
-          if (!tab) return false;
-          const url = tab.linkedBrowser?.currentURI?.spec || "";
-          if (!url) return false;
+          const tabs = getActionTargetTabs();
+          if (tabs.length === 0) return false;
+          const urls = [];
+          for (const tab of tabs) {
+            const url = tab.linkedBrowser?.currentURI?.spec || "";
+            if (url) urls.push(url);
+          }
+          if (urls.length === 0) return false;
           try {
             const clip = Cc["@mozilla.org/widget/clipboardhelper;1"].getService(Ci.nsIClipboardHelper);
-            clip.copyString(url);
+            clip.copyString(urls.join("\n"));
             return true;
           } catch (e) {
             return false;
@@ -2953,12 +3042,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         // Activate the most-recently-accessed unread tab (newest unvisited).
-        async activateUnvisitedNewest() {
-          return activateUnvisitedByOrder("newest");
+        async activateUnvisitedNewest(excludeDomIds) {
+          return activateUnvisitedByOrder("newest", excludeDomIds);
         },
 
-        async activateUnvisitedOldest() {
-          return activateUnvisitedByOrder("oldest");
+        async activateUnvisitedOldest(excludeDomIds) {
+          return activateUnvisitedByOrder("oldest", excludeDomIds);
         },
 
         // List Zen folders (tab groups) for the move-to-folder menu.
@@ -2980,13 +3069,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async moveTabToFolder(folderId) {
           const w = getWin();
           if (!w?.gBrowser) return false;
-          try {
-            const tab = w.gBrowser.selectedTab;
-            const group = w.gBrowser.getTabGroupById?.(folderId);
-            if (!tab || !group || !w.gBrowser.moveTabToExistingGroup) return false;
-            w.gBrowser.moveTabToExistingGroup(tab, group);
-            return true;
-          } catch (e) { return false; }
+          const group = w.gBrowser.getTabGroupById?.(folderId);
+          if (!group || !w.gBrowser.moveTabToExistingGroup) return false;
+          const tabs = getActionTargetTabs();
+          if (tabs.length === 0) return false;
+          for (const tab of tabs) {
+            try { w.gBrowser.moveTabToExistingGroup(tab, group); } catch (e) {}
+          }
+          return true;
         },
 
         // Enumerate Firefox/Zen profiles from the toolkit profile service.
@@ -3023,20 +3113,32 @@ this.zenWorkspaces = class extends ExtensionAPI {
           throw new Error(`Profile not found: ${name}`);
         },
 
-        // Reopen the active tab in the given contextual identity (container).
+        // Reopen each selected tab in the given contextual identity
+        // (container). For each old tab: open a new tab in the container
+        // at the same URL, then remove the old. The previously-active
+        // tab's replacement becomes the new active tab.
         async reopenInContainer(userContextId) {
           const w = getWin();
           if (!w?.gBrowser) return false;
-          try {
-            const oldTab = w.gBrowser.selectedTab;
-            const url = oldTab.linkedBrowser?.currentURI?.spec || "about:newtab";
-            const newTab = w.gBrowser.addTab(url, {
-              userContextId,
-              triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
-            });
-            w.gBrowser.selectedTab = newTab;
-            return true;
-          } catch (e) { return false; }
+          const tabs = getActionTargetTabs();
+          if (tabs.length === 0) return false;
+          const wasActive = w.gBrowser.selectedTab;
+          let activeReplacement = null;
+          for (const oldTab of tabs) {
+            try {
+              const url = oldTab.linkedBrowser?.currentURI?.spec || "about:newtab";
+              const newTab = w.gBrowser.addTab(url, {
+                userContextId,
+                triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+              });
+              if (oldTab === wasActive) activeReplacement = newTab;
+              w.gBrowser.removeTab(oldTab);
+            } catch (e) {}
+          }
+          if (activeReplacement) {
+            try { w.gBrowser.selectedTab = activeReplacement; } catch (e) {}
+          }
+          return true;
         },
 
         // Close a tab by DOM id — works cross-workspace.
@@ -3192,6 +3294,30 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return w.gBrowser.selectedTabs
             .filter(t => !t.hasAttribute("zen-essential"))
             .map(t => t.id);
+        },
+
+        // DOM ids of tabs the next action should target. If the user has
+        // multi-selected in the sidebar, that's the full selection set —
+        // otherwise just the active tab. Used by the popup so the
+        // actions menu can show a "N selected" hint and so click/chord
+        // dispatch can target the right cohort.
+        async getActionTargetDomIds() {
+          const tabs = getActionTargetTabs();
+          return tabs.map((t) => t.id);
+        },
+
+        // Extension tab IDs (the numeric kind browser.tabs.* takes) for
+        // the action-target set. Used by background.js's moveTabToStart/
+        // End and unloadActiveTab where the WebExtension tabs API is the
+        // path of least resistance.
+        async getActionTargetExtIds() {
+          const tabs = getActionTargetTabs();
+          const ids = [];
+          for (const t of tabs) {
+            const id = getExtTabId(t);
+            if (id != null) ids.push(id);
+          }
+          return ids;
         },
 
         async getSelectedTabUrls() {
