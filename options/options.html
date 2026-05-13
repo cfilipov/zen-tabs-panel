@@ -66,6 +66,15 @@
     </section>
 
     <section>
+      <h2>Backdrop</h2>
+      <p class="description">Dim the content behind the palette while it's open. Disabling this leaves the underlying page fully visible; clicking outside the panel still dismisses the palette.</p>
+      <label class="toggle-row">
+        <input type="checkbox" id="dimBackdrop">
+        <span>Dim content behind the palette</span>
+      </label>
+    </section>
+
+    <section>
       <h2>Chord delay</h2>
       <p class="description">How long the chord engine waits after each key (in milliseconds) before opening the next menu. Applies to the leader pause (e.g. <code>cmd+.</code> alone), prefix pause (e.g. <code>cmd+., o</code> alone), and open-view pause (e.g. <code>cmd+., q</code> alone). Lower values feel snappier; higher values give you more time to think between keys. Set to <code>0</code> to show the menu immediately on every chord key — the menu effectively becomes the chord progress indicator.</p>
       <label class="toggle-row">

@@ -1195,6 +1195,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // setSkipOverlayAnimations after init. Used by createOverlay's
     // reveal path and destroyOverlay's dismiss path.
     let skipOverlayAnimations = false;
+    // Default matches STORAGE_DEFAULTS.dimBackdrop (true). When false,
+    // the overlay backdrop is transparent — the underlying page stays
+    // fully visible behind the panel. Background pushes the persisted
+    // value via setDimBackdrop after init.
+    let dimBackdrop = true;
+    function overlayBackdropColor() {
+      return dimBackdrop ? "rgba(0, 0, 0, 0.25)" : "transparent";
+    }
     // Services.ww.openWindow is non-writable/non-configurable on the XPCOM
     // wrapper, so direct assignment is silently rejected and defineProperty
     // throws. We replace Services.ww itself with a Proxy on an empty target
@@ -1325,7 +1333,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "display: flex",
         "align-items: center",
         "justify-content: center",
-        "background: rgba(0, 0, 0, 0.25)",
+        "background: " + overlayBackdropColor(),
         // Start fully hidden. The popup browser still loads (visibility
         // doesn't gate network/JS), so when the chord engine prerenders
         // during its wait the popup is ready by the time we reveal.
@@ -3680,6 +3688,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // fades inside an open palette are unaffected.
         async setSkipOverlayAnimations(skip) {
           skipOverlayAnimations = !!skip;
+        },
+
+        // Toggle the backdrop dim behind the palette. Background pushes
+        // this from the dimBackdrop setting. Updates the warm overlay's
+        // background immediately so the change is visible without
+        // waiting for the next chord arm.
+        async setDimBackdrop(enabled) {
+          dimBackdrop = !!enabled;
+          const w = getWin();
+          const overlay = w && w.document.getElementById(OVERLAY_ID);
+          if (overlay) overlay.style.background = overlayBackdropColor();
         },
 
         // User-facing single delay for chord timeouts. Background

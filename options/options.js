@@ -7,6 +7,7 @@ const els = {
   autoMoveDelay: document.getElementById("autoMoveDelay"),
   interceptExtensionPopups: document.getElementById("interceptExtensionPopups"),
   skipOverlayAnimations: document.getElementById("skipOverlayAnimations"),
+  dimBackdrop: document.getElementById("dimBackdrop"),
   chordDelayMs: document.getElementById("chordDelayMs"),
   status: document.getElementById("status"),
   companionMods: document.getElementById("companion-mods"),
@@ -20,6 +21,7 @@ async function loadSettings() {
   els.autoMoveDelay.value = String(settings.autoMoveDelay);
   els.interceptExtensionPopups.checked = settings.interceptExtensionPopups;
   els.skipOverlayAnimations.checked = settings.skipOverlayAnimations;
+  els.dimBackdrop.checked = settings.dimBackdrop;
   els.chordDelayMs.value = String(settings.chordDelayMs);
 }
 
@@ -68,6 +70,7 @@ async function saveSettings() {
     autoMoveDelay: Number(els.autoMoveDelay.value),
     interceptExtensionPopups: els.interceptExtensionPopups.checked,
     skipOverlayAnimations: els.skipOverlayAnimations.checked,
+    dimBackdrop: els.dimBackdrop.checked,
     chordDelayMs: Math.max(0, Number(els.chordDelayMs.value) || 0),
   });
 

@@ -632,6 +632,15 @@
         ]
       },
       {
+        "name": "setDimBackdrop",
+        "type": "function",
+        "async": true,
+        "description": "Toggle the dim wash behind the palette. When false, the backdrop is transparent and the page content shows through; clicks outside the panel still dismiss.",
+        "parameters": [
+          { "name": "enabled", "type": "boolean" }
+        ]
+      },
+      {
         "name": "setChordDelay",
         "type": "function",
         "async": true,

@@ -19,6 +19,7 @@ async function loadSettings() {
   syncAutoCloseAlarm();
   pushInterceptSetting();
   pushSkipAnimationsSetting();
+  pushDimBackdropSetting();
   pushChordDelaySetting();
 }
 
@@ -28,6 +29,10 @@ function pushInterceptSetting() {
 
 function pushSkipAnimationsSetting() {
   api.setSkipOverlayAnimations(!!settings.skipOverlayAnimations).catch(() => {});
+}
+
+function pushDimBackdropSetting() {
+  api.setDimBackdrop(!!settings.dimBackdrop).catch(() => {});
 }
 
 function pushChordDelaySetting() {
@@ -42,6 +47,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
   let autoCloseTouched = false;
   let interceptTouched = false;
   let skipAnimationsTouched = false;
+  let dimBackdropTouched = false;
   let chordDelayTouched = false;
   for (const key of Object.keys(changes)) {
     if (key in STORAGE_DEFAULTS) {
@@ -49,12 +55,14 @@ browser.storage.onChanged.addListener((changes, areaName) => {
       if (key === "autoCloseEnabled") autoCloseTouched = true;
       if (key === "interceptExtensionPopups") interceptTouched = true;
       if (key === "skipOverlayAnimations") skipAnimationsTouched = true;
+      if (key === "dimBackdrop") dimBackdropTouched = true;
       if (key === "chordDelayMs") chordDelayTouched = true;
     }
   }
   if (autoCloseTouched) syncAutoCloseAlarm();
   if (interceptTouched) pushInterceptSetting();
   if (skipAnimationsTouched) pushSkipAnimationsSetting();
+  if (dimBackdropTouched) pushDimBackdropSetting();
   if (chordDelayTouched) pushChordDelaySetting();
 });
 

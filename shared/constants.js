@@ -187,6 +187,11 @@ this.STORAGE_DEFAULTS = Object.freeze({
   // the panel just appears/disappears. In-popup sub-menu cross-fades
   // (navigating between views inside an open palette) still animate.
   skipOverlayAnimations: false,
+  // When true, the overlay backdrop dims the content behind the palette
+  // (the default rgba(0,0,0,0.25) wash). When false, the backdrop is
+  // transparent and clicks outside the panel still dismiss (the
+  // overlay div continues to fill the viewport and capture mousedown).
+  dimBackdrop: true,
   // Single user-facing delay for all chord timeouts: root timeout
   // (after leader, before menu reveals if no chord key), prefix
   // timeout (after descending into a prefix node), and reveal timeout
