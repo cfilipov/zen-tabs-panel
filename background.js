@@ -528,11 +528,21 @@ async function handleChordResult(result) {
   }
 }
 
-// cmd+ctrl+. used to be a WebExtension `commands` shortcut routed through
-// here. With the dual-autonomous-engine design, both the chrome engine and
-// the per-content-process engine detect cmd+ctrl+. locally as an alternate
-// chord leader (same as cmd+cmd), so the manifest command is gone and
-// we don't need a commands.onCommand handler. See CHORD_LEAK_HANDOFF.md.
+// The default cmd+ctrl+. shortcut is detected LOCALLY by the chrome engine
+// and the per-content-process engine via isAlternateLeader (an alternate
+// chord leader, same as cmd+cmd). The default never reaches this handler.
+//
+// However, the `commands` entry in manifest.json is still declared so the
+// extension appears in about:addons → Manage Extension Shortcuts. If the
+// user customizes the shortcut to something different, Firefox's keyset
+// routes the new combo here instead of the engines, and we open the
+// palette directly (no chord-chain behavior on the customized binding —
+// the engines only know the default).
+browser.commands.onCommand.addListener((command) => {
+  if (command === "open-palette") {
+    api.showPalette({ skipChord: true });
+  }
+});
 
 // The chord engines (in experiment/api.js and frame script) fire chord
 // results back via this event. We dispatch the resulting action (if any).

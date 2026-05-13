@@ -45,6 +45,13 @@
     "default_title": "Zen Tabs Panel"
   },
 
+  "commands": {
+    "open-palette": {
+      "suggested_key": { "default": "MacCtrl+Command+Period" },
+      "description": "Open tab actions palette"
+    }
+  },
+
   "options_ui": {
     "page": "options/options.html",
     "open_in_tab": true
