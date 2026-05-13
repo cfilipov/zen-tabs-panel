@@ -724,6 +724,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
     const PANEL_ID = "zen-tabs-panel-panel";
     const BROWSER_ID = "zen-tabs-panel-browser";
 
+    // Per-view dimensions. `width` is fixed (so chord-chain navigation
+    // doesn't reflow horizontally). `height` is a MAXIMUM — the popup
+    // measures its natural content height after rendering and sends a
+    // resize-panel message with the actual height; resizePanelToView
+    // caps that to VIEW_SIZES[view].height so list-y views with many
+    // rows still get a scrollable bounded panel instead of growing
+    // off-screen.
     const VIEW_SIZES = {
       actions:              { width: 960, height: 604 },
       "child-tabs":         { width: 720, height: 604 },
@@ -743,6 +750,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "move-to-workspace":  { width: 600, height: 604 },
       "close-and-select":   { width: 600, height: 604 },
       "move-to-folder":     { width: 360, height: 604 },
+      "split-view":         { width: 360, height: 604 },
       "open-in-container":  { width: 320, height: 604 },
       "extension-popup":    { width: 360, height: 500 },
     };
@@ -1545,17 +1553,26 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // view's dimensions. Used for navigation between our own views — the
     // popup is staying in the same browser and will render the new view
     // itself, so chrome only needs to drive the size transition.
-    function resizePanelToView(view) {
+    //
+    // `measuredHeight` (optional): the popup measures the natural content
+    // height of the rendered view and passes it here. We cap to the
+    // VIEW_SIZES[view].height (which acts as a max) so list-y views with
+    // many rows stay bounded and scroll internally; short menus
+    // (reorder, split, etc.) shrink to fit their content.
+    function resizePanelToView(view, measuredHeight) {
       const w = getWin();
       if (!w) return;
       const panel = w.document.getElementById(PANEL_ID);
       const br = w.document.getElementById(BROWSER_ID);
       if (!panel || !br) return;
       const targetSize = getViewSize(view);
+      const height = (typeof measuredHeight === "number" && measuredHeight > 0)
+        ? Math.min(Math.ceil(measuredHeight), targetSize.height)
+        : targetSize.height;
       panel.style.width = targetSize.width + "px";
-      panel.style.height = targetSize.height + "px";
+      panel.style.height = height + "px";
       br.style.width = targetSize.width + "px";
-      br.style.height = targetSize.height + "px";
+      br.style.height = height + "px";
     }
 
     // Resize the panel and browser to match the popup body's natural size.
@@ -3637,9 +3654,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         },
 
-        async resizePanel(view) {
+        async resizePanel(view, height) {
           if (!isOverlayOpen()) return;
-          resizePanelToView(view);
+          resizePanelToView(view, height);
         },
 
         async navigateBack() {

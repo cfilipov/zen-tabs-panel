@@ -404,9 +404,10 @@
         "name": "resizePanel",
         "type": "function",
         "async": true,
-        "description": "Resize the panel/browser to a given view's natural size. Used by the popup after its in-place cross-fade so panel resize happens after content settles.",
+        "description": "Resize the panel/browser. Width comes from VIEW_SIZES[view]. The optional `height` is the popup's measured natural content height; chrome caps it to VIEW_SIZES[view].height (acts as a max). Omit `height` to use the preset.",
         "parameters": [
-          { "name": "view", "type": "string" }
+          { "name": "view", "type": "string" },
+          { "name": "height", "type": "number", "optional": true }
         ]
       },
       {

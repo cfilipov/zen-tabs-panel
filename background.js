@@ -530,7 +530,7 @@ const SYNC_HANDLERS = Object.freeze({
     await api.focusPalette().catch(() => {});
   },
   [MSG.OPEN_EXTENSION_POPUP]: (m) => api.openExtensionPopup(m.extensionId),
-  [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view),
+  [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view, m.height),
 });
 
 // Hide palette, then run an action. Used by the message handler to keep

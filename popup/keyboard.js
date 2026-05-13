@@ -512,6 +512,7 @@ const _bridgeExt = typeof browser !== "undefined" ? browser : chrome;
     const handler = VIEWS[targetView];
     if (handler) {
       try { await handler({}); } catch (e) {}
+      if (typeof requestPanelResize === "function") requestPanelResize(targetView);
     }
   }
 
@@ -581,7 +582,15 @@ async function handleWarmRearm(data) {
   }
   if (myGen !== warmRearmGen) return;
 
-  _bridgeExt.runtime.sendMessage({ type: MSG.RESIZE_PANEL, view }).catch(() => {});
+  // Resize to fit the rendered content (popup.js helper, in scope via
+  // shared script-globals). If popup.js hasn't loaded yet — e.g. a
+  // chord arm landed mid-popup-load — fall back to a view-only resize
+  // so chrome still updates the preset width.
+  if (typeof requestPanelResize === "function") {
+    requestPanelResize(view);
+  } else {
+    _bridgeExt.runtime.sendMessage({ type: MSG.RESIZE_PANEL, view }).catch(() => {});
+  }
 
   // Same POPUP_READY exchange as the IIFE. The inst echoed here tells
   // chrome to drain into THIS rearm cycle (stale inst → bg returns

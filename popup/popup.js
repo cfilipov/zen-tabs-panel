@@ -977,6 +977,39 @@ async function runViewSwitchInvisibly(handler, params) {
   }
 }
 
+// Measure the rendered view's natural height so chrome can shrink the
+// panel to fit. We can't use listEl.scrollHeight here — when the
+// content fits, scrollHeight equals listEl's rendered height, which is
+// `flex: 1` inside a 100vh #palette and so always reports the full
+// viewport (604px) regardless of how short the content is. Sum the
+// list's direct children to get the actual natural size.
+//
+// Chrome caps this to VIEW_SIZES[view].height — list-y views with many
+// rows stay bounded and scroll inside the list; short menus (reorder,
+// split, etc.) shrink to fit.
+function measureNaturalHeight() {
+  const header = document.getElementById("header");
+  const indicator = document.getElementById("page-indicator");
+  // #list has 6px top + 2px bottom padding (see popup.css #list).
+  let listContentH = 8;
+  for (const child of listEl.children) {
+    listContentH += child.offsetHeight;
+  }
+  let total = listContentH;
+  if (header && !header.classList.contains("hidden") && header.children.length > 0) {
+    total += header.offsetHeight;
+  }
+  if (indicator && !indicator.classList.contains("hidden")) {
+    total += indicator.offsetHeight;
+  }
+  return total;
+}
+
+function requestPanelResize(view) {
+  const height = measureNaturalHeight();
+  ext.runtime.sendMessage({ type: "resize-panel", view, height }).catch(() => {});
+}
+
 async function navigateToView(view, params) {
   if (view === "extension-popup") {
     ext.runtime.sendMessage({ type: "navigate-view", view, params: params ? JSON.stringify(params) : undefined }).catch(() => {});
@@ -989,8 +1022,8 @@ async function navigateToView(view, params) {
   ext.runtime.sendMessage({ type: "navigate-view", view, params: params ? JSON.stringify(params) : undefined }).catch(() => {});
   // Cross-fade content at the old panel size — no reflow during the fade.
   await runViewSwitchInvisibly(handler, params);
-  // Now resize the panel to the new view's target size.
-  ext.runtime.sendMessage({ type: "resize-panel", view }).catch(() => {});
+  // Now resize the panel to fit the new view's natural content height.
+  requestPanelResize(view);
 }
 
 async function navigateBack() {
@@ -999,7 +1032,7 @@ async function navigateBack() {
   if (!prev || !prev.view) return;
   const handler = VIEWS[prev.view];
   if (handler) await runViewSwitchInvisibly(handler, prev.params);
-  ext.runtime.sendMessage({ type: "resize-panel", view: prev.view }).catch(() => {});
+  requestPanelResize(prev.view);
 }
 
 function activateAction(action) {
@@ -1062,12 +1095,16 @@ async function init() {
 
   if (!initialView) {
     await showActionsMenu();
+    requestPanelResize("actions");
     return;
   }
 
   await fetchWorkspaceMap();
   const handler = VIEWS[initialView];
-  if (handler) await handler({ domain: paramDomain, parentDomId: paramParentDomId });
+  if (handler) {
+    await handler({ domain: paramDomain, parentDomId: paramParentDomId });
+    requestPanelResize(initialView);
+  }
 }
 
 // Exposed for popup/keyboard.js — the bridge-replay path awaits this so the

@@ -64,12 +64,12 @@ function showSplitView() {
   ui.selectedIndex = -1;
   listEl.innerHTML = "";
 
-  const grid = document.createElement("div");
-  grid.className = "actions-grid actions-grid-2col";
-
+  // Single-column list (matches the move-to-folder / new-container-tab
+  // layout). Four entries don't need a two-column grid and the narrower
+  // width feels less like wasted whitespace.
   for (const opt of opts) {
     const el = document.createElement("div");
-    el.className = "list-item compact-item";
+    el.className = "list-item";
 
     el.innerHTML = `
       <span class="item-icon-placeholder">${getIcon(opt.icon)}</span>
@@ -85,10 +85,9 @@ function showSplitView() {
       ext.runtime.sendMessage({ type: opt.submenuAction }).catch(() => {});
     });
 
-    grid.appendChild(el);
+    listEl.appendChild(el);
   }
 
-  listEl.appendChild(grid);
   updateSelection();
   updateHeader("Split");
 }
