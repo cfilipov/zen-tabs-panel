@@ -368,6 +368,13 @@
         "parameters": []
       },
       {
+        "name": "armChord",
+        "type": "function",
+        "async": true,
+        "description": "Force-arm the chord engines from an external trigger (e.g. user-customized commands shortcut). Chrome engine arms locally; the selected tab's content engine arms via a targeted message.",
+        "parameters": []
+      },
+      {
         "name": "revealPalette",
         "type": "function",
         "async": true,

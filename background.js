@@ -528,19 +528,19 @@ async function handleChordResult(result) {
   }
 }
 
-// The default cmd+ctrl+. shortcut is detected LOCALLY by the chrome engine
-// and the per-content-process engine via isAlternateLeader (an alternate
-// chord leader, same as cmd+cmd). The default never reaches this handler.
+// The customizable open-palette shortcut (default cmd+.) is matched by
+// Firefox's keyset at chrome level and routed here. We arm the chord
+// engines so the shortcut behaves as a chord leader — the user can
+// chain chord keys after it (e.g. cmd+., p fires the action without
+// showing UI, just like cmd+cmd, p).
 //
-// However, the `commands` entry in manifest.json is still declared so the
-// extension appears in about:addons → Manage Extension Shortcuts. If the
-// user customizes the shortcut to something different, Firefox's keyset
-// routes the new combo here instead of the engines, and we open the
-// palette directly (no chord-chain behavior on the customized binding —
-// the engines only know the default).
+// armChord arms the chrome engine synchronously and sends a targeted
+// message to the focused tab's content engine. There's a small IPC race
+// (next chord key typed <~10ms after the leader could arrive at an idle
+// content engine), but typical chord typing speed leaves enough margin.
 browser.commands.onCommand.addListener((command) => {
   if (command === "open-palette") {
-    api.showPalette({ skipChord: true });
+    api.armChord();
   }
 });
 

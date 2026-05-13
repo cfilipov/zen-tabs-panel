@@ -47,7 +47,7 @@
 
   "commands": {
     "open-palette": {
-      "suggested_key": { "default": "MacCtrl+Command+Period" },
+      "suggested_key": { "default": "Command+Period" },
       "description": "Open tab actions palette"
     }
   },

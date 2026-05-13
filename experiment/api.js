@@ -1884,13 +1884,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // fires (slow path) or the popup itself reveals (action path).
         createOverlay();
       },
-      onAction: (payload) => dispatchChordAction(payload),
-      onOpenView: (view, snapshot, source) =>
-        enterBridgeFromOpenView(view, snapshot, "chrome", source),
+      // Any chrome-engine terminal/transition event resets content engines
+      // that may have been armed in parallel (armChord arms both so a
+      // user-customized commands shortcut works regardless of focus).
+      // Without this, the content engine's stale root timer would fire
+      // ~400ms later and pop an unwanted menu after a chrome-side action.
+      onAction: (payload) => {
+        try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
+        dispatchChordAction(payload);
+      },
+      onOpenView: (view, snapshot, source) => {
+        try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
+        enterBridgeFromOpenView(view, snapshot, "chrome", source);
+      },
       onStateChange: () => {},
       onCancel: () => {
-        // Chord cancelled (unknown key, Escape, blur). If a prerender is
-        // still hidden, tear it down.
+        try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
         if (pendingReveal) destroyOverlay();
       },
       onBridgeKey: (k) => forwardKeyToPopup(k),
@@ -2039,6 +2048,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "addEventListener('DOMWindowCreated', attach, true);\n" +
         "addMessageListener('ZenChord:ExitBridge', function(){ try { __engine.exitBridge(); } catch(e){} });\n" +
         "addMessageListener('ZenChord:Reset', function(){ try { __engine.reset(); } catch(e){} });\n" +
+        // External-trigger arm — chrome calls this when the open-palette
+        // commands shortcut fires. Sent to the focused tab's MM only.
+        "addMessageListener('ZenChord:Arm', function(){\n" +
+        "  if (__shutdown) return;\n" +
+        "  try { __engine.arm(); } catch(e){}\n" +
+        "});\n" +
         // Shutdown signal: extension reload broadcasts this. We detach the
         // engine and stop responding so a stale frame script (which Firefox
         // doesn't unload on extension reload) doesn't double-fire alongside
@@ -2079,8 +2094,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const data = m && m.data;
       return data && data.__gen === CHORD_GENERATION;
     }
+    // Whenever a CONTENT engine fires a chord outcome, the chrome engine
+    // (if armed in parallel via armChord) is now stale — its root timer
+    // would fire later and pop an unwanted menu. Reset it. The reverse
+    // (chrome engine firing while content armed) is handled by content
+    // engines themselves via the ZenChord:Reset broadcast.
+    function resetChromeEngineIfArmed() {
+      try { if (chromeEngine && chromeEngine.isArmed()) chromeEngine.reset(); } catch (e) {}
+    }
     function onContentAction(m) {
       if (!isCurrentGen(m)) return;
+      resetChromeEngineIfArmed();
       dispatchChordAction(m.data);
     }
     function onContentArmed(m) {
@@ -2092,11 +2116,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function onContentOpenView(m) {
       if (!isCurrentGen(m)) return;
+      resetChromeEngineIfArmed();
       const data = m.data;
       enterBridgeFromOpenView(data.view, data.snapshot, "content", data.source);
     }
     function onContentCancel(m) {
       if (!isCurrentGen(m)) return;
+      resetChromeEngineIfArmed();
       if (pendingReveal) destroyOverlay();
     }
     function onContentBridgeKey(m) {
@@ -3207,8 +3233,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         //   - browserAction.onClicked passes {skipChord:true} → opens immediately
         //   - any caller can pass a view string to open directly to a submenu
         //
-        // The cmd+cmd / cmd+ctrl+. chord leaders no longer route through
-        // here — both engines detect them locally on keydown.
+        // The cmd+cmd chord leader no longer routes through here — both
+        // engines detect it locally on keyup. The configurable shortcut
+        // (default cmd+.) routes through background.js → armChord.
         async showPalette(viewOrOpts) {
           let view = null;
           if (typeof viewOrOpts === "string") {
@@ -3243,6 +3270,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         async hidePalette() {
           destroyOverlay();
+        },
+
+        // Force-arm the chord engines from an external trigger — used by
+        // background.js's commands.onCommand handler so the configurable
+        // open-palette shortcut (default cmd+.) acts as a chord leader
+        // rather than just opening the palette. We arm the chrome engine
+        // synchronously and send a targeted message to the currently-
+        // focused tab's content process so its engine arms too — without
+        // this the user's next chord key would reach an idle content
+        // engine and leak through to the page.
+        async armChord() {
+          try { if (chromeEngine) chromeEngine.arm(); } catch (e) {}
+          const w = getWin();
+          const tab = w && w.gBrowser && w.gBrowser.selectedTab;
+          const br = tab && tab.linkedBrowser;
+          if (br && br.messageManager) {
+            try { br.messageManager.sendAsyncMessage("ZenChord:Arm"); } catch (e) {}
+          }
         },
 
         // Popup-driven reveal. Called when the popup's own reveal-on-pause

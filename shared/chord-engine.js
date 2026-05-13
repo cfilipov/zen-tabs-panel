@@ -82,10 +82,14 @@
     return e.key;
   }
 
-  // Alternate chord leader: cmd+ctrl+. The same gesture as cmd+cmd but
-  // typeable as a single shortcut for users who prefer it.
-  function isAlternateLeader(e) {
-    return !!(e.metaKey && e.ctrlKey && !e.altKey && e.key === ".");
+  // Alternate chord leader detection used to live here for the old
+  // hardcoded cmd+ctrl+. shortcut. With the customizable commands-API
+  // shortcut routed via background.js's onCommand → armChord, the engine
+  // no longer needs to detect a fixed combo — kept as an always-false
+  // stub so the keydown path below remains structurally identical to
+  // its prior form.
+  function isAlternateLeader(_e) {
+    return false;
   }
 
   // Build the chord tree from the keybindings registry. Same shape used by
@@ -450,6 +454,9 @@
       setInitialState,
       exitBridge,
       reset,
+      arm,           // exposed so an external trigger (e.g. commands.onCommand
+                     // for a user-customized chord leader shortcut) can force
+                     // the engine into armed-root from outside the keydown path
       isArmed,
       serializeState,
     };

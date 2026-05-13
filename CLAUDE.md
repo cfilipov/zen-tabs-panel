@@ -55,6 +55,14 @@ The XUL `<keyset>` mechanism that Firefox uses for `cmd+T`, `cmd+W`, etc. **does
 
 This is a deliberate Firefox property, not a bug. It's also why a chrome-side JS `preventDefault` (even with `mozSystemGroup: true`) cannot synchronously stop a content-routed plain-letter keystroke — that pipeline is reserved for command-key shortcuts.
 
+### The configurable single-keystroke chord leader
+
+In addition to `cmd+cmd`, a modifier-key shortcut (default `cmd+.`) acts as a single-keystroke chord leader. Declared in `manifest.json`'s `commands.open-palette` so it appears in `about:addons` → Manage Extension Shortcuts and is user-customizable. Firefox's keyset matches the combo at chrome level (modifier-key keysets DO match; see above) and routes it via `browser.commands.onCommand` to `background.js`, which calls `api.armChord()` to put the engines into `armed-root`. The user's next chord key is then captured normally — same chord-chain behavior as `cmd+cmd`.
+
+`armChord` arms the chrome engine synchronously and sends a targeted message to the currently-focused tab's content `messageManager`. The small IPC window (~10ms before the content engine acks the arm) is a race risk only for ultra-fast typing immediately after the leader; typical typing speeds leave margin.
+
+State desync between chrome and content engines after a cross-process action is handled both ways: chrome's content-event handlers (`onContentAction`/`OpenView`/`Cancel`) reset the chrome engine if armed, and the chrome engine's own callbacks broadcast `ZenChord:Reset` to all content engines.
+
 ### Dynamic chord entries (extension-popup quick-launch)
 
 `Shift+1..9` are bound at runtime to the first 9 installed extensions' popups (Bitwarden, uBlock, etc.) by `buildExtensionList()` in `experiment/api.js`. The chrome-side `CHORD_TREE.children["Shift+N"]` is mutated directly. Each frame-script engine receives the same entries via a `ZenChord:AddChord` broadcast (and any frame script that initialized late asks for them via `ZenChord:Hello`, which chrome replies to per-frame).
