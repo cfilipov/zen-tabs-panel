@@ -278,6 +278,16 @@ html, body {
   background: var(--ztt-bg-selected);
 }
 
+/* Activation flash: distinct from .selected (gray arrow-key cursor). Uses
+   the system accent color so the user can see which item they activated
+   via chord key, click, or Enter. Briefly applied then removed by
+   flashActivated() in keyboard.js. !important so column-specific styles
+   (.section-column .list-item, .compact-item, etc.) can't override. */
+.list-item.activated {
+  background: AccentColor !important;
+  color: AccentColorText !important;
+}
+
 .list-item.disabled {
   opacity: 0.35;
   cursor: default;

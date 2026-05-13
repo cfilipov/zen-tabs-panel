@@ -92,6 +92,26 @@ KEY_HANDLERS["Backspace"] = (e) => {
 // In the actions menu (and similarly-structured submenus), a digit 1-9
 // activates a workspace switch row, and a single letter matches an
 // item.hotkey. These views never display tabs as numbered rows.
+// Briefly add the .activated class to a list-item so the user can
+// see which row they triggered. Distinct from .selected (gray arrow-
+// key cursor) — uses the system AccentColor for an unambiguous
+// "this is what fired" indicator. Called from chord-key matches,
+// click handler, and Enter activation. Accepts either an index into
+// navigableListItems() or the element directly.
+function flashActivated(elOrIdx) {
+  let el = null;
+  if (typeof elOrIdx === "number") {
+    if (elOrIdx < 0) return;
+    const items = navigableListItems();
+    el = items[elOrIdx];
+  } else {
+    el = elOrIdx;
+  }
+  if (!el || !el.classList) return;
+  el.classList.add("activated");
+  setTimeout(() => { try { el.classList.remove("activated"); } catch (e) {} }, 400);
+}
+
 function handleActionsKey(e) {
   // Shift+1..9 inside the actions view opens the Nth extension's popup
   // in our overlay (mirrors the page-1 footer strip). Bare 1..9 still
@@ -111,10 +131,13 @@ function handleActionsKey(e) {
   const num = parseInt(e.key, 10);
   if (!isNaN(num) && num >= 1 && num <= 9) {
     const wsItems = listEl.querySelectorAll(".list-item[data-workspace-switch-id]");
-    for (const wsEl of wsItems) {
+    for (let i = 0; i < wsItems.length; i++) {
+      const wsEl = wsItems[i];
       const badge = wsEl.querySelector(".item-badge");
       if (badge && badge.textContent === String(num)) {
         e.preventDefault();
+        const allListItems = navigableListItems();
+        flashActivated(Array.prototype.indexOf.call(allListItems, wsEl));
         ext.runtime.sendMessage({ type: "switch-workspace", workspaceId: wsEl.dataset.workspaceSwitchId }).catch(() => {});
         return;
       }
@@ -129,16 +152,27 @@ function handleActionsKey(e) {
   if (listItems[idx]?.classList.contains("disabled")) return;
 
   e.preventDefault();
+  flashActivated(idx);
   const item = ui.items[idx];
-  if (item.reorderAction) {
-    ext.runtime.sendMessage({ type: item.reorderAction }).catch(() => {});
-  } else if (item.closeAndSelectAction) {
-    ext.runtime.sendMessage({ type: item.closeAndSelectAction }).catch(() => {});
-  } else if (item.submenuAction) {
-    ext.runtime.sendMessage({ type: item.submenuAction }).catch(() => {});
-  } else {
-    activateAction(item);
-  }
+  const fire = () => {
+    if (item.reorderAction) {
+      ext.runtime.sendMessage({ type: item.reorderAction }).catch(() => {});
+    } else if (item.closeAndSelectAction) {
+      ext.runtime.sendMessage({ type: item.closeAndSelectAction }).catch(() => {});
+    } else if (item.submenuAction) {
+      ext.runtime.sendMessage({ type: item.submenuAction }).catch(() => {});
+    } else {
+      activateAction(item);
+    }
+  };
+  // Briefly hold the menu visible (with the row showing the .activated
+  // flash) before firing the action. Without this delay, the action's
+  // navigateToView immediately replaces the visible content with the
+  // cross-fade snapshot — the flash only shows on the snapshot mid-fade,
+  // which is barely perceptible. Holding here renders the AccentColor
+  // background on the real, painted DOM for ~100ms before the drill
+  // starts, so the user sees a clear "this is what fired" indicator.
+  setTimeout(fire, 100);
 }
 
 // In list-style views (tab lists, history, domains, etc.), special keys
@@ -245,7 +279,11 @@ async function handleListViewKey(e) {
     if (badge && badge.textContent === String(num)) {
       e.preventDefault();
       const firstItem = row.querySelector(".list-item[data-dom-id]");
-      if (firstItem) activateTab(firstItem.dataset.domId);
+      if (firstItem) {
+        const allListItems = navigableListItems();
+        flashActivated(Array.prototype.indexOf.call(allListItems, firstItem));
+        activateTab(firstItem.dataset.domId);
+      }
       return;
     }
   }
@@ -258,6 +296,7 @@ async function handleListViewKey(e) {
     if (!matched) continue;
 
     e.preventDefault();
+    flashActivated(i);
     const item = ui.items[i];
     if (item?.navIndex !== undefined && !item?.isCurrent) {
       ext.runtime.sendMessage({ type: "navigate-to-history-index", index: item.navIndex }).catch(() => {});

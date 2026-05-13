@@ -43,6 +43,16 @@ function isDelegateSkipped(row) {
   return false;
 }
 
+// Activation flash (capture phase, fires before any view-specific click
+// handler in bubble phase). Catches clicks on any .list-item except the
+// inline close button — that one's about to remove the row anyway, and
+// the flash would be confusing.
+listEl.addEventListener("click", (e) => {
+  if (e.target.closest(".item-close")) return;
+  const row = e.target.closest(".list-item");
+  if (row && !row.classList.contains("disabled")) flashActivated(row);
+}, { capture: true });
+
 listEl.addEventListener("click", (e) => {
   const row = e.target.closest("[data-dom-id]");
   if (!row || row.classList.contains("disabled") || isDelegateSkipped(row)) return;
@@ -884,6 +894,8 @@ function activateSelected() {
   const item = ui.items[ui.selectedIndex];
   const listItems = navigableListItems();
   if (isUnselectableRow(listItems[ui.selectedIndex])) return;
+
+  flashActivated(ui.selectedIndex);
 
   if (item.navIndex !== undefined && !item.isCurrent) {
     ext.runtime.sendMessage({ type: "navigate-to-history-index", index: item.navIndex }).catch(() => {});
