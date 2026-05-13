@@ -2167,9 +2167,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (w && id != null) try { w.clearTimeout(id); } catch (e) {}
       },
       onArmed: () => {
-        // Prerender the popup at the default view off-screen so it loads
-        // during the chord wait window. Hidden until the reveal timer
-        // fires (slow path) or the popup itself reveals (action path).
         createOverlay();
         hudOnArmed();
       },
@@ -2188,6 +2185,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         enterBridgeFromOpenView(view, snapshot, "chrome", source);
       },
       onStateChange: (snapshot) => {
+        // Chrome engine descended into a prefix. Reset content engines
+        // (armed in parallel via armChord) so their stale root timers
+        // don't fire ~250ms later and overwrite the prefix prerender
+        // with the default actions view. Mirror of the
+        // resetChromeEngineIfArmed call in onContentStateChange.
+        try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
         hudOnStateChange(snapshot);
         prerenderPrefixView(snapshot);
       },
@@ -2431,6 +2434,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function onContentStateChange(m) {
       if (!isCurrentGen(m)) return;
+      // Content engine descended into a prefix. The chrome engine
+      // (armed in parallel via armChord) needs to be reset; otherwise
+      // its 250ms root timer fires before the content engine's 300ms
+      // prefix timer and pops the default actions view before the
+      // intended prefix view can take over.
+      resetChromeEngineIfArmed();
       const data = m.data;
       hudOnStateChange(data && data.snapshot);
       prerenderPrefixView(data && data.snapshot);
