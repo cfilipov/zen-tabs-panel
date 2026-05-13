@@ -274,7 +274,7 @@ function handleListViewKey(e) {
   }
 }
 
-document.addEventListener("keydown", (e) => {
+function dispatchKey(e) {
   const handler = KEY_HANDLERS[e.key];
   if (handler) {
     handler(e);
@@ -285,4 +285,71 @@ document.addEventListener("keydown", (e) => {
   } else {
     handleListViewKey(e);
   }
+}
+
+// Chord-bridge handshake: the chord engine in the experiment API may have
+// buffered keystrokes during the gap between firing the chord outcome and
+// this listener being live. Until those have been drained and replayed,
+// hold any live keys we receive so we don't process them out of order.
+let chordBridgeReady = false;
+const heldLiveKeys = [];
+
+function snapshotKeyEvent(e) {
+  return {
+    key: e.key, code: e.code,
+    shiftKey: e.shiftKey, altKey: e.altKey,
+    ctrlKey: e.ctrlKey, metaKey: e.metaKey,
+  };
+}
+
+function makeSyntheticKeyEvent(d) {
+  return new KeyboardEvent("keydown", { ...d, bubbles: false, cancelable: true });
+}
+
+document.addEventListener("keydown", (e) => {
+  if (!chordBridgeReady) {
+    e.preventDefault();
+    e.stopPropagation();
+    heldLiveKeys.push(snapshotKeyEvent(e));
+    return;
+  }
+  dispatchKey(e);
 });
+
+// keyboard.js loads before popup.js, so `ext` is in its TDZ here. Use the
+// browser/chrome fallback directly for the handshake.
+const _bridgeExt = typeof browser !== "undefined" ? browser : chrome;
+
+(async () => {
+  let buffered = [];
+  try {
+    const reply = await _bridgeExt.runtime.sendMessage({ type: MSG.POPUP_READY });
+    // POPUP_READY reply shape: { buffered, stateSnapshot }. The buffered
+    // array is keys the chord engine captured during the
+    // chord-fires-open-view → popup-keyboard-attached gap. stateSnapshot
+    // is the chord-tree path the engine was at when bridging began
+    // (e.g. ["O"] for Reorder prefix); for the popup that's already
+    // implied by the opened view (URL ?view= param) and dispatchKey's
+    // handleActionsKey matches against the current view's items, so the
+    // snapshot isn't separately consumed here.
+    if (reply && Array.isArray(reply.buffered)) buffered = reply.buffered;
+    else if (Array.isArray(reply)) buffered = reply; // backwards-compat
+  } catch (err) {
+    // Background may not yet be ready, or there's no bridge to drain; either
+    // way, fall through and just process any held live keys.
+  }
+
+  // Don't replay before popup.js's init() has had a chance to set ui state
+  // and kick off the initial view render — otherwise dispatchKey lands on
+  // an unrendered view and the buffered key is wasted. DOMContentLoaded
+  // tells us all scripts have run; one rAF lets the first paint settle.
+  if (document.readyState === "loading") {
+    await new Promise((r) => document.addEventListener("DOMContentLoaded", r, { once: true }));
+  }
+  await new Promise((r) => requestAnimationFrame(r));
+
+  for (const k of buffered) dispatchKey(makeSyntheticKeyEvent(k));
+  for (const k of heldLiveKeys) dispatchKey(makeSyntheticKeyEvent(k));
+  heldLiveKeys.length = 0;
+  chordBridgeReady = true;
+})();

@@ -130,7 +130,31 @@ this.MSG = Object.freeze({
   // Foreign extension popup hosting
   LIST_EXTENSIONS:                "list-extensions",
   OPEN_EXTENSION_POPUP:           "open-extension-popup",
+
+  // Chord → popup key bridge: popup sends this once its keydown listener is
+  // attached; background replies with the array of keys the chord engine
+  // buffered during the chrome-to-popup handoff (so the popup can replay them
+  // in order before processing any live keys it queued during the handshake).
+  POPUP_READY:                    "popup-ready",
 });
+
+// Chord-engine timing constants. Defined here so the engine module
+// (shared/chord-engine.js) can read them from a single source whether it's
+// instantiated in chrome (loadSubScript), the per-content-process actor
+// child (loadSubScript), or the popup (<script>).
+//
+//   DOUBLE_TAP_WINDOW_MS    — max gap between the two Meta keyups that count
+//                             as cmd+cmd. Tuned for fast typists; longer than
+//                             this and the second tap is treated as a new
+//                             single tap.
+//   CHORD_ROOT_TIMEOUT_MS   — after cmd+cmd, how long to wait for the first
+//                             chord key before opening the menu by default.
+//   CHORD_PREFIX_TIMEOUT_MS — after a prefix node descent, how long to wait
+//                             for the next chord key before opening the
+//                             prefix's view.
+this.DOUBLE_TAP_WINDOW_MS = 350;
+this.CHORD_ROOT_TIMEOUT_MS = 400;
+this.CHORD_PREFIX_TIMEOUT_MS = 600;
 
 // Default values for browser.storage.local. Pass to storage.get() to read
 // any subset; the keys used as `get`'s argument also act as the schema.

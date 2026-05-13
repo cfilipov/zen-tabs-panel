@@ -449,6 +449,16 @@ const ACTIONS = Object.freeze({
 // the result. Must NOT include a hide-palette prelude (hiding the palette
 // destroys the caller's content browser before it can read the response).
 const QUERIES = Object.freeze({
+  // Popup signals it has wired its document keydown listener. The reply
+  // is { buffered, stateSnapshot } where:
+  //   - buffered:      array of keys captured during the engine-bridge gap
+  //                    (chord triggered open-view → popup keyboard.js attached).
+  //                    Popup replays them before processing live input.
+  //   - stateSnapshot: chord-tree path the engine was at when bridging
+  //                    began (e.g. ["O"] for the Reorder prefix). The popup's
+  //                    chord engine initializes at that node so further chord
+  //                    keys resume the in-flight chord rather than restart at root.
+  [MSG.POPUP_READY]:                   ()  => api.takeChordBridgeBuffer(),
   [MSG.GET_ALL_TABS]:                  ()  => api.getAllTabs(),
   [MSG.GET_DEFAULT_CLOSE_TARGET]:      ()  => api.getDefaultCloseTargetDomId(),
   [MSG.GET_ACTIVE_TAB_INFO]:           ()  => getActiveTabInfo(),
@@ -511,20 +521,21 @@ async function runChordAction(actionId) {
   await handler({ type: actionId });
 }
 
-async function handleOpenPaletteRequest() {
-  const result = await api.showPalette();
+async function handleChordResult(result) {
   if (result && result.kind === "chord-action") {
     await runChordAction(result.actionId);
   }
 }
 
-browser.commands.onCommand.addListener(async (command) => {
-  if (command !== "open-palette") return;
-  await handleOpenPaletteRequest();
-});
+// cmd+ctrl+. used to be a WebExtension `commands` shortcut routed through
+// here. With the dual-autonomous-engine design, both the chrome engine and
+// the per-content-process engine detect cmd+ctrl+. locally as an alternate
+// chord leader (same as cmd+cmd), so the manifest command is gone and
+// we don't need a commands.onCommand handler. See CHORD_LEAK_HANDOFF.md.
 
-// Chrome-side gesture (double-tap Cmd) — see experiment/api.js.
-api.onPaletteRequest.addListener(handleOpenPaletteRequest);
+// The chord engines (in experiment/api.js and frame script) fire chord
+// results back via this event. We dispatch the resulting action (if any).
+api.onPaletteRequest.addListener(handleChordResult);
 
 // Toolbar icon click opens the palette immediately, bypassing chord-arming.
 browser.browserAction.onClicked.addListener(() => {

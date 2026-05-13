@@ -84,8 +84,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Clean up on extension unload
     context.callOnClose({
       close() {
-        try { disarmChord(); } catch (e) {}
-        try { uninstallGestureListener(); } catch (e) {}
+        try { teardownChordEngines(); } catch (e) {}
         try { cancelSyncDuplicates(); } catch (e) {}
         try { teardownTabTracking(); } catch (e) {}
         const w = Services.wm.getMostRecentWindow("navigator:browser");
@@ -736,49 +735,46 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "extension-popup":    { width: 360, height: 500 },
     };
 
-    // Chord/leader-key shortcut tree. After the leader (MacCtrl+Cmd+.) fires,
-    // a chrome-window-level keydown listener runs the user's next key against
-    // this tree. Matched terminals fire actions or open submenus directly,
-    // skipping the main palette menu. The tree is built from the shared
-    // keybindings registry (shared/keybindings.js) so chord shortcuts and
-    // popup menu hotkey badges stay in sync.
-    const CHORD_ROOT_TIMEOUT_MS = 400;
-    const CHORD_PREFIX_TIMEOUT_MS = 600;
-
-    const kbScope = {};
+    // Chord engine: same shared/chord-engine.js module instantiated here
+    // (chrome side) and in the per-content-process frame script (see below).
+    // Each engine owns its own state; they observe the same physical user
+    // actions (cmd+cmd etc.) and stay in sync naturally without IPC for
+    // chord state. The chord tree is built from the shared keybindings
+    // registry (shared/keybindings.js) so chord shortcuts and popup-menu
+    // hotkey badges stay in sync.
+    const engineScope = {};
     Services.scriptloader.loadSubScript(
       context.extension.getURL("shared/keybindings.js"),
-      kbScope
+      engineScope
     );
-    const KEYBINDINGS = kbScope.ZEN_KEYBINDINGS || [];
-    const WORKSPACE_DIGIT_CHORDS = kbScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
-
-    function buildChordNode(entry) {
-      if (entry.kind === "action") return { type: "action", actionId: entry.id };
-      if (entry.kind === "open-view") return { type: "open-view", view: entry.view };
-      if (entry.kind === "prefix") {
-        const children = {};
-        for (const child of (entry.children || [])) {
-          children[child.chord] = buildChordNode(child);
-        }
-        return {
-          type: "prefix",
-          timeoutMs: CHORD_PREFIX_TIMEOUT_MS,
-          onTimeout: { type: "open-view", view: entry.view },
-          children,
-        };
-      }
-      return null;
-    }
-
-    const CHORD_TREE = { children: {} };
-    for (const entry of KEYBINDINGS) {
-      const node = buildChordNode(entry);
-      if (node) CHORD_TREE.children[entry.chord] = node;
-    }
-    for (let i = 0; i < WORKSPACE_DIGIT_CHORDS.length; i++) {
-      CHORD_TREE.children[WORKSPACE_DIGIT_CHORDS[i]] = { type: "switch-workspace", index: i };
-    }
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("shared/constants.js"),
+      engineScope
+    );
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("shared/chord-engine.js"),
+      engineScope
+    );
+    const KEYBINDINGS = engineScope.ZEN_KEYBINDINGS || [];
+    const WORKSPACE_DIGIT_CHORDS = engineScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
+    const CHORD_CONSTANTS = {
+      DOUBLE_TAP_WINDOW_MS:    engineScope.DOUBLE_TAP_WINDOW_MS,
+      CHORD_ROOT_TIMEOUT_MS:   engineScope.CHORD_ROOT_TIMEOUT_MS,
+      CHORD_PREFIX_TIMEOUT_MS: engineScope.CHORD_PREFIX_TIMEOUT_MS,
+    };
+    // Mutable so the dynamic Shift+1..9 extension-popup chords (added by
+    // buildExtensionList below) can be appended after the static tree is
+    // built. The chrome engine reads from this reference at match time, so
+    // mutations take effect immediately for the chrome side. Frame-script
+    // engines receive these dynamic entries via broadcast (see below).
+    const CHORD_TREE = engineScope.buildChordTree(
+      KEYBINDINGS,
+      WORKSPACE_DIGIT_CHORDS,
+      CHORD_CONSTANTS
+    );
+    // Track dynamic chord entries so newly-spawned content frame scripts
+    // can request the current set on init.
+    const dynamicChordEntries = [];
 
     let navStack = [];
     let currentViewName = null;
@@ -786,18 +782,35 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Set by createOverlay to the function that flips the (initially hidden)
     // overlay to visible and starts the in animations. Stays non-null until
     // the overlay is revealed or destroyed. When the chord engine prerenders
-    // during its wait window, this is what onChordTimeout calls to surface
-    // the already-loaded popup with no further delay.
+    // during its wait window (via onArmed), this is what enterBridgeFromOpenView
+    // / revealOverlay surface to display the already-loaded popup with no
+    // further delay.
     let pendingReveal = null;
 
-    // Chord engine state.
-    let chordState = null;          // null | "armed-root" | "armed-prefix"
-    let chordCurrentNode = null;
-    let chordTimer = null;
-    let chordKeyListener = null;
-    let chordBlurListener = null;
-    let chordResolve = null;        // resolver for the showPalette() promise
-    let chordPrefixOnTimeout = null;
+    // Chrome engine instance is constructed later in this getAPI body once
+    // the helpers it depends on (createOverlay, runChordAction, etc.) are
+    // declared. The variable is hoisted here so functions defined above the
+    // construction site (destroyOverlay etc.) can reference it for state
+    // queries.
+    let chromeEngine = null;
+    // Per-content-process frame script registration handle. Populated once
+    // by installContentEngineFrameScript() below.
+    let contentEngineFrameScriptUrl = null;
+    // Chrome-side bridge buffer. Filled by either engine (chrome's engine
+    // pushes via its onBridgeKey callback; content engines push via the
+    // ZenChord:BridgeKey IPC). Drained by takeChordBridgeBuffer() when the
+    // popup signals POPUP_READY.
+    let bridgeBuffer = null;
+    let bridgeTimer = null;
+    const BRIDGE_TIMEOUT_MS = 1500;
+    // The chord-tree path the engine was at when it transitioned to
+    // bridging — passed to the popup on POPUP_READY so its engine
+    // resumes at the same node.
+    let pendingStateSnapshot = null;
+    // Which engine instance fired the open-view that triggered the active
+    // bridge — exit-bridge must be sent to it (and only it) when popup
+    // drains. "chrome" or "content"; null when no bridge active.
+    let bridgingEngineKind = null;
 
     // Mirror whatever theme Zen's URL-bar dropdown (Cmd+T) uses. The
     // chrome root's resolved `color-scheme` is the same signal that dialog
@@ -944,15 +957,30 @@ this.zenWorkspaces = class extends ExtensionAPI {
         });
       }
       items.sort((a, b) => a.name.localeCompare(b.name));
-      // Mirror the popup's Shift+1..9 quick-launch into the chord
-      // engine's CHORD_TREE so the same shortcut works from outside
-      // an open palette too (leader chord → Shift+N opens the Nth
-      // extension's popup directly, just like clicking the icon does).
+      // Mirror the popup's Shift+1..9 quick-launch into the chord tree
+      // so the same shortcut works from outside an open palette
+      // (leader chord → Shift+N opens the Nth extension's popup directly,
+      // just like clicking the icon does). Inject into the chrome-side
+      // CHORD_TREE (the chrome engine reads from it at match time) AND
+      // broadcast to every content-process frame script so their local
+      // tree copies stay in sync.
+      //
+      // Clear any prior entries first — the extension set can change as
+      // the user installs/uninstalls add-ons. Replacing the whole 1..9
+      // range keeps both sides consistent.
+      dynamicChordEntries.length = 0;
       for (let i = 0; i < Math.min(items.length, 9); i++) {
-        CHORD_TREE.children["Shift+" + (i + 1)] = {
+        const key = "Shift+" + (i + 1);
+        const node = {
           type: "open-extension-popup",
           extensionId: items[i].id,
         };
+        CHORD_TREE.children[key] = node;
+        const entry = { key, node };
+        dynamicChordEntries.push(entry);
+        try {
+          Services.mm.broadcastAsyncMessage("ZenChord:AddChord", entry);
+        } catch (e) {}
       }
       return items;
     }
@@ -1506,6 +1534,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const overlay = w.document.getElementById(OVERLAY_ID);
       if (!overlay || overlay.dataset.closing) return;
 
+      // Bridge mode can't outlive the panel it was waiting on. If a bridge
+      // is active when the overlay is being destroyed (e.g. user clicked the
+      // toolbar icon to toggle it closed mid-animation), tear it down now —
+      // otherwise the engine that owned the bridge would keep capturing
+      // keys until the safety timeout.
+      if (bridgeBuffer) {
+        bridgeBuffer = null;
+        pendingStateSnapshot = null;
+        finishBridge();
+      }
+
       overlay.dataset.closing = "true";
       morphGeneration++;
       navStack = [];
@@ -1547,263 +1586,298 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     // -----------------------------------------------------------------------
-    // Chord engine
+    // Chord engine wiring — dual autonomous instances
     // -----------------------------------------------------------------------
+    //
+    // We instantiate the same shared/chord-engine.js state machine TWICE:
+    // once in this chrome process (handles keys delivered to chrome targets
+    // like the URL bar) and once per content process (handles keys
+    // delivered to content documents). Each engine has its own local state;
+    // they never communicate. They observe the same physical user actions
+    // (cmd+cmd, etc.) and naturally stay in sync because they're seeing
+    // the same events.
+    //
+    // Partitioning is by `e.target`:
+    //   - Chrome engine: filterEvent rejects events whose target is a
+    //     <browser> element (those are content's responsibility).
+    //   - Content engine: only sees keys delivered to its own document.
+    //
+    // This dual-engine design preserves chord-from-URL-bar (chrome engine)
+    // and races NOWHERE for the leak case (content engine runs synchronously
+    // in the content process that's about to dispatch the keystroke to the
+    // editor). The leak comes from cross-process state projection; we no
+    // longer project state across the boundary, so there is no race.
+    //
+    // See CHORD_LEAK_HANDOFF.md for the full investigation log.
 
-    // Map a keydown event to a chord-tree key string, or null if it should be
-    // ignored (pure modifier press, or non-Shift modifier held — those fall
-    // through to the OS/browser).
-    function chordKeyFor(e) {
-      if (e.key === "Meta" || e.key === "Control" || e.key === "Alt" || e.key === "Shift") return null;
-      if (e.metaKey || e.ctrlKey || e.altKey) return null;
-      if (e.key === "Escape") return "Escape";
-      if (e.key.length === 1 && /[a-z]/i.test(e.key)) {
-        const upper = e.key.toUpperCase();
-        return e.shiftKey ? "Shift+" + upper : upper;
-      }
-      // Shift+digit produces a layout-dependent symbol via e.key
-      // (Shift+1 = "!", Shift+4 = "$" on US, etc.), so use e.code to
-      // recover the digit for the extension-popup quick-launch chords.
-      if (e.shiftKey && e.code && /^Digit[1-9]$/.test(e.code)) {
-        return "Shift+" + e.code.slice(5);
-      }
-      return e.key;
-    }
-
-    function disarmChord() {
-      const w = getWin();
-      if (chordTimer !== null && w) {
-        w.clearTimeout(chordTimer);
-      }
-      if (chordKeyListener && w) {
-        w.removeEventListener("keydown", chordKeyListener, true);
-      }
-      if (chordBlurListener && w) {
-        w.removeEventListener("blur", chordBlurListener, true);
-      }
-      chordTimer = null;
-      chordKeyListener = null;
-      chordBlurListener = null;
-      chordState = null;
-      chordCurrentNode = null;
-      chordPrefixOnTimeout = null;
-    }
-
-    // -----------------------------------------------------------------------
-    // Double-tap-Cmd gesture: persistent chrome-window listener that opens
-    // the palette when the user taps Cmd-alone twice within DOUBLE_TAP_WINDOW_MS.
-    // Replaces the awkward Ctrl+Cmd+. leader for daily use; the manifest
-    // keybinding stays as a fallback.
-    // -----------------------------------------------------------------------
-    const DOUBLE_TAP_WINDOW_MS = 350;
-    let cmdAlone = false;
-    let lastCmdAloneRelease = 0;
-    let gestureListeners = null;
+    // Pre-declared so functions defined earlier (destroyOverlay, etc.) can
+    // call into the engine for state queries.
     let paletteRequestFire = null;
 
-    function onGestureKeydown(e) {
-      if (e.key === "Meta") {
-        cmdAlone = true;
-      } else if (e.metaKey) {
-        // A non-modifier key pressed while Cmd is held — Cmd is being used
-        // as part of a real shortcut, so disqualify this hold from counting
-        // as a clean Cmd-alone tap.
-        cmdAlone = false;
-      }
-    }
-
-    function onGestureKeyup(e) {
-      if (e.key !== "Meta") return;
-      if (cmdAlone) {
-        const now = Date.now();
-        if (now - lastCmdAloneRelease < DOUBLE_TAP_WINDOW_MS) {
-          lastCmdAloneRelease = 0;
-          if (paletteRequestFire) paletteRequestFire.async();
-        } else {
-          lastCmdAloneRelease = now;
-        }
-      } else {
-        lastCmdAloneRelease = 0;
-      }
-    }
-
-    function onGestureBlur() {
-      cmdAlone = false;
-      lastCmdAloneRelease = 0;
-    }
-
-    function installGestureListener() {
-      const w = getWin();
-      if (!w || gestureListeners) return;
-      gestureListeners = { keydown: onGestureKeydown, keyup: onGestureKeyup, blur: onGestureBlur };
-      w.addEventListener("keydown", gestureListeners.keydown, true);
-      w.addEventListener("keyup",   gestureListeners.keyup,   true);
-      w.addEventListener("blur",    gestureListeners.blur,    true);
-    }
-
-    function uninstallGestureListener() {
-      const w = getWin();
-      if (!w || !gestureListeners) return;
-      w.removeEventListener("keydown", gestureListeners.keydown, true);
-      w.removeEventListener("keyup",   gestureListeners.keyup,   true);
-      w.removeEventListener("blur",    gestureListeners.blur,    true);
-      gestureListeners = null;
-    }
-
+    // Reveal-or-open helper used by chord-action / open-view dispatch.
     function openOverlayWithView(view) {
       createOverlay(view || null);
       revealOverlay();
     }
 
-    function onChordKey(e) {
-      const k = chordKeyFor(e);
-      // Ignore pure-modifier keydowns and modifier-co-pressed keys: leave them
-      // alone so the OS/browser can handle Cmd+P etc. The chord arm still
-      // stays live for these — but in practice the leader's modifiers have
-      // released by the time the user presses a chord key, so this rarely
-      // matters. We don't disarm here either; the chord just continues to
-      // wait until a real candidate or timeout.
-      if (k === null) return;
-
-      if (k === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        const resolve = chordResolve;
-        chordResolve = null;
-        disarmChord();
-        if (pendingReveal) destroyOverlay();
-        if (resolve) resolve({ kind: "chord-cancelled" });
+    // Dispatch a chord action coming from EITHER engine (chrome direct call
+    // or content via the ZenChord:Action IPC). Same routing either way —
+    // payload shape is { type: "action" | "switch-workspace" | "open-extension-popup", ...}.
+    function dispatchChordAction(payload) {
+      if (!payload || !payload.type) return;
+      if (pendingReveal) destroyOverlay();
+      if (payload.type === "action") {
+        if (paletteRequestFire) {
+          paletteRequestFire.async({ kind: "chord-action", actionId: payload.actionId });
+        }
         return;
       }
-
-      const node = chordCurrentNode?.children?.[k];
-      if (!node) {
-        // Unknown key: cancel chord silently — no panel.
-        e.preventDefault();
-        e.stopPropagation();
-        const resolve = chordResolve;
-        chordResolve = null;
-        disarmChord();
-        if (pendingReveal) destroyOverlay();
-        if (resolve) resolve({ kind: "chord-cancelled" });
-        return;
-      }
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (node.type === "action") {
-        const resolve = chordResolve;
-        chordResolve = null;
-        disarmChord();
-        if (pendingReveal) destroyOverlay();
-        if (resolve) resolve({ kind: "chord-action", actionId: node.actionId });
-        return;
-      }
-
-      if (node.type === "open-view") {
-        const resolve = chordResolve;
-        chordResolve = null;
-        disarmChord();
-        // Prerender (if any) was for the actions menu — different view, so
-        // discard it silently and open fresh.
-        if (pendingReveal) destroyOverlay();
-        openOverlayWithView(node.view);
-        if (resolve) resolve({ kind: "opened" });
-        return;
-      }
-
-      if (node.type === "open-extension-popup") {
-        const resolve = chordResolve;
-        chordResolve = null;
-        disarmChord();
-        if (pendingReveal) destroyOverlay();
-        openExtensionPopupInternal(node.extensionId);
-        if (resolve) resolve({ kind: "opened" });
-        return;
-      }
-
-      if (node.type === "switch-workspace") {
+      if (payload.type === "switch-workspace") {
         const w = getWin();
-        const resolve = chordResolve;
-        chordResolve = null;
-        disarmChord();
-        if (pendingReveal) destroyOverlay();
         if (w?.gZenWorkspaces) {
           const list = w.gZenWorkspaces.getWorkspaces();
-          const ws = Array.isArray(list) ? list[node.index] : null;
+          const ws = Array.isArray(list) ? list[payload.index] : null;
           if (ws?.uuid) {
             try { w.gZenWorkspaces.changeWorkspaceWithID(ws.uuid); } catch (err) {}
           }
         }
-        if (resolve) resolve({ kind: "chord-cancelled" });
         return;
       }
-
-      if (node.type === "prefix") {
-        const w = getWin();
-        if (chordTimer !== null && w) w.clearTimeout(chordTimer);
-        chordCurrentNode = node;
-        chordPrefixOnTimeout = node.onTimeout || null;
-        chordState = "armed-prefix";
-        chordTimer = w ? w.setTimeout(onChordTimeout, node.timeoutMs ?? CHORD_PREFIX_TIMEOUT_MS) : null;
+      if (payload.type === "open-extension-popup") {
+        openExtensionPopupInternal(payload.extensionId);
+        return;
       }
     }
 
-    function onChordTimeout() {
-      const resolve = chordResolve;
-      chordResolve = null;
-      const onTimeout = chordPrefixOnTimeout;
-      disarmChord();
+    // Bridge entry: an engine fired open-view. Open the overlay at the
+    // right view, remember the state snapshot for the popup to resume at,
+    // start the bridge-safety timer.
+    function enterBridgeFromOpenView(view, stateSnapshot, kind) {
+      bridgeBuffer = [];
+      pendingStateSnapshot = stateSnapshot || [];
+      bridgingEngineKind = kind;
+      const w = getWin();
+      if (bridgeTimer !== null && w) {
+        try { w.clearTimeout(bridgeTimer); } catch (e) {}
+      }
+      bridgeTimer = w ? w.setTimeout(() => {
+        // Safety: popup never reported ready. Cancel the bridge.
+        bridgeTimer = null;
+        finishBridge();
+      }, BRIDGE_TIMEOUT_MS) : null;
 
-      if (onTimeout && onTimeout.type === "open-view") {
-        // Prerender (if any) was for the actions menu — different view, so
-        // discard it silently and create fresh.
-        if (pendingReveal) destroyOverlay();
-        openOverlayWithView(onTimeout.view);
-      } else if (pendingReveal) {
-        // Common path: the prerender is the actions menu we want. Just reveal.
+      // For the "default view" case (root timeout), if we already
+      // prerendered the actions menu and the user is letting it open, just
+      // reveal what's there. Otherwise, discard prerender and open the
+      // requested view fresh.
+      const requestedView = view || null;
+      if (pendingReveal && !requestedView) {
         revealOverlay();
       } else {
-        openOverlayWithView(null); // root timeout → main actions menu
+        if (pendingReveal) destroyOverlay();
+        openOverlayWithView(requestedView);
       }
-      if (resolve) resolve({ kind: "opened" });
     }
 
-    function onChordBlur() {
-      const resolve = chordResolve;
-      chordResolve = null;
-      disarmChord();
-      if (pendingReveal) destroyOverlay();
-      if (resolve) resolve({ kind: "chord-cancelled" });
-    }
-
-    function armChord(resolve) {
+    // Called from takeChordBridgeBuffer when popup signals ready, or from
+    // the safety timer, or from destroyOverlay if the bridge is aborted.
+    function finishBridge() {
       const w = getWin();
-      if (!w) {
-        resolve({ kind: "chord-cancelled" });
-        return;
+      if (bridgeTimer !== null && w) {
+        try { w.clearTimeout(bridgeTimer); } catch (e) {}
       }
-      chordResolve = resolve;
-      chordCurrentNode = CHORD_TREE;
-      chordState = "armed-root";
-      chordKeyListener = onChordKey;
-      chordBlurListener = onChordBlur;
-      // Capture-phase keydown on the chrome window catches keys regardless of
-      // whether chrome or content has focus, because the chrome window owns
-      // the XUL <browser> element wrapping the active tab.
-      w.addEventListener("keydown", chordKeyListener, true);
-      w.addEventListener("blur", chordBlurListener, true);
-      chordTimer = w.setTimeout(onChordTimeout, CHORD_ROOT_TIMEOUT_MS);
+      bridgeTimer = null;
+      // Tell the engine that owned the bridge to exit. Either engine's
+      // exitBridge() is safe to call even when not bridging (no-op).
+      if (bridgingEngineKind === "chrome" && chromeEngine) {
+        try { chromeEngine.exitBridge(); } catch (e) {}
+      }
+      // Content engines: broadcast — any one of them might own the bridge.
+      try { Services.mm.broadcastAsyncMessage("ZenChord:ExitBridge"); } catch (e) {}
+      bridgingEngineKind = null;
+    }
 
-      // Prerender the actions menu off-screen so the popup loads during the
-      // chord wait. If a chord matches, onChordKey paths below tear this down
-      // before reveal; if the chord times out, onChordTimeout reveals it
-      // instantly with content already painted.
+    // ---- Chrome engine instance ----------------------------------------
+    chromeEngine = engineScope.createChordEngine({
+      chordTree: CHORD_TREE,
+      constants: CHORD_CONSTANTS,
+      // We only handle keys delivered to chrome targets (URL bar, browser
+      // chrome). Content-routed keys have target=<browser>; let the
+      // per-content-process engine handle them.
+      filterEvent: (e) => {
+        const t = e && e.target;
+        if (!t) return true;
+        const name = (t.tagName || t.nodeName || "").toLowerCase();
+        return name !== "browser";
+      },
+      setTimeoutFn: (fn, ms) => {
+        const w = getWin();
+        return w ? w.setTimeout(fn, ms) : null;
+      },
+      clearTimeoutFn: (id) => {
+        const w = getWin();
+        if (w && id != null) try { w.clearTimeout(id); } catch (e) {}
+      },
+      onArmed: () => {
+        // Prerender the actions menu off-screen so the popup loads during
+        // the chord wait window. Hidden until reveal.
+        createOverlay();
+      },
+      onAction: (payload) => dispatchChordAction(payload),
+      onOpenView: (view, snapshot) => enterBridgeFromOpenView(view, snapshot, "chrome"),
+      onStateChange: () => {},
+      onCancel: () => {
+        // Chord cancelled (unknown key, Escape, blur). If a prerender is
+        // still hidden, tear it down.
+        if (pendingReveal) destroyOverlay();
+      },
+      onBridgeKey: (k) => {
+        if (bridgeBuffer) bridgeBuffer.push(k);
+      },
+    });
+
+    function installChromeEngine() {
+      const w = getWin();
+      if (!w) return;
+      chromeEngine.attach(w);
+
+      // Intra-window focus shifts: when the user clicks between URL bar
+      // and content (or vice versa) mid-chord, the chord engine that was
+      // armed needs to know its domain just lost focus. The chrome
+      // window's `blur` event only fires on whole-window blur, not on
+      // sub-element focus shifts — so we hook `focus` events (which DO
+      // bubble) and cancel chrome's engine when focus moves to a
+      // <browser>. Content engines handle their own blur via their own
+      // content-window blur listener.
+      w.addEventListener("focus", (e) => {
+        if (!chromeEngine.isArmed()) return;
+        const t = e && e.target;
+        if (!t) return;
+        const name = (t.tagName || t.nodeName || "").toLowerCase();
+        if (name === "browser") chromeEngine.reset();
+      }, true);
+    }
+
+    // ---- Per-content-process frame script ------------------------------
+    //
+    // Loads the same shared/chord-engine.js + shared/keybindings.js +
+    // shared/constants.js into the content process via Services.scriptloader
+    // and instantiates an engine attached to the `content` window. The
+    // engine reports actions/open-view/cancel/bridge-key back to chrome via
+    // sendAsyncMessage. Re-attaches on DOMWindowCreated for navigations.
+    // Skips activation when the document is moz-extension:// (our popup and
+    // foreign-extension popups handle their own keys).
+    function installContentEngineFrameScript() {
+      if (contentEngineFrameScriptUrl) return;
+      const engineURL = context.extension.getURL("shared/chord-engine.js");
+      const bindingsURL = context.extension.getURL("shared/keybindings.js");
+      const constantsURL = context.extension.getURL("shared/constants.js");
+      const body =
+        "(function(){\n" +
+        "var __scope = {};\n" +
+        "try {\n" +
+        "  Services.scriptloader.loadSubScript(" + JSON.stringify(bindingsURL) + ", __scope);\n" +
+        "  Services.scriptloader.loadSubScript(" + JSON.stringify(constantsURL) + ", __scope);\n" +
+        "  Services.scriptloader.loadSubScript(" + JSON.stringify(engineURL) + ", __scope);\n" +
+        "} catch (err) { return; }\n" +
+        "var __tree = __scope.buildChordTree(__scope.ZEN_KEYBINDINGS, __scope.ZEN_WORKSPACE_DIGIT_CHORDS, {\n" +
+        "  DOUBLE_TAP_WINDOW_MS: __scope.DOUBLE_TAP_WINDOW_MS,\n" +
+        "  CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS,\n" +
+        "  CHORD_PREFIX_TIMEOUT_MS: __scope.CHORD_PREFIX_TIMEOUT_MS,\n" +
+        "});\n" +
+        "var __engine = __scope.createChordEngine({\n" +
+        "  chordTree: __tree,\n" +
+        "  constants: { DOUBLE_TAP_WINDOW_MS: __scope.DOUBLE_TAP_WINDOW_MS, CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS, CHORD_PREFIX_TIMEOUT_MS: __scope.CHORD_PREFIX_TIMEOUT_MS },\n" +
+        "  filterEvent: function(){ return true; },\n" +
+        "  setTimeoutFn: function(fn, ms){ return content ? content.setTimeout(fn, ms) : null; },\n" +
+        "  clearTimeoutFn: function(id){ if (content && id != null) try { content.clearTimeout(id); } catch (e) {} },\n" +
+        "  onArmed: function(){ try { sendAsyncMessage('ZenChord:Armed', {}); } catch(e){} },\n" +
+        "  onAction: function(p){ try { sendAsyncMessage('ZenChord:Action', p); } catch(e){} },\n" +
+        "  onOpenView: function(v, s){ try { sendAsyncMessage('ZenChord:OpenView', { view: v, snapshot: s }); } catch(e){} },\n" +
+        "  onCancel: function(){ try { sendAsyncMessage('ZenChord:Cancel', {}); } catch(e){} },\n" +
+        "  onBridgeKey: function(k){ try { sendAsyncMessage('ZenChord:BridgeKey', k); } catch(e){} },\n" +
+        "  onStateChange: function(){},\n" +
+        "});\n" +
+        "function attach(){\n" +
+        "  try {\n" +
+        "    if (!content) return;\n" +
+        "    // Skip extension pages (our own popup, foreign extension popups).\n" +
+        "    var href = '';\n" +
+        "    try { href = String(content.location && content.location.href || ''); } catch(e){}\n" +
+        "    if (href.startsWith('moz-extension://')) return;\n" +
+        "    __engine.attach(content);\n" +
+        "  } catch (err) { /* ignore */ }\n" +
+        "}\n" +
+        "attach();\n" +
+        "addEventListener('DOMWindowCreated', attach, true);\n" +
+        "addMessageListener('ZenChord:ExitBridge', function(){ try { __engine.exitBridge(); } catch(e){} });\n" +
+        "addMessageListener('ZenChord:Reset', function(){ try { __engine.reset(); } catch(e){} });\n" +
+        "addMessageListener('ZenChord:AddChord', function(m){\n" +
+        "  try {\n" +
+        "    var d = m && m.data;\n" +
+        "    if (d && d.key && d.node && __tree && __tree.children) __tree.children[d.key] = d.node;\n" +
+        "  } catch(e){}\n" +
+        "});\n" +
+        // Ask chrome for any dynamic chord entries that were registered
+        // before this frame script loaded (e.g. Shift+1..9 extension popup
+        // shortcuts added at extension startup).
+        "try { sendAsyncMessage('ZenChord:Hello', {}); } catch(e){}\n" +
+        "})();";
+      const url = "data:application/javascript;charset=utf-8," + encodeURIComponent(body);
+      try {
+        Services.mm.loadFrameScript(url, true);
+        contentEngineFrameScriptUrl = url;
+      } catch (e) {}
+    }
+
+    // ---- Cross-process message handlers --------------------------------
+    function onContentAction(m) { dispatchChordAction(m && m.data); }
+    function onContentArmed() {
+      // Content engine just self-armed. Prerender the actions menu so the
+      // popup is ready if the user lets the root timer fire.
       createOverlay();
     }
+    function onContentOpenView(m) {
+      const data = (m && m.data) || {};
+      enterBridgeFromOpenView(data.view, data.snapshot, "content");
+    }
+    function onContentCancel() {
+      if (pendingReveal) destroyOverlay();
+    }
+    function onContentBridgeKey(m) {
+      if (bridgeBuffer && m && m.data) bridgeBuffer.push(m.data);
+    }
+    function onContentHello(m) {
+      // A frame script just initialized; reply with the current set of
+      // dynamic chord entries so it can populate its tree.
+      if (!m || !m.target || !m.target.messageManager) return;
+      for (const entry of dynamicChordEntries) {
+        try {
+          m.target.messageManager.sendAsyncMessage("ZenChord:AddChord", entry);
+        } catch (e) {}
+      }
+    }
+    Services.mm.addMessageListener("ZenChord:Action",    onContentAction);
+    Services.mm.addMessageListener("ZenChord:Armed",     onContentArmed);
+    Services.mm.addMessageListener("ZenChord:OpenView",  onContentOpenView);
+    Services.mm.addMessageListener("ZenChord:Cancel",    onContentCancel);
+    Services.mm.addMessageListener("ZenChord:BridgeKey", onContentBridgeKey);
+    Services.mm.addMessageListener("ZenChord:Hello",     onContentHello);
 
-    installGestureListener();
+    // Teardown helpers used by callOnClose.
+    function teardownChordEngines() {
+      try { if (chromeEngine) chromeEngine.detach(); } catch (e) {}
+      try { Services.mm.removeMessageListener("ZenChord:Action",    onContentAction); } catch (e) {}
+      try { Services.mm.removeMessageListener("ZenChord:Armed",     onContentArmed); } catch (e) {}
+      try { Services.mm.removeMessageListener("ZenChord:OpenView",  onContentOpenView); } catch (e) {}
+      try { Services.mm.removeMessageListener("ZenChord:Cancel",    onContentCancel); } catch (e) {}
+      try { Services.mm.removeMessageListener("ZenChord:BridgeKey", onContentBridgeKey); } catch (e) {}
+      try { Services.mm.removeMessageListener("ZenChord:Hello",     onContentHello); } catch (e) {}
+      try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
+    }
+
+    installChromeEngine();
+    installContentEngineFrameScript();
 
     return {
       zenWorkspaces: {
@@ -2779,28 +2853,40 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         },
 
+        // Drain the chord-bridge buffer (keys captured during the gap
+        // between an engine firing open-view and the popup's keyboard
+        // handler attaching) and tear down the bridge. Returns BOTH the
+        // captured keys and the engine's state snapshot at bridge entry —
+        // the popup's engine uses the snapshot to resume at the same node
+        // (e.g. inside a prefix submenu rather than at root).
+        async takeChordBridgeBuffer() {
+          if (!bridgeBuffer) return { buffered: [], stateSnapshot: [] };
+          const drained = bridgeBuffer;
+          const snapshot = pendingStateSnapshot || [];
+          bridgeBuffer = null;
+          pendingStateSnapshot = null;
+          finishBridge();
+          return { buffered: drained, stateSnapshot: snapshot };
+        },
+
         // Palette management.
         //
         // Returns a discriminated object describing what happened:
         //   {kind: "opened"}            — overlay opened (with main menu or a view)
         //   {kind: "closed"}            — overlay was already open and got closed (toggle)
-        //   {kind: "chord-action",      — chord resolved to an action; caller should
-        //          actionId}              dispatch it via runChordAction
-        //   {kind: "chord-cancelled"}   — chord aborted (unknown key, Escape, blur)
         //
         // Callers:
-        //   - commands.onCommand passes no arg → routes through chord engine
         //   - browserAction.onClicked passes {skipChord:true} → opens immediately
         //   - any caller can pass a view string to open directly to a submenu
+        //
+        // The cmd+cmd / cmd+ctrl+. chord leaders no longer route through
+        // here — both engines detect them locally on keydown.
         async showPalette(viewOrOpts) {
           let view = null;
-          let skipChord = false;
           if (typeof viewOrOpts === "string") {
             view = viewOrOpts;
-            skipChord = true;
           } else if (viewOrOpts && typeof viewOrOpts === "object") {
             view = viewOrOpts.view || null;
-            skipChord = !!viewOrOpts.skipChord;
           }
 
           if (isOverlayOpen()) {
@@ -2808,30 +2894,23 @@ this.zenWorkspaces = class extends ExtensionAPI {
             return { kind: "closed" };
           }
 
-          // Double-tap of the leader (or a click while chord is armed):
-          // cancel the in-flight chord and open immediately. If the chord
-          // already prerendered the actions menu and that's what the caller
-          // wants, reveal it rather than churning a fresh overlay.
-          if (chordState !== null) {
-            const resolve = chordResolve;
-            chordResolve = null;
-            disarmChord();
-            if (pendingReveal && !view) {
-              revealOverlay();
-            } else {
-              if (pendingReveal) destroyOverlay();
-              openOverlayWithView(view);
-            }
-            if (resolve) resolve({ kind: "opened" });
+          // A chord might be in flight (the user did cmd+cmd and the
+          // engine is armed/bridging) when this is invoked by an external
+          // path (toolbar icon click). Tear down any in-flight chord state
+          // in both engines so we open cleanly.
+          if (chromeEngine && chromeEngine.isArmed()) chromeEngine.reset();
+          try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
+
+          // If a prerender of the actions menu is already in flight from
+          // an aborted chord and the caller didn't request a specific
+          // submenu, just reveal it (avoids churning a fresh overlay).
+          if (pendingReveal && !view) {
+            revealOverlay();
             return { kind: "opened" };
           }
-
-          if (skipChord) {
-            openOverlayWithView(view);
-            return { kind: "opened" };
-          }
-
-          return new Promise((resolve) => armChord(resolve));
+          if (pendingReveal) destroyOverlay();
+          openOverlayWithView(view);
+          return { kind: "opened" };
         },
 
         async hidePalette() {
