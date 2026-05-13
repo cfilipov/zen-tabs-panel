@@ -464,19 +464,25 @@ const _bridgeExt = typeof browser !== "undefined" ? browser : chrome;
 
   let buffered = [];
   let isStale = false;
+  let targetView = null;
   try {
     const reply = await _bridgeExt.runtime.sendMessage({
       type: MSG.POPUP_READY,
       inst: _popupInst,
     });
-    // POPUP_READY reply shape: { buffered, stateSnapshot, stale? }. The
-    // buffered array is keys the chord engine captured during the
+    // POPUP_READY reply shape: { buffered, stateSnapshot, stale?, view? }.
+    // The buffered array is keys the chord engine captured during the
     // chord-fires-open-view → popup-keyboard-attached gap. stale is set
     // by chrome when this popup's `inst` doesn't match the current popup
     // (a prerender-swap left us as a soon-to-be-destroyed instance).
+    // view is set when chrome arrived at a non-default view during a
+    // chord arm that landed mid-popup-load (WarmRearm message dropped) —
+    // we navigate to it before replaying so buffered chord-chain keys
+    // operate at the right view.
     if (reply && reply.stale) isStale = true;
     if (reply && Array.isArray(reply.buffered)) buffered = reply.buffered;
     else if (Array.isArray(reply)) buffered = reply; // backwards-compat
+    if (reply && typeof reply.view === "string") targetView = reply.view;
   } catch (err) {
     // Background may not yet be ready, or there's no bridge to drain; either
     // way, fall through and just process any held live keys.
@@ -498,6 +504,16 @@ const _bridgeExt = typeof browser !== "undefined" ? browser : chrome;
     await new Promise((r) => document.addEventListener("DOMContentLoaded", r, { once: true }));
   }
   await new Promise((r) => requestAnimationFrame(r));
+
+  // Navigate to the chord's target view if chrome reported one and we
+  // aren't already there (the user chorded faster than the WarmRearm
+  // message could attach — see takeChordBridgeBuffer's `view` reply).
+  if (targetView && typeof VIEWS !== "undefined" && typeof ui !== "undefined" && ui.currentView !== targetView) {
+    const handler = VIEWS[targetView];
+    if (handler) {
+      try { await handler({}); } catch (e) {}
+    }
+  }
 
   // Each replay is awaited so chord chains involving drill navigation
   // (e.g. cmd+., q, 1, 1: drill into first domain, then activate
@@ -521,3 +537,88 @@ const _bridgeExt = typeof browser !== "undefined" ? browser : chrome;
     armPopupRevealTimer();
   }
 })();
+
+// Warm-popup rearm handler. The warm overlay's popup browser stays loaded
+// across chord chains — instead of being torn down and recreated, chrome
+// sends a ZenChord:WarmRearm MM message which the frame script dispatches
+// as a `ztt:warm-rearm` CustomEvent here. We reset the popup's UI state,
+// navigate to the requested view, then signal POPUP_READY (just like the
+// IIFE above) so chrome drains any chord-chain keys that arrived in the
+// rearm window.
+//
+// A generation counter discards stale rearms: if a second rearm message
+// arrives before the first finishes (e.g. cmd+. typed twice fast, or a
+// prefix descent followed quickly by an open-view match), the older
+// handler bails before mutating UI state.
+let warmRearmGen = 0;
+
+async function handleWarmRearm(data) {
+  const myGen = ++warmRearmGen;
+  if (typeof data.inst === "number") _popupInst = data.inst;
+  chordBridgeReady = false;
+  clearPopupRevealTimer();
+  // The previous chain's leftover keys (buffered live keys, queued
+  // dispatches) are stale for a fresh chord chain — discard them.
+  liveDispatchQueue.length = 0;
+  heldLiveKeys.length = 0;
+
+  // Clear preview / hover state from the previous chain so a new view
+  // doesn't inherit a stale tab outline.
+  _bridgeExt.runtime.sendMessage({ type: MSG.CLEAR_PREVIEW }).catch(() => {});
+
+  // Reset selection / pagination so the rendered view starts at item 0.
+  if (typeof ui !== "undefined") {
+    ui.selectedIndex = -1;
+    ui.pageIndex = 0;
+    ui.sidebarFocused = false;
+  }
+
+  const view = data.view || "actions";
+  const params = data.params || {};
+  const handler = (typeof VIEWS !== "undefined") ? VIEWS[view] : null;
+  if (handler) {
+    try { await handler(params); } catch (e) {}
+  }
+  if (myGen !== warmRearmGen) return;
+
+  _bridgeExt.runtime.sendMessage({ type: MSG.RESIZE_PANEL, view }).catch(() => {});
+
+  // Same POPUP_READY exchange as the IIFE. The inst echoed here tells
+  // chrome to drain into THIS rearm cycle (stale inst → bg returns
+  // { stale: true }, we bail without replaying).
+  let buffered = [];
+  let isStale = false;
+  try {
+    const reply = await _bridgeExt.runtime.sendMessage({
+      type: MSG.POPUP_READY,
+      inst: _popupInst,
+    });
+    if (reply && reply.stale) isStale = true;
+    if (reply && Array.isArray(reply.buffered)) buffered = reply.buffered;
+    else if (Array.isArray(reply)) buffered = reply;
+  } catch (e) {}
+
+  if (isStale || myGen !== warmRearmGen) return;
+
+  for (const k of buffered) await dispatchKey(makeSyntheticKeyEvent(k));
+  for (const k of heldLiveKeys) await dispatchKey(makeSyntheticKeyEvent(k));
+  heldLiveKeys.length = 0;
+
+  if (myGen !== warmRearmGen) return;
+  chordBridgeReady = true;
+
+  if (buffered.length === 0) armPopupRevealTimer();
+}
+
+document.addEventListener("ztt:warm-rearm", (e) => {
+  let data = {};
+  try { data = JSON.parse(e.detail); } catch (err) {}
+  handleWarmRearm(data);
+});
+
+// Chrome dismissed the overlay — kill any in-flight reveal-on-pause
+// timer so it doesn't fire ~350ms later and race past revealBlocked
+// in the next chord arm to re-reveal the popup.
+document.addEventListener("ztt:cancel-reveal", () => {
+  clearPopupRevealTimer();
+});

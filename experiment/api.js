@@ -1234,7 +1234,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       if (!w) return null;
 
-      if (w.document.getElementById(OVERLAY_ID)) return null;
+      // Warm popup: an overlay already exists from extension init (or from
+      // a previous chord chain that hid instead of removed). Take the
+      // rearm path — popup browser stays loaded, we just reset its state
+      // and (re)arm pendingReveal for the next chord arm.
+      const existing = w.document.getElementById(OVERLAY_ID);
+      if (existing) return rearmExistingOverlay(view, params, existing);
 
       // Each overlay gets its own instance number. The popup reads it from
       // its URL (?inst=N) and includes it in POPUP_READY. Lets chrome
@@ -1354,6 +1359,79 @@ this.zenWorkspaces = class extends ExtensionAPI {
           panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
         }
         br.focus();
+      };
+      pendingReveal = reveal;
+
+      return overlay;
+    }
+
+    // Warm popup is mounted from a previous chord chain (or initial
+    // pre-create at extension load). Reset state for a fresh chord arm,
+    // tell the popup to navigate to the requested view, and arm a new
+    // pendingReveal. The popup's WarmRearm handler completes the reset
+    // asynchronously and sends POPUP_READY when it's ready to drain any
+    // chord-chain keys that arrived in the rearm window.
+    function rearmExistingOverlay(view, params, overlay) {
+      const w = getWin();
+      // popupInstance intentionally NOT bumped on rearm. With the warm
+      // popup, the same browser persists across chord chains — there is
+      // no destroyed popup that could send a stale POPUP_READY. Overlapping
+      // rearms (a second arm landing while the first's handler is still
+      // running) are discriminated by the popup-side warmRearmGen counter,
+      // which doesn't depend on inst. Bumping inst here would race the
+      // initial popup-load IIFE (which uses the URL's ?inst=N) and orphan
+      // the popup with chordBridgeReady=false if the user chords during
+      // extension load.
+      revealBlocked = false;
+      // Popup will signal ready again after it processes WarmRearm; any
+      // chord-chain keys that land in this window are buffered (just like
+      // the cold-create case).
+      popupReady = false;
+      navStack = [];
+      currentViewName = view || "actions";
+
+      const viewName = view || "actions";
+      const size = getViewSize(viewName);
+      const panel = w.document.getElementById(PANEL_ID);
+      const br = w.document.getElementById(BROWSER_ID);
+
+      // Resize panel + browser to the target view (the overlay is hidden
+      // so this is invisible to the user; reveal happens at the right
+      // dimensions).
+      if (panel) {
+        panel.style.width = size.width + "px";
+        panel.style.height = size.height + "px";
+        panel.style.animation = "";
+      }
+      if (br) {
+        br.style.width = size.width + "px";
+        br.style.height = size.height + "px";
+      }
+      overlay.style.animation = "";
+      delete overlay.dataset.closing;
+
+      // Generation-tagged so stale frame scripts (from prior extension
+      // loads) ignore it and only the current popup-process listener
+      // dispatches the ztt:warm-rearm CustomEvent.
+      if (br && br.messageManager) {
+        try {
+          br.messageManager.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
+            inst: popupInstance,
+            view: view || null,
+            params: params || null,
+          });
+        } catch (e) {}
+      }
+
+      const reveal = () => {
+        if (pendingReveal !== reveal) return;
+        pendingReveal = null;
+        overlay.style.visibility = "visible";
+        if (!skipOverlayAnimations) {
+          overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
+          if (panel) panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
+        }
+        if (br) br.focus();
       };
       pendingReveal = reveal;
 
@@ -1617,6 +1695,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const overlay = w.document.getElementById(OVERLAY_ID);
       if (!overlay || overlay.dataset.closing) return;
 
+      // The popup arms its own reveal-on-pause timer on every keydown
+      // (see armPopupRevealTimer in keyboard.js). With the warm popup
+      // there's no pagehide to auto-clear that timer when we soft-hide,
+      // so a stale timer from the now-dismissed menu would fire ~350ms
+      // later, race past revealBlocked once the next chord arm clears
+      // it, and re-reveal the just-armed popup at the wrong moment.
+      // Tell the popup to clear its timer right now.
+      const _br = w.document.getElementById(BROWSER_ID);
+      if (_br && _br.messageManager) {
+        try { _br.messageManager.sendAsyncMessage("ZenChord:CancelReveal:" + CHORD_GENERATION, {}); } catch (e) {}
+      }
+
+      // `hard: true` actually removes the overlay DOM (only used during
+      // extension teardown). Default is soft-hide: the warm popup browser
+      // stays mounted so the next chord arm reveals instantly.
+      const hard = !!(opts && opts.hard);
+      const silent = !!(opts && opts.silent);
+
       // Block reveal until the next createOverlay. The popup's own
       // reveal timer (set in keyboard.js's dispatchKey) can fire shortly
       // after a terminal action's sendMessage, while this destroy is
@@ -1625,54 +1721,80 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // remove it, producing a flash.
       revealBlocked = true;
 
-      // Bridge mode can't outlive the panel it was waiting on. If a bridge
-      // is active when the overlay is being destroyed (e.g. user clicked
-      // the toolbar icon to toggle it closed mid-animation), tear it down
+      // Bridge mode can't outlive the chord chain it was driving. If a
+      // bridge is active when the overlay is being destroyed, tear it down
       // now — otherwise the engine that owned the bridge would keep
       // capturing keys until the safety timeout.
       //
       // EXCEPT during a "silent" destroy (used by enterBridgeFromOpenView
-      // when swapping out a stale prerender to create a new popup at the
-      // requested view). In that case the bridge state was JUST set up by
-      // the caller and we want to keep it — only the overlay DOM goes.
-      if (bridgeBuffer && !(opts && opts.silent)) {
+      // when swapping the prerender's view mid-chord). In that case the
+      // bridge state was JUST set up by the caller and we want to keep it.
+      if (bridgeBuffer && !silent) {
         bridgeBuffer = null;
         pendingStateSnapshot = null;
         finishBridge();
       }
 
-      overlay.dataset.closing = "true";
       morphGeneration++;
       navStack = [];
       currentViewName = null;
 
       // Prerender that never revealed (chord cancelled, action fired, view
-      // mismatch on timeout). The overlay is invisible — skip the exit
-      // animation and remove immediately so a follow-up open isn't racing
-      // an exit anim on the previous prerender.
+      // mismatch on timeout). Usually the overlay is invisible — skip the
+      // exit animation. But it can ALSO be visible here, if a stale
+      // popup-side reveal-on-pause timer fired between an earlier
+      // destroy and this one's rearm (the race that left the menu stuck
+      // open on the second cmd+.,p). In that case still force-hide.
       if (pendingReveal) {
         pendingReveal = null;
-        overlay.remove();
+        if (hard) {
+          overlay.remove();
+        } else if (overlay.style.visibility !== "hidden") {
+          const panel = w.document.getElementById(PANEL_ID);
+          overlay.style.visibility = "hidden";
+          overlay.style.animation = "";
+          if (panel) panel.style.animation = "";
+        }
         return;
       }
 
+      // Idle warm overlay (between chord chains, no pendingReveal). Nothing
+      // to animate. Hard mode removes the DOM; soft mode is a no-op.
+      if (overlay.style.visibility === "hidden") {
+        if (hard) overlay.remove();
+        return;
+      }
+
+      overlay.dataset.closing = "true";
       const panel = w.document.getElementById(PANEL_ID);
+
+      const finish = () => {
+        if (hard) {
+          if (overlay.isConnected) overlay.remove();
+          return;
+        }
+        overlay.style.visibility = "hidden";
+        overlay.style.animation = "";
+        if (panel) panel.style.animation = "";
+        delete overlay.dataset.closing;
+      };
+
       if (skipOverlayAnimations) {
         // Setting opted out — skip the exit animation entirely.
-        overlay.remove();
+        finish();
         return;
       }
       overlay.style.animation = "ztt-overlay-out 0.06s ease-in forwards";
       if (panel) panel.style.animation = "ztt-panel-out 0.06s ease-in forwards";
 
-      overlay.addEventListener("animationend", () => overlay.remove(), { once: true });
-      // Backup removal: if animationend doesn't fire (we've observed this
-      // when destroyOverlay is invoked from a messageManager callback
-      // while the parent process is busy — the animation property is
-      // set but the animation never progresses), force-remove after the
-      // animation's nominal duration.
+      overlay.addEventListener("animationend", finish, { once: true });
+      // Backup: if animationend doesn't fire (we've observed this when
+      // destroyOverlay is invoked from a messageManager callback while
+      // the parent process is busy — the animation property is set but
+      // the animation never progresses), finish after the animation's
+      // nominal duration.
       w.setTimeout(() => {
-        if (overlay.isConnected) overlay.remove();
+        if (overlay.dataset.closing) finish();
       }, 80);
     }
 
@@ -1680,10 +1802,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       if (!w) return false;
       const overlay = w.document.getElementById(OVERLAY_ID);
-      // A still-hidden prerender (chord wait) isn't really open — callers
-      // like showPalette's toggle and isOverlayOpen-guarded paths shouldn't
-      // treat the chord-wait phantom as a visible panel.
-      return overlay && !overlay.dataset.closing && !pendingReveal;
+      // Mounted and reachable: the warm-popup model keeps the overlay DOM
+      // around between chord chains (hidden), so navigation/state-query
+      // callers should still operate on it. Visibility is checked
+      // separately by isOverlayVisible() for the showPalette toggle.
+      return !!overlay && !overlay.dataset.closing;
+    }
+
+    // True only when the overlay is actually shown to the user — used by
+    // the toolbar-icon toggle, which should close-on-second-click only
+    // when the user can see the palette (a still-hidden prerender from
+    // an in-flight chord doesn't count).
+    function isOverlayVisible() {
+      const w = getWin();
+      if (!w) return false;
+      const overlay = w.document.getElementById(OVERLAY_ID);
+      if (!overlay || overlay.dataset.closing) return false;
+      if (pendingReveal) return false;
+      return overlay.style.visibility !== "hidden";
     }
 
     // -----------------------------------------------------------------------
@@ -1716,15 +1852,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // call into the engine for state queries.
     let paletteRequestFire = null;
 
-    // Reveal-or-open helper used by chord-action / open-view dispatch.
-    // Used by paths that should jump straight to the full popup with no
-    // HUD phase (engine root-timeout / prefix-timeout reveals where the
-    // HUD was already showing and is being morphed into the popup;
-    // toolbar-icon clicks; etc.). Skips the HUD entirely — the panel
-    // is sized to the view's dimensions from the start, the browser is
-    // visible, and reveal() runs the legacy fade-in animation.
+    // Rearm-and-reveal helper. The warm popup is already mounted, so this
+    // resolves to a rearm to the requested view followed by an immediate
+    // reveal. Used by paths that bypass the chord-wait reveal timer
+    // (toolbar-icon clicks, engine root/prefix timeout when prerender
+    // is at the wrong view, etc.).
     function openOverlayWithView(view) {
-      createOverlay(view || null, null, { noHud: true });
+      createOverlay(view || null, null);
       revealOverlay();
     }
 
@@ -2069,6 +2203,35 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    content.document.dispatchEvent(ev);\n" +
         "  } catch(e){}\n" +
         "});\n" +
+        // Warm-popup rearm: chrome tells the loaded popup to reset its UI
+        // state (selection, preview, scroll), navigate to the requested
+        // view, and then signal POPUP_READY to drain any chord-chain keys
+        // that arrived in the rearm window. Payload is JSON-encoded so we
+        // don't have to cloneInto objects across the chrome→content
+        // boundary.
+        "addMessageListener('ZenChord:WarmRearm:' + __GEN, function(m){\n" +
+        "  if (__shutdown) return;\n" +
+        "  try {\n" +
+        "    if (!isExtensionPage() || !content || !content.document) return;\n" +
+        "    var d = (m && m.data) || {};\n" +
+        "    var payload = JSON.stringify(d);\n" +
+        "    var ev = new content.CustomEvent('ztt:warm-rearm', { detail: payload });\n" +
+        "    content.document.dispatchEvent(ev);\n" +
+        "  } catch(e){}\n" +
+        "});\n" +
+        // Cancel-reveal: chrome dismisses the overlay and needs the popup
+        // to drop any in-flight reveal-on-pause timer before the next
+        // chord arm clears revealBlocked. Without this, the stale timer
+        // fires after the next rearm and re-reveals the popup (the
+        // "menu stays open after cmd+.,p" bug).
+        "addMessageListener('ZenChord:CancelReveal:' + __GEN, function(){\n" +
+        "  if (__shutdown) return;\n" +
+        "  try {\n" +
+        "    if (!isExtensionPage() || !content || !content.document) return;\n" +
+        "    var ev = new content.CustomEvent('ztt:cancel-reveal');\n" +
+        "    content.document.dispatchEvent(ev);\n" +
+        "  } catch(e){}\n" +
+        "});\n" +
         // The chord-engine path runs only on non-extension pages. The popup
         // and foreign extension popups own their own keybindings.
         // Mutable constants object — chrome's setChordDelay broadcasts
@@ -2259,6 +2422,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // don't load the stale script.
     function teardownChordEngines() {
       try { if (chromeEngine) chromeEngine.detach(); } catch (e) {}
+      // Hard-remove the warm overlay so its persistent popup browser
+      // doesn't leak across an extension reload (soft-hide alone keeps
+      // the DOM around).
+      try { destroyOverlay({ hard: true }); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Shutdown"); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
       // Remove every delayed chord-engine frame script we (or a prior
@@ -2288,6 +2455,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     installChromeEngine();
     installContentEngineFrameScript();
+
+    // Pre-create the warm overlay so the popup browser loads its content
+    // (popup.html, all view modules, the initial data fetches) in the
+    // background. The first chord arm rearms this existing overlay rather
+    // than paying a 50-200ms cold-start cost. Subsequent chord arms also
+    // reuse the same loaded popup — the browser never reloads, only
+    // navigates internally via WarmRearm.
+    try { createOverlay(); } catch (e) {}
 
     return {
       zenWorkspaces: {
@@ -3282,8 +3457,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (typeof inst === "number" && inst !== popupInstance) {
             return { buffered: [], stateSnapshot: [], stale: true };
           }
-          if (!bridgeBuffer) return { buffered: [], stateSnapshot: [] };
-          const drained = bridgeBuffer;
+          // Warm popup may send POPUP_READY when no bridge is active (initial
+          // pre-create, or rearm-without-chord-key-yet). Treat that as
+          // "popup is ready; buffer empty" — popupReady still flips true so
+          // any subsequent bridge keys go live via DeliverKey rather than
+          // queueing to a null buffer.
+          const drained = bridgeBuffer || [];
           const snapshot = pendingStateSnapshot || [];
           // Reset the bridge buffer to an empty array so future bridge
           // keys from the engine (before forwardKeyToPopup checks
@@ -3319,7 +3498,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
               if (w) w.setTimeout(() => { if (pendingReveal) revealOverlay(); }, 0);
             }
           }
-          return { buffered: drained, stateSnapshot: snapshot };
+          // Race-safety: if the user chorded during initial popup load,
+          // a WarmRearm message may have been dropped because the frame
+          // script wasn't registered yet. The popup's IIFE will see this
+          // `view` in the reply and navigate before replaying buffered
+          // keys, so chord-chain digits land at the right view.
+          const replyView = (currentViewName && currentViewName !== "actions") ? currentViewName : null;
+          return { buffered: drained, stateSnapshot: snapshot, view: replyView };
         },
 
         // Palette management.
@@ -3343,7 +3528,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             view = viewOrOpts.view || null;
           }
 
-          if (isOverlayOpen()) {
+          if (isOverlayVisible()) {
             destroyOverlay();
             return { kind: "closed" };
           }
@@ -3362,7 +3547,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
             revealOverlay();
             return { kind: "opened" };
           }
-          if (pendingReveal) destroyOverlay();
           openOverlayWithView(view);
           return { kind: "opened" };
         },
