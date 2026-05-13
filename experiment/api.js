@@ -768,10 +768,28 @@ this.zenWorkspaces = class extends ExtensionAPI {
     );
     const KEYBINDINGS = engineScope.ZEN_KEYBINDINGS || [];
     const WORKSPACE_DIGIT_CHORDS = engineScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
+    // Mutable so the user's chordDelayMs setting can override at runtime.
+    // The engine reads `constants.CHORD_*_TIMEOUT_MS` on each timer set,
+    // so mutations apply to the next chord without rebuilding the engine.
+    // applyChordDelay below mutates the same object and broadcasts the
+    // new value to content frame scripts.
     const CHORD_CONSTANTS = {
-      CHORD_ROOT_TIMEOUT_MS:   engineScope.CHORD_ROOT_TIMEOUT_MS,
-      CHORD_PREFIX_TIMEOUT_MS: engineScope.CHORD_PREFIX_TIMEOUT_MS,
+      CHORD_ROOT_TIMEOUT_MS:   engineScope.CHORD_ROOT_TIMEOUT_MS   || 350,
+      CHORD_PREFIX_TIMEOUT_MS: engineScope.CHORD_PREFIX_TIMEOUT_MS || 350,
+      CHORD_REVEAL_TIMEOUT_MS: engineScope.CHORD_REVEAL_TIMEOUT_MS || 350,
     };
+    // Current chord delay (for getPaletteURL's ?delay=N param, etc.).
+    let chordDelayMs = CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS;
+    function applyChordDelay(ms) {
+      if (typeof ms !== "number" || ms < 50) return;
+      chordDelayMs = ms;
+      CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS = ms;
+      CHORD_CONSTANTS.CHORD_PREFIX_TIMEOUT_MS = ms;
+      CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS = ms;
+      try {
+        Services.mm.broadcastAsyncMessage("ZenChord:SetDelay", { ms });
+      } catch (e) {}
+    }
     // Mutable so the dynamic Shift+1..9 extension-popup chords (added by
     // buildExtensionList below) can be appended after the static tree is
     // built. The chrome engine reads from this reference at match time, so
@@ -891,6 +909,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const isDark = isChromeDark();
       let url = context.extension.getURL("popup/popup.html") + "?theme=" + (isDark ? "dark" : "light");
       url += "&inst=" + popupInstance;
+      // Current chord-delay setting — popup's keyboard.js reads it and
+      // overrides its reveal-timer duration.
+      url += "&delay=" + chordDelayMs;
       if (view) url += "&view=" + encodeURIComponent(view);
       if (params) {
         for (const [k, v] of Object.entries(params)) {
@@ -2294,13 +2315,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "});\n" +
         // The chord-engine path runs only on non-extension pages. The popup
         // and foreign extension popups own their own keybindings.
-        "var __tree = __scope.buildChordTree(__scope.ZEN_KEYBINDINGS, __scope.ZEN_WORKSPACE_DIGIT_CHORDS, {\n" +
-        "  CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS,\n" +
-        "  CHORD_PREFIX_TIMEOUT_MS: __scope.CHORD_PREFIX_TIMEOUT_MS,\n" +
+        // Mutable constants object — chrome's setChordDelay broadcasts
+        // ZenChord:SetDelay to mutate these at runtime.
+        "var __constants = {\n" +
+        "  CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS || 350,\n" +
+        "  CHORD_PREFIX_TIMEOUT_MS: __scope.CHORD_PREFIX_TIMEOUT_MS || 350,\n" +
+        "};\n" +
+        "addMessageListener('ZenChord:SetDelay', function(m){\n" +
+        "  if (__shutdown) return;\n" +
+        "  var ms = m && m.data && m.data.ms;\n" +
+        "  if (typeof ms === 'number' && ms >= 50) {\n" +
+        "    __constants.CHORD_ROOT_TIMEOUT_MS = ms;\n" +
+        "    __constants.CHORD_PREFIX_TIMEOUT_MS = ms;\n" +
+        "  }\n" +
         "});\n" +
+        "var __tree = __scope.buildChordTree(__scope.ZEN_KEYBINDINGS, __scope.ZEN_WORKSPACE_DIGIT_CHORDS, __constants);\n" +
         "var __engine = __scope.createChordEngine({\n" +
         "  chordTree: __tree,\n" +
-        "  constants: { CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS, CHORD_PREFIX_TIMEOUT_MS: __scope.CHORD_PREFIX_TIMEOUT_MS },\n" +
+        "  constants: __constants,\n" +
         "  filterEvent: function(){ return true; },\n" +
         "  setTimeoutFn: function(fn, ms){ return content ? content.setTimeout(fn, ms) : null; },\n" +
         "  clearTimeoutFn: function(id){ if (content && id != null) try { content.clearTimeout(id); } catch (e) {} },\n" +
@@ -3709,6 +3741,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // reveal.
         async setShowChordHud(enabled) {
           showChordHud = !!enabled;
+        },
+
+        // User-facing single delay for chord timeouts. Background
+        // pushes this from the chordDelayMs setting. applyChordDelay
+        // updates the chrome engine's constants and broadcasts to
+        // content frame scripts. The popup picks it up from its URL
+        // ?delay=N param at load time.
+        async setChordDelay(ms) {
+          applyChordDelay(ms);
         },
 
       },

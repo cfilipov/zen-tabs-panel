@@ -359,6 +359,9 @@ async function runLiveDispatchQueue() {
 // gate against a stale popup (destroyed in a prerender swap) firing
 // reveal on its replacement.
 let _popupInst = null;
+// Chord delay (ms). Read from ?delay=N at IIFE start; falls back to
+// CHORD_REVEAL_TIMEOUT_MS from shared/constants.js if missing.
+let _popupChordDelay = CHORD_REVEAL_TIMEOUT_MS;
 let popupRevealTimer = null;
 function clearPopupRevealTimer() {
   if (popupRevealTimer !== null) {
@@ -374,7 +377,7 @@ function armPopupRevealTimer() {
       type: MSG.REVEAL_PALETTE,
       inst: _popupInst,
     }).catch(() => {});
-  }, CHORD_REVEAL_TIMEOUT_MS);
+  }, _popupChordDelay);
 }
 
 // Stop the reveal timer if this popup is being torn down — keeps a
@@ -415,6 +418,10 @@ const _bridgeExt = typeof browser !== "undefined" ? browser : chrome;
   const _params = new URLSearchParams(location.search);
   const _inst = parseInt(_params.get("inst") || "", 10);
   _popupInst = Number.isFinite(_inst) ? _inst : null;
+  const _delay = parseInt(_params.get("delay") || "", 10);
+  if (Number.isFinite(_delay) && _delay >= 50) {
+    _popupChordDelay = _delay;
+  }
 
   let buffered = [];
   let isStale = false;

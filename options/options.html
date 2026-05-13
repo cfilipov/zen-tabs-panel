@@ -75,6 +75,15 @@
     </section>
 
     <section>
+      <h2>Chord delay</h2>
+      <p class="description">How long the chord engine waits after each key (in milliseconds) before opening the next menu. Applies to the leader pause (e.g. <code>cmd+.</code> alone), prefix pause (e.g. <code>cmd+., o</code> alone), and open-view pause (e.g. <code>cmd+., q</code> alone). Lower values feel snappier; higher values give you more time to think between keys.</p>
+      <label class="toggle-row">
+        <input type="number" id="chordDelayMs" min="50" max="2000" step="50">
+        <span>milliseconds (default 350)</span>
+      </label>
+    </section>
+
+    <section>
       <h2>Companion Zen Mods</h2>
       <p class="description">Optional Zen Mods installed alongside this extension. Each can be enabled or disabled independently from Zen's Mods settings.</p>
       <div id="companion-mods"></div>

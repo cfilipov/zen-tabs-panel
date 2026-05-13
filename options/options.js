@@ -8,6 +8,7 @@ const els = {
   interceptExtensionPopups: document.getElementById("interceptExtensionPopups"),
   skipOverlayAnimations: document.getElementById("skipOverlayAnimations"),
   showChordHud: document.getElementById("showChordHud"),
+  chordDelayMs: document.getElementById("chordDelayMs"),
   status: document.getElementById("status"),
   companionMods: document.getElementById("companion-mods"),
 };
@@ -21,6 +22,7 @@ async function loadSettings() {
   els.interceptExtensionPopups.checked = settings.interceptExtensionPopups;
   els.skipOverlayAnimations.checked = settings.skipOverlayAnimations;
   els.showChordHud.checked = settings.showChordHud;
+  els.chordDelayMs.value = String(settings.chordDelayMs);
 }
 
 async function loadShortcuts() {
@@ -69,6 +71,7 @@ async function saveSettings() {
     interceptExtensionPopups: els.interceptExtensionPopups.checked,
     skipOverlayAnimations: els.skipOverlayAnimations.checked,
     showChordHud: els.showChordHud.checked,
+    chordDelayMs: Math.max(50, Number(els.chordDelayMs.value) || 350),
   });
 
   els.status.classList.remove("hidden");

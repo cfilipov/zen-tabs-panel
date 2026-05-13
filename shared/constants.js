@@ -167,9 +167,12 @@ this.MSG = Object.freeze({
 // the user types the next key right at the boundary — but the
 // revealBlocked flag on destroyOverlay and the revealDeferred-on-
 // popup-not-ready guard catch the common race cases.
-this.CHORD_ROOT_TIMEOUT_MS = 250;
-this.CHORD_PREFIX_TIMEOUT_MS = 300;
-this.CHORD_REVEAL_TIMEOUT_MS = 300;
+// Initial defaults — overridden at runtime by the chordDelayMs setting
+// (see api.js applyChordDelay, the ZenChord:SetDelay IPC for frame
+// scripts, and the popup's reading of ?delay=N from its URL).
+this.CHORD_ROOT_TIMEOUT_MS = 350;
+this.CHORD_PREFIX_TIMEOUT_MS = 350;
+this.CHORD_REVEAL_TIMEOUT_MS = 350;
 
 // Default values for browser.storage.local. Pass to storage.get() to read
 // any subset; the keys used as `get`'s argument also act as the schema.
@@ -190,6 +193,13 @@ this.STORAGE_DEFAULTS = Object.freeze({
   // hidden-prerender model: invisible during the chord wait, fades
   // in on reveal.
   showChordHud: false,
+  // Single user-facing delay for all chord timeouts: root timeout
+  // (after leader, before menu reveals if no chord key), prefix
+  // timeout (after descending into a prefix node), and reveal timeout
+  // (after an open-view chord match before the menu shows). Pushed to
+  // the chrome engine, content engines (via ZenChord:SetDelay), and
+  // the popup (via ?delay=N URL param).
+  chordDelayMs: 350,
 });
 
 // Whitelist of view names accepted by the navigate-view message. Mirrors

@@ -20,6 +20,7 @@ async function loadSettings() {
   pushInterceptSetting();
   pushSkipAnimationsSetting();
   pushShowChordHudSetting();
+  pushChordDelaySetting();
 }
 
 function pushInterceptSetting() {
@@ -34,12 +35,20 @@ function pushShowChordHudSetting() {
   api.setShowChordHud(!!settings.showChordHud).catch(() => {});
 }
 
+function pushChordDelaySetting() {
+  const ms = Number(settings.chordDelayMs);
+  if (Number.isFinite(ms) && ms >= 50) {
+    api.setChordDelay(ms).catch(() => {});
+  }
+}
+
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
   let autoCloseTouched = false;
   let interceptTouched = false;
   let skipAnimationsTouched = false;
   let showChordHudTouched = false;
+  let chordDelayTouched = false;
   for (const key of Object.keys(changes)) {
     if (key in STORAGE_DEFAULTS) {
       settings[key] = changes[key].newValue ?? STORAGE_DEFAULTS[key];
@@ -47,12 +56,14 @@ browser.storage.onChanged.addListener((changes, areaName) => {
       if (key === "interceptExtensionPopups") interceptTouched = true;
       if (key === "skipOverlayAnimations") skipAnimationsTouched = true;
       if (key === "showChordHud") showChordHudTouched = true;
+      if (key === "chordDelayMs") chordDelayTouched = true;
     }
   }
   if (autoCloseTouched) syncAutoCloseAlarm();
   if (interceptTouched) pushInterceptSetting();
   if (skipAnimationsTouched) pushSkipAnimationsSetting();
   if (showChordHudTouched) pushShowChordHudSetting();
+  if (chordDelayTouched) pushChordDelaySetting();
 });
 
 // ---------------------------------------------------------------------------

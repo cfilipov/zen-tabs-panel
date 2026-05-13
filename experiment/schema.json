@@ -641,6 +641,15 @@
         "parameters": [
           { "name": "enabled", "type": "boolean" }
         ]
+      },
+      {
+        "name": "setChordDelay",
+        "type": "function",
+        "async": true,
+        "description": "Set the single user-configurable chord delay used for root, prefix, and reveal timeouts. Broadcasts to content frame scripts. Popups pick it up via their ?delay=N URL param at load.",
+        "parameters": [
+          { "name": "ms", "type": "integer" }
+        ]
       }
     ],
     "events": [
