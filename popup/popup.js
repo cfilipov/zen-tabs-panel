@@ -912,6 +912,14 @@ function activateSelected() {
 // completely before any fade starts, and the fade is a single
 // continuous opacity blend — no fade-out gap.
 async function runViewSwitchInvisibly(handler, params) {
+  // Mid chord-chain (popup hasn't revealed yet) the cross-fade is
+  // wasted — nobody can see it, but the 220ms wait still delays the
+  // reveal-on-pause timer. Just render the new view directly.
+  if (typeof chordBridgeReady !== "undefined" && !chordBridgeReady) {
+    await handler(params || {});
+    return;
+  }
+
   contentEl.style.position = "relative";
 
   // Clone the current content as the "old" visual. Keep all descendant
@@ -926,14 +934,14 @@ async function runViewSwitchInvisibly(handler, params) {
     inset: "0",
     pointerEvents: "none",
     opacity: "1",
-    transition: "opacity 0.2s ease-in-out",
+    transition: "opacity 0.10s ease-in-out",
   });
 
   // Hide the real children so the handler can write the new view into
   // them invisibly behind the snapshot.
   const realChildren = Array.from(contentEl.children);
   for (const child of realChildren) {
-    child.style.transition = "opacity 0.2s ease-in-out";
+    child.style.transition = "opacity 0.10s ease-in-out";
     child.style.opacity = "0";
   }
   contentEl.appendChild(snapshot);
@@ -949,7 +957,7 @@ async function runViewSwitchInvisibly(handler, params) {
     }
   });
 
-  await new Promise(r => setTimeout(r, 220));
+  await new Promise(r => setTimeout(r, 110));
   snapshot.remove();
   for (const child of realChildren) {
     child.style.transition = "";

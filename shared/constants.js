@@ -157,20 +157,19 @@ this.MSG = Object.freeze({
 //   CHORD_PREFIX_TIMEOUT_MS — after a prefix node descent, how long to wait
 //                             for the next chord key before opening the
 //                             prefix's view.
-this.CHORD_ROOT_TIMEOUT_MS = 400;
-this.CHORD_PREFIX_TIMEOUT_MS = 600;
-// After an engine fires open-view (transitioning to bridging), chrome
-// keeps the popup invisible and waits this long without further chord
-// keys before revealing. Fast chord chains complete before this fires
-// and never show the UI; chains that pause reveal the menu at the
-// current view+context. Cleared the moment the user's next chord key
-// is forwarded to the popup (forwardKeyToPopup in api.js).
+//   CHORD_REVEAL_TIMEOUT_MS — after an open-view match, how long to wait
+//                             with no further chord key before revealing
+//                             the popup. Used by both chrome's reveal
+//                             timer (in api.js) and the popup-side
+//                             reveal timer (in keyboard.js).
 //
-// Sized larger than CHORD_ROOT_TIMEOUT_MS / CHORD_PREFIX_TIMEOUT_MS
-// so a user typing a chord chain near the boundary (e.g. ~500ms
-// between keys) doesn't trigger a brief reveal+destroy flash for
-// fast terminal actions like cmd+., r, 1.
-this.CHORD_REVEAL_TIMEOUT_MS = 700;
+// Sized to feel snappy. Risk floor is a flash on a chord chain where
+// the user types the next key right at the boundary — but the
+// revealBlocked flag on destroyOverlay and the revealDeferred-on-
+// popup-not-ready guard catch the common race cases.
+this.CHORD_ROOT_TIMEOUT_MS = 250;
+this.CHORD_PREFIX_TIMEOUT_MS = 300;
+this.CHORD_REVEAL_TIMEOUT_MS = 300;
 
 // Default values for browser.storage.local. Pass to storage.get() to read
 // any subset; the keys used as `get`'s argument also act as the schema.
@@ -181,6 +180,10 @@ this.STORAGE_DEFAULTS = Object.freeze({
   autoMoveDelay:      3000,
   welcomed:           false,
   interceptExtensionPopups: true,
+  // When true, the overlay's reveal/dismiss animations are skipped —
+  // the panel just appears/disappears. In-popup sub-menu cross-fades
+  // (navigating between views inside an open palette) still animate.
+  skipOverlayAnimations: false,
 });
 
 // Whitelist of view names accepted by the navigate-view message. Mirrors

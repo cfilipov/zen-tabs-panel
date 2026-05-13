@@ -1157,6 +1157,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // openings between init and that first push (rare in practice) match
     // the default-on behavior the user configured.
     let interceptEnabled = true;
+    // Default matches STORAGE_DEFAULTS.skipOverlayAnimations (false —
+    // animations on). Background pushes the persisted value via
+    // setSkipOverlayAnimations after init. Used by createOverlay's
+    // reveal path and destroyOverlay's dismiss path.
+    let skipOverlayAnimations = false;
     // Services.ww.openWindow is non-writable/non-configurable on the XPCOM
     // wrapper, so direct assignment is silently rejected and defineProperty
     // throws. We replace Services.ww itself with a Proxy on an empty target
@@ -1323,8 +1328,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (pendingReveal !== reveal) return;
         pendingReveal = null;
         overlay.style.visibility = "visible";
-        overlay.style.animation = "ztt-overlay-in 0.22s ease-out";
-        panel.style.animation = "ztt-panel-in 0.22s cubic-bezier(0.25, 1, 0.5, 1)";
+        if (skipOverlayAnimations) {
+          // Setting opted out of overlay animations — snap visible.
+        } else {
+          overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
+          panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
+        }
         br.focus();
       };
       pendingReveal = reveal;
@@ -1629,8 +1638,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
 
       const panel = w.document.getElementById(PANEL_ID);
-      overlay.style.animation = "ztt-overlay-out 0.12s ease-in forwards";
-      if (panel) panel.style.animation = "ztt-panel-out 0.12s ease-in forwards";
+      if (skipOverlayAnimations) {
+        // Setting opted out — skip the exit animation entirely.
+        overlay.remove();
+        return;
+      }
+      overlay.style.animation = "ztt-overlay-out 0.06s ease-in forwards";
+      if (panel) panel.style.animation = "ztt-panel-out 0.06s ease-in forwards";
 
       overlay.addEventListener("animationend", () => overlay.remove(), { once: true });
       // Backup removal: if animationend doesn't fire (we've observed this
@@ -1640,7 +1654,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // animation's nominal duration.
       w.setTimeout(() => {
         if (overlay.isConnected) overlay.remove();
-      }, 150);
+      }, 80);
     }
 
     function isOverlayOpen() {
@@ -1687,6 +1701,31 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function openOverlayWithView(view) {
       createOverlay(view || null);
       revealOverlay();
+    }
+
+    // Engine descended into a prefix node — eagerly prerender the prefix's
+    // view (the one that would open on prefix-timeout) so it's loaded by
+    // the time the timer fires. Without this, cmd+., o pauses for the
+    // prefix timeout AND THEN starts the popup load + reveal, which feels
+    // noticeably slower than cmd+., q (where the open-view match fires
+    // the IPC immediately and popup loads during the reveal-wait window).
+    function prerenderPrefixView(snapshot) {
+      if (!Array.isArray(snapshot) || snapshot.length === 0) return;
+      let node = CHORD_TREE;
+      for (const k of snapshot) {
+        if (!node || !node.children) return;
+        node = node.children[k];
+        if (!node) return;
+      }
+      if (!node || node.type !== "prefix") return;
+      const view = node.onTimeout && node.onTimeout.type === "open-view"
+        ? node.onTimeout.view : null;
+      if (!view) return;
+      // Swap the existing prerender (typically the actions-view one from
+      // onArmed) for one at the prefix's view. Silent destroy preserves
+      // any in-flight bridge state.
+      if (pendingReveal) destroyOverlay({ silent: true });
+      createOverlay(view);
     }
 
     // Dispatch a chord action coming from EITHER engine (chrome direct call
@@ -1900,7 +1939,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
         enterBridgeFromOpenView(view, snapshot, "chrome", source);
       },
-      onStateChange: () => {},
+      onStateChange: (snapshot) => prerenderPrefixView(snapshot),
       onCancel: () => {
         try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
         if (pendingReveal) destroyOverlay();
@@ -2013,7 +2052,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  onOpenView: function(v, s, source){ try { sendAsyncMessage('ZenChord:OpenView', tag({ view: v, snapshot: s, source: source })); } catch(e){} },\n" +
         "  onCancel: function(){ try { sendAsyncMessage('ZenChord:Cancel', tag({})); } catch(e){} },\n" +
         "  onBridgeKey: function(k){ try { sendAsyncMessage('ZenChord:BridgeKey', tag(k)); } catch(e){} },\n" +
-        "  onStateChange: function(){},\n" +
+        "  onStateChange: function(snapshot){ try { sendAsyncMessage('ZenChord:StateChange', tag({ snapshot: snapshot })); } catch(e){} },\n" +
         "});\n" +
         "var __shutdown = false;\n" +
         // Default-group capture listener. The system-group engine listener
@@ -2133,6 +2172,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!isCurrentGen(m)) return;
       forwardKeyToPopup(m.data);
     }
+    function onContentStateChange(m) {
+      if (!isCurrentGen(m)) return;
+      const data = m.data;
+      prerenderPrefixView(data && data.snapshot);
+    }
     function onContentHello(m) {
       if (!isCurrentGen(m)) return;
       // A frame script just initialized; reply with the current set of
@@ -2144,12 +2188,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
         } catch (e) {}
       }
     }
-    Services.mm.addMessageListener("ZenChord:Action",    onContentAction);
-    Services.mm.addMessageListener("ZenChord:Armed",     onContentArmed);
-    Services.mm.addMessageListener("ZenChord:OpenView",  onContentOpenView);
-    Services.mm.addMessageListener("ZenChord:Cancel",    onContentCancel);
-    Services.mm.addMessageListener("ZenChord:BridgeKey", onContentBridgeKey);
-    Services.mm.addMessageListener("ZenChord:Hello",     onContentHello);
+    Services.mm.addMessageListener("ZenChord:Action",      onContentAction);
+    Services.mm.addMessageListener("ZenChord:Armed",       onContentArmed);
+    Services.mm.addMessageListener("ZenChord:OpenView",    onContentOpenView);
+    Services.mm.addMessageListener("ZenChord:Cancel",      onContentCancel);
+    Services.mm.addMessageListener("ZenChord:BridgeKey",   onContentBridgeKey);
+    Services.mm.addMessageListener("ZenChord:StateChange", onContentStateChange);
+    Services.mm.addMessageListener("ZenChord:Hello",       onContentHello);
 
     // Teardown helpers used by callOnClose.
     //
@@ -2185,8 +2230,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       try { Services.mm.removeMessageListener("ZenChord:Armed",     onContentArmed); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:OpenView",  onContentOpenView); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:Cancel",    onContentCancel); } catch (e) {}
-      try { Services.mm.removeMessageListener("ZenChord:BridgeKey", onContentBridgeKey); } catch (e) {}
-      try { Services.mm.removeMessageListener("ZenChord:Hello",     onContentHello); } catch (e) {}
+      try { Services.mm.removeMessageListener("ZenChord:BridgeKey",   onContentBridgeKey); } catch (e) {}
+      try { Services.mm.removeMessageListener("ZenChord:StateChange", onContentStateChange); } catch (e) {}
+      try { Services.mm.removeMessageListener("ZenChord:Hello",       onContentHello); } catch (e) {}
     }
 
     installChromeEngine();
@@ -3377,6 +3423,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // pushes this from the interceptExtensionPopups setting.
         async setExtensionPopupIntercept(enabled) {
           interceptEnabled = !!enabled;
+        },
+
+        // Toggle overlay reveal/dismiss animations. Background pushes
+        // this from the skipOverlayAnimations setting. Sub-menu cross-
+        // fades inside an open palette are unaffected.
+        async setSkipOverlayAnimations(skip) {
+          skipOverlayAnimations = !!skip;
         },
 
       },

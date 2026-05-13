@@ -289,6 +289,15 @@ async function handleListViewKey(e) {
 // Async so chord-chain replay can await each key's effect (esp. drill
 // navigation via navigateToView) before the next replay key dispatches.
 async function dispatchKey(e) {
+  // Anchor the reveal timer to the moment the key arrived, not to when
+  // the handler finishes. The previous "arm at end" anchor added the
+  // handler duration (~drill animation) to the perceived pause-to-
+  // reveal delay; with cross-fade skipped during chord-chain (popup
+  // invisible), handlers are short enough that arming at start is
+  // safe — the next chord key resets the timer before it fires, and
+  // the revealBlocked flag on destroyOverlay catches terminal-action
+  // races.
+  armPopupRevealTimer();
   const handler = KEY_HANDLERS[e.key];
   if (handler) {
     handler(e);
@@ -297,15 +306,6 @@ async function dispatchKey(e) {
   } else {
     await handleListViewKey(e);
   }
-  // Arm the reveal timer AFTER the handler completes. If the handler
-  // awaited a slow drill (runViewSwitchInvisibly takes ~470ms with the
-  // 220ms cross-fade + handler render), arming at dispatch start would
-  // fire the timer mid-drill, revealing the popup before the next
-  // chord-chain key could finish processing — producing a flash on
-  // cmd+., q, 1, 1 when the second 1 lands during drill. Anchoring
-  // the 400ms pause to "handler finished" means subsequent keys in
-  // the drain reset the timer before it can fire.
-  armPopupRevealTimer();
 }
 
 // Chord-bridge handshake: the chord engine in the experiment API may have
@@ -374,7 +374,7 @@ function armPopupRevealTimer() {
       type: MSG.REVEAL_PALETTE,
       inst: _popupInst,
     }).catch(() => {});
-  }, 400);
+  }, CHORD_REVEAL_TIMEOUT_MS);
 }
 
 // Stop the reveal timer if this popup is being torn down — keeps a

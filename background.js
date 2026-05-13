@@ -18,25 +18,33 @@ async function loadSettings() {
   Object.assign(settings, stored);
   syncAutoCloseAlarm();
   pushInterceptSetting();
+  pushSkipAnimationsSetting();
 }
 
 function pushInterceptSetting() {
   api.setExtensionPopupIntercept(!!settings.interceptExtensionPopups).catch(() => {});
 }
 
+function pushSkipAnimationsSetting() {
+  api.setSkipOverlayAnimations(!!settings.skipOverlayAnimations).catch(() => {});
+}
+
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
   let autoCloseTouched = false;
   let interceptTouched = false;
+  let skipAnimationsTouched = false;
   for (const key of Object.keys(changes)) {
     if (key in STORAGE_DEFAULTS) {
       settings[key] = changes[key].newValue ?? STORAGE_DEFAULTS[key];
       if (key === "autoCloseEnabled") autoCloseTouched = true;
       if (key === "interceptExtensionPopups") interceptTouched = true;
+      if (key === "skipOverlayAnimations") skipAnimationsTouched = true;
     }
   }
   if (autoCloseTouched) syncAutoCloseAlarm();
   if (interceptTouched) pushInterceptSetting();
+  if (skipAnimationsTouched) pushSkipAnimationsSetting();
 });
 
 // ---------------------------------------------------------------------------

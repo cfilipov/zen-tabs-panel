@@ -621,6 +621,15 @@
         "parameters": [
           { "name": "enabled", "type": "boolean" }
         ]
+      },
+      {
+        "name": "setSkipOverlayAnimations",
+        "type": "function",
+        "async": true,
+        "description": "When true, the overlay's reveal/dismiss animations are skipped — the panel just appears/disappears. Sub-menu cross-fades inside the open palette are unaffected.",
+        "parameters": [
+          { "name": "skip", "type": "boolean" }
+        ]
       }
     ],
     "events": [
