@@ -1454,7 +1454,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // changes (cmd+.,o swapping to reorder, etc.). For same-view
       // rearms (cmd+. → actions → cmd+. → actions) the size is already
       // correct, no transition.
-      if (panel) panel.style.animation = "";
+      //
+      // Suppress the panel's width/height CSS transition during the
+      // rearm → reveal window though: any resize that WarmRearm
+      // triggers should snap to the final size before reveal, so the
+      // user doesn't see the panel "grow" into place after opening.
+      // The reveal closure below restores the transition so in-popup
+      // sub-menu navigation still animates smoothly.
+      if (panel) {
+        panel.style.animation = "";
+        panel.style.transition = "none";
+      }
       overlay.style.animation = "";
       delete overlay.dataset.closing;
 
@@ -1478,6 +1488,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (!skipOverlayAnimations) {
           overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
           if (panel) panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
+        }
+        // Restore the width/height transition that rearm suppressed —
+        // in-popup sub-menu navigation still wants the smooth resize.
+        // Defer one frame so any final size assignment from the rearm
+        // window definitively snaps without interpolation.
+        if (panel) {
+          const w2 = getWin();
+          if (w2) w2.requestAnimationFrame(() => {
+            panel.style.transition = "width 0.15s ease-out, height 0.15s ease-out";
+          });
         }
         if (br) br.focus();
       };
@@ -1745,6 +1765,29 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }, { capture: true });
     }
 
+    // Send a WarmRearm to the popup telling it to navigate back to
+    // actions and re-render. Used by destroyOverlay's soft-hide so the
+    // dismissed popup settles at actions size + content while still
+    // hidden, ready for the next cmd+. to reveal without any reflow.
+    //
+    // The popup's normal WarmRearm handler runs: state reset, view
+    // handler, requestPanelResize, POPUP_READY exchange. Chrome's
+    // takeChordBridgeBuffer sets popupReady=true but doesn't reveal
+    // here (pendingReveal is null after destroy; revealDeferred wasn't
+    // set), so this is purely state preparation.
+    function resetWarmPopupToActions() {
+      const w = getWin();
+      const br = w && w.document.getElementById(BROWSER_ID);
+      if (!br || !br.messageManager) return;
+      try {
+        br.messageManager.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
+          inst: popupInstance,
+          view: null,
+          params: null,
+        });
+      } catch (e) {}
+    }
+
     function destroyOverlay(opts) {
       clearPreviewState();
       const w = getWin();
@@ -1822,6 +1865,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return;
       }
 
+      // Same skip-animation path as above for opted-out users runs `finish`
+      // synchronously, including the reset-to-actions handoff below.
+
       overlay.dataset.closing = "true";
       const panel = w.document.getElementById(PANEL_ID);
 
@@ -1834,6 +1880,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
         overlay.style.animation = "";
         if (panel) panel.style.animation = "";
         delete overlay.dataset.closing;
+        // Tell the popup to navigate back to the default actions view
+        // and re-render at its natural size while still hidden. Without
+        // this, dismissing from a smaller submenu (e.g. reorder ~230px)
+        // leaves the popup's content laid out for that viewport — the
+        // next cmd+. has to reflow content from reorder-shape to
+        // actions-shape as the panel grows, which the user sees as the
+        // contents "animating in." Resetting to actions here keeps the
+        // popup pre-rendered and pre-sized for the most common
+        // next-open case.
+        resetWarmPopupToActions();
       };
 
       if (skipOverlayAnimations) {
