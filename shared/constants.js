@@ -184,6 +184,12 @@ this.STORAGE_DEFAULTS = Object.freeze({
   // the panel just appears/disappears. In-popup sub-menu cross-fades
   // (navigating between views inside an open palette) still animate.
   skipOverlayAnimations: false,
+  // When true, arming the chord shows a small HUD (key badges +
+  // progress bar) centered on screen, which morphs into the full popup
+  // on reveal. When false (default), the popup uses the legacy
+  // hidden-prerender model: invisible during the chord wait, fades
+  // in on reveal.
+  showChordHud: false,
 });
 
 // Whitelist of view names accepted by the navigate-view message. Mirrors

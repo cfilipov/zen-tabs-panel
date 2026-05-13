@@ -19,6 +19,7 @@ async function loadSettings() {
   syncAutoCloseAlarm();
   pushInterceptSetting();
   pushSkipAnimationsSetting();
+  pushShowChordHudSetting();
 }
 
 function pushInterceptSetting() {
@@ -29,22 +30,29 @@ function pushSkipAnimationsSetting() {
   api.setSkipOverlayAnimations(!!settings.skipOverlayAnimations).catch(() => {});
 }
 
+function pushShowChordHudSetting() {
+  api.setShowChordHud(!!settings.showChordHud).catch(() => {});
+}
+
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
   let autoCloseTouched = false;
   let interceptTouched = false;
   let skipAnimationsTouched = false;
+  let showChordHudTouched = false;
   for (const key of Object.keys(changes)) {
     if (key in STORAGE_DEFAULTS) {
       settings[key] = changes[key].newValue ?? STORAGE_DEFAULTS[key];
       if (key === "autoCloseEnabled") autoCloseTouched = true;
       if (key === "interceptExtensionPopups") interceptTouched = true;
       if (key === "skipOverlayAnimations") skipAnimationsTouched = true;
+      if (key === "showChordHud") showChordHudTouched = true;
     }
   }
   if (autoCloseTouched) syncAutoCloseAlarm();
   if (interceptTouched) pushInterceptSetting();
   if (skipAnimationsTouched) pushSkipAnimationsSetting();
+  if (showChordHudTouched) pushShowChordHudSetting();
 });
 
 // ---------------------------------------------------------------------------
@@ -549,9 +557,22 @@ async function handleChordResult(result) {
 // message to the focused tab's content engine. There's a small IPC race
 // (next chord key typed <~10ms after the leader could arrive at an idle
 // content engine), but typical chord typing speed leaves enough margin.
+// Cached shortcuts — refreshed at startup and on `browser.commands.update`
+// changes. We pass the leader's shortcut string to armChord so the HUD's
+// first badge can display the actual configured combo (e.g. "⌘ .").
+let cachedShortcuts = {};
+async function refreshShortcuts() {
+  try {
+    const all = await browser.commands.getAll();
+    cachedShortcuts = {};
+    for (const cmd of all) cachedShortcuts[cmd.name] = cmd.shortcut || "";
+  } catch (e) {}
+}
+refreshShortcuts();
+
 browser.commands.onCommand.addListener((command) => {
   if (command.startsWith("open-palette")) {
-    api.armChord();
+    api.armChord(cachedShortcuts[command] || "").catch(() => {});
   }
 });
 

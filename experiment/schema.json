@@ -371,8 +371,10 @@
         "name": "armChord",
         "type": "function",
         "async": true,
-        "description": "Force-arm the chord engines from an external trigger (e.g. user-customized commands shortcut). Chrome engine arms locally; the selected tab's content engine arms via a targeted message.",
-        "parameters": []
+        "description": "Force-arm the chord engines from an external trigger (e.g. user-customized commands shortcut). Chrome engine arms locally; the selected tab's content engine arms via a targeted message. The leaderLabel (configured shortcut string, e.g. 'Command+Period') is displayed as the first badge in the chord HUD.",
+        "parameters": [
+          { "name": "leaderLabel", "type": "string", "optional": true }
+        ]
       },
       {
         "name": "revealPalette",
@@ -629,6 +631,15 @@
         "description": "When true, the overlay's reveal/dismiss animations are skipped — the panel just appears/disappears. Sub-menu cross-fades inside the open palette are unaffected.",
         "parameters": [
           { "name": "skip", "type": "boolean" }
+        ]
+      },
+      {
+        "name": "setShowChordHud",
+        "type": "function",
+        "async": true,
+        "description": "Toggle the chord HUD (small badge box + progress bar) shown during chord arming. When false, the chord uses the legacy hidden-prerender behavior.",
+        "parameters": [
+          { "name": "enabled", "type": "boolean" }
         ]
       }
     ],

@@ -7,6 +7,7 @@ const els = {
   autoMoveDelay: document.getElementById("autoMoveDelay"),
   interceptExtensionPopups: document.getElementById("interceptExtensionPopups"),
   skipOverlayAnimations: document.getElementById("skipOverlayAnimations"),
+  showChordHud: document.getElementById("showChordHud"),
   status: document.getElementById("status"),
   companionMods: document.getElementById("companion-mods"),
 };
@@ -19,6 +20,7 @@ async function loadSettings() {
   els.autoMoveDelay.value = String(settings.autoMoveDelay);
   els.interceptExtensionPopups.checked = settings.interceptExtensionPopups;
   els.skipOverlayAnimations.checked = settings.skipOverlayAnimations;
+  els.showChordHud.checked = settings.showChordHud;
 }
 
 async function loadShortcuts() {
@@ -66,6 +68,7 @@ async function saveSettings() {
     autoMoveDelay: Number(els.autoMoveDelay.value),
     interceptExtensionPopups: els.interceptExtensionPopups.checked,
     skipOverlayAnimations: els.skipOverlayAnimations.checked,
+    showChordHud: els.showChordHud.checked,
   });
 
   els.status.classList.remove("hidden");
