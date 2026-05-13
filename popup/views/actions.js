@@ -652,11 +652,14 @@ async function showActionsMenu() {
         sameWsTabs.push(t);
       }
 
-      // Previous-tab preview candidate: not active, not split sibling, not unread.
+      // Previous-tab preview candidate: not active, not split sibling, not unread,
+      // not a new-tab/blank page (matches goToPreviousTab's filter — landing in
+      // an empty workspace shouldn't anchor the "previous" preview).
       // Track the running argmax instead of collecting + sorting an intermediate.
       const isActive = t.domId === activeDomId;
       const isSplitSibling = activeSplitGroupId != null && t.splitGroupId === activeSplitGroupId;
-      if (!isActive && !isSplitSibling && !t.unread) {
+      const isNewTab = !t.url || t.url === "about:newtab" || t.url === "about:blank" || t.url === "about:home";
+      if (!isActive && !isSplitSibling && !t.unread && !isNewTab) {
         const access = t.lastAccessed || 0;
         if (access > prevBestAccess) {
           prevBestAccess = access;

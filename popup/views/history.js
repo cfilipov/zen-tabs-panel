@@ -92,7 +92,7 @@ async function showLastVisited(animate) {
   const filtered = filterByWorkspace(allTabs.filter((t) => {
     if (t.active) return false;
     if (activeSplitGroupId && t.splitGroupId === activeSplitGroupId) return false;
-    if (!t.url || t.url === "about:newtab" || t.url === "about:blank") return false;
+    if (!t.url || t.url === "about:newtab" || t.url === "about:blank" || t.url === "about:home") return false;
     return true;
   }));
 

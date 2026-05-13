@@ -134,6 +134,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return Array.from(w.document.querySelectorAll(".tabbrowser-tab"));
     }
 
+    // True for any URL that should be excluded from lastAccessed-based
+    // navigation (previous tab, recents, etc.). Landing in an empty
+    // workspace or opening a fresh tab shouldn't poison the recency
+    // ordering — the chord-driven "previous" should jump back to the
+    // last *real* tab the user was on.
+    function isNewTabUrl(url) {
+      return !url || url === "about:newtab" || url === "about:blank" || url === "about:home";
+    }
+    function isNewTabElement(tab) {
+      return isNewTabUrl(tab?.linkedBrowser?.currentURI?.spec || "");
+    }
+
     // -----------------------------------------------------------------------
     // Persistent per-tab metadata (rides SessionStore.extData; survives restart)
     //
@@ -2535,9 +2547,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
             }
           }
 
-          // Sort by lastAccessed descending, filter out visible and unread tabs
+          // Sort by lastAccessed descending, filter out visible, unread,
+          // and new-tab/blank pages (the latter shouldn't anchor "previous"
+          // navigation — landing in an empty workspace would otherwise
+          // make the next cmd+.,p jump back into the wrong workspace).
           const candidates = allTabs
-            .filter((t) => !visibleDomIds.has(t.id) && !t.hasAttribute("unread"))
+            .filter((t) => !visibleDomIds.has(t.id) && !t.hasAttribute("unread") && !isNewTabElement(t))
             .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
 
           if (candidates.length === 0) return false;
@@ -3407,7 +3422,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             for (const t of tabs) visibleDomIds.add(t.id);
 
             const candidates = allTabs
-              .filter((t) => !visibleDomIds.has(t.id))
+              .filter((t) => !visibleDomIds.has(t.id) && !isNewTabElement(t))
               .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
             if (candidates.length > 0) {
               await activateNativeTab(candidates[0]);
