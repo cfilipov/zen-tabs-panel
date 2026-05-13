@@ -282,9 +282,23 @@ html, body {
    the system accent color so the user can see which item they activated
    via chord key, click, or Enter. Briefly applied then removed by
    flashActivated() in keyboard.js. !important so column-specific styles
-   (.section-column .list-item, .compact-item, etc.) can't override. */
+   (.section-column .list-item, .compact-item, etc.) can't override.
+   In dark mode the OS AccentColor is brightened for visibility, which
+   pushes white AccentColorText into low-contrast territory — darken the
+   accent so the foreground reads cleanly. */
 .list-item.activated {
-  background: AccentColor !important;
+  background: light-dark(AccentColor, color-mix(in srgb, AccentColor, black 30%)) !important;
+  color: AccentColorText !important;
+}
+/* Text descendants — the row's color: AccentColorText doesn't reach
+   children that set their own color (subtitles use --ztt-text-muted,
+   etc.). Force them all to AccentColorText so nothing reads as muted
+   gray sitting on top of the accent flash. Brief flash, so we drop the
+   "muted" distinction here rather than try to mix a translucent variant. */
+.list-item.activated .item-title,
+.list-item.activated .item-text,
+.list-item.activated .item-subtitle,
+.list-item.activated .subtitle-domain {
   color: AccentColorText !important;
 }
 
