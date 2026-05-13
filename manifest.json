@@ -48,7 +48,17 @@
   "commands": {
     "open-palette": {
       "suggested_key": { "default": "Command+Period" },
-      "description": "Open tab actions palette"
+      "description": "Open palette / arm chord"
+    },
+    "open-palette-2": {
+      "suggested_key": { "default": "Command+Alt+Period" },
+      "description": "Open palette / arm chord (backup 1)"
+    },
+    "open-palette-3": {
+      "description": "Open palette / arm chord (backup 2)"
+    },
+    "open-palette-4": {
+      "description": "Open palette / arm chord (backup 3)"
     }
   },
 

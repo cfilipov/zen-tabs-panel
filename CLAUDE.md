@@ -24,30 +24,41 @@ Three execution contexts — they cannot share code or globals:
 
 ## Keybindings and the chord engine
 
-### The mental model — one set of bindings, three timing windows
+### The mental model — one chord tree, one leader (plus backups), three timing windows
 
-The user memorizes a single entry point: `cmd+cmd` (double-tap the Cmd modifier). Everything else flows from a chord tree defined once in `shared/keybindings.js`. The exact same sequence of keys does the same thing whether the user types it fast (no UI), slowly enough that the menu fades in (with UI), or with a key mid-fade-in (the bridge case):
+The chord chain is `<leader>, <key>, <key>, …` where `<leader>` is any of four configurable shortcuts declared in `manifest.json` under `commands` (defaults: `cmd+.`, `cmd+option+.`, plus two unset slots). All four do the same thing — they're alternates so the user can pick whichever modifier isn't eaten by the focused page. Customize them in `about:addons` → Manage Extension Shortcuts.
 
-- **Fast** (`cmd+cmd, o, r`): the chord engine matches the keys against the tree and fires the terminal action — `reorder-all-tabs`, in this example — without showing any UI.
-- **Slow** (`cmd+cmd, [wait], o, r`): the engine's root timer fires, the menu opens, the user types `o` into the menu (descend to Reorder submenu), then `r` (fire action). Same outcome as fast path.
-- **Mid-fade-in** (`cmd+cmd, [hesitate], p`): the root timer triggered the menu to open but the user's next key arrives during the fade-in. The originating engine is in `bridging` state — it captures the key and chrome buffers it. When the popup signals `POPUP_READY`, the buffered key is replayed into the popup and fires the action mid-fade-in.
+Everything after the leader flows from a chord tree defined once in `shared/keybindings.js`. The same sequence of keys does the same thing whether the user types it fast (no UI), slowly enough that the menu fades in (with UI), or with a key mid-fade-in (the bridge case):
+
+- **Fast** (`cmd+., o, r`): the chord engine matches the keys against the tree and fires the terminal action — `reorder-all-tabs`, in this example — without showing any UI.
+- **Slow** (`cmd+., [wait], o, r`): the engine's root timer fires, the menu opens, the user types `o` into the menu (descend to Reorder submenu), then `r` (fire action). Same outcome as fast path.
+- **Mid-fade-in** (`cmd+., [hesitate], p`): the root timer triggered the menu to open but the user's next key arrives during the fade-in. The engine is in `bridging` state — it captures the key and chrome buffers it. When the popup signals `POPUP_READY`, the buffered key is replayed into the popup and fires the action mid-fade-in.
 
 In code this means: there is one `shared/keybindings.js`. Adding a new entry there gives it the fast path, the slow path, and the bridge path automatically. The popup's view-item hotkeys are populated from `entry.chord` (see `actionFromRegistry` in `popup/popup.js`), so the on-screen badge and the matcher always agree.
 
 UI-augmentation keys are explicitly **not** part of the chord set — Space (paginate the actions menu), Tab (jump section), Arrow keys (navigate selection), Enter (activate), Escape (close), Backspace (back). These only make sense when the menu is visible and live in `popup/keyboard.js`'s `KEY_HANDLERS` plus the view-specific `handleListViewKey` (W/O/B/F/S/0/digit-row-select). The chord-tree keys (letters, digits, Shift+digit) ARE chord keys and behave identically in all three timing windows.
 
-### Dual autonomous chord engines (the chrome+content split)
+### How the leader arms the engine
 
-In Firefox e10s, the chrome process cannot synchronously suppress a content-routed keystroke via standard `preventDefault` from a chrome-window listener — the IPC forwarding the event to the content process has already shipped by the time the chrome-side listener runs. To make `cmd+cmd, p` typed fast in a focused content input not leak `p`, the chord state machine has to run **in the same process as the content keydown dispatch**.
+The configurable leader shortcuts are modifier-key combos, so Firefox's keyset matches them at chrome level and routes via `browser.commands.onCommand`. The handler in `background.js` calls `api.armChord()`, which:
 
-The solution is two instances of the same state machine — `shared/chord-engine.js` — running autonomously:
+1. Arms the chrome engine synchronously (`chromeEngine.arm()`).
+2. Sends a targeted `ZenChord:Arm` message to the currently-focused tab's content `messageManager` so its engine arms too.
+
+Either engine handles the next chord key, depending on focus. The IPC race window is ~10ms (only ultra-fast typing immediately after the leader would beat the content engine into being armed). When either engine fires a terminal/transition event, the other is reset to prevent stale-root-timer "menu after action" desync — chrome's `onContentAction`/`OpenView`/`Cancel` handlers reset the chrome engine if armed, and the chrome engine's callbacks broadcast `ZenChord:Reset` to all content engines.
+
+### Dual chord engines (the chrome+content split)
+
+In Firefox e10s, the chrome process cannot synchronously suppress a content-routed keystroke via standard `preventDefault` from a chrome-window listener — the IPC forwarding the event to the content process has already shipped by the time the chrome-side listener runs. To make `cmd+., p` typed fast in a focused content input not leak `p`, the chord state machine has to run **in the same process as the content keydown dispatch**.
+
+The solution is two instances of the same state machine — `shared/chord-engine.js`:
 
 1. **Chrome engine** in `experiment/api.js`. Listens on the chrome window (capture phase + `mozSystemGroup`). `filterEvent` rejects events whose target is a `<browser>` element, so it only acts on chrome-routed keystrokes (URL bar, browser chrome). For chrome targets, `preventDefault` works locally — no race.
 2. **Content engine** loaded via a per-content-process frame script (`Services.mm.loadFrameScript`). The frame-script body is constructed in `installContentEngineFrameScript()` in `experiment/api.js` as a data: URL that `loadSubScript`s the same `shared/chord-engine.js` and instantiates an engine attached to `content`. Skips activation for `moz-extension://` documents (our popup and foreign-extension popups handle their own keys). For content keys, `preventDefault` from the engine runs in the content process before the editor's default action — no race.
 
-The two engines never communicate. They observe the same physical user events (Meta keyups, etc.) and arrive at the same chord state by coincidence (same events, same code). Each is fully autonomous in its focus domain.
+Both engines are armed in parallel by `armChord` (see above) — chrome synchronously, content via a targeted IPC. The first engine to see a non-modifier keydown processes it; the other gets reset when chrome receives that engine's output IPC.
 
-Cross-process IPC is **output-only** from the content engine: when it fires an action, it sends a `ZenChord:Action` / `ZenChord:OpenView` / `ZenChord:Cancel` / `ZenChord:Armed` / `ZenChord:BridgeKey` message. Chrome receives and dispatches. The IPC never gates a synchronous chord-key decision, so it can never race.
+Output IPC from the content engine: `ZenChord:Action` / `ZenChord:OpenView` / `ZenChord:Cancel` / `ZenChord:Armed` / `ZenChord:BridgeKey`. Chrome receives and dispatches. The IPC never gates a synchronous chord-key decision (the engine acts on its local state alone), so it can never race against subsequent keystrokes.
 
 ### Why `<key>`/keysets do not work for plain letters
 
@@ -55,13 +66,6 @@ The XUL `<keyset>` mechanism that Firefox uses for `cmd+T`, `cmd+W`, etc. **does
 
 This is a deliberate Firefox property, not a bug. It's also why a chrome-side JS `preventDefault` (even with `mozSystemGroup: true`) cannot synchronously stop a content-routed plain-letter keystroke — that pipeline is reserved for command-key shortcuts.
 
-### The configurable single-keystroke chord leader
-
-In addition to `cmd+cmd`, a modifier-key shortcut (default `cmd+.`) acts as a single-keystroke chord leader. Declared in `manifest.json`'s `commands.open-palette` so it appears in `about:addons` → Manage Extension Shortcuts and is user-customizable. Firefox's keyset matches the combo at chrome level (modifier-key keysets DO match; see above) and routes it via `browser.commands.onCommand` to `background.js`, which calls `api.armChord()` to put the engines into `armed-root`. The user's next chord key is then captured normally — same chord-chain behavior as `cmd+cmd`.
-
-`armChord` arms the chrome engine synchronously and sends a targeted message to the currently-focused tab's content `messageManager`. The small IPC window (~10ms before the content engine acks the arm) is a race risk only for ultra-fast typing immediately after the leader; typical typing speeds leave margin.
-
-State desync between chrome and content engines after a cross-process action is handled both ways: chrome's content-event handlers (`onContentAction`/`OpenView`/`Cancel`) reset the chrome engine if armed, and the chrome engine's own callbacks broadcast `ZenChord:Reset` to all content engines.
 
 ### Dynamic chord entries (extension-popup quick-launch)
 
@@ -83,7 +87,7 @@ The popup's `chordBridgeReady` flag holds any live keys (delivered via `ZenChord
 
 The popup stays invisible during a chord chain. Two timers govern reveal:
 
-- **Chrome reveal timer** (in `experiment/api.js`) — armed on `enterBridgeFromOpenView`, cleared the moment any chord key is forwarded (`forwardKeyToPopup`). Fires only if the user pauses after `open-view` without typing another chord key (e.g., `cmd+cmd, q [pause]`). If the popup hasn't drained yet when the timer fires, it sets `revealDeferred = true` and bails — `takeChordBridgeBuffer` consumes that flag and reveals one tick after POPUP_READY for empty drains.
+- **Chrome reveal timer** (in `experiment/api.js`) — armed on `enterBridgeFromOpenView`, cleared the moment any chord key is forwarded (`forwardKeyToPopup`). Fires only if the user pauses after `open-view` without typing another chord key (e.g., `cmd+., q [pause]`). If the popup hasn't drained yet when the timer fires, it sets `revealDeferred = true` and bails — `takeChordBridgeBuffer` consumes that flag and reveals one tick after POPUP_READY for empty drains.
 - **Popup reveal timer** (in `popup/keyboard.js`) — armed **after** each `dispatchKey` handler completes (not at dispatch start). For drills (`await navigateToView`) the handler takes ~470ms (220ms cross-fade + render); arming at dispatch start would fire mid-drill and reveal before the next chord-chain key could process. Each subsequent dispatch resets the timer; on pause, it sends `MSG.REVEAL_PALETTE` to chrome with its `inst`.
 
 To prevent the popup-side timer from racing the terminal-action destroy round-trip and revealing a popup that's already destroying, `destroyOverlay` sets a `revealBlocked` flag, cleared on the next `createOverlay`. `revealPalette` checks this flag — any stale timer firing during the destroy window is a no-op.
@@ -92,7 +96,7 @@ Terminal-action helpers (`activateTab`, `closePalette` in `popup/popup.js`) also
 
 ### Default-group blocker — stopping page keybindings
 
-System-group `preventDefault` from the chord engine suppresses the **default browser action** (character insertion), which is enough to fix the `cmd+cmd, p` character leak. It does NOT stop **custom page keydown handlers** registered by sites (e.g., Reddit's bare-`q` sidebar toggle). System group and default group propagate independently; `stopPropagation` from one doesn't reach the other.
+System-group `preventDefault` from the chord engine suppresses the **default browser action** (character insertion), which is enough to fix the `cmd+., p` character leak. It does NOT stop **custom page keydown handlers** registered by sites (e.g., Reddit's bare-`q` sidebar toggle). System group and default group propagate independently; `stopPropagation` from one doesn't reach the other.
 
 The fix is a second listener attached in **default group** capture phase at the window level (in the per-content-process frame script). When the engine is armed, it `stopPropagation`s — preventing the event from reaching page handlers on inner nodes (document/body/specific elements). Our system-group engine on the same window still fires (same node, different group); only travel to other nodes is stopped. Frame scripts run at `document_start` so this listener is registered before any page script can attach competing listeners.
 
@@ -109,7 +113,7 @@ Each `createOverlay` increments `popupInstance` and bakes the value into the pop
 
 ### Silent prerender swap
 
-When chord arms via `cmd+cmd`, chrome creates a hidden prerender at the default `actions` view so the popup loads during the chord wait. When the user types an `open-view` chord key, the requested view doesn't match the prerender — chrome calls `destroyOverlay({silent: true})` then a fresh `createOverlay(requestedView)`. The `silent` flag is critical: the regular destroy path calls `finishBridge` which broadcasts `ZenChord:ExitBridge`, resetting the engine's bridging state and discarding `bridgeBuffer`. For a swap, we want the bridge to survive — the new popup will drain it.
+When chord arms (via `armChord`), chrome creates a hidden prerender at the default `actions` view so the popup loads during the chord wait. When the user types an `open-view` chord key, the requested view doesn't match the prerender — chrome calls `destroyOverlay({silent: true})` then a fresh `createOverlay(requestedView)`. The `silent` flag is critical: the regular destroy path calls `finishBridge` which broadcasts `ZenChord:ExitBridge`, resetting the engine's bridging state and discarding `bridgeBuffer`. For a swap, we want the bridge to survive — the new popup will drain it.
 
 ## Companion Mods
 

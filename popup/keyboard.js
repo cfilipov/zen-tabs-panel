@@ -276,7 +276,7 @@ async function handleListViewKey(e) {
     // Domains view: each row carries data-domain. The click handler in
     // popup/views/domains.js drills into "domain-tabs" with that domain;
     // mirror that for digit selection so chord chains can navigate
-    // deeper (cmd+cmd, q, 1, 1).
+    // deeper (cmd+., q, 1, 1).
     if (ds.domain) {
       await navigateToView("domain-tabs", { domain: ds.domain });
       return;
@@ -302,7 +302,7 @@ async function dispatchKey(e) {
   // 220ms cross-fade + handler render), arming at dispatch start would
   // fire the timer mid-drill, revealing the popup before the next
   // chord-chain key could finish processing — producing a flash on
-  // cmd+cmd, q, 1, 1 when the second 1 lands during drill. Anchoring
+  // cmd+., q, 1, 1 when the second 1 lands during drill. Anchoring
   // the 400ms pause to "handler finished" means subsequent keys in
   // the drain reset the timer before it can fire.
   armPopupRevealTimer();
@@ -443,7 +443,7 @@ const _bridgeExt = typeof browser !== "undefined" ? browser : chrome;
   // Wait for popup.js's init() to fully render the initial view BEFORE
   // dispatching buffered keys. Otherwise handleListViewKey scans
   // listEl.querySelectorAll(".list-item") before items exist and silently
-  // drops digits (the classic cmd+cmd, r, 1 fast-chain bug).
+  // drops digits (the classic cmd+., r, 1 fast-chain bug).
   try { await window.__popupReady; } catch (e) { /* init failed; proceed anyway */ }
 
   // Belt and suspenders: also wait for DOMContentLoaded + a frame in case
@@ -454,7 +454,7 @@ const _bridgeExt = typeof browser !== "undefined" ? browser : chrome;
   await new Promise((r) => requestAnimationFrame(r));
 
   // Each replay is awaited so chord chains involving drill navigation
-  // (e.g. cmd+cmd, q, 1, 1: drill into first domain, then activate
+  // (e.g. cmd+., q, 1, 1: drill into first domain, then activate
   // first tab) sequence correctly — handleListViewKey awaits
   // navigateToView, so the second digit sees the new view's items.
   //

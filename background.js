@@ -528,18 +528,21 @@ async function handleChordResult(result) {
   }
 }
 
-// The customizable open-palette shortcut (default cmd+.) is matched by
-// Firefox's keyset at chrome level and routed here. We arm the chord
-// engines so the shortcut behaves as a chord leader — the user can
-// chain chord keys after it (e.g. cmd+., p fires the action without
-// showing UI, just like cmd+cmd, p).
-//
+// Configurable chord-leader shortcuts. The manifest declares four
+// open-palette commands; each one is a separate Firefox-keyset entry
+// that can be customized independently in about:addons. All call the
+// same armChord — they're alternates, so users can pick whichever
+// modifier is least likely to be eaten by the focused page. Defaults:
+//   open-palette    cmd+.
+//   open-palette-2  cmd+option+.
+//   open-palette-3  (unset)
+//   open-palette-4  (unset)
 // armChord arms the chrome engine synchronously and sends a targeted
 // message to the focused tab's content engine. There's a small IPC race
 // (next chord key typed <~10ms after the leader could arrive at an idle
 // content engine), but typical chord typing speed leaves enough margin.
 browser.commands.onCommand.addListener((command) => {
-  if (command === "open-palette") {
+  if (command.startsWith("open-palette")) {
     api.armChord();
   }
 });

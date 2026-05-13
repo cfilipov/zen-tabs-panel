@@ -12,10 +12,16 @@
 // to each instance — there is no cross-process state projection, so there is
 // no race window for any state transition.
 //
+// The engine has no auto-arming logic — it's armed externally by the owner
+// (chrome/content frame script when commands.onCommand for one of the
+// open-palette shortcuts fires → api.armChord). Once armed, subsequent
+// chord keys typed in the engine's domain are processed and matched
+// against the chord tree.
+//
 // API:
 //   createChordEngine({
 //     chordTree,         // built via buildChordTree below
-//     constants,         // { DOUBLE_TAP_WINDOW_MS, CHORD_ROOT_TIMEOUT_MS, CHORD_PREFIX_TIMEOUT_MS }
+//     constants,         // { CHORD_ROOT_TIMEOUT_MS, CHORD_PREFIX_TIMEOUT_MS }
 //     filterEvent,       // (e) => boolean — does this engine own this event?
 //     setTimeoutFn,      // optional, defaults to globalThis.setTimeout
 //     clearTimeoutFn,    // optional, defaults to globalThis.clearTimeout
@@ -27,19 +33,19 @@
 //     onCancel,          // () => void
 //     onBridgeKey,       // (keyDescriptor) => void — non-modifier key captured during bridging
 //   }) → {
-//     attach(target),       // installs keydown/keyup/blur listeners
+//     attach(target),       // installs keydown/blur listeners
 //     detach(),
 //     handleKey(eventLike), // for synthetic dispatch (bridge replay path in popup)
 //     setInitialState(snapshot),
 //     exitBridge(),
 //     reset(),
+//     arm(),                // external trigger; called by chrome's armChord
 //     isArmed(),
 //     serializeState() → string[]
 //   }
 //
 //   buildChordTree(KEYBINDINGS, WORKSPACE_DIGIT_CHORDS, constants) → tree
 //   chordKeyFor(e) → string | null
-//   isAlternateLeader(e) → boolean
 //
 // The chord tree is a tree of nodes:
 //   { type: "action",            actionId }
@@ -80,16 +86,6 @@
       return "Shift+" + e.code.slice(5);
     }
     return e.key;
-  }
-
-  // Alternate chord leader detection used to live here for the old
-  // hardcoded cmd+ctrl+. shortcut. With the customizable commands-API
-  // shortcut routed via background.js's onCommand → armChord, the engine
-  // no longer needs to detect a fixed combo — kept as an always-false
-  // stub so the keydown path below remains structurally identical to
-  // its prior form.
-  function isAlternateLeader(_e) {
-    return false;
   }
 
   // Build the chord tree from the keybindings registry. Same shape used by
@@ -154,16 +150,11 @@
     let currentNode = chordTree;
     let currentPath = []; // chord-key path from root to currentNode
 
-    // Double-tap detection state for the cmd+cmd leader.
-    let cmdAlone = false;
-    let lastMetaUp = 0;
-
     let chordTimer = null;
 
     // Listener bookkeeping for detach().
     let attachedTarget = null;
     let keydownBound = null;
-    let keyupBound = null;
     let blurBound = null;
 
     function safeCall(fn /*, ...args */) {
@@ -207,8 +198,6 @@
       state = "armed-root";
       currentNode = chordTree;
       currentPath = [];
-      cmdAlone = false;
-      lastMetaUp = 0;
       safeCall(onArmed);
       if (!disableTimers && setT) {
         chordTimer = setT(rootTimeout, constants.CHORD_ROOT_TIMEOUT_MS);
@@ -231,8 +220,6 @@
       state = "idle";
       currentNode = chordTree;
       currentPath = [];
-      cmdAlone = false;
-      lastMetaUp = 0;
     }
 
     function cancel() {
@@ -255,39 +242,24 @@
       //    `disableTimers` is set (popup mode) to support replay.
       if (!e.isTrusted && !disableTimers) return;
 
-      // 3. Track cmd-alone for cmd+cmd detection. Meta keydown by itself
-      //    keeps cmd-alone true; any non-modifier key arriving with
-      //    metaKey/ctrlKey/altKey set clears it.
-      if (e.key === "Meta") {
-        cmdAlone = true;
-        return;
-      }
+      // 3. Pure modifier keydowns (Meta/Control/Alt/Shift alone): ignore.
+      if (e.key === "Meta" || e.key === "Control" || e.key === "Alt" || e.key === "Shift") return;
 
-      // 4. Alternate leader: cmd+ctrl+. Detect before the modifier-bail
-      //    below; this combo IS a chord leader, not "fall through to OS".
-      if (isAlternateLeader(e)) {
-        try { e.preventDefault(); } catch (_) {}
-        try { e.stopPropagation(); } catch (_) {}
-        if (state !== "idle") cancel();
-        arm();
-        return;
-      }
-
-      // 5. Modifier-co-pressed keys (cmd+T, ctrl+L, etc.) are NOT chord
+      // 4. Modifier-co-pressed keys (cmd+T, ctrl+L, etc.) are NOT chord
       //    keys. Don't capture them. They flow through to the OS / Firefox.
-      if (e.metaKey || e.ctrlKey || e.altKey) {
-        cmdAlone = false;
-        return;
-      }
+      //    The configurable open-palette shortcuts ARE modifier combos
+      //    (cmd+., option+., etc.), but they're matched by Firefox's
+      //    keyset at chrome level and dispatched via commands.onCommand →
+      //    api.armChord() — they never reach this listener as a keydown.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-      // 6. If not armed, pass through. Hot path for normal typing.
+      // 5. If not armed, pass through. Hot path for normal typing.
       if (state === "idle") return;
 
-      // 7. Bridging: a panel is opening but its keyboard handler isn't yet
+      // 6. Bridging: a panel is opening but its keyboard handler isn't yet
       //    live. Capture all non-modifier keys; forward to the owner's
       //    bridge buffer for replay into the popup.
       if (state === "bridging") {
-        if (e.key === "Meta" || e.key === "Control" || e.key === "Alt" || e.key === "Shift") return;
         try { e.preventDefault(); } catch (_) {}
         try { e.stopPropagation(); } catch (_) {}
         safeCall(onBridgeKey, {
@@ -358,25 +330,6 @@
       }
     }
 
-    // ---- keyup: cmd+cmd double-tap detection ---------------------------
-    function handleKeyup(e) {
-      if (filterEvent && !filterEvent(e)) return;
-      if (!e.isTrusted) return;
-      if (e.key !== "Meta") return;
-      if (!cmdAlone) {
-        lastMetaUp = 0;
-        return;
-      }
-      const now = Date.now();
-      if (now - lastMetaUp < constants.DOUBLE_TAP_WINDOW_MS) {
-        lastMetaUp = 0;
-        if (state !== "idle") cancel();
-        arm();
-      } else {
-        lastMetaUp = now;
-      }
-    }
-
     // ---- blur: focus left our target, cancel any in-flight chord -------
     function handleBlur(e) {
       if (filterEvent && !filterEvent(e)) return;
@@ -389,21 +342,18 @@
       if (attachedTarget) detach();
       attachedTarget = target;
       keydownBound = handleKey;
-      keyupBound = handleKeyup;
       blurBound = handleBlur;
       // System event group + capture phase: highest priority on the target.
       target.addEventListener("keydown", keydownBound, { capture: true, mozSystemGroup: true });
-      target.addEventListener("keyup",   keyupBound,   { capture: true, mozSystemGroup: true });
       target.addEventListener("blur",    blurBound,    { capture: true, mozSystemGroup: true });
     }
 
     function detach() {
       if (!attachedTarget) return;
       try { attachedTarget.removeEventListener("keydown", keydownBound, { capture: true, mozSystemGroup: true }); } catch (e) {}
-      try { attachedTarget.removeEventListener("keyup",   keyupBound,   { capture: true, mozSystemGroup: true }); } catch (e) {}
       try { attachedTarget.removeEventListener("blur",    blurBound,    { capture: true, mozSystemGroup: true }); } catch (e) {}
       attachedTarget = null;
-      keydownBound = keyupBound = blurBound = null;
+      keydownBound = blurBound = null;
       clearChordTimer();
     }
 
@@ -450,13 +400,13 @@
       attach,
       detach,
       handleKey,
-      handleKeyup,
       setInitialState,
       exitBridge,
       reset,
-      arm,           // exposed so an external trigger (e.g. commands.onCommand
-                     // for a user-customized chord leader shortcut) can force
-                     // the engine into armed-root from outside the keydown path
+      arm,           // exposed so an external trigger (commands.onCommand
+                     // for any of the configurable open-palette shortcuts)
+                     // can force the engine into armed-root from outside
+                     // the keydown path
       isArmed,
       serializeState,
     };
@@ -465,5 +415,4 @@
   scope.createChordEngine = createChordEngine;
   scope.buildChordTree = buildChordTree;
   scope.chordKeyFor = chordKeyFor;
-  scope.isAlternateLeader = isAlternateLeader;
 })(this);

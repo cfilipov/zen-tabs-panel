@@ -737,11 +737,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     // Chord engine: same shared/chord-engine.js module instantiated here
     // (chrome side) and in the per-content-process frame script (see below).
-    // Each engine owns its own state; they observe the same physical user
-    // actions (cmd+cmd etc.) and stay in sync naturally without IPC for
-    // chord state. The chord tree is built from the shared keybindings
-    // registry (shared/keybindings.js) so chord shortcuts and popup-menu
-    // hotkey badges stay in sync.
+    // Both engines are armed in parallel by armChord (commands.onCommand →
+    // chrome arms synchronously + targeted IPC arms the focused tab's
+    // content engine). Whichever engine sees the next chord key processes
+    // it; the other resets via cross-process IPC when chrome receives the
+    // firing engine's output message. The chord tree is built from the
+    // shared keybindings registry (shared/keybindings.js) so chord
+    // shortcuts and popup-menu hotkey badges stay in sync.
     const engineScope = {};
     Services.scriptloader.loadSubScript(
       context.extension.getURL("shared/keybindings.js"),
@@ -758,7 +760,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     const KEYBINDINGS = engineScope.ZEN_KEYBINDINGS || [];
     const WORKSPACE_DIGIT_CHORDS = engineScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
     const CHORD_CONSTANTS = {
-      DOUBLE_TAP_WINDOW_MS:    engineScope.DOUBLE_TAP_WINDOW_MS,
       CHORD_ROOT_TIMEOUT_MS:   engineScope.CHORD_ROOT_TIMEOUT_MS,
       CHORD_PREFIX_TIMEOUT_MS: engineScope.CHORD_PREFIX_TIMEOUT_MS,
     };
@@ -1199,10 +1200,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     // Build the overlay DOM hidden. The chord engine calls this to
-    // prerender during its wait window; openOverlayWithView and the
-    // double-tap path call it for immediate opens. Either way the
-    // caller flips the visibility on via revealOverlay() (or, if the
-    // chord cancels, tears the prerender down via destroyOverlay()).
+    // prerender during its wait window; openOverlayWithView calls it
+    // for immediate opens. Either way the caller flips the visibility
+    // on via revealOverlay() (or, if the chord cancels, tears the
+    // prerender down via destroyOverlay()).
     function createOverlay(view, params) {
       const w = getWin();
       if (!w) return null;
@@ -1659,10 +1660,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // We instantiate the same shared/chord-engine.js state machine TWICE:
     // once in this chrome process (handles keys delivered to chrome targets
     // like the URL bar) and once per content process (handles keys
-    // delivered to content documents). Each engine has its own local state;
-    // they never communicate. They observe the same physical user actions
-    // (cmd+cmd, etc.) and naturally stay in sync because they're seeing
-    // the same events.
+    // delivered to content documents). Each engine has its own local state.
+    // Both are armed in parallel by armChord (a commands.onCommand for any
+    // of the open-palette shortcuts triggers it). When either engine fires
+    // a terminal/transition event, the other is reset via cross-process
+    // IPC so its stale root timer can't pop a menu after the action.
     //
     // Partitioning is by `e.target`:
     //   - Chrome engine: filterEvent rejects events whose target is a
@@ -1742,9 +1744,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       if (source === "timeout") {
         // User-paused open: reveal immediately. Reuse the prerender if it
-        // matches (default-view case from cmd+cmd-wait); otherwise
-        // destroy+recreate at the requested view, then reveal. The
-        // destroy is `silent` because we want the bridge state we just
+        // matches (default-view case — engine root timer fired before any
+        // chord key); otherwise destroy+recreate at the requested view,
+        // then reveal. The destroy is `silent` because we want the bridge
+        // state we just
         // set up (bridgeBuffer / pendingStateSnapshot) to survive the
         // swap — the new popup will drain it on POPUP_READY.
         if (pendingReveal && !requestedView) {
@@ -1834,7 +1837,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // on their old generation's name and never fire — without this,
         // each stale script would dispatch a duplicate synthetic
         // keydown for every chord-chain key, producing the double-fire
-        // bug (e.g. cmd+cmd, q, 1 → drill + activate as if "1, 1").
+        // bug (e.g. cmd+., q, 1 → drill + activate as if "1, 1").
         try { br.messageManager.sendAsyncMessage("ZenChord:DeliverKey:" + CHORD_GENERATION, keyData); } catch (e) {}
       }
     }
@@ -1944,7 +1947,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // The frame-script body runs in EVERY content process. Two paths:
       //
       //   1. Non-extension pages (websites): instantiate the chord engine
-      //      attached to `content`. Self-arms on cmd+cmd, detects chord
+      //      attached to `content`. Armed externally by ZenChord:Arm IPC
+      //      (sent from chrome when a commands.onCommand for one of the
+      //      open-palette shortcuts fires). Once armed, detects chord
       //      keys, fires open-view/action/cancel/bridge-key IPC to chrome.
       //      The engine is the source of truth for chord state in this
       //      process.
@@ -1994,13 +1999,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // The chord-engine path runs only on non-extension pages. The popup
         // and foreign extension popups own their own keybindings.
         "var __tree = __scope.buildChordTree(__scope.ZEN_KEYBINDINGS, __scope.ZEN_WORKSPACE_DIGIT_CHORDS, {\n" +
-        "  DOUBLE_TAP_WINDOW_MS: __scope.DOUBLE_TAP_WINDOW_MS,\n" +
         "  CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS,\n" +
         "  CHORD_PREFIX_TIMEOUT_MS: __scope.CHORD_PREFIX_TIMEOUT_MS,\n" +
         "});\n" +
         "var __engine = __scope.createChordEngine({\n" +
         "  chordTree: __tree,\n" +
-        "  constants: { DOUBLE_TAP_WINDOW_MS: __scope.DOUBLE_TAP_WINDOW_MS, CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS, CHORD_PREFIX_TIMEOUT_MS: __scope.CHORD_PREFIX_TIMEOUT_MS },\n" +
+        "  constants: { CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS, CHORD_PREFIX_TIMEOUT_MS: __scope.CHORD_PREFIX_TIMEOUT_MS },\n" +
         "  filterEvent: function(){ return true; },\n" +
         "  setTimeoutFn: function(fn, ms){ return content ? content.setTimeout(fn, ms) : null; },\n" +
         "  clearTimeoutFn: function(id){ if (content && id != null) try { content.clearTimeout(id); } catch (e) {} },\n" +
@@ -2165,10 +2169,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // extension load) ever registered. Firefox doesn't unload frame
       // scripts from existing content processes, but at least we can
       // stop them from auto-loading into new ones. Without this, every
-      // disable+enable cycle leaks a permanent stale frame script — its
-      // engine keeps firing on cmd+cmd and the accumulation eventually
-      // chokes new generations out (this is what caused the "cmd+cmd
-      // does nothing" regression).
+      // disable+enable cycle leaks a permanent stale frame script that
+      // re-fires alongside the new one and corrupts chord behavior.
       try {
         const scripts = Services.mm.getDelayedFrameScripts();
         for (const entry of scripts) {
@@ -3233,9 +3235,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         //   - browserAction.onClicked passes {skipChord:true} → opens immediately
         //   - any caller can pass a view string to open directly to a submenu
         //
-        // The cmd+cmd chord leader no longer routes through here — both
-        // engines detect it locally on keyup. The configurable shortcut
-        // (default cmd+.) routes through background.js → armChord.
+        // Chord leaders (cmd+., option+., etc.) do not route through here
+        // — they go through background.js's commands.onCommand → armChord.
+        // This is for toolbar-icon clicks and explicit external opens.
         async showPalette(viewOrOpts) {
           let view = null;
           if (typeof viewOrOpts === "string") {
@@ -3249,9 +3251,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
             return { kind: "closed" };
           }
 
-          // A chord might be in flight (the user did cmd+cmd and the
-          // engine is armed/bridging) when this is invoked by an external
-          // path (toolbar icon click). Tear down any in-flight chord state
+          // A chord might be in flight (engine armed/bridging) when this
+          // is invoked by an external path (toolbar icon click). Tear
+          // down any in-flight chord state
           // in both engines so we open cleanly.
           if (chromeEngine && chromeEngine.isArmed()) chromeEngine.reset();
           try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}

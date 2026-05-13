@@ -150,16 +150,13 @@ this.MSG = Object.freeze({
 // instantiated in chrome (loadSubScript), the per-content-process actor
 // child (loadSubScript), or the popup (<script>).
 //
-//   DOUBLE_TAP_WINDOW_MS    — max gap between the two Meta keyups that count
-//                             as cmd+cmd. Tuned for fast typists; longer than
-//                             this and the second tap is treated as a new
-//                             single tap.
-//   CHORD_ROOT_TIMEOUT_MS   — after cmd+cmd, how long to wait for the first
-//                             chord key before opening the menu by default.
+//   CHORD_ROOT_TIMEOUT_MS   — after the engine arms (commands.onCommand for
+//                             an open-palette shortcut), how long to wait
+//                             for the first chord key before opening the
+//                             menu by default.
 //   CHORD_PREFIX_TIMEOUT_MS — after a prefix node descent, how long to wait
 //                             for the next chord key before opening the
 //                             prefix's view.
-this.DOUBLE_TAP_WINDOW_MS = 350;
 this.CHORD_ROOT_TIMEOUT_MS = 400;
 this.CHORD_PREFIX_TIMEOUT_MS = 600;
 // After an engine fires open-view (transitioning to bridging), chrome
@@ -172,7 +169,7 @@ this.CHORD_PREFIX_TIMEOUT_MS = 600;
 // Sized larger than CHORD_ROOT_TIMEOUT_MS / CHORD_PREFIX_TIMEOUT_MS
 // so a user typing a chord chain near the boundary (e.g. ~500ms
 // between keys) doesn't trigger a brief reveal+destroy flash for
-// fast terminal actions like cmd+cmd, r, 1.
+// fast terminal actions like cmd+., r, 1.
 this.CHORD_REVEAL_TIMEOUT_MS = 700;
 
 // Default values for browser.storage.local. Pass to storage.get() to read
