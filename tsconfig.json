@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.svelte.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "types": ["svelte", "vitest/globals"]
+  },
+  "include": ["src-svelte/**/*.ts", "src-svelte/**/*.svelte", "vite.config.ts"]
+}

@@ -1,14 +1,8 @@
-"use strict";
-
 // Source of truth for chord and menu key bindings.
 //
-// Loaded by both:
-//   - popup/popup.html   via <script src="../shared/keybindings.js">
-//   - experiment/api.js  via Services.scriptloader.loadSubScript
-//
-// Both contexts read globals via `this`. In a <script> tag, top-level `this`
-// is `window` (so assignments become page globals). In loadSubScript, `this`
-// is the scope object passed in (so the loader reads them off that object).
+// Build output:
+//   scripts/generate-keybindings.mjs emits dist/shared/keybindings.js for
+//   experiment/api.js and the current compatibility popup runtime.
 //
 // Hotkey notation:
 //   "P"        bare key
@@ -29,7 +23,9 @@
 //   page flip. Chord namespace is shared across pages, so collisions across
 //   pages are not allowed.
 
-this.ZEN_KEYBINDINGS = [
+import type { NavNode } from "./types";
+
+export const NAVIGATION_TREE = [
   // Tab navigation
   { id: "go-to-previous-tab", kind: "action", chord: "P", label: "Previous", icon: "svg:arrow-left-right" },
   { id: "go-to-parent-tab",   kind: "action", chord: "T", label: "Parent",   icon: "svg:move-up", needsParent: true },
@@ -172,16 +168,16 @@ this.ZEN_KEYBINDINGS = [
       { id: "close-and-select-unvisited-oldest", kind: "action", chord: "Shift+G", label: "Oldest unvisited",   icon: "svg:circle-dot" },
     ],
   },
-];
+] satisfies NavNode[];
 
 // Workspace digit chords. Each digit selects the workspace at the given
 // index. "0" selects the 10th workspace (matching keyboard layout where 0
 // follows 9). The popup also handles 1-9 directly when the palette is open.
-this.ZEN_WORKSPACE_DIGIT_CHORDS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
+export const WORKSPACE_DIGIT_CHORDS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 
 // Display helper: "Shift+T" -> "⇧T" for the on-screen badge. Bare keys and
 // punctuation pass through unchanged.
-this.zenDisplayKey = function (chord) {
+export function displayKey(chord: string | null | undefined): string {
   if (chord == null || chord === "") return "";
   return String(chord).replace(/^Shift\+/, "⇧");
 };
