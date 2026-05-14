@@ -47,10 +47,30 @@ function isDelegateSkipped(row) {
 // handler in bubble phase). Catches clicks on any .list-item except the
 // inline close button — that one's about to remove the row anyway, and
 // the flash would be confusing.
+// Trace the activated row's badge as a chord-replay key so cmd+.,.
+// reproduces what was just done — whether the user got here by digit,
+// Enter on a selected row, or mouse click. Replayed by chrome via
+// forwardKeyToPopup, which the popup re-processes through its normal
+// keydown path (matching the badge to find the equivalent row in
+// fresh data — so "2nd recent" cycles instead of activating the same
+// tab). Single-char badges only (digit/letter); decorative badges
+// like "Current"/"Default" aren't replayable as keystrokes.
+function traceActivatedRowKey(row) {
+  if (!row) return;
+  const badge = row.querySelector(".item-badge");
+  if (!badge) return;
+  const text = (badge.textContent || "").trim();
+  if (text.length !== 1) return;
+  ext.runtime.sendMessage({ type: "trace-replay-key", key: text }).catch(() => {});
+}
+
 listEl.addEventListener("click", (e) => {
   if (e.target.closest(".item-close")) return;
   const row = e.target.closest(".list-item");
-  if (row && !row.classList.contains("disabled")) flashActivated(row);
+  if (row && !row.classList.contains("disabled")) {
+    flashActivated(row);
+    traceActivatedRowKey(row);
+  }
 }, { capture: true });
 
 listEl.addEventListener("click", (e) => {
@@ -544,12 +564,12 @@ function updateSelection() {
     const isTabView = ui.currentView !== "actions" && ui.currentView !== "move-to-workspace" && ui.currentView !== "close-and-select" && ui.currentView !== "reorder-tabs";
     if (isTabView && item?.domId) {
       ext.runtime.sendMessage({ type: "preview-tab", domId: item.domId }).catch(() => {});
-    } else if ((ui.currentView === "actions" || ui.currentView === "close-and-select") && item?.preview?.domId) {
+    } else if ((ui.currentView === "actions" || ui.currentView === "close-and-select" || ui.currentView === "duplicate-prompt") && item?.preview?.domId) {
       ext.runtime.sendMessage({ type: "preview-tab", domId: item.preview.domId }).catch(() => {});
-    } else if (ui.currentView === "actions" || ui.currentView === "close-and-select") {
+    } else if (ui.currentView === "actions" || ui.currentView === "close-and-select" || ui.currentView === "duplicate-prompt") {
       ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
     }
-  } else if (ui.currentView === "actions" || ui.currentView === "close-and-select") {
+  } else if (ui.currentView === "actions" || ui.currentView === "close-and-select" || ui.currentView === "duplicate-prompt") {
     ext.runtime.sendMessage({ type: "clear-preview" }).catch(() => {});
   }
 
@@ -761,6 +781,59 @@ function refreshCurrentView() {
 // Navigation
 // ---------------------------------------------------------------------------
 
+// Spatial-arrow navigation: pick the nearest neighbor in the requested
+// direction by visual position. Used by ArrowLeft/Right in the actions
+// menu (and any other multi-column view) so "right" jumps across
+// columns instead of just advancing one item in the flat ui.items
+// order. dx/dy: pass {dx:+1, dy:0} for right, {dx:-1, dy:0} for left,
+// etc. — cross-axis penalty keeps the choice in the same row when
+// possible.
+function moveSelectionDirectional(dx, dy) {
+  const items = navigableListItems();
+  if (items.length === 0) return;
+
+  if (ui.selectedIndex < 0 || ui.selectedIndex >= items.length) {
+    ui.selectedIndex = 0;
+    updateSelection();
+    return;
+  }
+
+  const curR = items[ui.selectedIndex].getBoundingClientRect();
+  if (curR.width === 0 || curR.height === 0) return;
+  const cx = curR.left + curR.width / 2;
+  const cy = curR.top + curR.height / 2;
+
+  let best = -1;
+  let bestScore = Infinity;
+  for (let i = 0; i < items.length; i++) {
+    if (i === ui.selectedIndex) continue;
+    if (isUnselectableRow(items[i])) continue;
+    const r = items[i].getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    const ox = r.left + r.width / 2;
+    const oy = r.top + r.height / 2;
+    // Must lie in the requested direction.
+    if (dx > 0 && ox <= cx) continue;
+    if (dx < 0 && ox >= cx) continue;
+    if (dy > 0 && oy <= cy) continue;
+    if (dy < 0 && oy >= cy) continue;
+    // Primary distance on the requested axis; cross-axis weighted
+    // enough to prefer staying in the same row/column.
+    const primary = dx !== 0 ? Math.abs(ox - cx) : Math.abs(oy - cy);
+    const cross   = dx !== 0 ? Math.abs(oy - cy) : Math.abs(ox - cx);
+    const score = primary + cross * 2;
+    if (score < bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  }
+
+  if (best >= 0) {
+    ui.selectedIndex = best;
+    updateSelection();
+  }
+}
+
 function moveSelection(delta) {
   const totalCount = ui.items.length;
   if (totalCount === 0) return;
@@ -896,6 +969,7 @@ function activateSelected() {
   if (isUnselectableRow(listItems[ui.selectedIndex])) return;
 
   flashActivated(ui.selectedIndex);
+  traceActivatedRowKey(listItems[ui.selectedIndex]);
 
   if (item.navIndex !== undefined && !item.isCurrent) {
     ext.runtime.sendMessage({ type: "navigate-to-history-index", index: item.navIndex }).catch(() => {});
@@ -903,6 +977,8 @@ function activateSelected() {
     ext.runtime.sendMessage({ type: "switch-workspace", workspaceId: item.workspaceSwitchId }).catch(() => {});
   } else if (item.launchProfileName) {
     ext.runtime.sendMessage({ type: "launch-profile", name: item.launchProfileName }).catch(() => {});
+  } else if (item.runtimeAction) {
+    ext.runtime.sendMessage({ type: item.runtimeAction }).catch(() => {});
   } else if (item.id && typeof item.hotkey !== "undefined") {
     activateAction(item);
   } else if (item.reorderAction) {
@@ -992,8 +1068,15 @@ function measureNaturalHeight() {
   const indicator = document.getElementById("page-indicator");
   // #list has 6px top + 2px bottom padding (see popup.css #list).
   let listContentH = 8;
-  for (const child of listEl.children) {
-    listContentH += child.offsetHeight;
+  // Use the first child's top to last child's bottom (border-box rect)
+  // rather than summing offsetHeight — that misses inter-child margins
+  // (e.g. duplicate-prompt's URL preview has a 6px margin-bottom that
+  // pushes the option rows down past their own offsetHeight).
+  const children = listEl.children;
+  if (children.length > 0) {
+    const firstRect = children[0].getBoundingClientRect();
+    const lastRect = children[children.length - 1].getBoundingClientRect();
+    listContentH += Math.max(0, lastRect.bottom - firstRect.top);
   }
   let total = listContentH;
   if (header && !header.classList.contains("hidden") && header.children.length > 0) {

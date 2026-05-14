@@ -75,6 +75,15 @@
     </section>
 
     <section>
+      <h2>Duplicate tab prompt</h2>
+      <p class="description">When you click a link (in a new tab or the current tab) that points to a URL already open in another tab, intercept the navigation and show a prompt: <em>Switch to existing tab</em>, <em>Open anyway</em>, or <em>Cancel</em>. The orange status-bar pill that indicates a duplicate destination on hover is always on.</p>
+      <label class="toggle-row">
+        <input type="checkbox" id="duplicateTabIntercept">
+        <span>Prompt before opening duplicate tabs</span>
+      </label>
+    </section>
+
+    <section>
       <h2>Chord delay</h2>
       <p class="description">How long the chord engine waits after each key (in milliseconds) before opening the next menu. Applies to the leader pause (e.g. <code>cmd+.</code> alone), prefix pause (e.g. <code>cmd+., o</code> alone), and open-view pause (e.g. <code>cmd+., q</code> alone). Lower values feel snappier; higher values give you more time to think between keys. Set to <code>0</code> to show the menu immediately on every chord key — the menu effectively becomes the chord progress indicator.</p>
       <label class="toggle-row">

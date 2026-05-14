@@ -394,6 +394,54 @@
         "parameters": []
       },
       {
+        "name": "duplicateSwitch",
+        "type": "function",
+        "async": true,
+        "description": "Duplicate-prompt outcome: activate the existing tab with the duplicate URL.",
+        "parameters": []
+      },
+      {
+        "name": "duplicateOpenAnyway",
+        "type": "function",
+        "async": true,
+        "description": "Duplicate-prompt outcome: replay the original openLinkIn call to open the duplicate anyway.",
+        "parameters": []
+      },
+      {
+        "name": "showDuplicatePrompt",
+        "type": "function",
+        "async": true,
+        "description": "Open the duplicate-prompt overlay for a URL detected by an external path (bg's webRequest blocker). Returns the existing tab's DOM id.",
+        "parameters": [
+          { "name": "url", "type": "string" }
+        ]
+      },
+      {
+        "name": "replayLastChord",
+        "type": "function",
+        "async": true,
+        "description": "Re-fire the last engine-fired chord chain. Returns true if a chord was replayed; false if nothing has fired this session.",
+        "parameters": []
+      },
+      {
+        "name": "traceReplayKey",
+        "type": "function",
+        "async": true,
+        "description": "Popup-side trace hook: record a key as part of the in-flight chord chain so cmd+.,. can replay it. Called for digits/letters that activate items in a list view.",
+        "parameters": [
+          { "name": "key", "type": "string" }
+        ]
+      },
+      {
+        "name": "recordReplayContext",
+        "type": "function",
+        "async": true,
+        "description": "Commit-on-action hook. Bg calls this for every runtime action so chrome decides whether to promote the in-flight chord chain to lastChordReplay (cycling) or commit the raw action.",
+        "parameters": [
+          { "name": "message", "type": "any" }
+        ]
+      },
+      {
         "name": "armChord",
         "type": "function",
         "async": true,
@@ -667,6 +715,15 @@
         "type": "function",
         "async": true,
         "description": "Toggle the dim wash behind the palette. When false, the backdrop is transparent and the page content shows through; clicks outside the panel still dismiss.",
+        "parameters": [
+          { "name": "enabled", "type": "boolean" }
+        ]
+      },
+      {
+        "name": "setDuplicateTabIntercept",
+        "type": "function",
+        "async": true,
+        "description": "Toggle the openLinkIn duplicate intercept (paired with the webRequest blocker in bg).",
         "parameters": [
           { "name": "enabled", "type": "boolean" }
         ]

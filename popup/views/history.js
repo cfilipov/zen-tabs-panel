@@ -80,9 +80,17 @@ async function showLastVisited(animate) {
   try {
     allTabs = await getAllTabsCached();
   } catch (e) {
+    if (ui.currentView !== "last-visited") return;
     renderTabList([], "Recent");
     return;
   }
+
+  // Bail if a newer WarmRearm took over mid-fetch — otherwise our
+  // render would clobber listEl over the newer view's content, and
+  // a chord-key dispatched into that newer view would scan stale
+  // rows (e.g. matching a workspace-switch row from the actions
+  // menu instead of the recents tab the user actually picked).
+  if (ui.currentView !== "last-visited") return;
 
   allTabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
 

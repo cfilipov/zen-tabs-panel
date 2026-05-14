@@ -85,6 +85,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     context.callOnClose({
       close() {
         try { teardownChordEngines(); } catch (e) {}
+        try { teardownDuplicateLinkIndicator(); } catch (e) {}
+        try { teardownDuplicateLinkInterceptor(); } catch (e) {}
         try { cancelSyncDuplicates(); } catch (e) {}
         try { teardownTabTracking(); } catch (e) {}
         const w = Services.wm.getMostRecentWindow("navigator:browser");
@@ -775,6 +777,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "move-to-folder":     { width: 360, height: 604 },
       "split-view":         { width: 360, height: 604 },
       "open-in-container":  { width: 320, height: 604 },
+      "profiles":           { width: 360, height: 604 },
+      "duplicate-prompt":   { width: 420, height: 604 },
       "extension-popup":    { width: 360, height: 500 },
     };
 
@@ -893,6 +897,23 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // bridge — exit-bridge must be sent to it (and only it) when popup
     // drains. "chrome" or "content"; null when no bridge active.
     let bridgingEngineKind = null;
+    // Last completed chord, for the cmd+.,. replay action. Captures
+    // what the *engine* did (not the resolved popup-fired action) so
+    // replay re-runs the chord chain — e.g. cmd+.,r,2 records
+    // {kind:"open-view", view:"last-visited", bridgeKeys:["2"]} so
+    // replay re-navigates to recents and re-fires "2", which cycles
+    // through recents instead of activating the same now-current tab.
+    //
+    // For an engine action chord (cmd+.,p), records
+    // {kind:"action", actionId:"go-to-previous-tab"} and replay
+    // dispatches that action directly.
+    //
+    // currentChordReplay tracks the in-flight chain; bridge keys
+    // append into it. lastChordReplay points to the last committed
+    // chain. Reused across replays — replaying re-pushes the same
+    // bridge keys, so the trace stays valid for the next replay.
+    let lastChordReplay = null;
+    let currentChordReplay = null;
     // Popup-instance counter. Incremented in createOverlay; the popup
     // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
     // takeChordBridgeBuffer ignores POPUP_READY whose inst doesn't match
@@ -2003,8 +2024,131 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Dispatch a chord action coming from EITHER engine (chrome direct call
     // or content via the ZenChord:Action IPC). Same routing either way —
     // payload shape is { type: "action" | "switch-workspace" | "open-extension-popup", ...}.
+
+    // The replay-last-chord action's id. Hoisted here because the
+    // tracking and blocklist below reference it before the file-end
+    // declaration would be reachable under TDZ rules.
+    const MSG_REPLAY_LAST_CHORD = "replay-last-chord";
+
+    // ----- Chord-replay tracking ------------------------------------------
+    //
+    // The chord chain has two distinct states:
+    //
+    //   currentChordReplay — in-flight. Populated by trackChordOpenView /
+    //   trackChordBridgeKey as the engine traverses the chord chain. Reset
+    //   on engine arm (every cmd+. clears it).
+    //
+    //   lastChordReplay — committed. The most-recent chord chain that
+    //   actually FIRED A TERMINAL ACTION. cmd+.,. replays from here.
+    //
+    // Promotion happens only when an action terminates the chain (engine
+    // action via trackChordTerminalAction, popup-fired runtime action via
+    // recordReplayContext). Chord chains that just open a submenu and
+    // leave the user there (cmd+.,q, then Esc) never promote — so the
+    // previous chord stays replayable, matching the user's mental model
+    // of "repeat the last thing I DID."
+    function trackChordTerminalAction(payload) {
+      if (!payload || !payload.type) return;
+      if (payload.type === "action") {
+        if (payload.actionId === MSG_REPLAY_LAST_CHORD) return;
+        lastChordReplay = { kind: "action", actionId: payload.actionId };
+      } else if (payload.type === "switch-workspace") {
+        lastChordReplay = { kind: "switch-workspace", index: payload.index };
+      } else if (payload.type === "open-extension-popup") {
+        lastChordReplay = { kind: "open-extension-popup", extensionId: payload.extensionId };
+      }
+      currentChordReplay = null;
+    }
+
+    function trackChordOpenView(view) {
+      // In-flight only — the chain has merely descended into a view. It's
+      // not committed as replayable until an action actually fires.
+      currentChordReplay = { kind: "open-view", view: view || null, bridgeKeys: [] };
+    }
+
+    function trackChordBridgeKey(keyData) {
+      if (currentChordReplay && currentChordReplay.kind === "open-view" && keyData && keyData.key) {
+        currentChordReplay.bridgeKeys.push(keyData.key);
+      }
+    }
+
+    // Commit-on-action hook for popup-fired runtime actions. Bg calls this
+    // from recordChordAction. If the chord chain involved a view open
+    // (currentChordReplay.kind === "open-view"), commit the chain itself
+    // so replay re-fires the navigation + bridge keys (cycling). Otherwise
+    // commit the raw action (e.g. user clicked a row in the menu without
+    // a chord prefix).
+    //
+    // Excludes its own action ids so chained replays don't recurse and
+    // duplicate-prompt actions stay context-bound (not replayable).
+    const REPLAY_RECORD_BLOCKLIST = new Set([
+      MSG_REPLAY_LAST_CHORD,
+      "duplicate-switch",
+      "duplicate-open-anyway",
+    ]);
+    function recordReplayFromPopupAction(message) {
+      if (!message || !message.type) return;
+      if (REPLAY_RECORD_BLOCKLIST.has(message.type)) return;
+      // Engine-fired chord actions (cmd+.,p, cmd+.,w,n, …) commit via
+      // trackChordTerminalAction at chord-fire time, then paletteRequestFire
+      // routes through bg's runChordAction → recordChordAction → here
+      // for the *same* action. Without this skip we'd promptly overwrite
+      // the engine's kind:"action" record with kind:"action-msg", and
+      // replay would fall through to bg's lastChordAction (which might
+      // have been overwritten by an unrelated runtime action since).
+      if (lastChordReplay && lastChordReplay.kind === "action" && lastChordReplay.actionId === message.type) {
+        currentChordReplay = null;
+        return;
+      }
+      if (currentChordReplay && currentChordReplay.kind === "open-view") {
+        lastChordReplay = currentChordReplay;
+      } else {
+        lastChordReplay = Object.assign({ kind: "action-msg" }, message);
+      }
+      currentChordReplay = null;
+    }
+
+    // Replay the last completed chord. Engine actions dispatch directly;
+    // open-view chord chains re-enter bridge and re-forward their
+    // recorded bridge keys so the popup re-fires its handlers with
+    // freshly resolved data (e.g. "2nd recent" cycles through recents
+    // instead of jumping back to the same tab).
+    function replayLastChordTrace() {
+      if (!lastChordReplay) return false;
+      const r = lastChordReplay;
+      if (r.kind === "action") {
+        dispatchChordAction({ type: "action", actionId: r.actionId });
+        return true;
+      }
+      if (r.kind === "switch-workspace") {
+        dispatchChordAction({ type: "switch-workspace", index: r.index });
+        return true;
+      }
+      if (r.kind === "open-extension-popup") {
+        dispatchChordAction({ type: "open-extension-popup", extensionId: r.extensionId });
+        return true;
+      }
+      if (r.kind === "open-view") {
+        const keysCopy = Array.from(r.bridgeKeys || []);
+        enterBridgeFromOpenView(r.view, [], "chrome", "match");
+        for (const k of keysCopy) {
+          forwardKeyToPopup({ key: k, code: "", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false });
+        }
+        return true;
+      }
+      if (r.kind === "action-msg") {
+        // Replay a popup-fired action that wasn't part of a chord chain
+        // (e.g. user opened menu, clicked Reload — no chord prefix).
+        // Returns false so bg falls back to its lastChordAction path
+        // which re-dispatches the message through the ACTIONS table.
+        return false;
+      }
+      return false;
+    }
+
     function dispatchChordAction(payload) {
       if (!payload || !payload.type) return;
+      trackChordTerminalAction(payload);
       if (pendingReveal) destroyOverlay();
       if (payload.type === "action") {
         if (paletteRequestFire) {
@@ -2047,6 +2191,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // so we don't destroy-and-recreate the just-revealed popup or
       // double-fire the reveal animation.
       if (bridgingEngineKind != null) return;
+
+      // Source="match" is a user-typed chord-key (cmd+.,r, etc.) — the
+      // intentional chord. Source="timeout" is the menu opening because
+      // the user paused, which isn't a chord chain we want to replay
+      // (replay would just pop the actions menu instead of redoing what
+      // the user just did).
+      if (source === "match") trackChordOpenView(view);
 
       bridgeBuffer = [];
       pendingStateSnapshot = stateSnapshot || [];
@@ -2152,6 +2303,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // dispatches a synthetic keydown on content.document. Before
     // POPUP_READY, queue in bridgeBuffer (drained on POPUP_READY).
     function forwardKeyToPopup(keyData) {
+      // Note: don't track the bridge key here — the popup will trace it
+      // back via MSG.TRACE_REPLAY_KEY once handleListViewKey processes
+      // the (replayed) synthetic keydown, and that's the authoritative
+      // trace path (it also catches slow-typed chord chains where the
+      // engine never sees the key). Tracking both here AND in the
+      // popup duplicated entries, so repeated replays accumulated bogus
+      // bridgeKeys and eventually broke.
+      //
       // Any chord key after the initial leader means the user is committed
       // to a chord chain — kill chrome's reveal timer so the menu doesn't
       // flash for fast chains where the action fires after the chrome
@@ -2217,6 +2376,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (w && id != null) try { w.clearTimeout(id); } catch (e) {}
       },
       onArmed: () => {
+        // Fresh chord arm — clear the in-flight trace so any nav/keys
+        // recorded for the previous chord chain don't bleed into this
+        // one. lastChordReplay (the COMMITTED previous chord) is
+        // preserved for replay until something new commits over it.
+        currentChordReplay = null;
         createOverlay();
       },
       // Any chrome-engine terminal/transition event resets content engines
@@ -2365,6 +2529,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    content.document.dispatchEvent(ev);\n" +
         "  } catch(e){}\n" +
         "});\n" +
+        // Leader pressed while the menu is on a submenu → cross-fade
+        // navigate back to actions. Distinct from WarmRearm (which
+        // resets state and is for hidden-popup state preparation) —
+        // this runs the popup's normal navigateToView so the user sees
+        // the standard sub-menu transition.
+        "addMessageListener('ZenChord:GoToActions:' + __GEN, function(){\n" +
+        "  if (__shutdown) return;\n" +
+        "  try {\n" +
+        "    if (!isExtensionPage() || !content || !content.document) return;\n" +
+        "    var ev = new content.CustomEvent('ztt:go-to-actions');\n" +
+        "    content.document.dispatchEvent(ev);\n" +
+        "  } catch(e){}\n" +
+        "});\n" +
         // The chord-engine path runs only on non-extension pages. The popup
         // and foreign extension popups own their own keybindings.
         // Mutable constants object — chrome's setChordDelay broadcasts
@@ -2493,9 +2670,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function onContentArmed(m) {
       if (!isCurrentGen(m)) return;
-      // Content engine just self-armed. Prerender the popup so it's
-      // ready if the chord chain involves a view, or if the reveal
-      // timer fires (no further chord keys typed).
+      // Content engine just self-armed. Clear the in-flight trace
+      // (same as chrome engine's onArmed) and prerender the popup
+      // so it's ready if the chord chain involves a view, or if the
+      // reveal timer fires (no further chord keys typed).
+      currentChordReplay = null;
       createOverlay();
     }
     function onContentOpenView(m) {
@@ -2553,6 +2732,148 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // extension load doesn't double-fire alongside the new code's frame
     // script. We also removeDelayedFrameScript so new content processes
     // don't load the stale script.
+    // -----------------------------------------------------------------------
+    // Duplicate-link indicator
+    // -----------------------------------------------------------------------
+    // Firefox shows the destination URL of a hovered link in the
+    // statuspanel pill at the bottom of the page. When the hovered URL
+    // already matches an open tab, this paints the pill orange so the
+    // user can see at a glance that opening the link will produce a
+    // duplicate tab.
+    //
+    // We hook XULBrowserWindow.setOverLink rather than observing the
+    // label's `value`: the value is a display-formatted string (host
+    // trimmed, protocol stripped on some surfaces), not the raw URL we
+    // need for an open-tab match.
+    let origSetOverLink = null;
+    function installDuplicateLinkIndicator() {
+      const w = getWin();
+      if (!w?.document || !w.XULBrowserWindow) return;
+      if (origSetOverLink) return; // already wired
+
+      let style = w.document.getElementById("zen-tabs-panel-duplicate-link-css");
+      if (!style) {
+        style = w.document.createElement("style");
+        style.id = "zen-tabs-panel-duplicate-link-css";
+        // Inherit Zen's natural label shape/radius — only swap the
+        // background and text color. A solid orange + dark text keeps
+        // the pill visually consistent with the non-duplicate state
+        // while making "already open" instantly recognizable.
+        style.textContent = `
+          #statuspanel[ztt-duplicate-link="true"] #statuspanel-label {
+            background-color: #f59e0b !important;
+            color: black !important;
+            border-color: #d97706 !important;
+          }
+        `;
+        w.document.documentElement.appendChild(style);
+      }
+
+      const statusPanel = w.document.getElementById("statuspanel");
+      const xbw = w.XULBrowserWindow;
+      origSetOverLink = xbw.setOverLink.bind(xbw);
+      xbw.setOverLink = function (url, hosted) {
+        try {
+          let isDup = false;
+          if (url && /^https?:/.test(url)) {
+            for (const tab of w.gBrowser.tabs) {
+              const u = tab.linkedBrowser?.currentURI?.spec || "";
+              if (u === url) { isDup = true; break; }
+            }
+          }
+          if (statusPanel) {
+            if (isDup) statusPanel.setAttribute("ztt-duplicate-link", "true");
+            else statusPanel.removeAttribute("ztt-duplicate-link");
+          }
+        } catch (e) {}
+        return origSetOverLink(url, hosted);
+      };
+    }
+    function teardownDuplicateLinkIndicator() {
+      const w = getWin();
+      try {
+        if (origSetOverLink && w?.XULBrowserWindow) {
+          w.XULBrowserWindow.setOverLink = origSetOverLink;
+        }
+      } catch (e) {}
+      origSetOverLink = null;
+      const style = w?.document?.getElementById("zen-tabs-panel-duplicate-link-css");
+      if (style) style.remove();
+      const statusPanel = w?.document?.getElementById("statuspanel");
+      if (statusPanel) statusPanel.removeAttribute("ztt-duplicate-link");
+    }
+
+    // -----------------------------------------------------------------------
+    // Duplicate-link interceptor
+    // -----------------------------------------------------------------------
+    // openLinkIn(url, where, params) is the single funnel for cmd+click,
+    // middle-click, target=_blank, "Open Link in New Tab" context menu,
+    // and same-tab link clicks (where === "current"). We hook it so that
+    // any navigation about to produce a tab with a URL already open
+    // elsewhere is intercepted: instead of calling the original, we pop
+    // our duplicate-prompt overlay with three options.
+    //
+    // No tab is ever created on intercept — the prompt shows directly,
+    // the user picks Switch / Open anyway / (Esc cancels), and we either
+    // activate the existing duplicate, replay the saved openLinkIn args,
+    // or do nothing.
+    let origOpenLinkIn = null;
+    let pendingDuplicate = null; // { url, where, params }
+    let duplicateTabInterceptEnabled = true;
+
+    function urlMatchesAnyOpenTab(url, excludeTab) {
+      const w = getWin();
+      if (!w?.gBrowser) return null;
+      for (const tab of w.gBrowser.tabs) {
+        if (tab === excludeTab) continue;
+        const u = tab.linkedBrowser?.currentURI?.spec || "";
+        if (u === url) return tab;
+      }
+      return null;
+    }
+
+    function installDuplicateLinkInterceptor() {
+      const w = getWin();
+      if (!w || origOpenLinkIn) return;
+      const orig = w.openLinkIn;
+      if (typeof orig !== "function") return;
+      origOpenLinkIn = orig;
+
+      w.openLinkIn = function (url, where, params) {
+        try {
+          if (duplicateTabInterceptEnabled &&
+              url && /^https?:/.test(url) &&
+              (where === "tab" || where === "tabshifted" || where === "current")) {
+            const excludeTab = where === "current" ? w.gBrowser.selectedTab : null;
+            const existing = urlMatchesAnyOpenTab(url, excludeTab);
+            if (existing) {
+              pendingDuplicate = { url, where, params, domId: existing.id };
+              try {
+                createOverlay("duplicate-prompt", { url, domId: existing.id });
+                // Defer reveal until the popup signals POPUP_READY so the
+                // panel doesn't appear at the previous view's size and
+                // then jump-shrink once the duplicate-prompt's measured
+                // height comes back. takeChordBridgeBuffer reveals when
+                // popupReady transitions true with revealDeferred set.
+                revealDeferred = true;
+              } catch (e) {}
+              return null;
+            }
+          }
+        } catch (e) {}
+        return origOpenLinkIn.call(this, url, where, params);
+      };
+    }
+
+    function teardownDuplicateLinkInterceptor() {
+      const w = getWin();
+      try {
+        if (origOpenLinkIn && w) w.openLinkIn = origOpenLinkIn;
+      } catch (e) {}
+      origOpenLinkIn = null;
+      pendingDuplicate = null;
+    }
+
     function teardownChordEngines() {
       try { if (chromeEngine) chromeEngine.detach(); } catch (e) {}
       // Hard-remove the warm overlay so its persistent popup browser
@@ -2588,6 +2909,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     installChromeEngine();
     installContentEngineFrameScript();
+    installDuplicateLinkIndicator();
+    installDuplicateLinkInterceptor();
 
     // Pre-create the warm overlay so the popup browser loads its content
     // (popup.html, all view modules, the initial data fetches) in the
@@ -3794,6 +4117,81 @@ this.zenWorkspaces = class extends ExtensionAPI {
           destroyOverlay();
         },
 
+        // Duplicate-prompt outcomes. Each pops a saved pendingDuplicate
+        // captured at openLinkIn intercept time.
+
+        async duplicateSwitch() {
+          if (!pendingDuplicate) { destroyOverlay(); return false; }
+          const w = getWin();
+          let target = null;
+          if (w?.gBrowser) {
+            for (const tab of w.gBrowser.tabs) {
+              const u = tab.linkedBrowser?.currentURI?.spec || "";
+              if (u === pendingDuplicate.url) { target = tab; break; }
+            }
+          }
+          pendingDuplicate = null;
+          destroyOverlay();
+          if (target) return activateNativeTab(target);
+          return false;
+        },
+
+        async duplicateOpenAnyway() {
+          if (!pendingDuplicate || !origOpenLinkIn) { destroyOverlay(); return false; }
+          const { url, where, params } = pendingDuplicate;
+          pendingDuplicate = null;
+          destroyOverlay();
+          try { origOpenLinkIn.call(null, url, where, params); return true; }
+          catch (e) { return false; }
+        },
+
+        // Pop the duplicate-prompt overlay for a URL detected by some
+        // path other than openLinkIn (e.g. bg's webRequest blocker for
+        // plain same-tab link clicks). Caller owns the "switch / open
+        // anyway / cancel" handling on their side — chrome only renders
+        // the prompt. Returns the existing-tab dom id so the caller can
+        // wire up the Switch action without re-doing the URL lookup.
+        async showDuplicatePrompt(url) {
+          const existing = urlMatchesAnyOpenTab(url, null);
+          if (!existing) return null;
+          try {
+            createOverlay("duplicate-prompt", { url, domId: existing.id });
+            revealDeferred = true;
+          } catch (e) {}
+          return existing.id;
+        },
+
+        // Replay the last engine-fired chord. Returns true if something
+        // was replayed; false if no chord has been recorded yet (cold
+        // session). Bg's REPLAY_LAST_CHORD handler calls this; only falls
+        // back to its own popup-action recording if this returns false.
+        async replayLastChord() {
+          return replayLastChordTrace();
+        },
+
+        // Popup-side trace hook for slow-typed chord chains. When the
+        // popup processes a digit/letter that activates an item, it
+        // sends this so chrome records the key the same way it would
+        // have recorded an engine-bridged key (cmd+.,r,2 fast). Without
+        // this, slow typing (menu showed, then digit) wouldn't track
+        // and cmd+.,. would have nothing to replay.
+        async traceReplayKey(key) {
+          if (typeof key === "string" && key.length > 0) {
+            trackChordBridgeKey({ key });
+          }
+        },
+
+        // Commit-on-action hook. Bg calls this for every popup-fired
+        // runtime action so chrome decides whether to promote the
+        // in-flight chord chain to lastChordReplay (cycling-capable
+        // replay) or commit a raw action. The blocklist inside
+        // recordReplayFromPopupAction keeps the replay action itself
+        // and the duplicate-prompt outcomes out of the trace.
+        async recordReplayContext(message) {
+          recordReplayFromPopupAction(message);
+        },
+
+
         // Force-arm the chord engines from an external trigger — used by
         // background.js's commands.onCommand handler so the configurable
         // open-palette shortcut (default cmd+.) acts as a chord leader
@@ -3803,6 +4201,37 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // this the user's next chord key would reach an idle content
         // engine and leak through to the page.
         async armChord() {
+          // Leader-shortcut routing while the menu is visible:
+          //   - on actions   → dismiss (toggle off).
+          //   - on submenu   → navigate back to actions (regardless of depth).
+          //   - menu hidden  → arm the chord engines (existing behavior).
+          // Without this, pressing cmd+. on an open menu silently re-armed
+          // the engines and made it look frozen.
+          if (isOverlayVisible()) {
+            if (!currentViewName || currentViewName === "actions") {
+              destroyOverlay();
+              return;
+            }
+            // Tell the popup to navigate back to actions, with cross-fade
+            // (popup's navigateToView pushes onto its own chord state).
+            // Clear chrome's navStack so a subsequent Backspace from the
+            // actions view dismisses rather than walking back through the
+            // submenu chain.
+            navStack = [];
+            currentViewName = "actions";
+            const w0 = getWin();
+            const br0 = w0 && w0.document.getElementById(BROWSER_ID);
+            if (br0 && br0.messageManager) {
+              try {
+                br0.messageManager.sendAsyncMessage(
+                  "ZenChord:GoToActions:" + CHORD_GENERATION,
+                  {}
+                );
+              } catch (e) {}
+            }
+            return;
+          }
+
           try { if (chromeEngine) chromeEngine.arm(); } catch (e) {}
           const w = getWin();
           const tab = w && w.gBrowser && w.gBrowser.selectedTab;
@@ -3843,6 +4272,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
           navStack.push({ view: currentViewName, params: {} });
           const prevView = currentViewName;
           currentViewName = view;
+          // Record the nav as the in-flight chord's open-view target so
+          // cmd+.,. replay rebuilds the same sequence — covers the
+          // slow-typed case where the engine never sees the chord-key
+          // (popup is visible, handles the key itself).
+          trackChordOpenView(view);
           // Only swap browsers when crossing between our popup and a
           // foreign extension's popup. For our-view → our-view, we
           // just update the nav stack here — the popup runs its
@@ -3915,6 +4349,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const w = getWin();
           const overlay = w && w.document.getElementById(OVERLAY_ID);
           if (overlay) overlay.style.background = overlayBackdropColor();
+        },
+
+        // Toggle the duplicate-tab intercept (openLinkIn hook). Bg pushes
+        // this from the duplicateTabIntercept setting. The orange URL
+        // pill on hover is always on; this only gates the interactive
+        // prompt that catches the click/navigation.
+        async setDuplicateTabIntercept(enabled) {
+          duplicateTabInterceptEnabled = !!enabled;
         },
 
         // User-facing single delay for chord timeouts. Background

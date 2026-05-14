@@ -22,7 +22,10 @@
     "menus",
     "clipboardWrite",
     "history",
-    "contextualIdentities"
+    "contextualIdentities",
+    "webRequest",
+    "webRequestBlocking",
+    "<all_urls>"
   ],
 
   "experiment_apis": {

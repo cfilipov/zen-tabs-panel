@@ -102,6 +102,16 @@ this.ZEN_KEYBINDINGS = [
   // Page 2 — Page tools (additions)
   { id: "copy-url",           kind: "action", chord: "Shift+Y", label: "Copy URL",      icon: "svg:copy",     page: 2 },
 
+  // Profiles submenu — open a view that lists installed Zen profiles
+  // for switching/launching. Previously inlined as a column on page 2;
+  // moved to its own view so the actions menu stays compact.
+  { id: "profiles",           kind: "open-view", chord: "'", view: "profiles", label: "Profiles", icon: "svg:user", page: 2 },
+
+  // Page 2 — Repeat the most recent chord-action. Chord is "." after
+  // the leader, so cmd+.,. fires whatever cmd+.,X you did last —
+  // particularly handy for cycling close-and-select-next-vertical.
+  { id: "replay-last-chord",  kind: "action", chord: ".",       label: "Repeat last",   icon: "svg:rotate-ccw", page: 2 },
+
   // Page 1 — Organize (new)
   { id: "move-to-folder",     kind: "open-view", chord: "Shift+O", view: "move-to-folder", label: "Move to folder", icon: "svg:folder" },
 

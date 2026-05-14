@@ -118,6 +118,26 @@ this.MSG = Object.freeze({
   REOPEN_IN_CONTAINER:            "reopen-in-container",
   GET_FOLDERS:                    "get-folders",
 
+  // Replay the most recently fired chord-action (cmd+.,.). Background
+  // records the last action's message (type + params) at dispatch and
+  // re-runs it on demand. Excluded from recording itself so repeated
+  // presses keep replaying the SAME prior action.
+  REPLAY_LAST_CHORD:              "replay-last-chord",
+
+  // Popup → chrome trace for cmd+.,. replay tracking. Sent when the
+  // popup handles a chord-key (digit in a list view) that activates
+  // an item — chrome appends to its open-view bridgeKeys so the
+  // slow-typed chord (menu shown, then user types digit) is
+  // recorded the same as a fast-typed chord (engine-bridged).
+  TRACE_REPLAY_KEY:               "trace-replay-key",
+
+  // Duplicate-link intercept: popup-fired actions for the three buttons
+  // in the duplicate-prompt view. Excluded from chord-replay tracking —
+  // they're context-bound (refer to a specific in-flight openLinkIn
+  // intercept) and have no meaning outside that flow.
+  DUPLICATE_SWITCH:               "duplicate-switch",
+  DUPLICATE_OPEN_ANYWAY:          "duplicate-open-anyway",
+
   // Companion mods
   CHECK_COMPANION_MOD:            "check-companion-mod",
   INSTALL_COMPANION_MOD:          "install-companion-mod",
@@ -200,6 +220,11 @@ this.STORAGE_DEFAULTS = Object.freeze({
   // chord HUD. Pushed to the chrome engine, content engines (via
   // ZenChord:SetDelay), and the popup (via ?delay=N URL param).
   chordDelayMs: 350,
+  // Intercept link clicks that would open / navigate to a URL already
+  // open in another tab, and show a Switch / Open anyway / Cancel
+  // prompt. The orange URL pill always shows on hover regardless;
+  // this flag only gates the interactive intercept.
+  duplicateTabIntercept: true,
 });
 
 // Whitelist of view names accepted by the navigate-view message. Mirrors
@@ -226,6 +251,8 @@ this.VIEW_IDS = new Set([
   "close-and-select",
   "move-to-folder",
   "open-in-container",
+  "profiles",
+  "duplicate-prompt",
   "extension-popup",
 ]);
 

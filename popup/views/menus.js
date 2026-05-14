@@ -353,9 +353,145 @@ async function showOpenInContainer() {
   updateHeader("New container tab");
 }
 
+// Profiles submenu: one row per installed Zen profile. The current
+// profile is shown disabled with a "Current" badge; activating another
+// row spawns a new Zen instance against that profile (via
+// launch-profile in background.js → api.launchProfile).
+async function showProfiles() {
+  ui.currentView = "profiles";
+  ui.sectionStarts = [0];
+  ui.items = [];
+  ui.selectedIndex = -1;
+  listEl.innerHTML = "";
+
+  await fetchProfileList();
+  const profiles = profileState.profileList;
+
+  if (!profiles || profiles.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">No profiles found</div>`;
+    updateHeader("Profiles");
+    return;
+  }
+
+  for (let i = 0; i < profiles.length; i++) {
+    const profile = profiles[i];
+    const badge = (i + 1) <= 9 ? String(i + 1) : null;
+
+    const el = document.createElement("div");
+    el.className = "list-item" + (profile.isCurrent ? " disabled" : "");
+    el.dataset.profileName = profile.name;
+
+    let badgeRight = "";
+    if (profile.isCurrent) {
+      badgeRight = `<span class="item-badge">Current</span>`;
+    } else if (profile.isDefault) {
+      badgeRight = `<span class="item-badge">Default</span>`;
+    }
+
+    el.innerHTML = `
+      <span class="item-icon-placeholder">${getIcon("svg:user")}</span>
+      <span class="item-text">
+        <span class="item-title">${escapeHtml(profile.name)}</span>
+      </span>
+      <span class="item-right">
+        ${badgeRight}
+        ${badge !== null && !profile.isCurrent ? renderBadge(badge) : ""}
+      </span>
+    `;
+
+    if (!profile.isCurrent) {
+      el.addEventListener("click", () => {
+        ext.runtime.sendMessage({ type: "launch-profile", name: profile.name }).catch(() => {});
+      });
+    }
+    listEl.appendChild(el);
+
+    ui.items.push({
+      launchProfileName: profile.isCurrent ? null : profile.name,
+      label: profile.name,
+      isCurrentProfile: profile.isCurrent,
+    });
+  }
+
+  updateSelection();
+  updateHeader("Profiles");
+}
+
+// Duplicate-prompt view: pops up when openLinkIn is about to navigate
+// to or open a URL that already matches another open tab. Offers
+// Switch (activate existing), Open anyway (run the original
+// openLinkIn), or Escape to cancel. params: { url }.
+function showDuplicatePrompt(params) {
+  ui.currentView = "duplicate-prompt";
+  ui.sectionStarts = [0];
+  ui.items = [];
+  ui.selectedIndex = -1;
+  listEl.innerHTML = "";
+
+  // Page-indicator and sidebar are pulled in from the actions menu when
+  // this view comes up directly (we open the overlay at duplicate-prompt
+  // without going through navigateToView). Hide both explicitly since
+  // this is a focused prompt, not a paged list.
+  const indicator = document.getElementById("page-indicator");
+  if (indicator) indicator.classList.add("hidden");
+  if (typeof hideSidebar === "function") hideSidebar();
+
+  const url = (params && typeof params.url === "string") ? params.url : "";
+  const existingDomId = (params && typeof params.domId === "string") ? params.domId : null;
+
+  // URL preview at the top.
+  const urlRow = document.createElement("div");
+  urlRow.className = "duplicate-prompt-url";
+  urlRow.textContent = url;
+  listEl.appendChild(urlRow);
+
+  // Switch attaches data-dom-id so the standard hover delegate +
+  // updateSelection's preview branch (see popup.js) outline the
+  // existing duplicate tab in Zen's vertical sidebar — same UX as
+  // hovering rows in any tab-list view. The other two rows have no
+  // tab association.
+  const options = [
+    { label: "Switch to existing tab", hotkey: "S", actionId: "duplicate-switch",      icon: "svg:arrow-right", domId: existingDomId },
+    { label: "Open anyway",            hotkey: "O", actionId: "duplicate-open-anyway", icon: "svg:plus" },
+    { label: "Cancel",                 hotkey: "C", actionId: "hide-palette",          icon: "svg:x-circle" },
+  ];
+
+  for (const opt of options) {
+    const el = document.createElement("div");
+    el.className = "list-item";
+    if (opt.domId) el.dataset.domId = opt.domId;
+    el.innerHTML = `
+      <span class="item-icon-placeholder">${getIcon(opt.icon)}</span>
+      <span class="item-text">
+        <span class="item-title">${escapeHtml(opt.label)}</span>
+      </span>
+      <span class="item-right">${renderBadge(opt.hotkey)}</span>
+    `;
+    el.addEventListener("click", () => {
+      ext.runtime.sendMessage({ type: opt.actionId }).catch(() => {});
+    });
+    listEl.appendChild(el);
+    ui.items.push({
+      runtimeAction: opt.actionId,
+      hotkey: opt.hotkey,
+      label: opt.label,
+      // preview.domId is what updateSelection reads to send PREVIEW_TAB
+      // for arrow-key selection (the actions/close-and-select branch).
+      // Adding duplicate-prompt to that branch in popup.js completes
+      // the wiring on the popup side.
+      preview: opt.domId ? { domId: opt.domId } : undefined,
+    });
+  }
+
+  updateSelection();
+  updateHeader("Duplicate tab already open");
+}
+
 // View registry
 VIEWS["reorder-tabs"]       = () => showReorderTabs();
 VIEWS["split-view"]         = () => showSplitView();
 VIEWS["close-and-select"]   = () => showCloseAndSelect();
 VIEWS["move-to-folder"]     = () => showMoveToFolder();
 VIEWS["open-in-container"]  = () => showOpenInContainer();
+VIEWS["profiles"]           = () => showProfiles();
+VIEWS["duplicate-prompt"]   = (params) => showDuplicatePrompt(params);

@@ -278,6 +278,20 @@ html, body {
   background: var(--ztt-bg-selected);
 }
 
+/* Duplicate-prompt: the intercepted URL preview at the top of the
+   prompt view. Renders as a single line with the URL truncated. */
+.duplicate-prompt-url {
+  padding: 8px 12px 10px;
+  font-size: 12px;
+  color: var(--ztt-text-muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--ztt-text-muted) 25%, transparent);
+  margin: 0 4px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
 /* Activation flash: distinct from .selected (gray arrow-key cursor). Uses
    the system accent color so the user can see which item they activated
    via chord key, click, or Enter. Briefly applied then removed by

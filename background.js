@@ -20,6 +20,7 @@ async function loadSettings() {
   pushInterceptSetting();
   pushSkipAnimationsSetting();
   pushDimBackdropSetting();
+  pushDuplicateInterceptSetting();
   pushChordDelaySetting();
 }
 
@@ -35,6 +36,10 @@ function pushDimBackdropSetting() {
   api.setDimBackdrop(!!settings.dimBackdrop).catch(() => {});
 }
 
+function pushDuplicateInterceptSetting() {
+  api.setDuplicateTabIntercept(!!settings.duplicateTabIntercept).catch(() => {});
+}
+
 function pushChordDelaySetting() {
   const ms = Number(settings.chordDelayMs);
   if (Number.isFinite(ms) && ms >= 0) {
@@ -48,6 +53,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
   let interceptTouched = false;
   let skipAnimationsTouched = false;
   let dimBackdropTouched = false;
+  let dupInterceptTouched = false;
   let chordDelayTouched = false;
   for (const key of Object.keys(changes)) {
     if (key in STORAGE_DEFAULTS) {
@@ -56,6 +62,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
       if (key === "interceptExtensionPopups") interceptTouched = true;
       if (key === "skipOverlayAnimations") skipAnimationsTouched = true;
       if (key === "dimBackdrop") dimBackdropTouched = true;
+      if (key === "duplicateTabIntercept") dupInterceptTouched = true;
       if (key === "chordDelayMs") chordDelayTouched = true;
     }
   }
@@ -63,6 +70,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
   if (interceptTouched) pushInterceptSetting();
   if (skipAnimationsTouched) pushSkipAnimationsSetting();
   if (dimBackdropTouched) pushDimBackdropSetting();
+  if (dupInterceptTouched) pushDuplicateInterceptSetting();
   if (chordDelayTouched) pushChordDelaySetting();
 });
 
@@ -441,6 +449,9 @@ function getRecentlyClosed() {
 
 const ACTIONS = Object.freeze({
   [MSG.OPEN_OPTIONS]:                     ()  => openOptions(),
+  [MSG.REPLAY_LAST_CHORD]:                ()  => replayLastChord(),
+  [MSG.DUPLICATE_SWITCH]:                 ()  => handleDuplicateSwitch(),
+  [MSG.DUPLICATE_OPEN_ANYWAY]:            ()  => handleDuplicateOpenAnyway(),
   [MSG.ACTIVATE_TAB]:                     (m) => api.activateTabByDomId(m.domId),
   [MSG.GO_TO_PREVIOUS_TAB]:               ()  => api.goToPreviousTab(),
   [MSG.GO_TO_PARENT_TAB]:                 ()  => api.goToParentTab(),
@@ -575,6 +586,7 @@ const SYNC_HANDLERS = Object.freeze({
   },
   [MSG.OPEN_EXTENSION_POPUP]: (m) => api.openExtensionPopup(m.extensionId),
   [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view, m.height),
+  [MSG.TRACE_REPLAY_KEY]:     (m) => api.traceReplayKey(m.key),
 });
 
 // Hide palette, then run an action. Used by the message handler to keep
@@ -584,13 +596,56 @@ async function hideAndDo(fn) {
   return fn();
 }
 
+// Most-recently fired action's full message — recorded at dispatch
+// (popup-driven via onMessage / chord-driven via runChordAction), so
+// cmd+.,. can replay it. The replay action itself is NOT recorded,
+// so repeated presses keep replaying the same prior action rather
+// than recursing on "replay last".
+let lastChordAction = null;
+
+function recordChordAction(message) {
+  if (!message || !message.type) return;
+  if (message.type === MSG.REPLAY_LAST_CHORD) return;
+  // Duplicate-prompt outcomes are context-bound to the in-flight
+  // openLinkIn intercept — replaying them does nothing useful (and
+  // would mask the previous replayable chord by overwriting the bg
+  // fallback). Don't record either lastChordAction or chrome's
+  // chord-chain context for these.
+  if (message.type === MSG.DUPLICATE_SWITCH || message.type === MSG.DUPLICATE_OPEN_ANYWAY) return;
+  lastChordAction = message;
+  // Let chrome decide whether this terminal action commits a chord
+  // chain (open-view + bridge keys → cycling replay) or just gets
+  // recorded as a plain action. Bridges the bg/chrome split:
+  // chord-chain state lives in chrome's engine layer, action dispatch
+  // happens here in bg.
+  try { api.recordReplayContext(message).catch(() => {}); } catch (e) {}
+}
+
 // Run an action triggered via a chord shortcut. The palette never opened
 // in this path, so we skip the hide-palette prelude. Reuses the ACTIONS
 // table for parity with palette-driven dispatch.
 async function runChordAction(actionId) {
   const handler = ACTIONS[actionId];
   if (!handler) return;
-  await handler({ type: actionId });
+  const message = { type: actionId };
+  recordChordAction(message);
+  await handler(message);
+}
+
+// Replay-last-chord (cmd+.,.). Re-runs the most recent chord. Prefers
+// chrome's engine-level trace (so cmd+.,r,2 cycles through recents
+// instead of re-activating the same now-active tab) and falls back to
+// bg's runtime-action record for click-driven cases that never went
+// through the chord engine.
+async function replayLastChord() {
+  try {
+    const ok = await api.replayLastChord();
+    if (ok) return;
+  } catch (e) {}
+  if (!lastChordAction) return;
+  const handler = ACTIONS[lastChordAction.type];
+  if (!handler) return;
+  await handler(lastChordAction);
 }
 
 async function handleChordResult(result) {
@@ -622,6 +677,95 @@ browser.commands.onCommand.addListener((command) => {
 // results back via this event. We dispatch the resulting action (if any).
 api.onPaletteRequest.addListener(handleChordResult);
 
+// ---------------------------------------------------------------------------
+// Duplicate-link interceptor for same-tab navigation
+//
+// Plain left-clicks on links navigate in the content process without
+// calling chrome's openLinkIn, so the chrome-side hook in api.js
+// doesn't catch them. webRequest.onBeforeRequest with blocking is the
+// only place we can both detect AND cancel that nav before it
+// commits. We skip when the request originates from a newly-opened
+// tab (about:blank / about:newtab), since those are openLinkIn's
+// territory and handling them here would create a flash where the
+// new tab opens then we cancel.
+// ---------------------------------------------------------------------------
+
+let webRequestPendingDuplicate = null; // { tabId, url, dupExtId }
+// One-shot pass for the next webRequest matching {tabId,url}. Set by
+// "Open anyway" so the resulting browser.tabs.update doesn't re-trip
+// the duplicate detector and re-pop the prompt forever.
+let allowOnce = null; // { tabId, url }
+
+// Duplicate-prompt outcomes route here so we can pick between the bg
+// (webRequest, same-tab) path and the chrome (openLinkIn, new-tab)
+// path. Whichever has state set wins; if both are clear we just
+// dismiss the overlay.
+async function handleDuplicateSwitch() {
+  if (webRequestPendingDuplicate) {
+    const { dupExtId } = webRequestPendingDuplicate;
+    webRequestPendingDuplicate = null;
+    try { await browser.tabs.update(dupExtId, { active: true }); } catch (e) {}
+    await api.hidePalette();
+    return;
+  }
+  await api.duplicateSwitch();
+}
+
+async function handleDuplicateOpenAnyway() {
+  if (webRequestPendingDuplicate) {
+    const { tabId, url } = webRequestPendingDuplicate;
+    webRequestPendingDuplicate = null;
+    allowOnce = { tabId, url };
+    try { await browser.tabs.update(tabId, { url }); } catch (e) { allowOnce = null; }
+    await api.hidePalette();
+    return;
+  }
+  await api.duplicateOpenAnyway();
+}
+
+browser.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    if (!settings.duplicateTabIntercept) return {};
+    if (details.tabId < 0) return {};
+    if (details.frameId !== 0) return {};
+    if (!/^https?:/.test(details.url)) return {};
+    // One-shot bypass for the very navigation the user just chose to
+    // "Open anyway" — without this we'd intercept the same URL again
+    // and the prompt would loop.
+    if (allowOnce && allowOnce.tabId === details.tabId && allowOnce.url === details.url) {
+      allowOnce = null;
+      return {};
+    }
+    return (async () => {
+      try {
+        const navigatingTab = await browser.tabs.get(details.tabId);
+        // Brand-new tab opening: leave it to openLinkIn / let through.
+        if (!navigatingTab || !navigatingTab.url ||
+            navigatingTab.url === "about:newtab" ||
+            navigatingTab.url === "about:blank" ||
+            navigatingTab.url === "about:home") {
+          return {};
+        }
+        if (navigatingTab.url === details.url) return {};
+        const allTabs = await browser.tabs.query({});
+        const dup = allTabs.find((t) => t.id !== details.tabId && t.url === details.url);
+        if (!dup) return {};
+        webRequestPendingDuplicate = {
+          tabId: details.tabId,
+          url: details.url,
+          dupExtId: dup.id,
+        };
+        try { api.showDuplicatePrompt(details.url).catch(() => {}); } catch (e) {}
+        return { cancel: true };
+      } catch (e) {
+        return {};
+      }
+    })();
+  },
+  { urls: ["http://*/*", "https://*/*"], types: ["main_frame"] },
+  ["blocking"]
+);
+
 // Toolbar icon click opens the palette immediately, bypassing chord-arming.
 browser.browserAction.onClicked.addListener(() => {
   api.showPalette({ skipChord: true });
@@ -639,6 +783,7 @@ browser.runtime.onMessage.addListener((message) => {
 
   const action = ACTIONS[type];
   if (action) {
+    recordChordAction(message);
     hideAndDo(() => action(message));
     return;
   }

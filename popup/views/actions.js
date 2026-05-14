@@ -98,7 +98,7 @@ function getActions() {
     actionFromRegistry("open-in-container",  compact),
 
     { type: "section", label: "Profiles", page: 2, column: true, stack: true },
-    { type: "profiles" },
+    actionFromRegistry("profiles", compact),
 
     { type: "section", label: "Developer", page: 2, column: true },
     actionFromRegistry("toggle-devtools",        compact),
@@ -117,6 +117,7 @@ function getActions() {
     actionFromRegistry("copy-url-markdown", compact),
 
     { type: "section", label: "Other", page: 2, column: true, stack: true },
+    actionFromRegistry("replay-last-chord", compact),
     actionFromRegistry("open-options", compact),
   ];
 }
@@ -544,6 +545,7 @@ async function showActionsMenu() {
       fetchExtensionList(),
     ]);
   } catch (e) {
+    if (ui.currentView !== "actions") return;
     resetActionsState();
     if (!initialView) {
       renderActions(getActions(), null);
@@ -551,6 +553,13 @@ async function showActionsMenu() {
     }
     return;
   }
+
+  // Bail if a newer WarmRearm took over mid-fetch — without this our
+  // late render would clobber listEl over the newer view's content,
+  // and any key dispatched into the newer view would scan stale rows
+  // (e.g. matching this actions menu's workspace-switch row when the
+  // user actually wanted "2nd recent" in last-visited).
+  if (ui.currentView !== "actions") return;
 
   // Single-pass aggregation. The previous code did 11 separate filter / map /
   // sort passes over allTabs. With 500+ tabs each pass allocated an

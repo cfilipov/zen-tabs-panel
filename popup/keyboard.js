@@ -11,7 +11,7 @@
 
 // Views that present like the actions menu: a static list of menu items
 // where a single letter activates an item via item.hotkey.
-const ACTIONS_LIKE_VIEWS = new Set(["actions", "reorder-tabs", "close-and-select", "split-view"]);
+const ACTIONS_LIKE_VIEWS = new Set(["actions", "reorder-tabs", "close-and-select", "split-view", "duplicate-prompt"]);
 
 // Static dispatch — same behavior in every view.
 const KEY_HANDLERS = Object.create(null);
@@ -50,18 +50,33 @@ KEY_HANDLERS["Tab"] = (e) => {
 KEY_HANDLERS["ArrowRight"] = (e) => {
   e.preventDefault();
   if (ui.sidebarFocused || ui.selectedIndex < 0) return;
-  if (DRILL_CHILDREN_VIEWS.has(ui.currentView)) {
-    drillIntoSelectedParent();
+  // In multi-column views (the actions menu is laid out as section-
+  // columns, the compact submenus as 2-col grids), right moves
+  // selection to the neighbor on the right. The previous
+  // "activate-if-isView" shortcut conflated motion with activation —
+  // users expect right to be navigation, like ↓ but horizontal.
+  if (ui.currentView === "actions" ||
+      ui.currentView === "reorder-tabs" ||
+      ui.currentView === "close-and-select") {
+    moveSelectionDirectional(+1, 0);
     return;
   }
-  if (ui.items[ui.selectedIndex]?.isView) {
-    activateSelected();
+  // List views: drill if the row supports children.
+  if (DRILL_CHILDREN_VIEWS.has(ui.currentView)) {
+    drillIntoSelectedParent();
   }
 };
 
 KEY_HANDLERS["ArrowLeft"] = (e) => {
   e.preventDefault();
-  if (!ui.sidebarFocused && ui.currentView !== "actions") goBack();
+  if (ui.sidebarFocused) return;
+  if (ui.currentView === "actions" ||
+      ui.currentView === "reorder-tabs" ||
+      ui.currentView === "close-and-select") {
+    moveSelectionDirectional(-1, 0);
+    return;
+  }
+  if (ui.currentView !== "actions") goBack();
 };
 
 KEY_HANDLERS["Enter"] = (e) => {
@@ -153,9 +168,12 @@ function handleActionsKey(e) {
 
   e.preventDefault();
   flashActivated(idx);
+  if (typeof traceActivatedRowKey === "function") traceActivatedRowKey(listItems[idx]);
   const item = ui.items[idx];
   const fire = () => {
-    if (item.reorderAction) {
+    if (item.runtimeAction) {
+      ext.runtime.sendMessage({ type: item.runtimeAction }).catch(() => {});
+    } else if (item.reorderAction) {
       ext.runtime.sendMessage({ type: item.reorderAction }).catch(() => {});
     } else if (item.closeAndSelectAction) {
       ext.runtime.sendMessage({ type: item.closeAndSelectAction }).catch(() => {});
@@ -282,6 +300,7 @@ async function handleListViewKey(e) {
       if (firstItem) {
         const allListItems = navigableListItems();
         flashActivated(Array.prototype.indexOf.call(allListItems, firstItem));
+        if (typeof traceActivatedRowKey === "function") traceActivatedRowKey(firstItem);
         activateTab(firstItem.dataset.domId);
       }
       return;
@@ -297,6 +316,7 @@ async function handleListViewKey(e) {
 
     e.preventDefault();
     flashActivated(i);
+    if (typeof traceActivatedRowKey === "function") traceActivatedRowKey(listItems[i]);
     const item = ui.items[i];
     if (item?.navIndex !== undefined && !item?.isCurrent) {
       ext.runtime.sendMessage({ type: "navigate-to-history-index", index: item.navIndex }).catch(() => {});
@@ -633,4 +653,16 @@ document.addEventListener("ztt:warm-rearm", (e) => {
 // in the next chord arm to re-reveal the popup.
 document.addEventListener("ztt:cancel-reveal", () => {
   clearPopupRevealTimer();
+});
+
+// Leader shortcut while the menu is visible on a submenu — cross-fade
+// back to the actions view. Distinct from a WarmRearm (which is for
+// hidden-popup state reset).
+document.addEventListener("ztt:go-to-actions", () => {
+  try {
+    if (typeof ui !== "undefined" && ui.currentView !== "actions" &&
+        typeof navigateToView === "function") {
+      navigateToView("actions");
+    }
+  } catch (e) {}
 });
