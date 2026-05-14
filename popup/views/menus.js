@@ -106,8 +106,15 @@ async function showCloseAndSelect() {
     activeTab = allTabs.find((t) => t.active);
   } catch (e) {}
 
+  // Bail if a newer WarmRearm took over mid-fetch — see the matching
+  // guard in showActionsMenu / showLastVisited. Without this our paint
+  // would clobber listEl, and a dispatched chord-key would scan stale
+  // rows (or rows for the wrong view entirely).
+  if (ui.currentView !== "close-and-select") return;
+
   if (!wsState.workspaceMap || Object.keys(wsState.workspaceMap).length === 0) {
     await fetchWorkspaceMap();
+    if (ui.currentView !== "close-and-select") return;
   }
 
   const buildPreview = (tab) => tab
@@ -263,6 +270,8 @@ async function showMoveToFolder() {
   try { folders = await ext.runtime.sendMessage({ type: "get-folders" }) || []; }
   catch (e) {}
 
+  if (ui.currentView !== "move-to-folder") return;
+
   ui.items = folders.map((f) => ({ folderId: f.id, label: f.name, workspaceId: f.workspaceId }));
   ui.selectedIndex = -1;
   listEl.innerHTML = "";
@@ -307,6 +316,8 @@ async function showOpenInContainer() {
   let identities = [];
   try { identities = await ext.contextualIdentities.query({}) || []; }
   catch (e) {}
+
+  if (ui.currentView !== "open-in-container") return;
 
   ui.items = identities.map((c) => ({ userContextId: c.cookieStoreId, label: c.name }));
   ui.selectedIndex = -1;
@@ -362,9 +373,10 @@ async function showProfiles() {
   ui.sectionStarts = [0];
   ui.items = [];
   ui.selectedIndex = -1;
-  listEl.innerHTML = "";
 
   await fetchProfileList();
+  if (ui.currentView !== "profiles") return;
+  listEl.innerHTML = "";
   const profiles = profileState.profileList;
 
   if (!profiles || profiles.length === 0) {

@@ -12,6 +12,7 @@ async function showMoveToWorkspace() {
   try {
     workspaces = await ext.runtime.sendMessage({ type: "get-workspaces-with-icons" });
   } catch (e) { workspaces = []; }
+  if (ui.currentView !== "move-to-workspace") return;
   const otherWorkspaces = workspaces.filter(ws => !ws.isActive);
   renderWorkspaceList(otherWorkspaces, "Move to workspace");
 }
