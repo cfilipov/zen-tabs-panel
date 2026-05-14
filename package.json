@@ -4,6 +4,9 @@
   "version": "0.3.0",
   "description": "Tab management command palette and utilities for Zen Browser",
   "scripts": {
+    "build": "npm run build:vanilla",
+    "build:vanilla": "node scripts/build-extension.mjs --variant=vanilla",
+    "build:svelte": "node scripts/build-extension.mjs --variant=svelte",
     "test": "node --test tests/*.test.js"
   }
 }

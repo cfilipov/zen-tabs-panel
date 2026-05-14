@@ -1,0 +1,77 @@
+{
+  "manifest_version": 2,
+  "name": "Zen Tabs Panel",
+  "version": "0.3.0",
+  "description": "Tab management command palette and utilities for Zen Browser",
+  "author": "c13v",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "zen-tabs-panel@c13v.com",
+      "strict_min_version": "128.0"
+    }
+  },
+
+  "content_security_policy": "script-src 'self'; object-src 'self'; img-src 'self' data: resource:;",
+
+  "permissions": [
+    "tabs",
+    "alarms",
+    "storage",
+    "sessions",
+    "menus",
+    "clipboardWrite",
+    "history",
+    "contextualIdentities",
+    "webRequest",
+    "webRequestBlocking",
+    "<all_urls>"
+  ],
+
+  "experiment_apis": {
+    "zenWorkspaces": {
+      "schema": "experiment/schema.json",
+      "parent": {
+        "scopes": ["addon_parent"],
+        "paths": [["zenWorkspaces"]],
+        "script": "experiment/api.js"
+      }
+    }
+  },
+
+  "background": {
+    "scripts": ["shared/constants.js", "lib/tab-sort.js", "background.js"],
+    "persistent": true
+  },
+
+  "browser_action": {
+    "default_title": "Zen Tabs Panel"
+  },
+
+  "commands": {
+    "open-palette": {
+      "suggested_key": { "default": "Command+Period" },
+      "description": "Open palette / arm chord"
+    },
+    "open-palette-2": {
+      "suggested_key": { "default": "Command+Alt+Period" },
+      "description": "Open palette / arm chord (backup 1)"
+    },
+    "open-palette-3": {
+      "description": "Open palette / arm chord (backup 2)"
+    },
+    "open-palette-4": {
+      "description": "Open palette / arm chord (backup 3)"
+    }
+  },
+
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+
+  "icons": {
+    "48": "icons/icon-48.svg",
+    "96": "icons/icon-96.svg"
+  }
+}

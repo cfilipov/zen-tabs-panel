@@ -1,37 +1,24 @@
 XPI = zen-tabs-panel.xpi
+VARIANT ?= vanilla
 
-SRC = manifest.json \
-      background.js \
-      experiment/api.js \
-      experiment/schema.json \
-      popup/popup.html \
-      popup/popup.js \
-      popup/popup.css \
-      popup/state.js \
-      popup/render.js \
-      popup/keyboard.js \
-      $(wildcard popup/views/*.js) \
-      options/options.html \
-      options/options.js \
-      options/options.css \
-      welcome/welcome.html \
-      welcome/welcome.js \
-      welcome/welcome.css \
-      $(wildcard shared/*.js) \
-      $(wildcard lib/*.js) \
-      $(wildcard icons/*.svg) \
-      LICENSE
+.PHONY: build build-vanilla build-svelte package clean test
 
-.PHONY: build clean test
+build:
+	npm run build:$(VARIANT)
 
-build: $(XPI)
+build-vanilla:
+	npm run build:vanilla
 
-$(XPI): $(SRC)
-	rm -f $@
-	zip $@ $(SRC)
+build-svelte:
+	npm run build:svelte
+
+package: build
+	rm -f $(XPI)
+	cd dist && zip -r ../$(XPI) .
 
 test:
-	node --test tests/*.test.js
+	npm test
 
 clean:
+	rm -rf dist
 	rm -f $(XPI)

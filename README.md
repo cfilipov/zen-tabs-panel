@@ -212,12 +212,17 @@ Set these flags in `about:config`:
 
 ### Loading for development
 
-For iterating on `background.js`, `popup/`, and `options/`:
+Build the variant you want to test, then load the generated `dist/` extension:
+
+```bash
+npm run build:vanilla   # known-good vanilla source
+npm run build:svelte    # Svelte migration source, currently a parity copy
+```
 
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on...**
-3. Select `extension/manifest.json`
-4. Use the **Reload** button after making changes
+3. Select `dist/manifest.json`
+4. Rebuild the desired variant and use the **Reload** button after making changes
 
 ### Remote debugging
 
@@ -243,20 +248,24 @@ The Browser Toolbox is essential for inspecting Zen's chrome DOM, testing CSS se
 ### Building from source
 
 ```bash
-make
+npm run build:vanilla
+make package
 ```
 
-Then install the `.xpi` from `about:addons` as described above.
+`npm run build:vanilla` and `npm run build:svelte` both write the chosen variant to
+`dist/`. `make package` builds the vanilla variant by default, then zips `dist/`
+into `zen-tabs-panel.xpi`; use `make package VARIANT=svelte` to package the
+Svelte migration variant. Install the `.xpi` from `about:addons` as described above.
 
 ### Architecture notes
 
 The extension has three layers:
 
-1. **`experiment/api.js`** - Runs in the chrome-privileged parent process. Has full access to `gBrowser`, `gZenWorkspaces`, `gZenViewSplitter`, `gZenMods`, and the chrome DOM. Exposes a `browser.zenWorkspaces.*` API to the extension. Also manages the command palette overlay (injected as a chrome DOM element with an embedded `<browser>` XUL element).
+1. **`src-vanilla/experiment/api.js` / `src-svelte/experiment/api.js`** - Runs in the chrome-privileged parent process. Has full access to `gBrowser`, `gZenWorkspaces`, `gZenViewSplitter`, `gZenMods`, and the chrome DOM. Exposes a `browser.zenWorkspaces.*` API to the extension. Also manages the command palette overlay (injected as a chrome DOM element with an embedded `<browser>` XUL element).
 
-2. **`background.js`** - Persistent background script. Routes messages between the popup and the experiment API. Handles auto-close timers, auto-move logic, and keyboard command dispatch.
+2. **`src-vanilla/background.js` / `src-svelte/background.js`** - Persistent background script. Routes messages between the popup and the experiment API. Handles auto-close timers, auto-move logic, and keyboard command dispatch.
 
-3. **`popup/`** - The command palette UI, loaded inside the chrome overlay's embedded browser element. Communicates with `background.js` via `browser.runtime.sendMessage`.
+3. **`src-vanilla/popup/` / `src-svelte/popup/`** - The command palette UI, loaded inside the chrome overlay's embedded browser element. Communicates with `background.js` via `browser.runtime.sendMessage`.
 
 Key constraints discovered during development:
 
