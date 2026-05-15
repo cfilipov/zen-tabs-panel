@@ -1,8 +1,7 @@
 <script lang="ts">
   import Badge from "../components/Badge.svelte";
   import { iconHtml } from "../components/icons";
-
-  export type DuplicatePromptAction = "duplicate-switch" | "duplicate-open-anyway" | "hide-palette";
+  import type { DuplicatePromptAction } from "../interaction/interpreter";
 
   type PromptOption = {
     label: string;

@@ -11,7 +11,7 @@
   import ContainerList from "./views/ContainerList.svelte";
   import DomainList from "./views/DomainList.svelte";
   import DuplicateGroups from "./views/DuplicateGroups.svelte";
-  import DuplicatePrompt, { type DuplicatePromptAction } from "./views/DuplicatePrompt.svelte";
+  import DuplicatePrompt from "./views/DuplicatePrompt.svelte";
   import FolderList from "./views/FolderList.svelte";
   import PrefixMenu from "./views/PrefixMenu.svelte";
   import NavigationList from "./views/NavigationList.svelte";
@@ -20,7 +20,12 @@
   import TabList from "./views/TabList.svelte";
   import TabInfoView from "./views/TabInfoView.svelte";
   import WorkspaceList from "./views/WorkspaceList.svelte";
-  import { interpretVisibleInput, type InteractionCommand } from "./interaction/interpreter";
+  import {
+    DUPLICATE_PROMPT_ACTIONS,
+    interpretVisibleInput,
+    type DuplicatePromptAction,
+    type InteractionCommand,
+  } from "./interaction/interpreter";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
@@ -1187,8 +1192,7 @@
       const row = profileRows[selectedIndex];
       if (row) launchProfile(row);
     } else if (currentView === "duplicate-prompt") {
-      const action: DuplicatePromptAction[] = ["duplicate-switch", "duplicate-open-anyway", "hide-palette"];
-      const selected = action[selectedIndex];
+      const selected = DUPLICATE_PROMPT_ACTIONS[selectedIndex];
       if (selected) runDuplicatePromptAction(selected);
     }
   }
@@ -1234,8 +1238,7 @@
     }
 
     if (currentView === "duplicate-prompt") {
-      const action: DuplicatePromptAction[] = ["duplicate-switch", "duplicate-open-anyway", "hide-palette"];
-      const selected = action[index];
+      const selected = DUPLICATE_PROMPT_ACTIONS[index];
       if (selected) runDuplicatePromptAction(selected);
       return;
     }
