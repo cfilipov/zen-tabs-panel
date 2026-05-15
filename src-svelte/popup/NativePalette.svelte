@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import PaletteShell from "./components/PaletteShell.svelte";
   import ActionsMenu from "./views/ActionsMenu.svelte";
+  import ContainerList from "./views/ContainerList.svelte";
   import DomainList from "./views/DomainList.svelte";
   import PrefixMenu from "./views/PrefixMenu.svelte";
   import NavigationList from "./views/NavigationList.svelte";
@@ -10,6 +11,7 @@
   import WorkspaceList from "./views/WorkspaceList.svelte";
   import { inputFromKeyboardEvent } from "./interaction/inputs";
   import { interpretVisibleInput, type InteractionCommand } from "./interaction/interpreter";
+  import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createHistoryClient, type NavigationHistory, type RecentlyClosedRow } from "./runtime/history-client";
   import { fireMessage } from "./runtime/ipc";
   import { createTabIndexClient, type DomainIndexRow, type TabIndexRow, type TabIndexView } from "./runtime/tab-index-client";
@@ -34,8 +36,10 @@
   type NativePrefixView = Extract<ViewId, "reorder-tabs" | "close-and-select" | "split-view">;
   type NativeHistoryView = Extract<ViewId, "navigation" | "recently-closed">;
   type NativeWorkspaceView = Extract<ViewId, "move-to-workspace">;
+  type NativeContainerView = Extract<ViewId, "open-in-container">;
 
   const client = createTabIndexClient();
+  const containerClient = createContainerClient();
   const historyClient = createHistoryClient();
   const workspaceClient = createWorkspaceClient();
   const actionSections = buildActionsMenuModel();
@@ -62,6 +66,7 @@
   let navigationHistory = $state<NavigationHistory | null>(null);
   let recentlyClosedRows = $state<RecentlyClosedRow[]>([]);
   let workspaceRows = $state<WorkspaceRow[]>([]);
+  let containerRows = $state<ContainerRow[]>([]);
   let loadGeneration = 0;
 
   const headerHidden = $derived(currentView === "actions");
@@ -82,6 +87,8 @@
       ? "Recently closed"
       : currentView === "move-to-workspace"
       ? "Move to workspace"
+      : currentView === "open-in-container"
+      ? "New container tab"
       : allActionItems.find((item) => item.view === currentView)?.label ?? "",
   );
   const selectedActionId = $derived(currentView === "actions" ? visibleActionItems[selectedIndex]?.id ?? null : null);
@@ -105,6 +112,10 @@
 
   function isNativeWorkspaceView(view: ViewId | undefined): view is NativeWorkspaceView {
     return view === "move-to-workspace";
+  }
+
+  function isNativeContainerView(view: ViewId | undefined): view is NativeContainerView {
+    return view === "open-in-container";
   }
 
   function isNativeTabView(view: ViewId | undefined): view is NativeTabView {
@@ -229,6 +240,26 @@
     }
   }
 
+  async function loadOpenInContainer() {
+    const generation = ++loadGeneration;
+    loading = true;
+    error = null;
+    currentView = "open-in-container";
+    try {
+      const containers = await containerClient.getContainers();
+      if (generation !== loadGeneration || currentView !== "open-in-container") return;
+      containerRows = containers;
+      selectedIndex = containers.length ? 0 : -1;
+    } catch (err) {
+      if (generation !== loadGeneration) return;
+      containerRows = [];
+      selectedIndex = -1;
+      error = err instanceof Error ? err.message : String(err);
+    } finally {
+      if (generation === loadGeneration) loading = false;
+    }
+  }
+
   function activateAction(item: ActionMenuItem) {
     if (item.disabled) {
       return;
@@ -267,6 +298,11 @@
       return;
     }
 
+    if (item.view === "open-in-container") {
+      loadOpenInContainer();
+      return;
+    }
+
     error = `${item.label} has not been ported to native Svelte yet`;
   }
 
@@ -294,6 +330,10 @@
     fireMessage({ type: "move-selected-tabs-to-workspace", workspaceId: row.uuid });
   }
 
+  function reopenInContainer(row: ContainerRow) {
+    fireMessage({ type: "reopen-in-container", userContextId: row.userContextId });
+  }
+
   function previewTab(row: TabIndexRow) {
     fireMessage({ type: "preview-tab", domId: row.domId });
   }
@@ -312,6 +352,7 @@
     navigationHistory = null;
     recentlyClosedRows = [];
     workspaceRows = [];
+    containerRows = [];
     selectedIndex = 0;
     error = null;
   }
@@ -327,6 +368,8 @@
           ? recentlyClosedRows.length
           : currentView === "move-to-workspace"
             ? workspaceRows.length
+            : currentView === "open-in-container"
+              ? containerRows.length
         : rows.length;
     if (!length) {
       selectedIndex = -1;
@@ -368,6 +411,9 @@
     } else if (currentView === "move-to-workspace") {
       const row = workspaceRows[selectedIndex];
       if (row) moveToWorkspace(row);
+    } else if (currentView === "open-in-container") {
+      const row = containerRows[selectedIndex];
+      if (row) reopenInContainer(row);
     }
   }
 
@@ -390,6 +436,12 @@
     if (currentView === "move-to-workspace") {
       const row = workspaceRows[index];
       if (row) moveToWorkspace(row);
+      return;
+    }
+
+    if (currentView === "open-in-container") {
+      const row = containerRows[index];
+      if (row) reopenInContainer(row);
       return;
     }
 
@@ -447,6 +499,8 @@
           loadRecentlyClosed();
         } else if (command.view === "move-to-workspace") {
           loadMoveToWorkspace();
+        } else if (command.view === "open-in-container") {
+          loadOpenInContainer();
         } else {
           currentView = command.view;
           rows = [];
@@ -531,6 +585,8 @@
       loadRecentlyClosed();
     } else if (initialView === "move-to-workspace") {
       loadMoveToWorkspace();
+    } else if (initialView === "open-in-container") {
+      loadOpenInContainer();
     }
 
     window.addEventListener("keydown", handleKeydown);
@@ -573,6 +629,12 @@
       rows={workspaceRows}
       {selectedIndex}
       onactivate={moveToWorkspace}
+    />
+  {:else if currentView === "open-in-container"}
+    <ContainerList
+      rows={containerRows}
+      {selectedIndex}
+      onactivate={reopenInContainer}
     />
   {:else if isNativeTabView(currentView)}
     <TabList
