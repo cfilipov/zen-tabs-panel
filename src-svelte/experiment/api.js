@@ -806,6 +806,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
     );
     const KEYBINDINGS = engineScope.ZEN_KEYBINDINGS || [];
     const WORKSPACE_DIGIT_CHORDS = engineScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
+    const tabIndexScope = {};
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("experiment/tab-index.js"),
+      tabIndexScope
+    );
+    const tabIndex = tabIndexScope.createZenTabIndex({
+      getWin,
+      getAllTabElements,
+      getExtTabId,
+      unwrapFavicon,
+      readTabValue,
+      readTabStats,
+      ensureTabUuid,
+      recordInterval,
+    });
+    context.callOnClose(() => {
+      try { tabIndex.stop(); } catch (e) {}
+    });
     // Mutable so the user's chordDelayMs setting can override at runtime.
     // The engine reads `constants.CHORD_*_TIMEOUT_MS` on each timer set,
     // so mutations apply to the next chord without rebuilding the engine.
@@ -3603,6 +3621,39 @@ this.zenWorkspaces = class extends ExtensionAPI {
             });
           }
           return results;
+        },
+
+        async ensureIndexStarted() {
+          tabIndex.start();
+          return true;
+        },
+
+        async getIndexVersion() {
+          return tabIndex.getVersion();
+        },
+
+        async getViewSummary(view, paramsJson) {
+          let params = {};
+          if (typeof paramsJson === "string" && paramsJson) {
+            try { params = JSON.parse(paramsJson); } catch (e) { params = {}; }
+          } else if (paramsJson && typeof paramsJson === "object") {
+            params = paramsJson;
+          }
+          return tabIndex.getSummary(view, params);
+        },
+
+        async getViewWindow(view, offset, limit, paramsJson) {
+          let params = {};
+          if (typeof paramsJson === "string" && paramsJson) {
+            try { params = JSON.parse(paramsJson); } catch (e) { params = {}; }
+          } else if (paramsJson && typeof paramsJson === "object") {
+            params = paramsJson;
+          }
+          return tabIndex.getWindow(view, offset, limit, params);
+        },
+
+        async getRowTarget(domId) {
+          return tabIndex.getRowTarget(domId);
         },
 
         // ---------------------------------------------------------------

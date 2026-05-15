@@ -38,6 +38,11 @@ this.MSG = Object.freeze({
   GET_SELECTED_TAB_DOM_IDS:       "get-selected-tab-dom-ids",
   GET_SELECTED_TAB_URLS:          "get-selected-tab-urls",
   GET_WORKSPACES_WITH_ICONS:      "get-workspaces-with-icons",
+  TAB_INDEX_ENSURE_STARTED:       "tab-index:ensure-started",
+  TAB_INDEX_GET_VERSION:          "tab-index:get-version",
+  TAB_INDEX_GET_SUMMARY:          "tab-index:get-summary",
+  TAB_INDEX_GET_WINDOW:           "tab-index:get-window",
+  TAB_INDEX_GET_ROW_TARGET:       "tab-index:get-row-target",
 
   // Tab navigation
   GO_TO_PREVIOUS_TAB:             "go-to-previous-tab",

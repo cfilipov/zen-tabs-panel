@@ -199,6 +199,51 @@
         "parameters": []
       },
       {
+        "name": "ensureIndexStarted",
+        "type": "function",
+        "async": true,
+        "description": "Start the experiment-owned tab index",
+        "parameters": []
+      },
+      {
+        "name": "getIndexVersion",
+        "type": "function",
+        "async": true,
+        "description": "Get the current tab-index version",
+        "parameters": []
+      },
+      {
+        "name": "getViewSummary",
+        "type": "function",
+        "async": true,
+        "description": "Get bounded summary metadata for a tab-index view",
+        "parameters": [
+          { "name": "view", "type": "string" },
+          { "name": "paramsJson", "type": "string", "optional": true }
+        ]
+      },
+      {
+        "name": "getViewWindow",
+        "type": "function",
+        "async": true,
+        "description": "Get a bounded window of rows for a tab-index view",
+        "parameters": [
+          { "name": "view", "type": "string" },
+          { "name": "offset", "type": "integer" },
+          { "name": "limit", "type": "integer" },
+          { "name": "paramsJson", "type": "string", "optional": true }
+        ]
+      },
+      {
+        "name": "getRowTarget",
+        "type": "function",
+        "async": true,
+        "description": "Get the activation target metadata for a tab row",
+        "parameters": [
+          { "name": "domId", "type": "string" }
+        ]
+      },
+      {
         "name": "getCompanionMods",
         "type": "function",
         "async": true,
