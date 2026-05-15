@@ -804,7 +804,7 @@
       });
   }
 
-  async function activateAction(item: ActionMenuItem) {
+  async function performActionItem(item: ActionMenuItem) {
     if (item.disabled) {
       return;
     }
@@ -826,6 +826,25 @@
     }
 
     if (item.view) await openNativeView(item.view as ViewId, undefined, true);
+  }
+
+  async function activateAction(item: ActionMenuItem) {
+    if (item.disabled) return;
+
+    if (item.kind === "workspace-switch" && item.workspaceId) {
+      switchWorkspace(item.workspaceId);
+      return;
+    }
+
+    const actionNodes = isNativePrefixView(currentView) ? prefixNodes : allActionNodes;
+    const command = interpretVisibleInput(
+      { kind: "mouse", targetId: item.id },
+      { view: currentView },
+      actionNodes,
+    );
+    if (command.kind !== "none") {
+      await runCommand(command);
+    }
   }
 
   function activateTab(row: TabIndexRow) {
@@ -1268,7 +1287,7 @@
     switch (command.kind) {
       case "action": {
         const item = [...allActionItems, ...prefixItems].find((candidate) => candidate.id === command.actionId);
-        if (item) await activateAction(item);
+        if (item) await performActionItem(item);
         return;
       }
       case "open-view":
