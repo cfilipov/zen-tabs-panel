@@ -53,7 +53,7 @@
     loadProfilesView,
     loadRecentlyClosedView,
   } from "./view-loaders/basic-loaders";
-  import { domainOf } from "./views/url";
+  import { loadDuplicateGroupsView } from "./view-loaders/duplicates-loader";
   import {
     actionItemsForPage,
     actionNodesForSections,
@@ -551,21 +551,13 @@
   async function loadDuplicates() {
     const load = viewLoad.begin("duplicates");
     try {
-      const [allTabs, workspaces] = await Promise.all([
-        sendMessage<TabIndexRow[]>({ type: "get-all-tabs" }),
-        workspaceClient.getWorkspacesWithIcons().catch(() => []),
-      ]);
+      const result = await loadDuplicateGroupsView(tabIndexClient, workspaceClient, workspaceFilter);
       await load.commit(() => {
-        sidebarWorkspaces = workspaces;
-        duplicateWorkspaces = workspaces;
-        if (workspaceFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === workspaceFilter)) {
-          workspaceFilter = "all";
-        }
-        const filteredTabs = workspaceFilter === "all"
-          ? allTabs
-          : allTabs.filter((tab) => tab.workspaceId === workspaceFilter);
-        duplicateGroups = buildDuplicateGroups(filteredTabs);
-        selectedIndex = -1;
+        sidebarWorkspaces = result.workspaces;
+        duplicateWorkspaces = result.workspaces;
+        workspaceFilter = result.workspaceFilter;
+        duplicateGroups = result.groups;
+        selectedIndex = result.selectedIndex;
       });
     } catch (err) {
       await load.fail(err, (message) => {
@@ -741,30 +733,6 @@
     if (params instanceof URLSearchParams) return params.get(key);
     const value = params[key];
     return typeof value === "string" ? value : null;
-  }
-
-  function buildDuplicateGroups(allTabs: TabIndexRow[]): DuplicateGroupRow[] {
-    const groups = new Map<string, TabIndexRow[]>();
-    for (const tab of allTabs) {
-      if (!tab.url || tab.url === "about:newtab" || tab.url === "about:blank") continue;
-      const group = groups.get(tab.url);
-      if (group) group.push(tab);
-      else groups.set(tab.url, [tab]);
-    }
-    return [...groups.values()]
-      .filter((group) => group.length > 1)
-      .sort((a, b) => b.length - a.length)
-      .map((tabs) => {
-        const sample = tabs[0];
-        return {
-          kind: "duplicate-group",
-          url: sample.url,
-          title: sample.title,
-          domain: sample.domain || domainOf(sample.url),
-          favIconUrl: sample.favIconUrl,
-          tabs,
-        };
-      });
   }
 
   async function performActionItem(item: ActionMenuItem) {

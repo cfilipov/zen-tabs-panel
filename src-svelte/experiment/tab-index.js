@@ -206,6 +206,30 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
         : (a, b) => b.count - a.count || a.domain.localeCompare(b.domain));
   }
 
+  function duplicateGroups(params) {
+    const groups = new Map();
+    for (const row of filteredRows("all", params)) {
+      if (!row.url || row.url === "about:newtab" || row.url === "about:blank") continue;
+      const group = groups.get(row.url);
+      if (group) group.push(row);
+      else groups.set(row.url, [row]);
+    }
+    return [...groups.values()]
+      .filter((group) => group.length > 1)
+      .sort((a, b) => b.length - a.length)
+      .map((tabs) => {
+        const sample = tabs[0];
+        return {
+          kind: "duplicate-group",
+          url: sample.url,
+          title: sample.title,
+          domain: sample.domain || domainOf(sample.url),
+          favIconUrl: compactFavicon(sample.favIconUrl),
+          tabs: tabs.map(compactTabRow),
+        };
+      });
+  }
+
   function rowsForView(view, params) {
     if (view === "domains") return domainRows(params);
     return filteredRows(view, params);
@@ -289,6 +313,9 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
         counts[row.workspaceId] = (counts[row.workspaceId] || 0) + 1;
       }
       return counts;
+    },
+    getDuplicateGroups(params) {
+      return duplicateGroups(params || {});
     },
     getActionsSnapshot() {
       rebuildIfNeeded();

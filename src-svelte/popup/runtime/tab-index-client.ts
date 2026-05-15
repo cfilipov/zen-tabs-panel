@@ -107,6 +107,7 @@ type ZenWorkspacesApi = {
   getRowTarget(domId: string): Promise<{ domId: string; workspaceId: string | null; url: string; title: string } | null>;
   getWorkspaceTabCounts(): Promise<Record<string, number>>;
   getActionsSnapshot(): Promise<ActionsSnapshot>;
+  getDuplicateGroups(paramsJson?: string): Promise<DuplicateGroupRow[]>;
 };
 
 type BrowserWithExperiment = {
@@ -160,6 +161,10 @@ export function createTabIndexClient(send: Send = sendMessage, directApi: ZenWor
     getActionsSnapshot() {
       if (directApi) return directApi.getActionsSnapshot();
       return send<ActionsSnapshot>({ type: "tab-index:get-actions-snapshot" });
+    },
+    getDuplicateGroups(params: Record<string, unknown> = {}) {
+      if (directApi) return directApi.getDuplicateGroups(encodeParams(params));
+      return send<DuplicateGroupRow[]>({ type: "tab-index:get-duplicate-groups", params });
     },
   };
 }

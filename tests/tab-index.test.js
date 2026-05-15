@@ -1,0 +1,93 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+
+const { createZenTabIndex } = require("../src-svelte/experiment/tab-index.js");
+
+function fakeWindow() {
+  return {
+    gBrowser: {
+      tabContainer: {
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    },
+    MutationObserver: class {
+      observe() {}
+      disconnect() {}
+    },
+    gZenWorkspaces: {
+      addChangeListener() {},
+      addChangeListeners() {},
+    },
+  };
+}
+
+function fakeTab(id, url, workspaceId, attrs = {}) {
+  return {
+    id,
+    label: attrs.title || id,
+    linkedBrowser: { currentURI: { spec: url } },
+    pinned: !!attrs.pinned,
+    selected: !!attrs.active,
+    lastAccessed: attrs.lastAccessed || 0,
+    image: attrs.favIconUrl || "",
+    openerTab: null,
+    getAttribute(name) {
+      if (name === "zen-workspace-id") return workspaceId || "";
+      return "";
+    },
+    hasAttribute(name) {
+      return !!attrs[name];
+    },
+  };
+}
+
+function makeIndex(tabs) {
+  return createZenTabIndex({
+    getWin: fakeWindow,
+    getAllTabElements: () => tabs,
+    readTabStats: () => ({ focusCount: 0 }),
+    getExtTabId: (tab) => Number(tab.id.replace(/\D/g, "")) || null,
+    unwrapFavicon: (url) => url,
+    readTabValue: () => null,
+    ensureTabUuid: (tab) => `uuid-${tab.id}`,
+    recordInterval() {},
+  });
+}
+
+test("tab index returns duplicate URL groups without about:newtab/about:blank", () => {
+  const index = makeIndex([
+    fakeTab("tab-1", "https://example.test/a", "ws-1", { title: "A1" }),
+    fakeTab("tab-2", "about:newtab", "ws-1"),
+    fakeTab("tab-3", "https://example.test/a", "ws-2", { title: "A2" }),
+    fakeTab("tab-4", "about:blank", "ws-1"),
+    fakeTab("tab-5", "https://other.test/b", "ws-1"),
+    fakeTab("tab-6", "https://other.test/b", "ws-1"),
+    fakeTab("tab-7", "https://other.test/b", "ws-2"),
+  ]);
+
+  const groups = index.getDuplicateGroups({});
+
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups.map((group) => [group.url, group.tabs.length]), [
+    ["https://other.test/b", 3],
+    ["https://example.test/a", 2],
+  ]);
+  assert.equal(groups[0].kind, "duplicate-group");
+  assert.equal(groups[0].domain, "other.test");
+});
+
+test("tab index duplicate groups respect workspace filters", () => {
+  const index = makeIndex([
+    fakeTab("tab-1", "https://example.test/a", "ws-1"),
+    fakeTab("tab-2", "https://example.test/a", "ws-2"),
+    fakeTab("tab-3", "https://other.test/b", "ws-1"),
+    fakeTab("tab-4", "https://other.test/b", "ws-1"),
+  ]);
+
+  const groups = index.getDuplicateGroups({ workspaceId: "ws-1" });
+
+  assert.deepEqual(groups.map((group) => [group.url, group.tabs.length]), [
+    ["https://other.test/b", 2],
+  ]);
+});

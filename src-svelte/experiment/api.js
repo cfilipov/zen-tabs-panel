@@ -3739,6 +3739,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return tabIndex.getWorkspaceTabCounts();
         },
 
+        async getDuplicateGroups(paramsJson) {
+          let params = {};
+          if (typeof paramsJson === "string" && paramsJson) {
+            try { params = JSON.parse(paramsJson); } catch (e) { params = {}; }
+          } else if (paramsJson && typeof paramsJson === "object") {
+            params = paramsJson;
+          }
+          return tabIndex.getDuplicateGroups(params);
+        },
+
         async getActionsSnapshot() {
           return tabIndex.getActionsSnapshot();
         },

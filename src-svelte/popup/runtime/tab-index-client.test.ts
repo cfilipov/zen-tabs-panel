@@ -40,6 +40,7 @@ describe("tab index client", () => {
         },
         getRowTarget: async () => null,
         getWorkspaceTabCounts: async () => ({}),
+        getDuplicateGroups: async () => [],
         getActionsSnapshot: async () => ({
           version: 1,
           currentTabHasParent: false,
@@ -60,6 +61,20 @@ describe("tab index client", () => {
 
     expect(calls).toEqual([
       { view: "domain-tabs", offset: 0, limit: 5, paramsJson: "{\"domain\":\"example.com\"}" },
+    ]);
+  });
+
+  it("loads duplicate groups through the message fallback", async () => {
+    const sent: unknown[] = [];
+    const client = createTabIndexClient(async <T>(message: unknown) => {
+      sent.push(message);
+      return [] as T;
+    });
+
+    await client.getDuplicateGroups({ workspaceId: "ws-1" });
+
+    expect(sent).toEqual([
+      { type: "tab-index:get-duplicate-groups", params: { workspaceId: "ws-1" } },
     ]);
   });
 });
