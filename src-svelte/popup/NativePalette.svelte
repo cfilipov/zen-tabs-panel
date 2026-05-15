@@ -44,6 +44,15 @@
     type TabIndexView,
   } from "./runtime/tab-index-client";
   import { createWorkspaceClient, type WorkspaceRow } from "./runtime/workspace-client";
+  import { emptyActionsMenuData, loadActionsMenuData, type ActionsMenuData } from "./view-loaders/actions-loader";
+  import {
+    loadMoveToFolderView,
+    loadMoveToWorkspaceView,
+    loadNavigationView,
+    loadOpenInContainerView,
+    loadProfilesView,
+    loadRecentlyClosedView,
+  } from "./view-loaders/basic-loaders";
   import { domainOf } from "./views/url";
   import {
     actionItemsForPage,
@@ -271,6 +280,16 @@
     openExtensionIndex: openExtensionByIndex,
   };
 
+  function applyActionsMenuData(data: ActionsMenuData) {
+    actionsWorkspaces = data.workspaces;
+    actionWorkspaceTabCounts = data.workspaceTabCounts;
+    actionExtensions = data.extensions;
+    actionIconHtmlById = data.iconHtmlById;
+    actionPreviewsById = data.previewsById;
+    actionCounts = data.counts;
+    disabledActionIds = data.disabledIds;
+  }
+
   function isNativeListView(view: ViewId | undefined): view is NativeListView {
     return isNativeTabView(view) || view === "domains";
   }
@@ -374,94 +393,17 @@
 
   async function loadActionsData() {
     try {
-      const [
-        workspaces,
-        snapshot,
-        extensions,
-        recentlyClosed,
-        navHistory,
-        selectedDomIds,
-      ] = await Promise.all([
-        workspaceClient.getWorkspacesWithIcons().catch(() => []),
-        client.getActionsSnapshot().catch(() => null),
-        extensionClient.listExtensions().catch(() => []),
-        historyClient.getRecentlyClosed().catch(() => []),
-        historyClient.getNavigationHistory().catch(() => null),
-        sendMessage<string[]>({ type: "get-selected-tab-dom-ids" }).catch(() => []),
-      ]);
-      actionsWorkspaces = workspaces;
-      actionWorkspaceTabCounts = snapshot?.workspaceTabCounts ?? {};
-      actionExtensions = extensions;
-      actionIconHtmlById = workspaceNavigationIconMap(workspaces);
-      const backPreview = navHistory && navHistory.index > 0
-        ? historyPreview(navHistory.entries[navHistory.index - 1])
-        : null;
-      const forwardPreview = navHistory && navHistory.index < navHistory.entries.length - 1
-        ? historyPreview(navHistory.entries[navHistory.index + 1])
-        : null;
-      actionPreviewsById = {
-        ...(snapshot?.previews ?? {}),
-        "go-back-in-tab": backPreview,
-        "go-forward-in-tab": forwardPreview,
-      };
-      actionCounts = {
-        "child-tabs": snapshot?.childTabCount ?? 0,
-        "sibling-tabs": snapshot?.siblingTabCount ?? 0,
-        "parent-tabs": snapshot?.parentTabCount ?? 0,
-        "unvisited-tabs": snapshot?.unvisitedTabCount ?? 0,
-        "domains": snapshot?.domainCount ?? 0,
-        "recently-closed": recentlyClosed.length,
-        "duplicates": snapshot?.duplicateGroupCount ?? 0,
-        "move-to-workspace": selectedDomIds.length > 1 ? selectedDomIds.length : 0,
-      };
-      disabledActionIds = new Set([
-        ...(!actionPreviewsById["go-to-previous-tab"] ? ["go-to-previous-tab"] : []),
-        ...(!actionPreviewsById["go-to-parent-tab"] ? ["go-to-parent-tab"] : []),
-        ...(!actionPreviewsById["go-to-prev-vertical-tab"] ? ["go-to-prev-vertical-tab"] : []),
-        ...(!actionPreviewsById["go-to-next-vertical-tab"] ? ["go-to-next-vertical-tab"] : []),
-        ...(!actionPreviewsById["go-back-in-tab"] ? ["go-back-in-tab"] : []),
-        ...(!actionPreviewsById["go-forward-in-tab"] ? ["go-forward-in-tab"] : []),
-        ...(!actionPreviewsById["unvisited-newest"] ? ["unvisited-newest"] : []),
-        ...(!actionPreviewsById["unvisited-oldest"] ? ["unvisited-oldest"] : []),
-        ...((snapshot?.childTabCount ?? 0) <= 0 ? ["child-tabs"] : []),
-        ...((snapshot?.siblingTabCount ?? 0) <= 0 ? ["sibling-tabs"] : []),
-        ...((snapshot?.parentTabCount ?? 0) <= 0 ? ["parent-tabs"] : []),
-        ...((snapshot?.unvisitedTabCount ?? 0) <= 0 ? ["unvisited-tabs"] : []),
-        ...((snapshot?.domainCount ?? 0) <= 0 ? ["domains"] : []),
-        ...((snapshot?.duplicateGroupCount ?? 0) <= 0 ? ["duplicates"] : []),
-        ...(recentlyClosed.length <= 0 ? ["recently-closed"] : []),
-        ...((navHistory?.entries.length ?? 0) <= 1 ? ["navigation"] : []),
-        ...(!snapshot?.currentTabIsPinned ? ["reset-pinned-tab"] : []),
-      ]);
+      const data = await loadActionsMenuData({
+        tabIndexClient: client,
+        workspaceClient,
+        extensionClient,
+        historyClient,
+        getSelectedTabDomIds: () => sendMessage<string[]>({ type: "get-selected-tab-dom-ids" }),
+      });
+      applyActionsMenuData(data);
     } catch {
-      actionsWorkspaces = [];
-      actionWorkspaceTabCounts = {};
-      actionExtensions = [];
-      actionCounts = {};
-      actionPreviewsById = {};
-      disabledActionIds = new Set();
-      actionIconHtmlById = {};
+      applyActionsMenuData(emptyActionsMenuData());
     }
-  }
-
-  function historyPreview(entry: { title?: string; url?: string } | undefined): ActionPreview | null {
-    if (!entry) return null;
-    return {
-      title: entry.title || entry.url || "Untitled",
-      url: entry.url || "",
-      isHistory: true,
-    };
-  }
-
-  function workspaceNavigationIconMap(workspaces: WorkspaceRow[]) {
-    const activeIndex = workspaces.findIndex((workspace) => workspace.isActive);
-    if (activeIndex < 0 || workspaces.length <= 1) return {};
-    const prev = workspaces[(activeIndex - 1 + workspaces.length) % workspaces.length];
-    const next = workspaces[(activeIndex + 1) % workspaces.length];
-    return {
-      "go-to-prev-workspace": prev.svgContent ? `<span class="workspace-icon">${prev.svgContent}</span>` : null,
-      "go-to-next-workspace": next.svgContent ? `<span class="workspace-icon">${next.svgContent}</span>` : null,
-    };
   }
 
   async function loadListView(view: NativeListView, nextOffset = 0, limit = 80, resetSelection = true, params = viewParams(view)) {
@@ -493,10 +435,10 @@
   async function loadNavigation() {
     const load = viewLoad.begin("navigation");
     try {
-      const history = await historyClient.getNavigationHistory();
+      const result = await loadNavigationView(historyClient);
       await load.commit(() => {
-        navigationHistory = history;
-        selectedIndex = history?.entries.length ? history.index : -1;
+        navigationHistory = result.history;
+        selectedIndex = result.selectedIndex;
       });
     } catch (err) {
       await load.fail(err, (message) => {
@@ -512,10 +454,10 @@
   async function loadRecentlyClosed() {
     const load = viewLoad.begin("recently-closed");
     try {
-      const entries = await historyClient.getRecentlyClosed();
+      const result = await loadRecentlyClosedView(historyClient);
       await load.commit(() => {
-        recentlyClosedRows = entries;
-        selectedIndex = -1;
+        recentlyClosedRows = result.rows;
+        selectedIndex = result.selectedIndex;
       });
     } catch (err) {
       await load.fail(err, (message) => {
@@ -531,10 +473,10 @@
   async function loadMoveToWorkspace() {
     const load = viewLoad.begin("move-to-workspace");
     try {
-      const workspaces = await workspaceClient.getWorkspacesWithIcons();
+      const result = await loadMoveToWorkspaceView(workspaceClient);
       await load.commit(() => {
-        workspaceRows = workspaces.filter((workspace) => !workspace.isActive);
-        selectedIndex = -1;
+        workspaceRows = result.rows;
+        selectedIndex = result.selectedIndex;
       });
     } catch (err) {
       await load.fail(err, (message) => {
@@ -550,10 +492,10 @@
   async function loadOpenInContainer() {
     const load = viewLoad.begin("open-in-container");
     try {
-      const containers = await containerClient.getContainers();
+      const result = await loadOpenInContainerView(containerClient);
       await load.commit(() => {
-        containerRows = containers;
-        selectedIndex = -1;
+        containerRows = result.rows;
+        selectedIndex = result.selectedIndex;
       });
     } catch (err) {
       await load.fail(err, (message) => {
@@ -569,14 +511,11 @@
   async function loadMoveToFolder() {
     const load = viewLoad.begin("move-to-folder");
     try {
-      const [folders, workspaces] = await Promise.all([
-        folderClient.getFolders(),
-        workspaceClient.getWorkspacesWithIcons().catch(() => []),
-      ]);
+      const result = await loadMoveToFolderView(folderClient, workspaceClient);
       await load.commit(() => {
-        folderRows = folders;
-        folderWorkspaces = workspaces;
-        selectedIndex = -1;
+        folderRows = result.folders;
+        folderWorkspaces = result.workspaces;
+        selectedIndex = result.selectedIndex;
       });
     } catch (err) {
       await load.fail(err, (message) => {
@@ -593,10 +532,10 @@
   async function loadProfiles() {
     const load = viewLoad.begin("profiles");
     try {
-      const profiles = await profileClient.getProfiles();
+      const result = await loadProfilesView(profileClient);
       await load.commit(() => {
-        profileRows = profiles;
-        selectedIndex = -1;
+        profileRows = result.rows;
+        selectedIndex = result.selectedIndex;
       });
     } catch (err) {
       await load.fail(err, (message) => {
