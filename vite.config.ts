@@ -5,6 +5,9 @@ export default defineConfig({
   root: "src-svelte",
   base: "./",
   plugins: [svelte({ compilerOptions: { runes: true } })],
+  resolve: {
+    conditions: ["browser"],
+  },
   build: {
     outDir: "../dist",
     emptyOutDir: false,

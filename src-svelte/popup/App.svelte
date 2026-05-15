@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import PaletteShell from "./components/PaletteShell.svelte";
+  import ActionsMenu from "./views/ActionsMenu.svelte";
+  import { buildActionsMenuModel, type ActionMenuItem } from "./views/actions-model";
+  import { fireMessage } from "./runtime/ipc";
   import "./popup.css";
 
   const legacyScripts = [
@@ -24,6 +27,8 @@
   ];
 
   let bootError = $state<string | null>(null);
+  const nativeMode = new URLSearchParams(location.search).get("native") === "1";
+  const actionSections = buildActionsMenuModel();
 
   function loadScript(src: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -37,6 +42,7 @@
   }
 
   onMount(() => {
+    if (nativeMode) return;
     let cancelled = false;
     (async () => {
       for (const src of legacyScripts) {
@@ -51,10 +57,23 @@
       cancelled = true;
     };
   });
+
+  function activateNativeAction(item: ActionMenuItem) {
+    if (item.kind === "action") {
+      fireMessage({ type: item.id });
+      return;
+    }
+
+    if (item.view) {
+      bootError = `${item.label} is still handled by the compatibility runtime`;
+    }
+  }
 </script>
 
 <PaletteShell>
-  {#if bootError}
+  {#if nativeMode}
+    <ActionsMenu sections={actionSections} onactivate={activateNativeAction} />
+  {:else if bootError}
     <div class="empty-state">{bootError}</div>
   {/if}
 </PaletteShell>

@@ -18,6 +18,8 @@ export type ActionSectionId =
 
 export type ActionMenuItem = {
   id: string;
+  kind: "action" | "open-view" | "prefix";
+  view?: string;
   label: string;
   icon?: string;
   hotkey: string;
@@ -80,6 +82,8 @@ export function buildActionsMenuModel(disabledIds: ReadonlySet<string> = new Set
       if (!node) throw new Error(`Missing navigation node: ${id}`);
       return {
         id: node.id,
+        kind: node.kind,
+        view: node.kind === "open-view" || node.kind === "prefix" ? node.view : undefined,
         label: node.label,
         icon: node.icon,
         hotkey: node.chord,
