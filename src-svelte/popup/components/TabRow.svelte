@@ -1,5 +1,6 @@
 <script lang="ts">
   import Badge from "./Badge.svelte";
+  import { iconHtml } from "./icons";
   import type { TabIndexRow } from "../runtime/tab-index-client";
 
   type Props = {
@@ -33,9 +34,9 @@
   <span class="item-text">
     <span class="item-title">
       {#if row.essential}
-        <span class="tab-indicator essential" title="Essential">★</span>
+        <span class="tab-indicator essential" title="Essential">{@html iconHtml("svg:star")}</span>
       {:else if row.pinned}
-        <span class="tab-indicator pinned" title="Pinned">⌖</span>
+        <span class="tab-indicator pinned" title="Pinned">{@html iconHtml("svg:pin")}</span>
       {/if}
       {title}
     </span>

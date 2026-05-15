@@ -1,5 +1,6 @@
 <script lang="ts">
   import Badge from "./Badge.svelte";
+  import { iconHtml } from "./icons";
   import type { ActionMenuItem } from "../views/actions-model";
 
   type Props = {
@@ -10,6 +11,7 @@
   };
 
   let { item, compact = false, selected = false, onactivate }: Props = $props();
+  const icon = $derived(iconHtml(item.icon));
 </script>
 
 <button
@@ -22,7 +24,7 @@
   disabled={item.disabled}
   onclick={() => onactivate?.(item)}
 >
-  <span class="item-icon-placeholder">{item.icon ?? ""}</span>
+  <span class="item-icon-placeholder">{@html icon}</span>
   <span class="item-text">
     <span class="item-title">{item.label}</span>
   </span>
