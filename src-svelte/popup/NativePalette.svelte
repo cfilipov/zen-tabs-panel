@@ -4,6 +4,7 @@
   import ActionsMenu from "./views/ActionsMenu.svelte";
   import ContainerList from "./views/ContainerList.svelte";
   import DomainList from "./views/DomainList.svelte";
+  import FolderList from "./views/FolderList.svelte";
   import PrefixMenu from "./views/PrefixMenu.svelte";
   import NavigationList from "./views/NavigationList.svelte";
   import RecentlyClosedList from "./views/RecentlyClosedList.svelte";
@@ -12,6 +13,7 @@
   import { inputFromKeyboardEvent } from "./interaction/inputs";
   import { interpretVisibleInput, type InteractionCommand } from "./interaction/interpreter";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
+  import { createFolderClient, type FolderRow } from "./runtime/folder-client";
   import { createHistoryClient, type NavigationHistory, type RecentlyClosedRow } from "./runtime/history-client";
   import { fireMessage } from "./runtime/ipc";
   import { createTabIndexClient, type DomainIndexRow, type TabIndexRow, type TabIndexView } from "./runtime/tab-index-client";
@@ -37,9 +39,11 @@
   type NativeHistoryView = Extract<ViewId, "navigation" | "recently-closed">;
   type NativeWorkspaceView = Extract<ViewId, "move-to-workspace">;
   type NativeContainerView = Extract<ViewId, "open-in-container">;
+  type NativeFolderView = Extract<ViewId, "move-to-folder">;
 
   const client = createTabIndexClient();
   const containerClient = createContainerClient();
+  const folderClient = createFolderClient();
   const historyClient = createHistoryClient();
   const workspaceClient = createWorkspaceClient();
   const actionSections = buildActionsMenuModel();
@@ -67,6 +71,8 @@
   let recentlyClosedRows = $state<RecentlyClosedRow[]>([]);
   let workspaceRows = $state<WorkspaceRow[]>([]);
   let containerRows = $state<ContainerRow[]>([]);
+  let folderRows = $state<FolderRow[]>([]);
+  let folderWorkspaces = $state<WorkspaceRow[]>([]);
   let loadGeneration = 0;
 
   const headerHidden = $derived(currentView === "actions");
@@ -89,6 +95,8 @@
       ? "Move to workspace"
       : currentView === "open-in-container"
       ? "New container tab"
+      : currentView === "move-to-folder"
+      ? "Move to folder"
       : allActionItems.find((item) => item.view === currentView)?.label ?? "",
   );
   const selectedActionId = $derived(currentView === "actions" ? visibleActionItems[selectedIndex]?.id ?? null : null);
@@ -116,6 +124,10 @@
 
   function isNativeContainerView(view: ViewId | undefined): view is NativeContainerView {
     return view === "open-in-container";
+  }
+
+  function isNativeFolderView(view: ViewId | undefined): view is NativeFolderView {
+    return view === "move-to-folder";
   }
 
   function isNativeTabView(view: ViewId | undefined): view is NativeTabView {
@@ -260,6 +272,31 @@
     }
   }
 
+  async function loadMoveToFolder() {
+    const generation = ++loadGeneration;
+    loading = true;
+    error = null;
+    currentView = "move-to-folder";
+    try {
+      const [folders, workspaces] = await Promise.all([
+        folderClient.getFolders(),
+        workspaceClient.getWorkspacesWithIcons().catch(() => []),
+      ]);
+      if (generation !== loadGeneration || currentView !== "move-to-folder") return;
+      folderRows = folders;
+      folderWorkspaces = workspaces;
+      selectedIndex = folders.length ? 0 : -1;
+    } catch (err) {
+      if (generation !== loadGeneration) return;
+      folderRows = [];
+      folderWorkspaces = [];
+      selectedIndex = -1;
+      error = err instanceof Error ? err.message : String(err);
+    } finally {
+      if (generation === loadGeneration) loading = false;
+    }
+  }
+
   function activateAction(item: ActionMenuItem) {
     if (item.disabled) {
       return;
@@ -303,6 +340,11 @@
       return;
     }
 
+    if (item.view === "move-to-folder") {
+      loadMoveToFolder();
+      return;
+    }
+
     error = `${item.label} has not been ported to native Svelte yet`;
   }
 
@@ -334,6 +376,10 @@
     fireMessage({ type: "reopen-in-container", userContextId: row.userContextId });
   }
 
+  function moveToFolder(row: FolderRow) {
+    fireMessage({ type: "move-tab-to-folder", folderId: row.id });
+  }
+
   function previewTab(row: TabIndexRow) {
     fireMessage({ type: "preview-tab", domId: row.domId });
   }
@@ -353,6 +399,8 @@
     recentlyClosedRows = [];
     workspaceRows = [];
     containerRows = [];
+    folderRows = [];
+    folderWorkspaces = [];
     selectedIndex = 0;
     error = null;
   }
@@ -370,6 +418,8 @@
             ? workspaceRows.length
             : currentView === "open-in-container"
               ? containerRows.length
+              : currentView === "move-to-folder"
+                ? folderRows.length
         : rows.length;
     if (!length) {
       selectedIndex = -1;
@@ -414,6 +464,9 @@
     } else if (currentView === "open-in-container") {
       const row = containerRows[selectedIndex];
       if (row) reopenInContainer(row);
+    } else if (currentView === "move-to-folder") {
+      const row = folderRows[selectedIndex];
+      if (row) moveToFolder(row);
     }
   }
 
@@ -442,6 +495,12 @@
     if (currentView === "open-in-container") {
       const row = containerRows[index];
       if (row) reopenInContainer(row);
+      return;
+    }
+
+    if (currentView === "move-to-folder") {
+      const row = folderRows[index];
+      if (row) moveToFolder(row);
       return;
     }
 
@@ -501,6 +560,8 @@
           loadMoveToWorkspace();
         } else if (command.view === "open-in-container") {
           loadOpenInContainer();
+        } else if (command.view === "move-to-folder") {
+          loadMoveToFolder();
         } else {
           currentView = command.view;
           rows = [];
@@ -587,6 +648,8 @@
       loadMoveToWorkspace();
     } else if (initialView === "open-in-container") {
       loadOpenInContainer();
+    } else if (initialView === "move-to-folder") {
+      loadMoveToFolder();
     }
 
     window.addEventListener("keydown", handleKeydown);
@@ -635,6 +698,13 @@
       rows={containerRows}
       {selectedIndex}
       onactivate={reopenInContainer}
+    />
+  {:else if currentView === "move-to-folder"}
+    <FolderList
+      rows={folderRows}
+      workspaces={folderWorkspaces}
+      {selectedIndex}
+      onactivate={moveToFolder}
     />
   {:else if isNativeTabView(currentView)}
     <TabList
