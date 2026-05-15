@@ -66,4 +66,13 @@ describe("interaction interpreter", () => {
     expect(interpretVisibleInput({ kind: "key", key: "ArrowRight" }, { view: "parent-tabs" }, []))
       .toEqual({ kind: "drill-selection" });
   });
+
+  it("keeps workspace filter shortcuts centralized for sidebar-backed views", () => {
+    expect(interpretVisibleInput({ kind: "key", key: "0" }, { view: "domains" }, []))
+      .toEqual({ kind: "toggle-workspace-filter" });
+    expect(interpretVisibleInput({ kind: "key", key: "!", code: "Digit1", shiftKey: true }, { view: "duplicates" }, []))
+      .toEqual({ kind: "filter-workspace-index", index: 0 });
+    expect(interpretVisibleInput({ kind: "key", key: "0" }, { view: "recently-closed" }, []))
+      .toEqual({ kind: "none" });
+  });
 });

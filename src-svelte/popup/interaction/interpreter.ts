@@ -23,7 +23,9 @@ export type InteractionCommand =
   | { kind: "close-all" }
   | { kind: "restore-selection-keep-open" }
   | { kind: "drill-selection" }
-  | { kind: "toggle-sort" };
+  | { kind: "toggle-sort" }
+  | { kind: "toggle-workspace-filter" }
+  | { kind: "filter-workspace-index"; index: number };
 
 function commandForNode(node: TerminalNode, source: "tree" | "view" | "mouse"): InteractionCommand {
   if (node.kind === "action") return { kind: "action", actionId: node.id, source };
@@ -45,6 +47,18 @@ const closeAllViews = new Set<ViewId>(["child-tabs"]);
 const restoreableViews = new Set<ViewId>(["recently-closed"]);
 const sortableViews = new Set<ViewId>(["domains", "domain-tabs", "tabs-by-age"]);
 const drillableViews = new Set<ViewId>(["parent-tabs"]);
+const workspaceFilterViews = new Set<ViewId>([
+  "child-tabs",
+  "sibling-tabs",
+  "parent-tabs",
+  "unvisited-tabs",
+  "last-visited",
+  "domain-tabs",
+  "most-visited",
+  "tabs-by-age",
+  "domains",
+  "duplicates",
+]);
 
 function childrenForPath(tree: readonly NavNode[], path: readonly string[]): readonly TerminalNode[] {
   if (path.length === 0) return tree;
@@ -125,6 +139,13 @@ export function interpretStructuralKey(
         }
         if (upper === "S" && !input.shiftKey && sortableViews.has(context.view)) {
           return { kind: "toggle-sort" };
+        }
+        if (input.key === "0" && !input.shiftKey && workspaceFilterViews.has(context.view)) {
+          return { kind: "toggle-workspace-filter" };
+        }
+        if (input.shiftKey && input.code?.startsWith("Digit") && workspaceFilterViews.has(context.view)) {
+          const index = Number.parseInt(input.code.slice("Digit".length), 10) - 1;
+          if (index >= 0 && index < 9) return { kind: "filter-workspace-index", index };
         }
       }
       if (context.view !== "actions" && /^[1-9]$/.test(input.key) && !input.shiftKey) {

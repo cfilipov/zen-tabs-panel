@@ -55,6 +55,13 @@
   type NativeDomainView = Extract<ViewId, "domains">;
   type NativeListView = NativeTabView | NativeDomainView;
   type NativeRow = TabIndexRow | DomainIndexRow;
+  type SidebarHint = {
+    id: string;
+    label: string;
+    badge: string;
+    hidden?: boolean;
+    onclick: () => void;
+  };
   type NativeDuplicateView = Extract<ViewId, "duplicates">;
   type NativeTabInfoView = Extract<ViewId, "tab-info">;
   type NativeDuplicatePromptView = Extract<ViewId, "duplicate-prompt">;
@@ -111,6 +118,8 @@
   let duplicatePromptDomId = $state<string | null>(null);
   let domainsSortAlpha = $state(false);
   let tabsByAgeNewestFirst = $state(false);
+  let sidebarWorkspaces = $state<WorkspaceRow[]>([]);
+  let workspaceFilter = $state("all");
   let loadGeneration = 0;
 
   const headerHidden = $derived(currentView === "actions");
@@ -155,6 +164,34 @@
   const selectedRowDomId = $derived(selectedTabRow?.domId ?? null);
   const selectedDomain = $derived(selectedDomainRow?.domain ?? null);
   const navigationEntries = $derived(navigationHistory?.entries ?? []);
+  const activeWorkspaceId = $derived(sidebarWorkspaces.find((workspace) => workspace.isActive)?.uuid ?? null);
+  const sidebarHintsOnly = $derived(currentView === "recently-closed");
+  const sidebarSortLabel = $derived(
+    currentView === "domains"
+      ? `Sort by ${domainsSortAlpha ? "count" : "A-Z"}`
+      : currentView === "tabs-by-age"
+      ? `Sort by ${tabsByAgeNewestFirst ? "oldest" : "newest"}`
+      : null,
+  );
+  const sidebarHints = $derived<SidebarHint[]>([
+    ...(isCloseableSidebarView(currentView)
+      ? [{ id: "close", label: "Close tab", badge: "W", hidden: selectedIndex < 0, onclick: closeSelectedTabRow }]
+      : []),
+    ...(currentView === "child-tabs"
+      ? [{ id: "close-all", label: "Close all", badge: "⇧W", onclick: closeAllRowsInView }]
+      : []),
+    ...(currentView === "recently-closed"
+      ? [{ id: "restore", label: "Restore tab", badge: "O", hidden: selectedIndex < 0, onclick: restoreSelectedRecentlyClosed }]
+      : []),
+    ...(currentView === "parent-tabs"
+      ? [{ id: "children", label: "Show children", badge: "→", hidden: selectedIndex < 0, onclick: drillSelectedParent }]
+      : []),
+  ]);
+  const sidebarHidden = $derived(
+    sidebarHintsOnly
+      ? selectedIndex < 0
+      : !isWorkspaceFilterView(currentView) && sidebarHints.length === 0 && !sidebarSortLabel,
+  );
 
   function isNativeListView(view: ViewId | undefined): view is NativeListView {
     return isNativeTabView(view) || view === "domains";
@@ -209,6 +246,23 @@
     return view === "reorder-tabs" || view === "close-and-select" || view === "split-view";
   }
 
+  function isWorkspaceFilterView(view: ViewId | undefined) {
+    return isNativeListView(view) || view === "duplicates";
+  }
+
+  function isCloseableSidebarView(view: ViewId | undefined) {
+    return (
+      view === "child-tabs" ||
+      view === "sibling-tabs" ||
+      view === "parent-tabs" ||
+      view === "unvisited-tabs" ||
+      view === "last-visited" ||
+      view === "domain-tabs" ||
+      view === "most-visited" ||
+      view === "tabs-by-age"
+    );
+  }
+
   function isDomainRow(row: NativeRow | null): row is DomainIndexRow {
     return row?.kind === "domain";
   }
@@ -218,10 +272,26 @@
   }
 
   function viewParams(view: NativeListView) {
-    if (view === "domain-tabs" && currentDomain) return { domain: currentDomain };
-    if (view === "domains") return { sortAlpha: domainsSortAlpha };
-    if (view === "tabs-by-age") return { newestFirst: tabsByAgeNewestFirst };
-    return {};
+    const params: Record<string, unknown> = {};
+    if (workspaceFilter !== "all") params.workspaceId = workspaceFilter;
+    if (view === "domain-tabs" && currentDomain) params.domain = currentDomain;
+    if (view === "domains") params.sortAlpha = domainsSortAlpha;
+    if (view === "tabs-by-age") params.newestFirst = tabsByAgeNewestFirst;
+    return params;
+  }
+
+  async function refreshSidebarWorkspaces(generation = loadGeneration) {
+    if (!isWorkspaceFilterView(currentView)) return;
+    try {
+      const workspaces = await workspaceClient.getWorkspacesWithIcons();
+      if (generation !== loadGeneration || !isWorkspaceFilterView(currentView)) return;
+      sidebarWorkspaces = workspaces;
+      if (workspaceFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === workspaceFilter)) {
+        workspaceFilter = "all";
+      }
+    } catch {
+      if (generation === loadGeneration) sidebarWorkspaces = [];
+    }
   }
 
   async function loadListView(view: NativeListView, nextOffset = 0, limit = 80, resetSelection = true, params = viewParams(view)) {
@@ -232,6 +302,7 @@
     error = null;
     currentView = view;
     offset = nextOffset;
+    void refreshSidebarWorkspaces(generation);
     try {
       await client.ensureStarted();
       const win = await client.getWindow<NativeRow>(view as TabIndexView, nextOffset, limit, params);
@@ -398,8 +469,15 @@
         workspaceClient.getWorkspacesWithIcons().catch(() => []),
       ]);
       if (generation !== loadGeneration || currentView !== "duplicates") return;
-      duplicateGroups = buildDuplicateGroups(allTabs);
+      sidebarWorkspaces = workspaces;
       duplicateWorkspaces = workspaces;
+      if (workspaceFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === workspaceFilter)) {
+        workspaceFilter = "all";
+      }
+      const filteredTabs = workspaceFilter === "all"
+        ? allTabs
+        : allTabs.filter((tab) => tab.workspaceId === workspaceFilter);
+      duplicateGroups = buildDuplicateGroups(filteredTabs);
       selectedIndex = -1;
     } catch (err) {
       if (generation !== loadGeneration) return;
@@ -593,7 +671,7 @@
 
   function activateDomain(row: DomainIndexRow) {
     currentDomain = row.domain;
-    loadListView("domain-tabs", 0, 80, true, { domain: row.domain });
+    loadListView("domain-tabs");
   }
 
   function navigateToHistoryIndex(index: number) {
@@ -667,20 +745,45 @@
 
   function drillSelectedParent() {
     if (currentView !== "parent-tabs" || !selectedTabRow) return;
-    loadListView("child-tabs", 0, 80, true, { parentDomId: selectedTabRow.domId });
+    loadListView("child-tabs", 0, 80, true, { ...viewParams("child-tabs"), parentDomId: selectedTabRow.domId });
   }
 
   function toggleCurrentSort() {
     if (currentView === "domains" || currentView === "domain-tabs") {
       domainsSortAlpha = !domainsSortAlpha;
-      if (currentView === "domains") loadListView("domains", 0, 80, true, { sortAlpha: domainsSortAlpha });
+      if (currentView === "domains") loadListView("domains");
       else loadListView("domain-tabs", 0, 80, true, viewParams("domain-tabs"));
       return;
     }
     if (currentView === "tabs-by-age") {
       tabsByAgeNewestFirst = !tabsByAgeNewestFirst;
-      loadListView("tabs-by-age", 0, 80, true, { newestFirst: tabsByAgeNewestFirst });
+      loadListView("tabs-by-age");
     }
+  }
+
+  function reloadWorkspaceFilteredView() {
+    if (isNativeListView(currentView)) {
+      loadListView(currentView);
+      return;
+    }
+    if (currentView === "duplicates") {
+      loadDuplicates();
+    }
+  }
+
+  function setWorkspaceFilter(nextFilter: string) {
+    workspaceFilter = nextFilter || "all";
+    reloadWorkspaceFilteredView();
+  }
+
+  function toggleWorkspaceFilter() {
+    setWorkspaceFilter(workspaceFilter === "all" ? activeWorkspaceId || "all" : "all");
+  }
+
+  function filterWorkspaceByIndex(index: number) {
+    const workspace = sidebarWorkspaces[index];
+    if (!workspace) return;
+    setWorkspaceFilter(workspaceFilter === workspace.uuid ? "all" : workspace.uuid);
   }
 
   function closeTabInfoDuplicate(row: TabIndexRow) {
@@ -738,6 +841,7 @@
     tabInfoWorkspaces = [];
     duplicatePromptUrl = "";
     duplicatePromptDomId = null;
+    sidebarWorkspaces = [];
     selectedIndex = 0;
     error = null;
   }
@@ -999,6 +1103,12 @@
       case "toggle-sort":
         toggleCurrentSort();
         return;
+      case "toggle-workspace-filter":
+        toggleWorkspaceFilter();
+        return;
+      case "filter-workspace-index":
+        filterWorkspaceByIndex(command.index);
+        return;
       case "none":
         return;
     }
@@ -1061,7 +1171,20 @@
   });
 </script>
 
-<PaletteShell {headerHidden} {title} onback={currentView === "actions" ? undefined : goBack}>
+<PaletteShell
+  {headerHidden}
+  {title}
+  onback={currentView === "actions" ? undefined : goBack}
+  {sidebarHidden}
+  {sidebarHints}
+  {sidebarHintsOnly}
+  {sidebarSortLabel}
+  {sidebarWorkspaces}
+  {workspaceFilter}
+  {activeWorkspaceId}
+  onSidebarSort={toggleCurrentSort}
+  onWorkspaceFilter={setWorkspaceFilter}
+>
   {#if error}
     <div class="empty-state">{error}</div>
   {:else if currentView === "actions"}

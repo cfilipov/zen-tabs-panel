@@ -1430,6 +1430,15 @@ html, body {
   display: none;
 }
 
+#sidebar button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+}
+
 .sidebar-item {
   display: flex;
   align-items: center;
