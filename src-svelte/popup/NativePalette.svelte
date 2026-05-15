@@ -3,9 +3,16 @@
   import PaletteShell from "./components/PaletteShell.svelte";
   import ActionsMenu from "./views/ActionsMenu.svelte";
   import TabList from "./views/TabList.svelte";
+  import { inputFromKeyboardEvent } from "./interaction/inputs";
+  import { interpretVisibleInput, type InteractionCommand } from "./interaction/interpreter";
   import { fireMessage } from "./runtime/ipc";
   import { createTabIndexClient, type TabIndexRow, type TabIndexView } from "./runtime/tab-index-client";
-  import { buildActionsMenuModel, type ActionMenuItem } from "./views/actions-model";
+  import {
+    actionItemsForPage,
+    actionNodesForSections,
+    buildActionsMenuModel,
+    type ActionMenuItem,
+  } from "./views/actions-model";
   import type { ViewId } from "../shared/types";
 
   type NativeListView = Extract<ViewId, "last-visited" | "unvisited-tabs" | "tabs-by-age">;
@@ -24,9 +31,22 @@
   let offset = $state(0);
   let loading = $state(false);
   let error = $state<string | null>(null);
+  let currentPage = $state(1);
+  let selectedIndex = $state(0);
 
   const headerHidden = $derived(currentView === "actions");
-  const title = $derived(currentView in listViewTitles ? listViewTitles[currentView as NativeListView] : "");
+  const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
+  const visibleActionItems = $derived(actionItemsForPage(actionSections, currentPage));
+  const allActionItems = $derived(actionSections.flatMap((section) => section.items));
+  const allActionNodes = $derived(actionNodesForSections(actionSections));
+  const title = $derived(
+    currentView in listViewTitles
+      ? listViewTitles[currentView as NativeListView]
+      : allActionItems.find((item) => item.view === currentView)?.label ?? "",
+  );
+  const selectedActionId = $derived(currentView === "actions" ? visibleActionItems[selectedIndex]?.id ?? null : null);
+  const selectedRow = $derived(isNativeListView(currentView) ? rows[selectedIndex] ?? null : null);
+  const selectedRowDomId = $derived(selectedRow?.domId ?? null);
 
   function isNativeListView(view: ViewId | undefined): view is NativeListView {
     return view === "last-visited" || view === "unvisited-tabs" || view === "tabs-by-age";
@@ -42,9 +62,11 @@
       const win = await client.getWindow<TabIndexRow>(view as TabIndexView, nextOffset, 60);
       rows = win.rows;
       total = win.total;
+      selectedIndex = win.rows.length ? 0 : -1;
     } catch (err) {
       rows = [];
       total = 0;
+      selectedIndex = -1;
       error = err instanceof Error ? err.message : String(err);
     } finally {
       loading = false;
@@ -52,6 +74,10 @@
   }
 
   function activateAction(item: ActionMenuItem) {
+    if (item.disabled) {
+      return;
+    }
+
     if (item.kind === "action") {
       fireMessage({ type: item.id });
       return;
@@ -83,7 +109,99 @@
     rows = [];
     total = 0;
     offset = 0;
+    selectedIndex = 0;
     error = null;
+  }
+
+  function moveSelection(delta: 1 | -1) {
+    const length = currentView === "actions" ? visibleActionItems.length : rows.length;
+    if (!length) {
+      selectedIndex = -1;
+      return;
+    }
+
+    const start = selectedIndex < 0 ? (delta > 0 ? -1 : 0) : selectedIndex;
+    selectedIndex = (start + delta + length) % length;
+  }
+
+  function cyclePage(delta: 1 | -1) {
+    currentPage = ((currentPage - 1 + delta + pageCount) % pageCount) + 1;
+    selectedIndex = 0;
+  }
+
+  function activateSelected() {
+    if (currentView === "actions") {
+      const item = visibleActionItems[selectedIndex];
+      if (item) activateAction(item);
+      return;
+    }
+
+    if (selectedRow) activateTab(selectedRow);
+  }
+
+  function activateRow(index: number) {
+    const row = rows[index];
+    if (row) activateTab(row);
+  }
+
+  function runCommand(command: InteractionCommand) {
+    switch (command.kind) {
+      case "action": {
+        const item = allActionItems.find((candidate) => candidate.id === command.actionId);
+        if (item) activateAction(item);
+        return;
+      }
+      case "open-view":
+        if (isNativeListView(command.view)) {
+          loadListView(command.view);
+        } else {
+          currentView = command.view;
+          rows = [];
+          total = 0;
+          selectedIndex = -1;
+          const item = allActionItems.find((candidate) => candidate.view === command.view);
+          error = `${item?.label ?? command.view} has not been ported to native Svelte yet`;
+        }
+        return;
+      case "enter-prefix":
+        currentView = command.view;
+        rows = [];
+        total = 0;
+        selectedIndex = -1;
+        error = `${command.view} has not been ported to native Svelte yet`;
+        return;
+      case "cancel":
+        fireMessage({ type: "hide-palette" });
+        return;
+      case "back":
+        goBack();
+        return;
+      case "move-selection":
+        moveSelection(command.delta);
+        return;
+      case "activate-selection":
+        activateSelected();
+        return;
+      case "activate-row":
+        activateRow(command.index);
+        return;
+      case "cycle-page":
+        cyclePage(command.delta);
+        return;
+      case "none":
+        return;
+    }
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    const actionNodes = currentView === "actions" ? allActionNodes : [];
+    const command = interpretVisibleInput(inputFromKeyboardEvent(event), { view: currentView }, actionNodes);
+    if (command.kind === "none") {
+      return;
+    }
+
+    event.preventDefault();
+    runCommand(command);
   }
 
   onMount(() => {
@@ -92,6 +210,17 @@
     if (isNativeListView(initialView ?? undefined)) {
       loadListView(initialView as NativeListView);
     }
+
+    window.addEventListener("keydown", handleKeydown);
+    return () => window.removeEventListener("keydown", handleKeydown);
+  });
+
+  $effect(() => {
+    if (selectedRow) {
+      previewTab(selectedRow);
+    } else if (currentView === "actions") {
+      clearPreview();
+    }
   });
 </script>
 
@@ -99,7 +228,7 @@
   {#if error}
     <div class="empty-state">{error}</div>
   {:else if currentView === "actions"}
-    <ActionsMenu sections={actionSections} onactivate={activateAction} />
+    <ActionsMenu sections={actionSections} {currentPage} selectedId={selectedActionId} onactivate={activateAction} />
   {:else if loading}
     <div class="empty-state">Loading...</div>
   {:else if isNativeListView(currentView)}
@@ -107,6 +236,7 @@
       {rows}
       {total}
       {offset}
+      selectedDomId={selectedRowDomId}
       onactivate={activateTab}
       onpreview={previewTab}
       onclearpreview={clearPreview}

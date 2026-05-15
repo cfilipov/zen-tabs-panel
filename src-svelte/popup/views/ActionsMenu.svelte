@@ -5,10 +5,11 @@
   type Props = {
     sections: ActionSection[];
     currentPage?: number;
+    selectedId?: string | null;
     onactivate?: (item: ActionMenuItem) => void;
   };
 
-  let { sections, currentPage = 1, onactivate }: Props = $props();
+  let { sections, currentPage = 1, selectedId = null, onactivate }: Props = $props();
   const pageSections = $derived(sections.filter((section) => section.page === currentPage));
 </script>
 
@@ -19,7 +20,7 @@
       {#if section.navigateGrid}
         <div class="navigate-grid">
           {#each section.items as item (item.id)}
-            <ActionRow {item} compact onactivate={onactivate} />
+            <ActionRow {item} compact selected={item.id === selectedId} onactivate={onactivate} />
           {/each}
         </div>
       {:else if section.column}
@@ -28,20 +29,20 @@
             {#if section.scrollable}
               <div class="section-scroll">
                 {#each section.items as item (item.id)}
-                  <ActionRow {item} compact onactivate={onactivate} />
+                  <ActionRow {item} compact selected={item.id === selectedId} onactivate={onactivate} />
                 {/each}
               </div>
               <div class="section-scroll-fade"></div>
             {:else}
               {#each section.items as item (item.id)}
-                <ActionRow {item} compact onactivate={onactivate} />
+                <ActionRow {item} compact selected={item.id === selectedId} onactivate={onactivate} />
               {/each}
             {/if}
           </div>
         </div>
       {:else}
         {#each section.items as item (item.id)}
-          <ActionRow {item} onactivate={onactivate} />
+          <ActionRow {item} selected={item.id === selectedId} onactivate={onactivate} />
         {/each}
       {/if}
     {/each}

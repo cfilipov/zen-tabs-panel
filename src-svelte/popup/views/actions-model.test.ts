@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NAVIGATION_TREE } from "../../shared/navigation-tree";
-import { buildActionsMenuModel } from "./actions-model";
+import { actionItemsForPage, actionNodesForSections, buildActionsMenuModel } from "./actions-model";
 
 describe("actions menu model", () => {
   it("renders only ids from the navigation tree", () => {
@@ -28,5 +28,14 @@ describe("actions menu model", () => {
       label: "Parent",
       disabled: true,
     });
+  });
+
+  it("derives page items and interpreter nodes from the same action model", () => {
+    const model = buildActionsMenuModel();
+    const pageTwoItems = actionItemsForPage(model, 2);
+    const nodes = actionNodesForSections(model);
+
+    expect(pageTwoItems.some((item) => item.id === "reload-tab")).toBe(true);
+    expect(nodes.find((node) => node.id === "reload-tab")?.chord).toBe("Shift+R");
   });
 });

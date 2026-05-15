@@ -1,5 +1,5 @@
 import { NAVIGATION_TREE, displayKey } from "../../shared/navigation-tree";
-import type { NavNode } from "../../shared/types";
+import type { NavNode, TerminalNode } from "../../shared/types";
 
 export type ActionSectionId =
   | "navigate"
@@ -94,4 +94,20 @@ export function buildActionsMenuModel(disabledIds: ReadonlySet<string> = new Set
       };
     }),
   }));
+}
+
+export function actionItemsForPage(sections: readonly ActionSection[], page: number): ActionMenuItem[] {
+  return sections
+    .filter((section) => section.page === page)
+    .flatMap((section) => section.items);
+}
+
+export function actionNodesForSections(sections: readonly ActionSection[]): TerminalNode[] {
+  return sections
+    .flatMap((section) => section.items)
+    .map((item) => {
+      const node = nodeById.get(item.id);
+      if (!node) throw new Error(`Missing navigation node: ${item.id}`);
+      return node;
+    });
 }

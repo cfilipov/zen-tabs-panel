@@ -5,10 +5,11 @@
   type Props = {
     item: ActionMenuItem;
     compact?: boolean;
+    selected?: boolean;
     onactivate?: (item: ActionMenuItem) => void;
   };
 
-  let { item, compact = false, onactivate }: Props = $props();
+  let { item, compact = false, selected = false, onactivate }: Props = $props();
 </script>
 
 <button
@@ -16,6 +17,7 @@
   class="list-item"
   class:compact-item={compact}
   class:disabled={item.disabled}
+  class:selected
   data-id={item.id}
   disabled={item.disabled}
   onclick={() => onactivate?.(item)}

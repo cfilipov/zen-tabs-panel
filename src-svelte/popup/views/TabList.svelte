@@ -7,12 +7,13 @@
     rows: TabIndexRow[];
     total: number;
     offset?: number;
+    selectedDomId?: string | null;
     onactivate?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
   };
 
-  let { rows, total, offset = 0, onactivate, onpreview, onclearpreview }: Props = $props();
+  let { rows, total, offset = 0, selectedDomId = null, onactivate, onpreview, onclearpreview }: Props = $props();
 </script>
 
 {#if total === 0}
@@ -23,6 +24,7 @@
       <TabRow
         {row}
         badge={offset + index < 9 ? String(offset + index + 1) : null}
+        selected={row.domId === selectedDomId}
         onactivate={onactivate}
         onpreview={onpreview}
         onclearpreview={onclearpreview}

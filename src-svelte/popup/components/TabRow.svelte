@@ -5,12 +5,13 @@
   type Props = {
     row: TabIndexRow;
     badge?: string | null;
+    selected?: boolean;
     onactivate?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
   };
 
-  let { row, badge = null, onactivate, onpreview, onclearpreview }: Props = $props();
+  let { row, badge = null, selected = false, onactivate, onpreview, onclearpreview }: Props = $props();
   const title = $derived(row.title || "Untitled");
 </script>
 
@@ -18,6 +19,7 @@
   type="button"
   class="list-item"
   class:tab-pending={row.pending}
+  class:selected
   data-dom-id={row.domId}
   onclick={() => onactivate?.(row)}
   onmouseenter={() => onpreview?.(row)}

@@ -15,7 +15,9 @@ export type InteractionCommand =
   | { kind: "cancel" }
   | { kind: "back" }
   | { kind: "move-selection"; delta: 1 | -1 }
-  | { kind: "activate-selection" };
+  | { kind: "activate-selection" }
+  | { kind: "activate-row"; index: number }
+  | { kind: "cycle-page"; delta: 1 | -1 };
 
 function commandForNode(node: TerminalNode, source: "tree" | "view" | "mouse"): InteractionCommand {
   if (node.kind === "action") return { kind: "action", actionId: node.id, source };
@@ -76,6 +78,8 @@ export function interpretStructuralKey(
       return { kind: "cancel" };
     case "Backspace":
       return context.view === "actions" ? { kind: "none" } : { kind: "back" };
+    case " ":
+      return context.view === "actions" ? { kind: "cycle-page", delta: input.shiftKey ? -1 : 1 } : { kind: "none" };
     case "ArrowDown":
       return { kind: "move-selection", delta: 1 };
     case "ArrowUp":
@@ -83,6 +87,9 @@ export function interpretStructuralKey(
     case "Enter":
       return { kind: "activate-selection" };
     default:
+      if (context.view !== "actions" && /^[1-9]$/.test(input.key) && !input.shiftKey) {
+        return { kind: "activate-row", index: Number(input.key) - 1 };
+      }
       return { kind: "none" };
   }
 }
