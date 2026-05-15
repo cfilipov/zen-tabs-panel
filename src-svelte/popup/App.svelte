@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import PaletteShell from "./components/PaletteShell.svelte";
   import "./popup.css";
 
   const legacyScripts = [
@@ -52,19 +53,8 @@
   });
 </script>
 
-<div id="palette">
-  <div id="header">
-    <span id="back-button" class="hidden" tabindex="-1">&#8592;</span>
-    <span id="view-title"></span>
-    <span id="header-hint" class="hidden"></span>
-  </div>
-  <div id="content">
-    <div id="list">
-      {#if bootError}
-        <div class="empty-state">{bootError}</div>
-      {/if}
-    </div>
-    <div id="sidebar" class="hidden"></div>
-  </div>
-  <div id="page-indicator" class="hidden"></div>
-</div>
+<PaletteShell>
+  {#if bootError}
+    <div class="empty-state">{bootError}</div>
+  {/if}
+</PaletteShell>
