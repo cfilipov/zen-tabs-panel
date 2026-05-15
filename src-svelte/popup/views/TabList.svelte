@@ -11,15 +11,16 @@
     onactivate?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
+    onrange?: (offset: number, limit: number) => void;
   };
 
-  let { rows, total, offset = 0, selectedDomId = null, onactivate, onpreview, onclearpreview }: Props = $props();
+  let { rows, total, offset = 0, selectedDomId = null, onactivate, onpreview, onclearpreview, onrange }: Props = $props();
 </script>
 
 {#if total === 0}
   <div class="empty-state">No tabs</div>
 {:else}
-  <VirtualList {rows} {total}>
+  <VirtualList {rows} {total} {offset} onrange={onrange}>
     {#snippet children(row: TabIndexRow, index: number)}
       <TabRow
         {row}

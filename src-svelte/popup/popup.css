@@ -325,6 +325,17 @@ html, body {
   background: none;
 }
 
+.virtual-list {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+}
+
+.virtual-list-window {
+  position: absolute;
+  inset: 0 0 auto 0;
+}
+
 /* Multi-column grid for compact action items */
 .actions-grid {
   display: grid;
@@ -1578,4 +1589,3 @@ html, body {
 .nav-direction {
   font-size: 14px;
 }
-

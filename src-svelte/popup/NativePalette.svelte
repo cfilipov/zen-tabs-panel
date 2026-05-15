@@ -33,6 +33,7 @@
   let error = $state<string | null>(null);
   let currentPage = $state(1);
   let selectedIndex = $state(0);
+  let loadGeneration = 0;
 
   const headerHidden = $derived(currentView === "actions");
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
@@ -45,31 +46,44 @@
       : allActionItems.find((item) => item.view === currentView)?.label ?? "",
   );
   const selectedActionId = $derived(currentView === "actions" ? visibleActionItems[selectedIndex]?.id ?? null : null);
-  const selectedRow = $derived(isNativeListView(currentView) ? rows[selectedIndex] ?? null : null);
+  const selectedRow = $derived(isNativeListView(currentView) ? rowForIndex(selectedIndex) : null);
   const selectedRowDomId = $derived(selectedRow?.domId ?? null);
 
   function isNativeListView(view: ViewId | undefined): view is NativeListView {
     return view === "last-visited" || view === "unvisited-tabs" || view === "tabs-by-age";
   }
 
-  async function loadListView(view: NativeListView, nextOffset = 0) {
-    loading = true;
+  async function loadListView(view: NativeListView, nextOffset = 0, limit = 80, resetSelection = true) {
+    const generation = ++loadGeneration;
+    if (resetSelection) {
+      loading = true;
+    }
     error = null;
     currentView = view;
     offset = nextOffset;
     try {
       await client.ensureStarted();
-      const win = await client.getWindow<TabIndexRow>(view as TabIndexView, nextOffset, 60);
+      const win = await client.getWindow<TabIndexRow>(view as TabIndexView, nextOffset, limit);
+      if (generation !== loadGeneration || currentView !== view) {
+        return;
+      }
       rows = win.rows;
       total = win.total;
-      selectedIndex = win.rows.length ? 0 : -1;
+      if (resetSelection) {
+        selectedIndex = win.rows.length ? win.offset : -1;
+      }
     } catch (err) {
+      if (generation !== loadGeneration) {
+        return;
+      }
       rows = [];
       total = 0;
       selectedIndex = -1;
       error = err instanceof Error ? err.message : String(err);
     } finally {
-      loading = false;
+      if (generation === loadGeneration) {
+        loading = false;
+      }
     }
   }
 
@@ -122,6 +136,10 @@
 
     const start = selectedIndex < 0 ? (delta > 0 ? -1 : 0) : selectedIndex;
     selectedIndex = (start + delta + length) % length;
+    if (currentView !== "actions") {
+      ensureListIndexLoaded(selectedIndex);
+      scrollListIndexIntoView(selectedIndex);
+    }
   }
 
   function cyclePage(delta: 1 | -1) {
@@ -140,8 +158,40 @@
   }
 
   function activateRow(index: number) {
-    const row = rows[index];
+    const row = rowForIndex(index);
     if (row) activateTab(row);
+  }
+
+  function rowForIndex(index: number) {
+    const relativeIndex = index - offset;
+    return relativeIndex >= 0 ? rows[relativeIndex] ?? null : null;
+  }
+
+  function ensureListIndexLoaded(index: number) {
+    if (!isNativeListView(currentView)) return;
+    if (index >= offset && index < offset + rows.length) return;
+    const nextOffset = Math.max(0, index - 20);
+    loadListView(currentView, nextOffset, 80, false);
+  }
+
+  function scrollListIndexIntoView(index: number) {
+    requestAnimationFrame(() => {
+      const list = document.getElementById("list");
+      if (!list) return;
+      const rowHeight = 40;
+      const top = index * rowHeight;
+      const bottom = top + rowHeight;
+      if (top < list.scrollTop) {
+        list.scrollTop = top;
+      } else if (bottom > list.scrollTop + list.clientHeight) {
+        list.scrollTop = bottom - list.clientHeight;
+      }
+    });
+  }
+
+  function loadVisibleRange(nextOffset: number, limit: number) {
+    if (!isNativeListView(currentView)) return;
+    loadListView(currentView, nextOffset, Math.max(60, limit), false);
   }
 
   function runCommand(command: InteractionCommand) {
@@ -240,6 +290,7 @@
       onactivate={activateTab}
       onpreview={previewTab}
       onclearpreview={clearPreview}
+      onrange={loadVisibleRange}
     />
   {/if}
 </PaletteShell>
