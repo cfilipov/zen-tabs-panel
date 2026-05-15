@@ -42,6 +42,15 @@ export type DomainIndexRow = {
   count: number;
 };
 
+export type DuplicateGroupRow = {
+  kind: "duplicate-group";
+  url: string;
+  title: string;
+  domain: string;
+  favIconUrl: string;
+  tabs: TabIndexRow[];
+};
+
 export type ViewSummary = {
   version: number;
   view: string;

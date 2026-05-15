@@ -642,6 +642,12 @@ html, body {
   align-items: center;
   padding: 6px 8px;
   border-radius: var(--ztt-item-radius);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  width: 100%;
   cursor: pointer;
   transition: background 0.08s ease;
 }

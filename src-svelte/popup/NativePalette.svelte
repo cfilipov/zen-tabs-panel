@@ -4,6 +4,7 @@
   import ActionsMenu from "./views/ActionsMenu.svelte";
   import ContainerList from "./views/ContainerList.svelte";
   import DomainList from "./views/DomainList.svelte";
+  import DuplicateGroups from "./views/DuplicateGroups.svelte";
   import FolderList from "./views/FolderList.svelte";
   import PrefixMenu from "./views/PrefixMenu.svelte";
   import NavigationList from "./views/NavigationList.svelte";
@@ -16,10 +17,17 @@
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
   import { createHistoryClient, type NavigationHistory, type RecentlyClosedRow } from "./runtime/history-client";
-  import { fireMessage } from "./runtime/ipc";
+  import { fireMessage, sendMessage } from "./runtime/ipc";
   import { createProfileClient, type ProfileRow } from "./runtime/profile-client";
-  import { createTabIndexClient, type DomainIndexRow, type TabIndexRow, type TabIndexView } from "./runtime/tab-index-client";
+  import {
+    createTabIndexClient,
+    type DomainIndexRow,
+    type DuplicateGroupRow,
+    type TabIndexRow,
+    type TabIndexView,
+  } from "./runtime/tab-index-client";
   import { createWorkspaceClient, type WorkspaceRow } from "./runtime/workspace-client";
+  import { domainOf } from "./views/url";
   import {
     actionItemsForPage,
     actionNodesForSections,
@@ -44,6 +52,7 @@
   type NativeDomainView = Extract<ViewId, "domains">;
   type NativeListView = NativeTabView | NativeDomainView;
   type NativeRow = TabIndexRow | DomainIndexRow;
+  type NativeDuplicateView = Extract<ViewId, "duplicates">;
   type NativePrefixView = Extract<ViewId, "reorder-tabs" | "close-and-select" | "split-view">;
   type NativeHistoryView = Extract<ViewId, "navigation" | "recently-closed">;
   type NativeWorkspaceView = Extract<ViewId, "move-to-workspace">;
@@ -86,6 +95,8 @@
   let folderRows = $state<FolderRow[]>([]);
   let folderWorkspaces = $state<WorkspaceRow[]>([]);
   let profileRows = $state<ProfileRow[]>([]);
+  let duplicateGroups = $state<DuplicateGroupRow[]>([]);
+  let duplicateWorkspaces = $state<WorkspaceRow[]>([]);
   let loadGeneration = 0;
 
   const headerHidden = $derived(currentView === "actions");
@@ -104,6 +115,8 @@
       ? "Tab history"
       : currentView === "recently-closed"
       ? "Recently closed"
+      : currentView === "duplicates"
+      ? "Duplicates"
       : currentView === "move-to-workspace"
       ? "Move to workspace"
       : currentView === "open-in-container"
@@ -147,6 +160,10 @@
 
   function isNativeProfileView(view: ViewId | undefined): view is NativeProfileView {
     return view === "profiles";
+  }
+
+  function isNativeDuplicateView(view: ViewId | undefined): view is NativeDuplicateView {
+    return view === "duplicates";
   }
 
   function isNativeTabView(view: ViewId | undefined): view is NativeTabView {
@@ -341,6 +358,55 @@
     }
   }
 
+  async function loadDuplicates() {
+    const generation = ++loadGeneration;
+    loading = true;
+    error = null;
+    currentView = "duplicates";
+    try {
+      const [allTabs, workspaces] = await Promise.all([
+        sendMessage<TabIndexRow[]>({ type: "get-all-tabs" }),
+        workspaceClient.getWorkspacesWithIcons().catch(() => []),
+      ]);
+      if (generation !== loadGeneration || currentView !== "duplicates") return;
+      duplicateGroups = buildDuplicateGroups(allTabs);
+      duplicateWorkspaces = workspaces;
+      selectedIndex = -1;
+    } catch (err) {
+      if (generation !== loadGeneration) return;
+      duplicateGroups = [];
+      duplicateWorkspaces = [];
+      selectedIndex = -1;
+      error = err instanceof Error ? err.message : String(err);
+    } finally {
+      if (generation === loadGeneration) loading = false;
+    }
+  }
+
+  function buildDuplicateGroups(allTabs: TabIndexRow[]): DuplicateGroupRow[] {
+    const groups = new Map<string, TabIndexRow[]>();
+    for (const tab of allTabs) {
+      if (!tab.url || tab.url === "about:newtab" || tab.url === "about:blank") continue;
+      const group = groups.get(tab.url);
+      if (group) group.push(tab);
+      else groups.set(tab.url, [tab]);
+    }
+    return [...groups.values()]
+      .filter((group) => group.length > 1)
+      .sort((a, b) => b.length - a.length)
+      .map((tabs) => {
+        const sample = tabs[0];
+        return {
+          kind: "duplicate-group",
+          url: sample.url,
+          title: sample.title,
+          domain: sample.domain || domainOf(sample.url),
+          favIconUrl: sample.favIconUrl,
+          tabs,
+        };
+      });
+  }
+
   function activateAction(item: ActionMenuItem) {
     if (item.disabled) {
       return;
@@ -366,6 +432,11 @@
 
     if (item.view === "navigation") {
       loadNavigation();
+      return;
+    }
+
+    if (item.view === "duplicates") {
+      loadDuplicates();
       return;
     }
 
@@ -434,6 +505,13 @@
     fireMessage({ type: "launch-profile", name: row.name });
   }
 
+  function closeDuplicateTab(row: TabIndexRow) {
+    fireMessage({ type: "close-tab", domId: row.domId });
+    duplicateGroups = duplicateGroups
+      .map((group) => ({ ...group, tabs: group.tabs.filter((tab) => tab.domId !== row.domId) }))
+      .filter((group) => group.tabs.length > 1);
+  }
+
   function previewTab(row: TabIndexRow) {
     fireMessage({ type: "preview-tab", domId: row.domId });
   }
@@ -456,6 +534,8 @@
     folderRows = [];
     folderWorkspaces = [];
     profileRows = [];
+    duplicateGroups = [];
+    duplicateWorkspaces = [];
     selectedIndex = 0;
     error = null;
   }
@@ -463,6 +543,9 @@
   function isSelectableIndex(index: number) {
     if (currentView === "profiles") {
       return !!profileRows[index] && !profileRows[index].isCurrent;
+    }
+    if (currentView === "duplicates") {
+      return false;
     }
     return index >= 0;
   }
@@ -484,6 +567,8 @@
                 ? folderRows.length
               : currentView === "profiles"
                 ? profileRows.length
+              : currentView === "duplicates"
+                ? 0
         : rows.length;
     if (!length) {
       selectedIndex = -1;
@@ -647,6 +732,8 @@
           loadMoveToFolder();
         } else if (command.view === "profiles") {
           loadProfiles();
+        } else if (command.view === "duplicates") {
+          loadDuplicates();
         } else {
           currentView = command.view;
           rows = [];
@@ -737,6 +824,8 @@
       loadMoveToFolder();
     } else if (initialView === "profiles") {
       loadProfiles();
+    } else if (initialView === "duplicates") {
+      loadDuplicates();
     }
 
     window.addEventListener("keydown", handleKeydown);
@@ -798,6 +887,15 @@
       rows={profileRows}
       {selectedIndex}
       onactivate={launchProfile}
+    />
+  {:else if currentView === "duplicates"}
+    <DuplicateGroups
+      groups={duplicateGroups}
+      workspaces={duplicateWorkspaces}
+      onactivate={activateTab}
+      onclose={closeDuplicateTab}
+      onpreview={previewTab}
+      onclearpreview={clearPreview}
     />
   {:else if isNativeTabView(currentView)}
     <TabList
