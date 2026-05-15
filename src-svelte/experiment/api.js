@@ -821,8 +821,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       ensureTabUuid,
       recordInterval,
     });
-    context.callOnClose(() => {
-      try { tabIndex.stop(); } catch (e) {}
+    context.callOnClose({
+      close() {
+        try { tabIndex.stop(); } catch (e) {}
+      },
     });
     // Mutable so the user's chordDelayMs setting can override at runtime.
     // The engine reads `constants.CHORD_*_TIMEOUT_MS` on each timer set,
