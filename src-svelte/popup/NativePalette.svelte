@@ -11,6 +11,7 @@
   import ProfileList from "./views/ProfileList.svelte";
   import RecentlyClosedList from "./views/RecentlyClosedList.svelte";
   import TabList from "./views/TabList.svelte";
+  import TabInfoView from "./views/TabInfoView.svelte";
   import WorkspaceList from "./views/WorkspaceList.svelte";
   import { inputFromKeyboardEvent } from "./interaction/inputs";
   import { interpretVisibleInput, type InteractionCommand } from "./interaction/interpreter";
@@ -19,6 +20,7 @@
   import { createHistoryClient, type NavigationHistory, type RecentlyClosedRow } from "./runtime/history-client";
   import { fireMessage, sendMessage } from "./runtime/ipc";
   import { createProfileClient, type ProfileRow } from "./runtime/profile-client";
+  import { createTabInfoClient, type HistoryVisit, type TabInfo } from "./runtime/tab-info-client";
   import {
     createTabIndexClient,
     type DomainIndexRow,
@@ -53,6 +55,7 @@
   type NativeListView = NativeTabView | NativeDomainView;
   type NativeRow = TabIndexRow | DomainIndexRow;
   type NativeDuplicateView = Extract<ViewId, "duplicates">;
+  type NativeTabInfoView = Extract<ViewId, "tab-info">;
   type NativePrefixView = Extract<ViewId, "reorder-tabs" | "close-and-select" | "split-view">;
   type NativeHistoryView = Extract<ViewId, "navigation" | "recently-closed">;
   type NativeWorkspaceView = Extract<ViewId, "move-to-workspace">;
@@ -65,6 +68,7 @@
   const folderClient = createFolderClient();
   const historyClient = createHistoryClient();
   const profileClient = createProfileClient();
+  const tabInfoClient = createTabInfoClient();
   const workspaceClient = createWorkspaceClient();
   const actionSections = buildActionsMenuModel();
   const listViewTitles: Record<NativeListView, string> = {
@@ -97,6 +101,10 @@
   let profileRows = $state<ProfileRow[]>([]);
   let duplicateGroups = $state<DuplicateGroupRow[]>([]);
   let duplicateWorkspaces = $state<WorkspaceRow[]>([]);
+  let tabInfo = $state<TabInfo | null>(null);
+  let tabInfoVisits = $state<HistoryVisit[]>([]);
+  let tabInfoDuplicates = $state<TabIndexRow[]>([]);
+  let tabInfoWorkspaces = $state<WorkspaceRow[]>([]);
   let loadGeneration = 0;
 
   const headerHidden = $derived(currentView === "actions");
@@ -117,6 +125,8 @@
       ? "Recently closed"
       : currentView === "duplicates"
       ? "Duplicates"
+      : currentView === "tab-info"
+      ? "Tab info"
       : currentView === "move-to-workspace"
       ? "Move to workspace"
       : currentView === "open-in-container"
@@ -164,6 +174,10 @@
 
   function isNativeDuplicateView(view: ViewId | undefined): view is NativeDuplicateView {
     return view === "duplicates";
+  }
+
+  function isNativeTabInfoView(view: ViewId | undefined): view is NativeTabInfoView {
+    return view === "tab-info";
   }
 
   function isNativeTabView(view: ViewId | undefined): view is NativeTabView {
@@ -383,6 +397,70 @@
     }
   }
 
+  async function loadTabInfo() {
+    const generation = ++loadGeneration;
+    loading = true;
+    error = null;
+    currentView = "tab-info";
+    try {
+      const allTabs = await sendMessage<TabIndexRow[]>({ type: "get-all-tabs" });
+      const active = allTabs.find((tab) => tab.active);
+      if (!active) {
+        if (generation !== loadGeneration || currentView !== "tab-info") return;
+        tabInfo = null;
+        tabInfoVisits = [];
+        tabInfoDuplicates = [];
+        tabInfoWorkspaces = [];
+        selectedIndex = -1;
+        return;
+      }
+      const info = await tabInfoClient.getTabInfo(active.domId);
+      if (generation !== loadGeneration || currentView !== "tab-info") return;
+      if (!info) {
+        tabInfo = null;
+        tabInfoVisits = [];
+        tabInfoDuplicates = [];
+        tabInfoWorkspaces = [];
+        selectedIndex = -1;
+        return;
+      }
+
+      const titleByUrl = new Map<string, string>();
+      for (const entry of info.sessionEntries) {
+        if (entry.url && !titleByUrl.has(entry.url)) titleByUrl.set(entry.url, entry.title);
+      }
+      if (info.url && !titleByUrl.has(info.url)) titleByUrl.set(info.url, info.title);
+      const urls = new Set<string>();
+      if (info.url && !info.url.startsWith("about:")) urls.add(info.url);
+      for (const entry of info.sessionEntries) {
+        if (entry.url && !entry.url.startsWith("about:")) urls.add(entry.url);
+      }
+      const [visitLists, workspaces] = await Promise.all([
+        Promise.all([...urls].map((url) => tabInfoClient.getHistoryVisits(url).then(
+          (visits) => visits.map((visit) => ({ ...visit, url, title: titleByUrl.get(url) || url })),
+          () => [],
+        ))),
+        workspaceClient.getWorkspacesWithIcons().catch(() => []),
+      ]);
+      if (generation !== loadGeneration || currentView !== "tab-info") return;
+      tabInfo = info;
+      tabInfoVisits = visitLists.flat();
+      tabInfoDuplicates = allTabs.filter((tab) => info.duplicateDomIds.includes(tab.domId));
+      tabInfoWorkspaces = workspaces;
+      selectedIndex = -1;
+    } catch (err) {
+      if (generation !== loadGeneration) return;
+      tabInfo = null;
+      tabInfoVisits = [];
+      tabInfoDuplicates = [];
+      tabInfoWorkspaces = [];
+      selectedIndex = -1;
+      error = err instanceof Error ? err.message : String(err);
+    } finally {
+      if (generation === loadGeneration) loading = false;
+    }
+  }
+
   function buildDuplicateGroups(allTabs: TabIndexRow[]): DuplicateGroupRow[] {
     const groups = new Map<string, TabIndexRow[]>();
     for (const tab of allTabs) {
@@ -440,6 +518,11 @@
       return;
     }
 
+    if (item.view === "tab-info") {
+      loadTabInfo();
+      return;
+    }
+
     if (item.view === "recently-closed") {
       loadRecentlyClosed();
       return;
@@ -469,6 +552,10 @@
   }
 
   function activateTab(row: TabIndexRow) {
+    fireMessage({ type: "activate-tab", domId: row.domId });
+  }
+
+  function activateTabLike(row: { domId: string }) {
     fireMessage({ type: "activate-tab", domId: row.domId });
   }
 
@@ -512,7 +599,28 @@
       .filter((group) => group.tabs.length > 1);
   }
 
+  function closeTabInfoDuplicate(row: TabIndexRow) {
+    fireMessage({ type: "close-tab", domId: row.domId });
+    tabInfoDuplicates = tabInfoDuplicates.filter((tab) => tab.domId !== row.domId);
+  }
+
+  function closeOtherTabInfoDuplicates() {
+    if (!tabInfo) return;
+    const selfDomId = tabInfo.domId;
+    for (const duplicate of tabInfoDuplicates) {
+      if (duplicate.domId !== selfDomId) {
+        fireMessage({ type: "close-tab", domId: duplicate.domId });
+      }
+    }
+    tabInfoDuplicates = tabInfoDuplicates.filter((tab) => tab.domId === selfDomId);
+  }
+
+
   function previewTab(row: TabIndexRow) {
+    fireMessage({ type: "preview-tab", domId: row.domId });
+  }
+
+  function previewTabLike(row: { domId: string }) {
     fireMessage({ type: "preview-tab", domId: row.domId });
   }
 
@@ -536,6 +644,10 @@
     profileRows = [];
     duplicateGroups = [];
     duplicateWorkspaces = [];
+    tabInfo = null;
+    tabInfoVisits = [];
+    tabInfoDuplicates = [];
+    tabInfoWorkspaces = [];
     selectedIndex = 0;
     error = null;
   }
@@ -545,6 +657,9 @@
       return !!profileRows[index] && !profileRows[index].isCurrent;
     }
     if (currentView === "duplicates") {
+      return false;
+    }
+    if (currentView === "tab-info") {
       return false;
     }
     return index >= 0;
@@ -568,6 +683,8 @@
               : currentView === "profiles"
                 ? profileRows.length
               : currentView === "duplicates"
+                ? 0
+              : currentView === "tab-info"
                 ? 0
         : rows.length;
     if (!length) {
@@ -734,6 +851,8 @@
           loadProfiles();
         } else if (command.view === "duplicates") {
           loadDuplicates();
+        } else if (command.view === "tab-info") {
+          loadTabInfo();
         } else {
           currentView = command.view;
           rows = [];
@@ -826,6 +945,8 @@
       loadProfiles();
     } else if (initialView === "duplicates") {
       loadDuplicates();
+    } else if (initialView === "tab-info") {
+      loadTabInfo();
     }
 
     window.addEventListener("keydown", handleKeydown);
@@ -895,6 +1016,18 @@
       onactivate={activateTab}
       onclose={closeDuplicateTab}
       onpreview={previewTab}
+      onclearpreview={clearPreview}
+    />
+  {:else if currentView === "tab-info"}
+    <TabInfoView
+      info={tabInfo}
+      visits={tabInfoVisits}
+      duplicates={tabInfoDuplicates}
+      workspaces={tabInfoWorkspaces}
+      onactivate={activateTabLike}
+      onclose={closeTabInfoDuplicate}
+      oncloseothers={closeOtherTabInfoDuplicates}
+      onpreview={previewTabLike}
       onclearpreview={clearPreview}
     />
   {:else if isNativeTabView(currentView)}

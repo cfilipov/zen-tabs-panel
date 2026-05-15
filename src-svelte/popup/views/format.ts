@@ -9,3 +9,9 @@ export function formatDuration(ms: number) {
   const days = Math.floor(hours / 24);
   return `${days}d ${hours % 24}h`;
 }
+
+export function formatBytes(bytes: number | null | undefined) {
+  if (bytes == null) return "N/A";
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
