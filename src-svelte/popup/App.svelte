@@ -25,7 +25,7 @@
   ];
 
   let bootError = $state<string | null>(null);
-  const nativeMode = new URLSearchParams(location.search).get("native") === "1";
+  const nativeMode = new URLSearchParams(location.search).get("legacy") !== "1";
 
   function loadScript(src: string): Promise<void> {
     return new Promise((resolve, reject) => {
