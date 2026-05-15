@@ -2,11 +2,12 @@
   import { onMount } from "svelte";
   import PaletteShell from "./components/PaletteShell.svelte";
   import ActionsMenu from "./views/ActionsMenu.svelte";
+  import DomainList from "./views/DomainList.svelte";
   import TabList from "./views/TabList.svelte";
   import { inputFromKeyboardEvent } from "./interaction/inputs";
   import { interpretVisibleInput, type InteractionCommand } from "./interaction/interpreter";
   import { fireMessage } from "./runtime/ipc";
-  import { createTabIndexClient, type TabIndexRow, type TabIndexView } from "./runtime/tab-index-client";
+  import { createTabIndexClient, type DomainIndexRow, type TabIndexRow, type TabIndexView } from "./runtime/tab-index-client";
   import {
     actionItemsForPage,
     actionNodesForSections,
@@ -15,7 +16,10 @@
   } from "./views/actions-model";
   import type { ViewId } from "../shared/types";
 
-  type NativeListView = Extract<ViewId, "last-visited" | "unvisited-tabs" | "tabs-by-age">;
+  type NativeTabView = Extract<ViewId, "last-visited" | "unvisited-tabs" | "tabs-by-age" | "domain-tabs">;
+  type NativeDomainView = Extract<ViewId, "domains">;
+  type NativeListView = NativeTabView | NativeDomainView;
+  type NativeRow = TabIndexRow | DomainIndexRow;
 
   const client = createTabIndexClient();
   const actionSections = buildActionsMenuModel();
@@ -23,16 +27,19 @@
     "last-visited": "Recent",
     "unvisited-tabs": "New tabs",
     "tabs-by-age": "Tabs by age",
+    "domain-tabs": "",
+    "domains": "Domains",
   };
 
   let currentView = $state<ViewId>("actions");
-  let rows = $state<TabIndexRow[]>([]);
+  let rows = $state<NativeRow[]>([]);
   let total = $state(0);
   let offset = $state(0);
   let loading = $state(false);
   let error = $state<string | null>(null);
   let currentPage = $state(1);
   let selectedIndex = $state(0);
+  let currentDomain = $state<string | null>(null);
   let loadGeneration = 0;
 
   const headerHidden = $derived(currentView === "actions");
@@ -41,19 +48,42 @@
   const allActionItems = $derived(actionSections.flatMap((section) => section.items));
   const allActionNodes = $derived(actionNodesForSections(actionSections));
   const title = $derived(
-    currentView in listViewTitles
+    currentView === "domain-tabs" && currentDomain
+      ? currentDomain
+      : currentView in listViewTitles
       ? listViewTitles[currentView as NativeListView]
       : allActionItems.find((item) => item.view === currentView)?.label ?? "",
   );
   const selectedActionId = $derived(currentView === "actions" ? visibleActionItems[selectedIndex]?.id ?? null : null);
   const selectedRow = $derived(isNativeListView(currentView) ? rowForIndex(selectedIndex) : null);
-  const selectedRowDomId = $derived(selectedRow?.domId ?? null);
+  const selectedTabRow = $derived(isTabRow(selectedRow) ? selectedRow : null);
+  const selectedDomainRow = $derived(isDomainRow(selectedRow) ? selectedRow : null);
+  const tabRows = $derived(rows.filter(isTabRow));
+  const domainRows = $derived(rows.filter(isDomainRow));
+  const selectedRowDomId = $derived(selectedTabRow?.domId ?? null);
+  const selectedDomain = $derived(selectedDomainRow?.domain ?? null);
 
   function isNativeListView(view: ViewId | undefined): view is NativeListView {
-    return view === "last-visited" || view === "unvisited-tabs" || view === "tabs-by-age";
+    return isNativeTabView(view) || view === "domains";
   }
 
-  async function loadListView(view: NativeListView, nextOffset = 0, limit = 80, resetSelection = true) {
+  function isNativeTabView(view: ViewId | undefined): view is NativeTabView {
+    return view === "last-visited" || view === "unvisited-tabs" || view === "tabs-by-age" || view === "domain-tabs";
+  }
+
+  function isDomainRow(row: NativeRow | null): row is DomainIndexRow {
+    return row?.kind === "domain";
+  }
+
+  function isTabRow(row: NativeRow | null): row is TabIndexRow {
+    return !!row && row.kind !== "domain";
+  }
+
+  function viewParams(view: NativeListView) {
+    return view === "domain-tabs" && currentDomain ? { domain: currentDomain } : {};
+  }
+
+  async function loadListView(view: NativeListView, nextOffset = 0, limit = 80, resetSelection = true, params = viewParams(view)) {
     const generation = ++loadGeneration;
     if (resetSelection) {
       loading = true;
@@ -63,7 +93,7 @@
     offset = nextOffset;
     try {
       await client.ensureStarted();
-      const win = await client.getWindow<TabIndexRow>(view as TabIndexView, nextOffset, limit);
+      const win = await client.getWindow<NativeRow>(view as TabIndexView, nextOffset, limit, params);
       if (generation !== loadGeneration || currentView !== view) {
         return;
       }
@@ -98,6 +128,7 @@
     }
 
     if (isNativeListView(item.view as ViewId | undefined)) {
+      currentDomain = null;
       loadListView(item.view as NativeListView);
       return;
     }
@@ -107,6 +138,11 @@
 
   function activateTab(row: TabIndexRow) {
     fireMessage({ type: "activate-tab", domId: row.domId });
+  }
+
+  function activateDomain(row: DomainIndexRow) {
+    currentDomain = row.domain;
+    loadListView("domain-tabs", 0, 80, true, { domain: row.domain });
   }
 
   function previewTab(row: TabIndexRow) {
@@ -123,6 +159,7 @@
     rows = [];
     total = 0;
     offset = 0;
+    currentDomain = null;
     selectedIndex = 0;
     error = null;
   }
@@ -154,12 +191,14 @@
       return;
     }
 
-    if (selectedRow) activateTab(selectedRow);
+    if (selectedTabRow) activateTab(selectedTabRow);
+    else if (selectedDomainRow) activateDomain(selectedDomainRow);
   }
 
   function activateRow(index: number) {
     const row = rowForIndex(index);
-    if (row) activateTab(row);
+    if (isTabRow(row)) activateTab(row);
+    else if (isDomainRow(row)) activateDomain(row);
   }
 
   function rowForIndex(index: number) {
@@ -191,7 +230,7 @@
 
   function loadVisibleRange(nextOffset: number, limit: number) {
     if (!isNativeListView(currentView)) return;
-    loadListView(currentView, nextOffset, Math.max(60, limit), false);
+    loadListView(currentView, nextOffset, Math.max(60, limit), false, viewParams(currentView));
   }
 
   function runCommand(command: InteractionCommand) {
@@ -203,6 +242,7 @@
       }
       case "open-view":
         if (isNativeListView(command.view)) {
+          currentDomain = null;
           loadListView(command.view);
         } else {
           currentView = command.view;
@@ -258,7 +298,8 @@
     const params = new URLSearchParams(location.search);
     const initialView = params.get("view") as ViewId | null;
     if (isNativeListView(initialView ?? undefined)) {
-      loadListView(initialView as NativeListView);
+      currentDomain = params.get("domain");
+      loadListView(initialView as NativeListView, 0, 80, true, viewParams(initialView as NativeListView));
     }
 
     window.addEventListener("keydown", handleKeydown);
@@ -266,8 +307,8 @@
   });
 
   $effect(() => {
-    if (selectedRow) {
-      previewTab(selectedRow);
+    if (selectedTabRow) {
+      previewTab(selectedTabRow);
     } else if (currentView === "actions") {
       clearPreview();
     }
@@ -281,15 +322,24 @@
     <ActionsMenu sections={actionSections} {currentPage} selectedId={selectedActionId} onactivate={activateAction} />
   {:else if loading}
     <div class="empty-state">Loading...</div>
-  {:else if isNativeListView(currentView)}
+  {:else if isNativeTabView(currentView)}
     <TabList
-      {rows}
+      rows={tabRows}
       {total}
       {offset}
       selectedDomId={selectedRowDomId}
       onactivate={activateTab}
       onpreview={previewTab}
       onclearpreview={clearPreview}
+      onrange={loadVisibleRange}
+    />
+  {:else if currentView === "domains"}
+    <DomainList
+      rows={domainRows}
+      {total}
+      {offset}
+      {selectedDomain}
+      onactivate={activateDomain}
       onrange={loadVisibleRange}
     />
   {/if}

@@ -49,12 +49,44 @@ export type ViewWindow<T = TabIndexRow | DomainIndexRow> = {
 
 export type Send = <T = unknown>(message: unknown) => Promise<T>;
 
-export function createTabIndexClient(send: Send = sendMessage) {
+type ZenWorkspacesApi = {
+  ensureIndexStarted(): Promise<boolean>;
+  getViewSummary(view: string, paramsJson?: string): Promise<ViewSummary>;
+  getViewWindow<T = TabIndexRow | DomainIndexRow>(
+    view: string,
+    offset: number,
+    limit: number,
+    paramsJson?: string,
+  ): Promise<ViewWindow<T>>;
+  getRowTarget(domId: string): Promise<{ domId: string; workspaceId: string | null; url: string; title: string } | null>;
+};
+
+type BrowserWithExperiment = {
+  zenWorkspaces?: ZenWorkspacesApi;
+};
+
+function getDirectApi(): ZenWorkspacesApi | null {
+  const globals = globalThis as typeof globalThis & {
+    browser?: BrowserWithExperiment;
+    chrome?: BrowserWithExperiment;
+  };
+  if (globals.browser?.zenWorkspaces) return globals.browser.zenWorkspaces;
+  if (globals.chrome?.zenWorkspaces) return globals.chrome.zenWorkspaces;
+  return null;
+}
+
+function encodeParams(params: Record<string, unknown>) {
+  return JSON.stringify(params || {});
+}
+
+export function createTabIndexClient(send: Send = sendMessage, directApi: ZenWorkspacesApi | null = getDirectApi()) {
   return {
     ensureStarted() {
+      if (directApi) return directApi.ensureIndexStarted();
       return send<boolean>({ type: "tab-index:ensure-started" });
     },
     getSummary(view: TabIndexView, params: Record<string, unknown> = {}) {
+      if (directApi) return directApi.getViewSummary(view, encodeParams(params));
       return send<ViewSummary>({ type: "tab-index:get-summary", view, params });
     },
     getWindow<T = TabIndexRow | DomainIndexRow>(
@@ -63,9 +95,11 @@ export function createTabIndexClient(send: Send = sendMessage) {
       limit: number,
       params: Record<string, unknown> = {},
     ) {
+      if (directApi) return directApi.getViewWindow<T>(view, offset, limit, encodeParams(params));
       return send<ViewWindow<T>>({ type: "tab-index:get-window", view, offset, limit, params });
     },
     getRowTarget(domId: string) {
+      if (directApi) return directApi.getRowTarget(domId);
       return send<{ domId: string; workspaceId: string | null; url: string; title: string } | null>({
         type: "tab-index:get-row-target",
         domId,

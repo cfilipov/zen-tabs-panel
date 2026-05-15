@@ -24,4 +24,28 @@ describe("tab index client", () => {
 
     await expect(client.getRowTarget("tab-1")).resolves.toMatchObject({ domId: "tab-1" });
   });
+
+  it("prefers the direct experiment API with JSON-encoded params when available", async () => {
+    const calls: unknown[] = [];
+    const client = createTabIndexClient(
+      async () => {
+        throw new Error("message fallback should not be used");
+      },
+      {
+        ensureIndexStarted: async () => true,
+        getViewSummary: async () => ({ version: 1, view: "domains", total: 1, rowType: "domain" }),
+        getViewWindow: async <T>(view: string, offset: number, limit: number, paramsJson?: string) => {
+          calls.push({ view, offset, limit, paramsJson });
+          return { version: 1, view, offset, limit, total: 1, rows: [] } as T;
+        },
+        getRowTarget: async () => null,
+      },
+    );
+
+    await client.getWindow("domain-tabs", 0, 5, { domain: "example.com" });
+
+    expect(calls).toEqual([
+      { view: "domain-tabs", offset: 0, limit: 5, paramsJson: "{\"domain\":\"example.com\"}" },
+    ]);
+  });
 });
