@@ -54,6 +54,21 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     };
   }
 
+  function previewRow(row) {
+    return row
+      ? {
+          title: row.title,
+          url: row.url,
+          favIconUrl: compactFavicon(row.favIconUrl),
+          domId: row.domId,
+          workspaceId: row.workspaceId,
+          pending: row.pending,
+          pinned: row.pinned,
+          essential: row.essential,
+        }
+      : null;
+  }
+
   function splitGroupMap(win) {
     const out = new Map();
     if (!win?.gZenViewSplitter?._data) return out;
@@ -274,6 +289,126 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
         counts[row.workspaceId] = (counts[row.workspaceId] || 0) + 1;
       }
       return counts;
+    },
+    getActionsSnapshot() {
+      rebuildIfNeeded();
+      const activeTab = rows.find((row) => row.active) || null;
+      const activeParentUuid = activeTab?.panelParentUuid || null;
+      const activeOpener = activeTab?.openerTabDomId || null;
+      const activeUuid = activeTab?.panelTabUuid || null;
+      const activeWorkspaceId = activeTab?.workspaceId || null;
+      const activeSplitGroupId = activeTab?.splitGroupId || null;
+      const activeDomId = activeTab?.domId || null;
+      const hasParent = !!(activeParentUuid || activeOpener);
+
+      let parentTab = null;
+      const parentUuids = new Set();
+      const parentDomIds = new Set();
+      const uuidToRow = new Map();
+      const urlCounts = new Map();
+      const domains = new Set();
+      const workspaceTabCounts = Object.create(null);
+      let unvisitedTabCount = 0;
+      let newestUnvisited = null;
+      let newestUnvisitedAccess = -Infinity;
+      let oldestUnvisited = null;
+      let oldestUnvisitedAccess = Infinity;
+
+      for (const row of rows) {
+        if (row.panelTabUuid) uuidToRow.set(row.panelTabUuid, row);
+        if (row.panelParentUuid) parentUuids.add(row.panelParentUuid);
+        else if (row.openerTabDomId) parentDomIds.add(row.openerTabDomId);
+        if (row.workspaceId) workspaceTabCounts[row.workspaceId] = (workspaceTabCounts[row.workspaceId] || 0) + 1;
+        if (row.domain) domains.add(row.domain);
+        if (row.url && row.url !== "about:newtab" && row.url !== "about:blank") {
+          urlCounts.set(row.url, (urlCounts.get(row.url) || 0) + 1);
+        }
+        if (row.unread) {
+          unvisitedTabCount++;
+          const access = row.lastAccessed || 0;
+          if (access > newestUnvisitedAccess) {
+            newestUnvisitedAccess = access;
+            newestUnvisited = row;
+          }
+          if (access < oldestUnvisitedAccess) {
+            oldestUnvisitedAccess = access;
+            oldestUnvisited = row;
+          }
+        }
+      }
+
+      if (activeParentUuid) parentTab = uuidToRow.get(activeParentUuid) || null;
+      if (!parentTab && activeOpener) parentTab = rows.find((row) => row.domId === activeOpener) || null;
+
+      let childTabCount = 0;
+      let siblingTabCount = 0;
+      let parentTabCount = 0;
+      let prevBest = null;
+      let prevBestAccess = -Infinity;
+      const sameWorkspaceTabs = activeWorkspaceId ? [] : null;
+      let verticalIndex = -1;
+
+      for (const row of rows) {
+        if ((row.panelTabUuid && parentUuids.has(row.panelTabUuid)) || parentDomIds.has(row.domId)) {
+          parentTabCount++;
+        }
+
+        if (!activeTab) continue;
+
+        const isChildByUuid = activeUuid && row.panelParentUuid === activeUuid;
+        const isChildByDom = !row.panelParentUuid && row.openerTabDomId === activeDomId;
+        if (isChildByUuid || isChildByDom) childTabCount++;
+
+        const isSiblingByUuid = activeParentUuid && row.panelParentUuid === activeParentUuid && row.domId !== activeDomId;
+        const isSiblingByDom = !activeParentUuid && !row.panelParentUuid && activeOpener && row.openerTabDomId === activeOpener && row.domId !== activeDomId;
+        if (isSiblingByUuid || isSiblingByDom) siblingTabCount++;
+
+        if (sameWorkspaceTabs && row.workspaceId === activeWorkspaceId) {
+          if (row.domId === activeDomId) verticalIndex = sameWorkspaceTabs.length;
+          sameWorkspaceTabs.push(row);
+        }
+
+        const isActive = row.domId === activeDomId;
+        const isSplitSibling = activeSplitGroupId != null && row.splitGroupId === activeSplitGroupId;
+        const isNewTab = !row.url || row.url === "about:newtab" || row.url === "about:blank" || row.url === "about:home";
+        if (!isActive && !isSplitSibling && !row.unread && !isNewTab) {
+          const access = row.lastAccessed || 0;
+          if (access > prevBestAccess) {
+            prevBestAccess = access;
+            prevBest = row;
+          }
+        }
+      }
+
+      let duplicateGroupCount = 0;
+      for (const count of urlCounts.values()) if (count > 1) duplicateGroupCount++;
+
+      const prevVertical = sameWorkspaceTabs && verticalIndex > 0 ? sameWorkspaceTabs[verticalIndex - 1] : null;
+      const nextVertical = sameWorkspaceTabs && verticalIndex >= 0 && verticalIndex < sameWorkspaceTabs.length - 1
+        ? sameWorkspaceTabs[verticalIndex + 1]
+        : null;
+      const oldestDistinct = oldestUnvisited && oldestUnvisited !== newestUnvisited ? oldestUnvisited : null;
+
+      return {
+        version,
+        currentTabHasParent: hasParent,
+        currentTabIsPinned: !!activeTab?.pinned,
+        childTabCount,
+        siblingTabCount,
+        parentTabCount,
+        unvisitedTabCount,
+        domainCount: domains.size,
+        duplicateGroupCount,
+        workspaceTabCounts,
+        previews: {
+          "go-to-previous-tab": previewRow(prevBest),
+          "go-to-parent-tab": previewRow(parentTab),
+          "go-to-prev-vertical-tab": previewRow(prevVertical),
+          "go-to-next-vertical-tab": previewRow(nextVertical),
+          "unvisited-newest": previewRow(newestUnvisited),
+          "unvisited-oldest": previewRow(oldestDistinct),
+        },
+      };
     },
   };
 };

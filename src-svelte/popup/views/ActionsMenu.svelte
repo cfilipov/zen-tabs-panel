@@ -1,7 +1,9 @@
 <script lang="ts">
   import ActionRow from "../components/ActionRow.svelte";
   import ExtensionStrip from "../components/ExtensionStrip.svelte";
+  import NavigateActionRow from "../components/NavigateActionRow.svelte";
   import type { ExtensionRow } from "../runtime/extension-client";
+  import type { WorkspaceRow } from "../runtime/workspace-client";
   import type { ActionMenuItem, ActionSection } from "./actions-model";
 
   type Props = {
@@ -9,8 +11,11 @@
     currentPage?: number;
     selectedId?: string | null;
     extensions?: ExtensionRow[];
+    workspaces?: WorkspaceRow[];
     onactivate?: (item: ActionMenuItem) => void;
     onextension?: (extension: ExtensionRow) => void;
+    onpreview?: (domId: string) => void;
+    onclearpreview?: () => void;
   };
 
   type SectionBlock = {
@@ -68,7 +73,17 @@
     return block.kind === "columns" ? block.id : `${block.section.id}-${block.section.page}`;
   }
 
-  let { sections, currentPage = 1, selectedId = null, extensions = [], onactivate, onextension }: Props = $props();
+  let {
+    sections,
+    currentPage = 1,
+    selectedId = null,
+    extensions = [],
+    workspaces = [],
+    onactivate,
+    onextension,
+    onpreview,
+    onclearpreview,
+  }: Props = $props();
   const pageSections = $derived(sections.filter((section) => section.page === currentPage));
   const pageBlocks = $derived(buildPageBlocks(pageSections));
 </script>
@@ -103,7 +118,14 @@
         {#if block.section.navigateGrid}
           <div class="navigate-grid">
             {#each block.section.items as item (item.id)}
-              <ActionRow {item} compact selected={item.id === selectedId} onactivate={onactivate} />
+              <NavigateActionRow
+                {item}
+                {workspaces}
+                selected={item.id === selectedId}
+                onactivate={onactivate}
+                onpreview={onpreview}
+                onclearpreview={onclearpreview}
+              />
             {/each}
           </div>
         {:else}

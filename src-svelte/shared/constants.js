@@ -44,6 +44,7 @@ this.MSG = Object.freeze({
   TAB_INDEX_GET_WINDOW:           "tab-index:get-window",
   TAB_INDEX_GET_ROW_TARGET:       "tab-index:get-row-target",
   TAB_INDEX_GET_WORKSPACE_COUNTS: "tab-index:get-workspace-counts",
+  TAB_INDEX_GET_ACTIONS_SNAPSHOT: "tab-index:get-actions-snapshot",
 
   // Tab navigation
   GO_TO_PREVIOUS_TAB:             "go-to-previous-tab",

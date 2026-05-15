@@ -259,15 +259,31 @@ html, body {
 
 /* List items */
 .list-item {
+  appearance: none;
+  -moz-appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
   display: flex;
   align-items: center;
   gap: 12px;
+  font: inherit;
   height: var(--ztt-item-height);
   padding: 0 12px;
   border-radius: var(--ztt-item-radius);
   cursor: pointer;
+  text-align: left;
   user-select: none;
+  width: 100%;
   transition: background 0.08s ease;
+}
+
+.list-item:disabled {
+  color: inherit;
+}
+
+.list-item:focus {
+  outline: none;
 }
 
 .list-item:hover {

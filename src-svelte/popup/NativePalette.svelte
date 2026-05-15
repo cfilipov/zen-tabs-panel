@@ -24,6 +24,7 @@
   import { createTabInfoClient, type HistoryVisit, type TabInfo } from "./runtime/tab-info-client";
   import {
     createTabIndexClient,
+    type ActionPreview,
     type DomainIndexRow,
     type DuplicateGroupRow,
     type TabIndexRow,
@@ -134,6 +135,7 @@
   let actionsWorkspaces = $state<WorkspaceRow[]>([]);
   let actionWorkspaceTabCounts = $state<Record<string, number>>({});
   let actionCounts = $state<Record<string, number>>({});
+  let actionPreviewsById = $state<Record<string, ActionPreview | null>>({});
   let disabledActionIds = $state<Set<string>>(new Set());
   let actionIconHtmlById = $state<Record<string, string | null>>({});
   let actionExtensions = $state<ExtensionRow[]>([]);
@@ -156,6 +158,7 @@
       actionCounts,
       disabledActionIds,
       actionIconHtmlById,
+      actionPreviewsById,
     ),
   );
   const visibleActionItems = $derived(actionItemsForPage(renderedActionSections, currentPage));
@@ -332,56 +335,81 @@
     try {
       const [
         workspaces,
-        counts,
+        snapshot,
         extensions,
-        childSummary,
-        siblingSummary,
-        parentSummary,
-        unvisitedSummary,
-        domainSummary,
         recentlyClosed,
+        navHistory,
         selectedDomIds,
       ] = await Promise.all([
         workspaceClient.getWorkspacesWithIcons().catch(() => []),
-        client.getWorkspaceTabCounts().catch(() => ({})),
+        client.getActionsSnapshot().catch(() => null),
         extensionClient.listExtensions().catch(() => []),
-        client.getSummary("child-tabs").catch(() => ({ total: 0 })),
-        client.getSummary("sibling-tabs").catch(() => ({ total: 0 })),
-        client.getSummary("parent-tabs").catch(() => ({ total: 0 })),
-        client.getSummary("unvisited-tabs").catch(() => ({ total: 0 })),
-        client.getSummary("domains").catch(() => ({ total: 0 })),
         historyClient.getRecentlyClosed().catch(() => []),
+        historyClient.getNavigationHistory().catch(() => null),
         sendMessage<string[]>({ type: "get-selected-tab-dom-ids" }).catch(() => []),
       ]);
       actionsWorkspaces = workspaces;
-      actionWorkspaceTabCounts = counts;
+      actionWorkspaceTabCounts = snapshot?.workspaceTabCounts ?? {};
       actionExtensions = extensions;
       actionIconHtmlById = workspaceNavigationIconMap(workspaces);
+      const backPreview = navHistory && navHistory.index > 0
+        ? historyPreview(navHistory.entries[navHistory.index - 1])
+        : null;
+      const forwardPreview = navHistory && navHistory.index < navHistory.entries.length - 1
+        ? historyPreview(navHistory.entries[navHistory.index + 1])
+        : null;
+      actionPreviewsById = {
+        ...(snapshot?.previews ?? {}),
+        "go-back-in-tab": backPreview,
+        "go-forward-in-tab": forwardPreview,
+      };
       actionCounts = {
-        "child-tabs": childSummary.total,
-        "sibling-tabs": siblingSummary.total,
-        "parent-tabs": parentSummary.total,
-        "unvisited-tabs": unvisitedSummary.total,
-        "domains": domainSummary.total,
+        "child-tabs": snapshot?.childTabCount ?? 0,
+        "sibling-tabs": snapshot?.siblingTabCount ?? 0,
+        "parent-tabs": snapshot?.parentTabCount ?? 0,
+        "unvisited-tabs": snapshot?.unvisitedTabCount ?? 0,
+        "domains": snapshot?.domainCount ?? 0,
         "recently-closed": recentlyClosed.length,
+        "duplicates": snapshot?.duplicateGroupCount ?? 0,
         "move-to-workspace": selectedDomIds.length > 1 ? selectedDomIds.length : 0,
       };
       disabledActionIds = new Set([
-        ...(childSummary.total <= 0 ? ["child-tabs"] : []),
-        ...(siblingSummary.total <= 0 ? ["sibling-tabs"] : []),
-        ...(parentSummary.total <= 0 ? ["parent-tabs"] : []),
-        ...(unvisitedSummary.total <= 0 ? ["unvisited-tabs"] : []),
-        ...(domainSummary.total <= 0 ? ["domains"] : []),
+        ...(!actionPreviewsById["go-to-previous-tab"] ? ["go-to-previous-tab"] : []),
+        ...(!actionPreviewsById["go-to-parent-tab"] ? ["go-to-parent-tab"] : []),
+        ...(!actionPreviewsById["go-to-prev-vertical-tab"] ? ["go-to-prev-vertical-tab"] : []),
+        ...(!actionPreviewsById["go-to-next-vertical-tab"] ? ["go-to-next-vertical-tab"] : []),
+        ...(!actionPreviewsById["go-back-in-tab"] ? ["go-back-in-tab"] : []),
+        ...(!actionPreviewsById["go-forward-in-tab"] ? ["go-forward-in-tab"] : []),
+        ...(!actionPreviewsById["unvisited-newest"] ? ["unvisited-newest"] : []),
+        ...(!actionPreviewsById["unvisited-oldest"] ? ["unvisited-oldest"] : []),
+        ...((snapshot?.childTabCount ?? 0) <= 0 ? ["child-tabs"] : []),
+        ...((snapshot?.siblingTabCount ?? 0) <= 0 ? ["sibling-tabs"] : []),
+        ...((snapshot?.parentTabCount ?? 0) <= 0 ? ["parent-tabs"] : []),
+        ...((snapshot?.unvisitedTabCount ?? 0) <= 0 ? ["unvisited-tabs"] : []),
+        ...((snapshot?.domainCount ?? 0) <= 0 ? ["domains"] : []),
+        ...((snapshot?.duplicateGroupCount ?? 0) <= 0 ? ["duplicates"] : []),
         ...(recentlyClosed.length <= 0 ? ["recently-closed"] : []),
+        ...((navHistory?.entries.length ?? 0) <= 1 ? ["navigation"] : []),
+        ...(!snapshot?.currentTabIsPinned ? ["reset-pinned-tab"] : []),
       ]);
     } catch {
       actionsWorkspaces = [];
       actionWorkspaceTabCounts = {};
       actionExtensions = [];
       actionCounts = {};
+      actionPreviewsById = {};
       disabledActionIds = new Set();
       actionIconHtmlById = {};
     }
+  }
+
+  function historyPreview(entry: { title?: string; url?: string } | undefined): ActionPreview | null {
+    if (!entry) return null;
+    return {
+      title: entry.title || entry.url || "Untitled",
+      url: entry.url || "",
+      isHistory: true,
+    };
   }
 
   function workspaceNavigationIconMap(workspaces: WorkspaceRow[]) {
@@ -1571,8 +1599,11 @@
       {currentPage}
       selectedId={selectedActionId}
       extensions={actionExtensions}
+      workspaces={actionsWorkspaces}
       onactivate={activateAction}
       onextension={openExtensionPopup}
+      onpreview={(domId) => previewTabLike({ domId })}
+      onclearpreview={clearPreview}
     />
   {:else if isNativePrefixView(currentView)}
     <PrefixMenu view={currentView} items={prefixItems} selectedId={selectedPrefixId} onactivate={activateAction} />

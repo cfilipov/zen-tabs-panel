@@ -3662,6 +3662,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return tabIndex.getWorkspaceTabCounts();
         },
 
+        async getActionsSnapshot() {
+          return tabIndex.getActionsSnapshot();
+        },
+
         // ---------------------------------------------------------------
         // Companion mod management
         // ---------------------------------------------------------------

@@ -49,4 +49,24 @@ describe("ActionsMenu", () => {
     expect(columns[0].textContent).toContain("This tab");
     expect(columns[0].textContent).toContain("Tab actions");
   });
+
+  it("renders navigate entries as preview cells", () => {
+    const sections = buildActionsMenuModel().map((section) => section.id === "navigate" && section.page === 1
+      ? {
+          ...section,
+          items: section.items.map((item) => item.id === "go-to-previous-tab"
+            ? { ...item, preview: { title: "Previous tab title", favIconUrl: "", domId: "tab-1" } }
+            : item),
+        }
+      : section);
+    const { container } = render(ActionsMenu, {
+      props: {
+        sections,
+        currentPage: 1,
+      },
+    });
+
+    expect(container.querySelector(".navigate-cell")).toBeTruthy();
+    expect(screen.getByText("Previous tab title")).toBeTruthy();
+  });
 });

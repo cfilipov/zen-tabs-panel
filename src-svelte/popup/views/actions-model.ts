@@ -1,5 +1,6 @@
 import { NAVIGATION_TREE, displayKey } from "../../shared/navigation-tree";
 import type { NavNode, PrefixNode, TerminalNode, ViewId } from "../../shared/types";
+import type { ActionPreview } from "../runtime/tab-index-client";
 import type { WorkspaceRow } from "../runtime/workspace-client";
 
 export type ActionSectionId =
@@ -32,6 +33,7 @@ export type ActionMenuItem = {
   isView: boolean;
   page: number;
   disabled?: boolean;
+  preview?: ActionPreview | null;
 };
 
 export type ActionSection = {
@@ -168,6 +170,7 @@ export function applyActionMetadata(
   counts: Readonly<Record<string, number>>,
   disabledIds: ReadonlySet<string>,
   iconHtmlById: Readonly<Record<string, string | null>> = {},
+  previewsById: Readonly<Record<string, ActionPreview | null>> = {},
 ): ActionSection[] {
   return sections.map((section) => ({
     ...section,
@@ -176,6 +179,7 @@ export function applyActionMetadata(
       iconHtml: iconHtmlById[item.id] ?? item.iconHtml,
       count: item.kind === "workspace-switch" ? item.count : counts[item.id] || 0,
       disabled: item.disabled || disabledIds.has(item.id),
+      preview: previewsById[item.id] ?? item.preview,
     })),
   }));
 }

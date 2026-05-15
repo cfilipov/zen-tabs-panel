@@ -40,6 +40,19 @@ describe("tab index client", () => {
         },
         getRowTarget: async () => null,
         getWorkspaceTabCounts: async () => ({}),
+        getActionsSnapshot: async () => ({
+          version: 1,
+          currentTabHasParent: false,
+          currentTabIsPinned: false,
+          childTabCount: 0,
+          siblingTabCount: 0,
+          parentTabCount: 0,
+          unvisitedTabCount: 0,
+          domainCount: 0,
+          duplicateGroupCount: 0,
+          workspaceTabCounts: {},
+          previews: {},
+        }),
       },
     );
 

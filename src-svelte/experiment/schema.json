@@ -244,6 +244,13 @@
         ]
       },
       {
+        "name": "getActionsSnapshot",
+        "type": "function",
+        "async": true,
+        "description": "Get compact counts and previews for the actions menu",
+        "parameters": []
+      },
+      {
         "name": "getCompanionMods",
         "type": "function",
         "async": true,
