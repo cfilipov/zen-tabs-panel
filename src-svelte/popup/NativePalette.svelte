@@ -1277,6 +1277,17 @@
       case "enter-prefix":
         await openNativeView(command.view, undefined, true);
         return;
+      case "duplicate-prompt-action":
+        runDuplicatePromptAction(command.action);
+        return;
+      case "navigate-history-delta": {
+        const current = navigationHistory?.index ?? -1;
+        const target = current + command.delta;
+        if (target >= 0 && target < navigationEntries.length) {
+          navigateToHistoryIndex(target);
+        }
+        return;
+      }
       case "cancel":
         fireMessage({ type: "hide-palette" });
         return;
@@ -1342,32 +1353,6 @@
   }
 
   async function handleKeyInput(input: KeyData) {
-    if (currentView === "duplicate-prompt" && !input.metaKey && !input.ctrlKey && !input.altKey) {
-      const key = input.key.toUpperCase();
-      const actionByKey: Record<string, DuplicatePromptAction> = {
-        S: "duplicate-switch",
-        O: "duplicate-open-anyway",
-        C: "hide-palette",
-      };
-      const action = actionByKey[key];
-      if (action) {
-        runDuplicatePromptAction(action);
-        return true;
-      }
-    }
-
-    if (currentView === "navigation" && !input.metaKey && !input.ctrlKey && !input.altKey) {
-      const upper = input.key.toUpperCase();
-      if (upper === "B" || upper === "F") {
-        const current = navigationHistory?.index ?? -1;
-        const target = current + (upper === "B" ? -1 : 1);
-        if (target >= 0 && target < navigationEntries.length) {
-          navigateToHistoryIndex(target);
-        }
-        return true;
-      }
-    }
-
     const actionNodes = currentView === "actions" ? allActionNodes : isNativePrefixView(currentView) ? prefixNodes : [];
     const command = interpretVisibleInput({ kind: "key", ...input }, { view: currentView }, actionNodes);
     if (command.kind === "none") {

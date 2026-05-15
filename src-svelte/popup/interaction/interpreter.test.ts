@@ -82,4 +82,17 @@ describe("interaction interpreter", () => {
     expect(interpretVisibleInput({ kind: "key", key: "@", code: "Digit2", shiftKey: true }, { view: "actions" }, []))
       .toEqual({ kind: "open-extension-index", index: 1 });
   });
+
+  it("keeps special view hotkeys in the interpreter instead of components", () => {
+    expect(interpretVisibleInput({ kind: "key", key: "b" }, { view: "navigation" }, []))
+      .toEqual({ kind: "navigate-history-delta", delta: -1 });
+    expect(interpretVisibleInput({ kind: "key", key: "f" }, { view: "navigation" }, []))
+      .toEqual({ kind: "navigate-history-delta", delta: 1 });
+    expect(interpretVisibleInput({ kind: "key", key: "s" }, { view: "duplicate-prompt" }, []))
+      .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-switch" });
+    expect(interpretVisibleInput({ kind: "key", key: "o" }, { view: "duplicate-prompt" }, []))
+      .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-anyway" });
+    expect(interpretVisibleInput({ kind: "key", key: "c" }, { view: "duplicate-prompt" }, []))
+      .toEqual({ kind: "duplicate-prompt-action", action: "hide-palette" });
+  });
 });

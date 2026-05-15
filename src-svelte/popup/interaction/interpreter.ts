@@ -12,6 +12,8 @@ export type InteractionCommand =
   | { kind: "action"; actionId: string; source: "tree" | "view" | "mouse" }
   | { kind: "open-view"; view: ViewId; source: "tree" | "view" | "mouse" }
   | { kind: "enter-prefix"; view: ViewId; path: string[]; source: "tree" | "view" }
+  | { kind: "duplicate-prompt-action"; action: "duplicate-switch" | "duplicate-open-anyway" | "hide-palette" }
+  | { kind: "navigate-history-delta"; delta: 1 | -1 }
   | { kind: "cancel" }
   | { kind: "back" }
   | { kind: "move-selection"; delta: 1 | -1 }
@@ -132,6 +134,15 @@ export function interpretStructuralKey(
     default:
       if (!input.metaKey && !input.ctrlKey && !input.altKey) {
         const upper = input.key.toUpperCase();
+        if (context.view === "duplicate-prompt" && !input.shiftKey) {
+          if (upper === "S") return { kind: "duplicate-prompt-action", action: "duplicate-switch" };
+          if (upper === "O") return { kind: "duplicate-prompt-action", action: "duplicate-open-anyway" };
+          if (upper === "C") return { kind: "duplicate-prompt-action", action: "hide-palette" };
+        }
+        if (context.view === "navigation" && !input.shiftKey) {
+          if (upper === "B") return { kind: "navigate-history-delta", delta: -1 };
+          if (upper === "F") return { kind: "navigate-history-delta", delta: 1 };
+        }
         if (upper === "W") {
           if (input.shiftKey && closeAllViews.has(context.view)) return { kind: "close-all" };
           if (!input.shiftKey && closeableViews.has(context.view)) return { kind: "close-selection" };
