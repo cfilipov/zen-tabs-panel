@@ -30,7 +30,7 @@
   <span class="item-text">
     <span class="item-title">
       {item.label}
-      {#if item.kind === "workspace-switch"}
+      {#if item.kind === "workspace-switch" || (item.count ?? 0) > 0}
         <span class="item-count">{item.count ?? 0}</span>
       {/if}
     </span>

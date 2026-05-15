@@ -35,6 +35,7 @@
     actionItemsForPage,
     actionNodesForSections,
     appendWorkspaceSwitchItems,
+    applyActionMetadata,
     buildActionsMenuModel,
     prefixChildNodesForView,
     prefixItemsForView,
@@ -132,6 +133,8 @@
   let workspaceFilter = $state("all");
   let actionsWorkspaces = $state<WorkspaceRow[]>([]);
   let actionWorkspaceTabCounts = $state<Record<string, number>>({});
+  let actionCounts = $state<Record<string, number>>({});
+  let disabledActionIds = $state<Set<string>>(new Set());
   let actionExtensions = $state<ExtensionRow[]>([]);
   let loadGeneration = 0;
   let popupInst: number | null = null;
@@ -146,7 +149,13 @@
 
   const headerHidden = $derived(currentView === "actions");
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
-  const renderedActionSections = $derived(appendWorkspaceSwitchItems(actionSections, actionsWorkspaces, actionWorkspaceTabCounts));
+  const renderedActionSections = $derived(
+    applyActionMetadata(
+      appendWorkspaceSwitchItems(actionSections, actionsWorkspaces, actionWorkspaceTabCounts),
+      actionCounts,
+      disabledActionIds,
+    ),
+  );
   const visibleActionItems = $derived(actionItemsForPage(renderedActionSections, currentPage));
   const allActionItems = $derived(renderedActionSections.flatMap((section) => section.items));
   const allActionNodes = $derived(actionNodesForSections(renderedActionSections));
@@ -319,18 +328,55 @@
 
   async function loadActionsData() {
     try {
-      const [workspaces, counts, extensions] = await Promise.all([
+      const [
+        workspaces,
+        counts,
+        extensions,
+        childSummary,
+        siblingSummary,
+        parentSummary,
+        unvisitedSummary,
+        domainSummary,
+        recentlyClosed,
+        selectedDomIds,
+      ] = await Promise.all([
         workspaceClient.getWorkspacesWithIcons().catch(() => []),
         client.getWorkspaceTabCounts().catch(() => ({})),
         extensionClient.listExtensions().catch(() => []),
+        client.getSummary("child-tabs").catch(() => ({ total: 0 })),
+        client.getSummary("sibling-tabs").catch(() => ({ total: 0 })),
+        client.getSummary("parent-tabs").catch(() => ({ total: 0 })),
+        client.getSummary("unvisited-tabs").catch(() => ({ total: 0 })),
+        client.getSummary("domains").catch(() => ({ total: 0 })),
+        historyClient.getRecentlyClosed().catch(() => []),
+        sendMessage<string[]>({ type: "get-selected-tab-dom-ids" }).catch(() => []),
       ]);
       actionsWorkspaces = workspaces;
       actionWorkspaceTabCounts = counts;
       actionExtensions = extensions;
+      actionCounts = {
+        "child-tabs": childSummary.total,
+        "sibling-tabs": siblingSummary.total,
+        "parent-tabs": parentSummary.total,
+        "unvisited-tabs": unvisitedSummary.total,
+        "domains": domainSummary.total,
+        "recently-closed": recentlyClosed.length,
+        "move-to-workspace": selectedDomIds.length > 1 ? selectedDomIds.length : 0,
+      };
+      disabledActionIds = new Set([
+        ...(childSummary.total <= 0 ? ["child-tabs"] : []),
+        ...(siblingSummary.total <= 0 ? ["sibling-tabs"] : []),
+        ...(parentSummary.total <= 0 ? ["parent-tabs"] : []),
+        ...(unvisitedSummary.total <= 0 ? ["unvisited-tabs"] : []),
+        ...(domainSummary.total <= 0 ? ["domains"] : []),
+        ...(recentlyClosed.length <= 0 ? ["recently-closed"] : []),
+      ]);
     } catch {
       actionsWorkspaces = [];
       actionWorkspaceTabCounts = {};
       actionExtensions = [];
+      actionCounts = {};
+      disabledActionIds = new Set();
     }
   }
 

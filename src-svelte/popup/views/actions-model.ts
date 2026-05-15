@@ -161,3 +161,18 @@ export function appendWorkspaceSwitchItems(
     return { ...section, items: [...section.items, ...workspaceItems] };
   });
 }
+
+export function applyActionMetadata(
+  sections: readonly ActionSection[],
+  counts: Readonly<Record<string, number>>,
+  disabledIds: ReadonlySet<string>,
+): ActionSection[] {
+  return sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => ({
+      ...item,
+      count: item.kind === "workspace-switch" ? item.count : counts[item.id] || 0,
+      disabled: item.disabled || disabledIds.has(item.id),
+    })),
+  }));
+}
