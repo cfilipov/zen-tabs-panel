@@ -956,6 +956,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // timer would have to either fire blindly (blank panel flash) or
     // poll, neither of which is right.
     let revealDeferred = false;
+    let lastLeaderArmAt = 0;
 
     // Mirror whatever theme Zen's URL-bar dropdown (Cmd+T) uses. The
     // chrome root's resolved `color-scheme` is the same signal that dialog
@@ -2255,6 +2256,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // the resize has already been applied).
           if (!popupReady) {
             revealDeferred = true;
+            scheduleDeferredRevealFallback();
           } else {
             revealOverlay();
           }
@@ -2297,6 +2299,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       revealDeferred = false;
     }
 
+    function scheduleDeferredRevealFallback() {
+      const w = getWin();
+      if (!w) return;
+      w.setTimeout(() => {
+        if (!pendingReveal || !revealDeferred || popupReady) return;
+        revealDeferred = false;
+        revealOverlay();
+      }, 250);
+    }
+
     function armRevealTimer() {
       const w = getWin();
       clearRevealTimer();
@@ -2311,6 +2323,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // immediately if it sees a "deferred" flag set here.
         if (!popupReady) {
           revealDeferred = true;
+          scheduleDeferredRevealFallback();
           return;
         }
         revealOverlay();
@@ -2375,6 +2388,52 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     // ---- Chrome engine instance ----------------------------------------
+    function armChordFromLeader() {
+      const now = Date.now();
+      if (now - lastLeaderArmAt < 80) return;
+      lastLeaderArmAt = now;
+
+      // Leader-shortcut routing while the menu is visible:
+      //   - on actions   -> dismiss (toggle off).
+      //   - on submenu   -> navigate back to actions (regardless of depth).
+      //   - menu hidden  -> arm the chord engines.
+      if (isOverlayVisible()) {
+        if (!currentViewName || currentViewName === "actions") {
+          destroyOverlay();
+          return;
+        }
+        navStack = [];
+        currentViewName = "actions";
+        const w0 = getWin();
+        const br0 = w0 && w0.document.getElementById(BROWSER_ID);
+        if (br0 && br0.messageManager) {
+          try {
+            br0.messageManager.sendAsyncMessage(
+              "ZenChord:GoToActions:" + CHORD_GENERATION,
+              {}
+            );
+          } catch (e) {}
+        }
+        return;
+      }
+
+      try { if (chromeEngine) chromeEngine.arm(); } catch (e) {}
+      const w = getWin();
+      const tab = w && w.gBrowser && w.gBrowser.selectedTab;
+      const br = tab && tab.linkedBrowser;
+      if (br && br.messageManager) {
+        try { br.messageManager.sendAsyncMessage("ZenChord:Arm"); } catch (e) {}
+      }
+    }
+
+    function isDefaultLeaderShortcut(e) {
+      if (!e || !e.metaKey || e.ctrlKey || e.shiftKey) return false;
+      if (e.defaultPrevented) return false;
+      const code = String(e.code || "");
+      const key = String(e.key || "");
+      return code === "Period" || key === ".";
+    }
+
     chromeEngine = engineScope.createChordEngine({
       chordTree: CHORD_TREE,
       constants: CHORD_CONSTANTS,
@@ -2452,6 +2511,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const name = (t.tagName || t.nodeName || "").toLowerCase();
         if (name === "browser") chromeEngine.reset();
       }, true);
+
+      const fallbackLeaderKeydown = (e) => {
+        if (!isDefaultLeaderShortcut(e)) return;
+        try { e.preventDefault(); } catch (_) {}
+        try { e.stopPropagation(); } catch (_) {}
+        armChordFromLeader();
+      };
+      w.addEventListener("keydown", fallbackLeaderKeydown, { capture: true, mozSystemGroup: true });
+      context.callOnClose({
+        close() {
+          try { w.removeEventListener("keydown", fallbackLeaderKeydown, { capture: true, mozSystemGroup: true }); } catch (e) {}
+        },
+      });
     }
 
     // ---- Per-content-process frame script ------------------------------
@@ -4262,44 +4334,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // this the user's next chord key would reach an idle content
         // engine and leak through to the page.
         async armChord() {
-          // Leader-shortcut routing while the menu is visible:
-          //   - on actions   → dismiss (toggle off).
-          //   - on submenu   → navigate back to actions (regardless of depth).
-          //   - menu hidden  → arm the chord engines (existing behavior).
-          // Without this, pressing cmd+. on an open menu silently re-armed
-          // the engines and made it look frozen.
-          if (isOverlayVisible()) {
-            if (!currentViewName || currentViewName === "actions") {
-              destroyOverlay();
-              return;
-            }
-            // Tell the popup to navigate back to actions, with cross-fade
-            // (popup's navigateToView pushes onto its own chord state).
-            // Clear chrome's navStack so a subsequent Backspace from the
-            // actions view dismisses rather than walking back through the
-            // submenu chain.
-            navStack = [];
-            currentViewName = "actions";
-            const w0 = getWin();
-            const br0 = w0 && w0.document.getElementById(BROWSER_ID);
-            if (br0 && br0.messageManager) {
-              try {
-                br0.messageManager.sendAsyncMessage(
-                  "ZenChord:GoToActions:" + CHORD_GENERATION,
-                  {}
-                );
-              } catch (e) {}
-            }
-            return;
-          }
-
-          try { if (chromeEngine) chromeEngine.arm(); } catch (e) {}
-          const w = getWin();
-          const tab = w && w.gBrowser && w.gBrowser.selectedTab;
-          const br = tab && tab.linkedBrowser;
-          if (br && br.messageManager) {
-            try { br.messageManager.sendAsyncMessage("ZenChord:Arm"); } catch (e) {}
-          }
+          armChordFromLeader();
         },
 
         // Popup-driven reveal. Called when the popup's own reveal-on-pause
