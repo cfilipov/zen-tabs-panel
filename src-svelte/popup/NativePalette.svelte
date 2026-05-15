@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import PaletteShell from "./components/PaletteShell.svelte";
   import ActionsMenu from "./views/ActionsMenu.svelte";
   import ContainerList from "./views/ContainerList.svelte";
@@ -14,7 +14,6 @@
   import TabList from "./views/TabList.svelte";
   import TabInfoView from "./views/TabInfoView.svelte";
   import WorkspaceList from "./views/WorkspaceList.svelte";
-  import { inputFromKeyboardEvent } from "./interaction/inputs";
   import { interpretVisibleInput, type InteractionCommand } from "./interaction/interpreter";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
@@ -61,6 +60,14 @@
     badge: string;
     hidden?: boolean;
     onclick: () => void;
+  };
+  type KeyData = {
+    key: string;
+    code?: string;
+    shiftKey?: boolean;
+    altKey?: boolean;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
   };
   type NativeDuplicateView = Extract<ViewId, "duplicates">;
   type NativeTabInfoView = Extract<ViewId, "tab-info">;
@@ -121,6 +128,15 @@
   let sidebarWorkspaces = $state<WorkspaceRow[]>([]);
   let workspaceFilter = $state("all");
   let loadGeneration = 0;
+  let popupInst: number | null = null;
+  let popupChordDelay = 350;
+  let popupRevealTimer: ReturnType<typeof setTimeout> | null = null;
+  let chordBridgeReady = false;
+  let dispatchRunning = false;
+  let warmRearmGeneration = 0;
+  let pageAlive = true;
+  const heldLiveKeys: KeyData[] = [];
+  const liveDispatchQueue: KeyData[] = [];
 
   const headerHidden = $derived(currentView === "actions");
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
@@ -564,59 +580,94 @@
     selectedIndex = 0;
   }
 
-  function openNativeView(view: ViewId, params?: URLSearchParams) {
+  function encodedParams(params?: URLSearchParams | Record<string, unknown>) {
+    if (!params) return undefined;
+    if (params instanceof URLSearchParams) {
+      return JSON.stringify(Object.fromEntries(params.entries()));
+    }
+    return JSON.stringify(params);
+  }
+
+  function paramsRecord(params?: URLSearchParams | Record<string, unknown>) {
+    if (!params) return {};
+    if (params instanceof URLSearchParams) return Object.fromEntries(params.entries());
+    return params;
+  }
+
+  function notifyChromeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>) {
+    if (view === "actions") {
+      fireMessage({ type: "navigate-back" });
+      return;
+    }
+    fireMessage({ type: "navigate-view", view, params: encodedParams(params) });
+  }
+
+  async function finishOpenView(view: ViewId) {
+    await requestPanelResize(view);
+    return true;
+  }
+
+  async function openNativeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>, notifyChrome = false) {
+    if (notifyChrome) notifyChromeView(view, params);
     if (view === "actions") {
       goBack();
-      return true;
+      return finishOpenView(view);
     }
     if (isNativeListView(view)) {
-      currentDomain = params?.get("domain") ?? null;
-      loadListView(view, 0, 80, true, viewParams(view));
-      return true;
+      currentDomain = paramValue(params, "domain");
+      await loadListView(view, 0, 80, true, { ...paramsRecord(params), ...viewParams(view) });
+      return finishOpenView(view);
     }
     if (isNativePrefixView(view)) {
       currentView = view;
       selectedIndex = 0;
       error = null;
-      return true;
+      return finishOpenView(view);
     }
     if (view === "navigation") {
-      loadNavigation();
-      return true;
+      await loadNavigation();
+      return finishOpenView(view);
     }
     if (view === "recently-closed") {
-      loadRecentlyClosed();
-      return true;
+      await loadRecentlyClosed();
+      return finishOpenView(view);
     }
     if (view === "move-to-workspace") {
-      loadMoveToWorkspace();
-      return true;
+      await loadMoveToWorkspace();
+      return finishOpenView(view);
     }
     if (view === "open-in-container") {
-      loadOpenInContainer();
-      return true;
+      await loadOpenInContainer();
+      return finishOpenView(view);
     }
     if (view === "move-to-folder") {
-      loadMoveToFolder();
-      return true;
+      await loadMoveToFolder();
+      return finishOpenView(view);
     }
     if (view === "profiles") {
-      loadProfiles();
-      return true;
+      await loadProfiles();
+      return finishOpenView(view);
     }
     if (view === "duplicates") {
-      loadDuplicates();
-      return true;
+      await loadDuplicates();
+      return finishOpenView(view);
     }
     if (view === "tab-info") {
-      loadTabInfo();
-      return true;
+      await loadTabInfo();
+      return finishOpenView(view);
     }
     if (view === "duplicate-prompt") {
-      loadDuplicatePrompt(params);
-      return true;
+      loadDuplicatePrompt(params instanceof URLSearchParams ? params : undefined);
+      return finishOpenView(view);
     }
     return false;
+  }
+
+  function paramValue(params: URLSearchParams | Record<string, unknown> | undefined, key: string) {
+    if (!params) return null;
+    if (params instanceof URLSearchParams) return params.get(key);
+    const value = params[key];
+    return typeof value === "string" ? value : null;
   }
 
   function buildDuplicateGroups(allTabs: TabIndexRow[]): DuplicateGroupRow[] {
@@ -643,42 +694,47 @@
       });
   }
 
-  function activateAction(item: ActionMenuItem) {
+  async function activateAction(item: ActionMenuItem) {
     if (item.disabled) {
       return;
     }
 
     if (item.kind === "action") {
+      clearPopupRevealTimer();
       fireMessage({ type: item.id });
       return;
     }
 
     if (item.kind === "prefix" && isNativePrefixView(item.view as ViewId | undefined)) {
-      openNativeView(item.view as NativePrefixView);
+      await openNativeView(item.view as NativePrefixView, undefined, true);
       return;
     }
 
-    if (item.view) openNativeView(item.view as ViewId);
+    if (item.view) await openNativeView(item.view as ViewId, undefined, true);
   }
 
   function activateTab(row: TabIndexRow) {
+    clearPopupRevealTimer();
     fireMessage({ type: "activate-tab", domId: row.domId });
   }
 
   function activateTabLike(row: { domId: string }) {
+    clearPopupRevealTimer();
     fireMessage({ type: "activate-tab", domId: row.domId });
   }
 
-  function activateDomain(row: DomainIndexRow) {
+  async function activateDomain(row: DomainIndexRow) {
     currentDomain = row.domain;
-    loadListView("domain-tabs");
+    await openNativeView("domain-tabs", { domain: row.domain }, true);
   }
 
   function navigateToHistoryIndex(index: number) {
+    clearPopupRevealTimer();
     fireMessage({ type: "navigate-to-history-index", index });
   }
 
   function restoreClosedTab(row: RecentlyClosedRow, keepOpen = false) {
+    if (!keepOpen) clearPopupRevealTimer();
     fireMessage({
       type: keepOpen ? "restore-closed-tab-keep-open" : "restore-closed-tab",
       sessionId: row.sessionId,
@@ -686,19 +742,23 @@
   }
 
   function moveToWorkspace(row: WorkspaceRow) {
+    clearPopupRevealTimer();
     fireMessage({ type: "move-selected-tabs-to-workspace", workspaceId: row.uuid });
   }
 
   function reopenInContainer(row: ContainerRow) {
+    clearPopupRevealTimer();
     fireMessage({ type: "reopen-in-container", userContextId: row.userContextId });
   }
 
   function moveToFolder(row: FolderRow) {
+    clearPopupRevealTimer();
     fireMessage({ type: "move-tab-to-folder", folderId: row.id });
   }
 
   function launchProfile(row: ProfileRow) {
     if (row.isCurrent) return;
+    clearPopupRevealTimer();
     fireMessage({ type: "launch-profile", name: row.name });
   }
 
@@ -743,47 +803,47 @@
     }
   }
 
-  function drillSelectedParent() {
+  async function drillSelectedParent() {
     if (currentView !== "parent-tabs" || !selectedTabRow) return;
-    loadListView("child-tabs", 0, 80, true, { ...viewParams("child-tabs"), parentDomId: selectedTabRow.domId });
+    await openNativeView("child-tabs", { ...viewParams("child-tabs"), parentDomId: selectedTabRow.domId }, true);
   }
 
-  function toggleCurrentSort() {
+  async function toggleCurrentSort() {
     if (currentView === "domains" || currentView === "domain-tabs") {
       domainsSortAlpha = !domainsSortAlpha;
-      if (currentView === "domains") loadListView("domains");
-      else loadListView("domain-tabs", 0, 80, true, viewParams("domain-tabs"));
+      if (currentView === "domains") await loadListView("domains");
+      else await loadListView("domain-tabs", 0, 80, true, viewParams("domain-tabs"));
       return;
     }
     if (currentView === "tabs-by-age") {
       tabsByAgeNewestFirst = !tabsByAgeNewestFirst;
-      loadListView("tabs-by-age");
+      await loadListView("tabs-by-age");
     }
   }
 
-  function reloadWorkspaceFilteredView() {
+  async function reloadWorkspaceFilteredView() {
     if (isNativeListView(currentView)) {
-      loadListView(currentView);
+      await loadListView(currentView);
       return;
     }
     if (currentView === "duplicates") {
-      loadDuplicates();
+      await loadDuplicates();
     }
   }
 
-  function setWorkspaceFilter(nextFilter: string) {
+  async function setWorkspaceFilter(nextFilter: string) {
     workspaceFilter = nextFilter || "all";
-    reloadWorkspaceFilteredView();
+    await reloadWorkspaceFilteredView();
   }
 
-  function toggleWorkspaceFilter() {
-    setWorkspaceFilter(workspaceFilter === "all" ? activeWorkspaceId || "all" : "all");
+  async function toggleWorkspaceFilter() {
+    await setWorkspaceFilter(workspaceFilter === "all" ? activeWorkspaceId || "all" : "all");
   }
 
-  function filterWorkspaceByIndex(index: number) {
+  async function filterWorkspaceByIndex(index: number) {
     const workspace = sidebarWorkspaces[index];
     if (!workspace) return;
-    setWorkspaceFilter(workspaceFilter === workspace.uuid ? "all" : workspace.uuid);
+    await setWorkspaceFilter(workspaceFilter === workspace.uuid ? "all" : workspace.uuid);
   }
 
   function closeTabInfoDuplicate(row: TabIndexRow) {
@@ -803,6 +863,7 @@
   }
 
   function runDuplicatePromptAction(action: DuplicatePromptAction) {
+    clearPopupRevealTimer();
     fireMessage({ type: action });
   }
 
@@ -928,21 +989,21 @@
     selectedIndex = starts[(base + delta + starts.length) % starts.length];
   }
 
-  function activateSelected() {
+  async function activateSelected() {
     if (currentView === "actions") {
       const item = visibleActionItems[selectedIndex];
-      if (item) activateAction(item);
+      if (item) await activateAction(item);
       return;
     }
 
     if (isNativePrefixView(currentView)) {
       const item = prefixItems[selectedIndex];
-      if (item) activateAction(item);
+      if (item) await activateAction(item);
       return;
     }
 
     if (selectedTabRow) activateTab(selectedTabRow);
-    else if (selectedDomainRow) activateDomain(selectedDomainRow);
+    else if (selectedDomainRow) await activateDomain(selectedDomainRow);
     else if (currentView === "navigation" && selectedIndex !== navigationHistory?.index) navigateToHistoryIndex(selectedIndex);
     else if (currentView === "recently-closed") {
       const row = recentlyClosedRows[selectedIndex];
@@ -966,7 +1027,7 @@
     }
   }
 
-  function activateRow(index: number) {
+  async function activateRow(index: number) {
     if (currentView === "navigation") {
       const targets = navigationEntries
         .map((entry, navIndex) => ({ entry, navIndex }))
@@ -1015,7 +1076,7 @@
 
     const row = rowForIndex(index);
     if (isTabRow(row)) activateTab(row);
-    else if (isDomainRow(row)) activateDomain(row);
+    else if (isDomainRow(row)) await activateDomain(row);
   }
 
   function rowForIndex(index: number) {
@@ -1054,18 +1115,18 @@
     return currentView === "most-visited" ? `${row.focusCount ?? 0} focuses` : null;
   }
 
-  function runCommand(command: InteractionCommand) {
+  async function runCommand(command: InteractionCommand) {
     switch (command.kind) {
       case "action": {
         const item = [...allActionItems, ...prefixItems].find((candidate) => candidate.id === command.actionId);
-        if (item) activateAction(item);
+        if (item) await activateAction(item);
         return;
       }
       case "open-view":
-        openNativeView(command.view);
+        await openNativeView(command.view, undefined, true);
         return;
       case "enter-prefix":
-        openNativeView(command.view);
+        await openNativeView(command.view, undefined, true);
         return;
       case "cancel":
         fireMessage({ type: "hide-palette" });
@@ -1077,10 +1138,10 @@
         moveSelection(command.delta);
         return;
       case "activate-selection":
-        activateSelected();
+        await activateSelected();
         return;
       case "activate-row":
-        activateRow(command.index);
+        await activateRow(command.index);
         return;
       case "cycle-page":
         cyclePage(command.delta);
@@ -1092,31 +1153,42 @@
         closeSelectedTabRow();
         return;
       case "close-all":
-        closeAllRowsInView();
+        await closeAllRowsInView();
         return;
       case "restore-selection-keep-open":
         restoreSelectedRecentlyClosed();
         return;
       case "drill-selection":
-        drillSelectedParent();
+        await drillSelectedParent();
         return;
       case "toggle-sort":
-        toggleCurrentSort();
+        await toggleCurrentSort();
         return;
       case "toggle-workspace-filter":
-        toggleWorkspaceFilter();
+        await toggleWorkspaceFilter();
         return;
       case "filter-workspace-index":
-        filterWorkspaceByIndex(command.index);
+        await filterWorkspaceByIndex(command.index);
         return;
       case "none":
         return;
     }
   }
 
-  function handleKeydown(event: KeyboardEvent) {
-    if (currentView === "duplicate-prompt" && !event.metaKey && !event.ctrlKey && !event.altKey) {
-      const key = event.key.toUpperCase();
+  function snapshotKeyEvent(event: KeyboardEvent): KeyData {
+    return {
+      key: event.key,
+      code: event.code,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+    };
+  }
+
+  async function handleKeyInput(input: KeyData) {
+    if (currentView === "duplicate-prompt" && !input.metaKey && !input.ctrlKey && !input.altKey) {
+      const key = input.key.toUpperCase();
       const actionByKey: Record<string, DuplicatePromptAction> = {
         S: "duplicate-switch",
         O: "duplicate-open-anyway",
@@ -1124,43 +1196,229 @@
       };
       const action = actionByKey[key];
       if (action) {
-        event.preventDefault();
         runDuplicatePromptAction(action);
-        return;
+        return true;
       }
     }
 
-    if (currentView === "navigation" && !event.metaKey && !event.ctrlKey && !event.altKey) {
-      const upper = event.key.toUpperCase();
+    if (currentView === "navigation" && !input.metaKey && !input.ctrlKey && !input.altKey) {
+      const upper = input.key.toUpperCase();
       if (upper === "B" || upper === "F") {
         const current = navigationHistory?.index ?? -1;
         const target = current + (upper === "B" ? -1 : 1);
         if (target >= 0 && target < navigationEntries.length) {
-          event.preventDefault();
           navigateToHistoryIndex(target);
         }
-        return;
+        return true;
       }
     }
 
     const actionNodes = currentView === "actions" ? allActionNodes : isNativePrefixView(currentView) ? prefixNodes : [];
-    const command = interpretVisibleInput(inputFromKeyboardEvent(event), { view: currentView }, actionNodes);
+    const command = interpretVisibleInput({ kind: "key", ...input }, { view: currentView }, actionNodes);
     if (command.kind === "none") {
-      return;
+      return false;
     }
 
+    await runCommand(command);
+    return true;
+  }
+
+  async function runLiveDispatchQueue() {
+    if (dispatchRunning) return;
+    dispatchRunning = true;
+    try {
+      while (liveDispatchQueue.length > 0) {
+        const input = liveDispatchQueue.shift();
+        if (!input) continue;
+        armPopupRevealTimer();
+        await handleKeyInput(input);
+      }
+    } finally {
+      dispatchRunning = false;
+    }
+  }
+
+  function enqueueKeyInput(input: KeyData) {
+    liveDispatchQueue.push(input);
+    void runLiveDispatchQueue();
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    const input = snapshotKeyEvent(event);
+    if (!chordBridgeReady) {
+      event.preventDefault();
+      event.stopPropagation();
+      heldLiveKeys.push(input);
+      return;
+    }
     event.preventDefault();
-    runCommand(command);
+    enqueueKeyInput(input);
+  }
+
+  function clearPopupRevealTimer() {
+    if (popupRevealTimer !== null) {
+      clearTimeout(popupRevealTimer);
+      popupRevealTimer = null;
+    }
+  }
+
+  function armPopupRevealTimer() {
+    clearPopupRevealTimer();
+    popupRevealTimer = setTimeout(() => {
+      popupRevealTimer = null;
+      if (!pageAlive) return;
+      fireMessage({ type: "reveal-palette", inst: popupInst });
+    }, popupChordDelay);
+  }
+
+  function measureNaturalHeight() {
+    const header = document.getElementById("header");
+    const list = document.getElementById("list");
+    const indicator = document.getElementById("page-indicator");
+    let listContentHeight = 8;
+    const children = list?.children ?? [];
+    if (children.length > 0) {
+      const first = children[0].getBoundingClientRect();
+      const last = children[children.length - 1].getBoundingClientRect();
+      listContentHeight += Math.max(0, last.bottom - first.top);
+    }
+    let totalHeight = listContentHeight;
+    if (header && !header.classList.contains("hidden") && header.children.length > 0) {
+      totalHeight += header.getBoundingClientRect().height;
+    }
+    if (indicator && !indicator.classList.contains("hidden")) {
+      totalHeight += indicator.getBoundingClientRect().height;
+    }
+    return totalHeight;
+  }
+
+  async function requestPanelResize(view: ViewId = currentView) {
+    await tick();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    if (!pageAlive) return;
+    fireMessage({ type: "resize-panel", view, height: measureNaturalHeight() });
+  }
+
+  async function signalPopupReady() {
+    if (!pageAlive) return null;
+    try {
+      return await sendMessage<{
+        buffered?: KeyData[];
+        stale?: boolean;
+        view?: string | null;
+      }>({ type: "popup-ready", inst: popupInst });
+    } catch {
+      return null;
+    }
+  }
+
+  async function drainBridge(reply: { buffered?: KeyData[]; stale?: boolean; view?: string | null } | null, generation?: number) {
+    if (reply?.stale) return;
+    if (reply?.view && reply.view !== currentView) {
+      await openNativeView(reply.view as ViewId);
+      await requestPanelResize(reply.view as ViewId);
+    }
+
+    await tick();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const buffered = Array.isArray(reply?.buffered) ? reply.buffered : [];
+    const held = heldLiveKeys.splice(0);
+    for (const input of buffered) {
+      if (generation !== undefined && generation !== warmRearmGeneration) return;
+      armPopupRevealTimer();
+      await handleKeyInput(input);
+    }
+    for (const input of held) {
+      if (generation !== undefined && generation !== warmRearmGeneration) return;
+      armPopupRevealTimer();
+      await handleKeyInput(input);
+    }
+
+    if (generation !== undefined && generation !== warmRearmGeneration) return;
+    chordBridgeReady = true;
+    if (buffered.length === 0 && held.length === 0) {
+      armPopupRevealTimer();
+    }
+  }
+
+  async function initializeBridge(initialViewReady: Promise<unknown>) {
+    const params = new URLSearchParams(location.search);
+    const inst = Number.parseInt(params.get("inst") || "", 10);
+    popupInst = Number.isFinite(inst) ? inst : null;
+    const delay = Number.parseInt(params.get("delay") || "", 10);
+    if (Number.isFinite(delay) && delay >= 0) popupChordDelay = delay;
+
+    await initialViewReady.catch(() => {});
+    await requestPanelResize(currentView);
+    const reply = await signalPopupReady();
+    await drainBridge(reply);
+  }
+
+  async function handleWarmRearm(data: { inst?: number; view?: ViewId; params?: Record<string, unknown> }) {
+    const generation = ++warmRearmGeneration;
+    if (typeof data.inst === "number") popupInst = data.inst;
+    chordBridgeReady = false;
+    clearPopupRevealTimer();
+    liveDispatchQueue.length = 0;
+    heldLiveKeys.length = 0;
+    clearPreview();
+
+    const view = data.view || "actions";
+    await openNativeView(view, data.params || {});
+    if (generation !== warmRearmGeneration) return;
+    await requestPanelResize(view);
+    if (generation !== warmRearmGeneration) return;
+    const reply = await signalPopupReady();
+    await drainBridge(reply, generation);
+  }
+
+  function parseWarmRearmPayload(event: Event) {
+    const detail = event instanceof CustomEvent ? event.detail : null;
+    if (typeof detail !== "string") return {};
+    try {
+      return JSON.parse(detail) as { inst?: number; view?: ViewId; params?: Record<string, unknown> };
+    } catch {
+      return {};
+    }
   }
 
   onMount(() => {
     const params = new URLSearchParams(location.search);
     const initialView = params.get("view") as ViewId | null;
-    if (initialView) openNativeView(initialView, params);
+    const initialViewReady = initialView ? openNativeView(initialView, params) : Promise.resolve();
 
     window.addEventListener("keydown", handleKeydown);
-    return () => window.removeEventListener("keydown", handleKeydown);
+    pageAlive = true;
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("ztt:cancel-reveal", clearPopupRevealTimer);
+    document.addEventListener("ztt:warm-rearm", warmRearmListener);
+    document.addEventListener("ztt:go-to-actions", goToActionsListener);
+    void initializeBridge(initialViewReady);
+    return () => {
+      clearPopupRevealTimer();
+      window.removeEventListener("keydown", handleKeydown);
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("ztt:cancel-reveal", clearPopupRevealTimer);
+      document.removeEventListener("ztt:warm-rearm", warmRearmListener);
+      document.removeEventListener("ztt:go-to-actions", goToActionsListener);
+    };
   });
+
+  function handlePageHide() {
+    pageAlive = false;
+    clearPopupRevealTimer();
+  }
+
+  function warmRearmListener(event: Event) {
+    void handleWarmRearm(parseWarmRearmPayload(event));
+  }
+
+  function goToActionsListener() {
+    if (currentView !== "actions") {
+      void openNativeView("actions").then(() => requestPanelResize("actions"));
+    }
+  }
 
   $effect(() => {
     if (selectedTabRow) {
