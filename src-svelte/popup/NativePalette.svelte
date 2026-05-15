@@ -7,6 +7,7 @@
   import FolderList from "./views/FolderList.svelte";
   import PrefixMenu from "./views/PrefixMenu.svelte";
   import NavigationList from "./views/NavigationList.svelte";
+  import ProfileList from "./views/ProfileList.svelte";
   import RecentlyClosedList from "./views/RecentlyClosedList.svelte";
   import TabList from "./views/TabList.svelte";
   import WorkspaceList from "./views/WorkspaceList.svelte";
@@ -16,6 +17,7 @@
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
   import { createHistoryClient, type NavigationHistory, type RecentlyClosedRow } from "./runtime/history-client";
   import { fireMessage } from "./runtime/ipc";
+  import { createProfileClient, type ProfileRow } from "./runtime/profile-client";
   import { createTabIndexClient, type DomainIndexRow, type TabIndexRow, type TabIndexView } from "./runtime/tab-index-client";
   import { createWorkspaceClient, type WorkspaceRow } from "./runtime/workspace-client";
   import {
@@ -40,11 +42,13 @@
   type NativeWorkspaceView = Extract<ViewId, "move-to-workspace">;
   type NativeContainerView = Extract<ViewId, "open-in-container">;
   type NativeFolderView = Extract<ViewId, "move-to-folder">;
+  type NativeProfileView = Extract<ViewId, "profiles">;
 
   const client = createTabIndexClient();
   const containerClient = createContainerClient();
   const folderClient = createFolderClient();
   const historyClient = createHistoryClient();
+  const profileClient = createProfileClient();
   const workspaceClient = createWorkspaceClient();
   const actionSections = buildActionsMenuModel();
   const listViewTitles: Record<NativeListView, string> = {
@@ -73,6 +77,7 @@
   let containerRows = $state<ContainerRow[]>([]);
   let folderRows = $state<FolderRow[]>([]);
   let folderWorkspaces = $state<WorkspaceRow[]>([]);
+  let profileRows = $state<ProfileRow[]>([]);
   let loadGeneration = 0;
 
   const headerHidden = $derived(currentView === "actions");
@@ -97,6 +102,8 @@
       ? "New container tab"
       : currentView === "move-to-folder"
       ? "Move to folder"
+      : currentView === "profiles"
+      ? "Profiles"
       : allActionItems.find((item) => item.view === currentView)?.label ?? "",
   );
   const selectedActionId = $derived(currentView === "actions" ? visibleActionItems[selectedIndex]?.id ?? null : null);
@@ -128,6 +135,10 @@
 
   function isNativeFolderView(view: ViewId | undefined): view is NativeFolderView {
     return view === "move-to-folder";
+  }
+
+  function isNativeProfileView(view: ViewId | undefined): view is NativeProfileView {
+    return view === "profiles";
   }
 
   function isNativeTabView(view: ViewId | undefined): view is NativeTabView {
@@ -297,6 +308,30 @@
     }
   }
 
+  function firstSelectableProfileIndex(rows: ProfileRow[]) {
+    return rows.findIndex((row) => !row.isCurrent);
+  }
+
+  async function loadProfiles() {
+    const generation = ++loadGeneration;
+    loading = true;
+    error = null;
+    currentView = "profiles";
+    try {
+      const profiles = await profileClient.getProfiles();
+      if (generation !== loadGeneration || currentView !== "profiles") return;
+      profileRows = profiles;
+      selectedIndex = firstSelectableProfileIndex(profiles);
+    } catch (err) {
+      if (generation !== loadGeneration) return;
+      profileRows = [];
+      selectedIndex = -1;
+      error = err instanceof Error ? err.message : String(err);
+    } finally {
+      if (generation === loadGeneration) loading = false;
+    }
+  }
+
   function activateAction(item: ActionMenuItem) {
     if (item.disabled) {
       return;
@@ -345,6 +380,11 @@
       return;
     }
 
+    if (item.view === "profiles") {
+      loadProfiles();
+      return;
+    }
+
     error = `${item.label} has not been ported to native Svelte yet`;
   }
 
@@ -380,6 +420,11 @@
     fireMessage({ type: "move-tab-to-folder", folderId: row.id });
   }
 
+  function launchProfile(row: ProfileRow) {
+    if (row.isCurrent) return;
+    fireMessage({ type: "launch-profile", name: row.name });
+  }
+
   function previewTab(row: TabIndexRow) {
     fireMessage({ type: "preview-tab", domId: row.domId });
   }
@@ -401,8 +446,16 @@
     containerRows = [];
     folderRows = [];
     folderWorkspaces = [];
+    profileRows = [];
     selectedIndex = 0;
     error = null;
+  }
+
+  function isSelectableIndex(index: number) {
+    if (currentView === "profiles") {
+      return !!profileRows[index] && !profileRows[index].isCurrent;
+    }
+    return index >= 0;
   }
 
   function moveSelection(delta: 1 | -1) {
@@ -420,14 +473,22 @@
               ? containerRows.length
               : currentView === "move-to-folder"
                 ? folderRows.length
+              : currentView === "profiles"
+                ? profileRows.length
         : rows.length;
     if (!length) {
       selectedIndex = -1;
       return;
     }
 
-    const start = selectedIndex < 0 ? (delta > 0 ? -1 : 0) : selectedIndex;
-    selectedIndex = (start + delta + length) % length;
+    let next = selectedIndex < 0 ? (delta > 0 ? -1 : 0) : selectedIndex;
+    for (let attempts = 0; attempts < length; attempts += 1) {
+      next = (next + delta + length) % length;
+      if (isSelectableIndex(next)) {
+        selectedIndex = next;
+        break;
+      }
+    }
     if (currentView !== "actions" && !isNativePrefixView(currentView)) {
       ensureListIndexLoaded(selectedIndex);
       scrollListIndexIntoView(selectedIndex);
@@ -467,6 +528,9 @@
     } else if (currentView === "move-to-folder") {
       const row = folderRows[selectedIndex];
       if (row) moveToFolder(row);
+    } else if (currentView === "profiles") {
+      const row = profileRows[selectedIndex];
+      if (row) launchProfile(row);
     }
   }
 
@@ -501,6 +565,12 @@
     if (currentView === "move-to-folder") {
       const row = folderRows[index];
       if (row) moveToFolder(row);
+      return;
+    }
+
+    if (currentView === "profiles") {
+      const row = profileRows[index];
+      if (row) launchProfile(row);
       return;
     }
 
@@ -562,6 +632,8 @@
           loadOpenInContainer();
         } else if (command.view === "move-to-folder") {
           loadMoveToFolder();
+        } else if (command.view === "profiles") {
+          loadProfiles();
         } else {
           currentView = command.view;
           rows = [];
@@ -650,6 +722,8 @@
       loadOpenInContainer();
     } else if (initialView === "move-to-folder") {
       loadMoveToFolder();
+    } else if (initialView === "profiles") {
+      loadProfiles();
     }
 
     window.addEventListener("keydown", handleKeydown);
@@ -705,6 +779,12 @@
       workspaces={folderWorkspaces}
       {selectedIndex}
       onactivate={moveToFolder}
+    />
+  {:else if currentView === "profiles"}
+    <ProfileList
+      rows={profileRows}
+      {selectedIndex}
+      onactivate={launchProfile}
     />
   {:else if isNativeTabView(currentView)}
     <TabList
