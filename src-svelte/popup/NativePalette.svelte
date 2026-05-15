@@ -27,6 +27,12 @@
     type InteractionCommand,
   } from "./interaction/interpreter";
   import { applyInteractionCommand, type InteractionRuntimeHandlers } from "./interaction/runtime";
+  import {
+    resolveSelectionActivation,
+    resolveViewActivation,
+    type ViewActivation,
+    type ViewActivationContext,
+  } from "./interaction/view-activation";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
@@ -1061,79 +1067,38 @@
       return;
     }
 
-    if (selectedTabRow) activateTab(selectedTabRow);
-    else if (selectedDomainRow) await activateDomain(selectedDomainRow);
-    else if (currentView === "navigation" && selectedIndex !== navigationHistory?.index) navigateToHistoryIndex(selectedIndex);
-    else if (currentView === "recently-closed") {
-      const row = recentlyClosedRows[selectedIndex];
-      if (row) restoreClosedTab(row);
-    } else if (currentView === "move-to-workspace") {
-      const row = workspaceRows[selectedIndex];
-      if (row) moveToWorkspace(row);
-    } else if (currentView === "open-in-container") {
-      const row = containerRows[selectedIndex];
-      if (row) reopenInContainer(row);
-    } else if (currentView === "move-to-folder") {
-      const row = folderRows[selectedIndex];
-      if (row) moveToFolder(row);
-    } else if (currentView === "profiles") {
-      const row = profileRows[selectedIndex];
-      if (row) launchProfile(row);
-    } else if (currentView === "duplicate-prompt") {
-      const selected = DUPLICATE_PROMPT_ACTIONS[selectedIndex];
-      if (selected) runDuplicatePromptAction(selected);
-    }
+    await applyViewActivation(resolveSelectionActivation(viewActivationContext()));
   }
 
   async function activateRow(index: number) {
-    if (currentView === "navigation") {
-      const targets = navigationEntries
-        .map((entry, navIndex) => ({ entry, navIndex }))
-        .filter((candidate) => candidate.navIndex !== navigationHistory?.index);
-      const target = targets[index];
-      if (target) navigateToHistoryIndex(target.navIndex);
-      return;
-    }
+    await applyViewActivation(resolveViewActivation(viewActivationContext(), index, "shortcut"));
+  }
 
-    if (currentView === "recently-closed") {
-      const row = recentlyClosedRows[index];
-      if (row) restoreClosedTab(row);
-      return;
-    }
+  function viewActivationContext(): ViewActivationContext {
+    return {
+      view: currentView,
+      selectedIndex,
+      offset,
+      rows,
+      navigationHistory,
+      recentlyClosedRows,
+      workspaceRows,
+      containerRows,
+      folderRows,
+      profileRows,
+    };
+  }
 
-    if (currentView === "move-to-workspace") {
-      const row = workspaceRows[index];
-      if (row) moveToWorkspace(row);
-      return;
-    }
-
-    if (currentView === "open-in-container") {
-      const row = containerRows[index];
-      if (row) reopenInContainer(row);
-      return;
-    }
-
-    if (currentView === "move-to-folder") {
-      const row = folderRows[index];
-      if (row) moveToFolder(row);
-      return;
-    }
-
-    if (currentView === "profiles") {
-      const row = profileRows[index];
-      if (row) launchProfile(row);
-      return;
-    }
-
-    if (currentView === "duplicate-prompt") {
-      const selected = DUPLICATE_PROMPT_ACTIONS[index];
-      if (selected) runDuplicatePromptAction(selected);
-      return;
-    }
-
-    const row = rowForIndex(index);
-    if (isTabRow(row)) activateTab(row);
-    else if (isDomainRow(row)) await activateDomain(row);
+  async function applyViewActivation(activation: ViewActivation) {
+    if (activation.kind === "activate-tab") activateTab(activation.row);
+    else if (activation.kind === "activate-domain") await activateDomain(activation.row);
+    else if (activation.kind === "navigate-history-index") navigateToHistoryIndex(activation.index);
+    else if (activation.kind === "restore-closed-tab") restoreClosedTab(activation.row);
+    else if (activation.kind === "move-to-workspace") moveToWorkspace(activation.row);
+    else if (activation.kind === "reopen-in-container") reopenInContainer(activation.row);
+    else if (activation.kind === "move-to-folder") moveToFolder(activation.row);
+    else if (activation.kind === "launch-profile") launchProfile(activation.row);
+    else if (activation.kind === "duplicate-prompt-action") runDuplicatePromptAction(activation.action);
   }
 
   function rowForIndex(index: number) {
