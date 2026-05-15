@@ -2378,8 +2378,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // matches this CHORD_GENERATION receives. Stale frame scripts
         // from prior extension loads (Firefox doesn't unload them) listen
         // on their old generation's name and never fire — without this,
-        // each stale script would dispatch a duplicate synthetic
-        // keydown for every chord-chain key, producing the double-fire
+        // each stale script would dispatch a duplicate bridge payload
+        // for every chord-chain key, producing the double-fire
         // bug (e.g. cmd+., q, 1 → drill + activate as if "1, 1").
         try { br.messageManager.sendAsyncMessage("ZenChord:DeliverKey:" + CHORD_GENERATION, keyData); } catch (e) {}
       }

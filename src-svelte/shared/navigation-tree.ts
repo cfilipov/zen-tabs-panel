@@ -2,7 +2,7 @@
 //
 // Build output:
 //   scripts/generate-keybindings.mjs emits dist/shared/keybindings.js for
-//   experiment/api.js and the current compatibility popup runtime.
+//   experiment/api.js/background.js consumers that still run plain JS.
 //
 // Hotkey notation:
 //   "P"        bare key

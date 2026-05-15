@@ -5,7 +5,6 @@
 // Loaded by:
 //   - chrome (experiment/api.js)        via Services.scriptloader.loadSubScript
 //   - per-content-process actor child   via Services.scriptloader.loadSubScript
-//   - popup (popup.html)                 via <script src="../shared/chord-engine.js">
 //
 // Each consumer instantiates with environment-specific callbacks; the engine
 // itself owns the state machine and the chord-tree traversal. State is local
@@ -35,7 +34,7 @@
 //   }) → {
 //     attach(target),       // installs keydown/blur listeners
 //     detach(),
-//     handleKey(eventLike), // for synthetic dispatch (bridge replay path in popup)
+//     handleKey(eventLike), // direct entry point for tests/specialized callers
 //     setInitialState(snapshot),
 //     exitBridge(),
 //     reset(),
@@ -235,11 +234,9 @@
       if (filterEvent && !filterEvent(e)) return;
 
       // 2. Ignore synthetic events to prevent pages from triggering chord
-      //    actions via dispatchEvent. NOTE: callers that want to inject
-      //    synthetic events (e.g. popup bridge replay) bypass this by
-      //    constructing events with isTrusted=true via the proper path, OR
-      //    use a dedicated entry point — we accept synthetic events when
-      //    `disableTimers` is set (popup mode) to support replay.
+      //    actions via dispatchEvent. Tests/specialized callers can use
+      //    handleKey directly; disableTimers mode still accepts event-like
+      //    objects because it is used outside page-owned input streams.
       if (!e.isTrusted && !disableTimers) return;
 
       // 3. Pure modifier keydowns (Meta/Control/Alt/Shift alone): ignore.
