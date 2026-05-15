@@ -111,7 +111,7 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
   let currentPage = $state(1);
-  let selectedIndex = $state(0);
+  let selectedIndex = $state(-1);
   let currentDomain = $state<string | null>(null);
   let navigationHistory = $state<NavigationHistory | null>(null);
   let recentlyClosedRows = $state<RecentlyClosedRow[]>([]);
@@ -1044,7 +1044,8 @@
     duplicatePromptUrl = "";
     duplicatePromptDomId = null;
     sidebarWorkspaces = [];
-    selectedIndex = 0;
+    currentPage = 1;
+    selectedIndex = -1;
     error = null;
     void loadActionsData();
   }
@@ -1109,8 +1110,18 @@
   }
 
   function cyclePage(delta: 1 | -1) {
-    currentPage = ((currentPage - 1 + delta + pageCount) % pageCount) + 1;
-    selectedIndex = 0;
+    setActionsPage(currentPage + delta);
+  }
+
+  function setActionsPage(targetPage: number) {
+    if (currentView !== "actions" || pageCount <= 1) return;
+    let nextPage = targetPage;
+    if (nextPage < 1) nextPage = pageCount;
+    if (nextPage > pageCount) nextPage = 1;
+    if (nextPage === currentPage) return;
+    currentPage = nextPage;
+    selectedIndex = -1;
+    clearPreview();
   }
 
   function jumpSection(delta: 1 | -1) {
@@ -1588,8 +1599,12 @@
   {sidebarWorkspaces}
   {workspaceFilter}
   {activeWorkspaceId}
+  pageIndicatorHidden={currentView !== "actions" || pageCount <= 1}
+  {pageCount}
+  {currentPage}
   onSidebarSort={toggleCurrentSort}
   onWorkspaceFilter={setWorkspaceFilter}
+  onPage={setActionsPage}
 >
   {#if error}
     <div class="empty-state">{error}</div>

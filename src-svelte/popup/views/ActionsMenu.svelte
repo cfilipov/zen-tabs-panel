@@ -34,6 +34,10 @@
   };
 
   type PageBlock = SectionBlock | ColumnBlock;
+  type PageModel = {
+    page: number;
+    blocks: PageBlock[];
+  };
 
   function buildPageBlocks(sections: readonly ActionSection[]): PageBlock[] {
     const blocks: PageBlock[] = [];
@@ -73,6 +77,14 @@
     return block.kind === "columns" ? block.id : `${block.section.id}-${block.section.page}`;
   }
 
+  function buildPageModels(sections: readonly ActionSection[]): PageModel[] {
+    const pages = [...new Set(sections.map((section) => section.page))].sort((a, b) => a - b);
+    return pages.map((page) => ({
+      page,
+      blocks: buildPageBlocks(sections.filter((section) => section.page === page)),
+    }));
+  }
+
   let {
     sections,
     currentPage = 1,
@@ -84,59 +96,60 @@
     onpreview,
     onclearpreview,
   }: Props = $props();
-  const pageSections = $derived(sections.filter((section) => section.page === currentPage));
-  const pageBlocks = $derived(buildPageBlocks(pageSections));
+  const pageModels = $derived(buildPageModels(sections));
 </script>
 
 <div class="actions-pager no-anim" style={`transform: translateX(-${(currentPage - 1) * 100}%)`}>
-  <div class="actions-page" data-page={currentPage}>
-    {#each pageBlocks as block (blockKey(block))}
-      {#if block.kind === "columns"}
-        <div class="sections-row">
-          {#each block.columns as column (column.id)}
-            <div class="section-column" class:scrollable-column={column.scrollable}>
-              {#each column.sections as section (`${section.id}-${section.page}`)}
-                <div class="list-section-header">{section.label}</div>
-                {#if section.scrollable}
-                  <div class="section-scroll">
+  {#each pageModels as page (page.page)}
+    <div class="actions-page" data-page={page.page}>
+      {#each page.blocks as block (blockKey(block))}
+        {#if block.kind === "columns"}
+          <div class="sections-row">
+            {#each block.columns as column (column.id)}
+              <div class="section-column" class:scrollable-column={column.scrollable}>
+                {#each column.sections as section (`${section.id}-${section.page}`)}
+                  <div class="list-section-header">{section.label}</div>
+                  {#if section.scrollable}
+                    <div class="section-scroll">
+                      {#each section.items as item (item.id)}
+                        <ActionRow {item} compact selected={item.id === selectedId} onactivate={onactivate} />
+                      {/each}
+                    </div>
+                    <div class="section-scroll-fade"></div>
+                  {:else}
                     {#each section.items as item (item.id)}
                       <ActionRow {item} compact selected={item.id === selectedId} onactivate={onactivate} />
                     {/each}
-                  </div>
-                  <div class="section-scroll-fade"></div>
-                {:else}
-                  {#each section.items as item (item.id)}
-                    <ActionRow {item} compact selected={item.id === selectedId} onactivate={onactivate} />
-                  {/each}
-                {/if}
-              {/each}
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <div class="list-section-header">{block.section.label}</div>
-        {#if block.section.navigateGrid}
-          <div class="navigate-grid">
-            {#each block.section.items as item (item.id)}
-              <NavigateActionRow
-                {item}
-                {workspaces}
-                selected={item.id === selectedId}
-                onactivate={onactivate}
-                onpreview={onpreview}
-                onclearpreview={onclearpreview}
-              />
+                  {/if}
+                {/each}
+              </div>
             {/each}
           </div>
         {:else}
-          {#each block.section.items as item (item.id)}
-            <ActionRow {item} selected={item.id === selectedId} onactivate={onactivate} />
-          {/each}
+          <div class="list-section-header">{block.section.label}</div>
+          {#if block.section.navigateGrid}
+            <div class="navigate-grid">
+              {#each block.section.items as item (item.id)}
+                <NavigateActionRow
+                  {item}
+                  {workspaces}
+                  selected={item.id === selectedId}
+                  onactivate={onactivate}
+                  onpreview={onpreview}
+                  onclearpreview={onclearpreview}
+                />
+              {/each}
+            </div>
+          {:else}
+            {#each block.section.items as item (item.id)}
+              <ActionRow {item} selected={item.id === selectedId} onactivate={onactivate} />
+            {/each}
+          {/if}
         {/if}
+      {/each}
+      {#if page.page === 1}
+        <ExtensionStrip {extensions} onactivate={onextension} />
       {/if}
-    {/each}
-    {#if currentPage === 1}
-      <ExtensionStrip {extensions} onactivate={onextension} />
-    {/if}
-  </div>
+    </div>
+  {/each}
 </div>

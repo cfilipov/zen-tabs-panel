@@ -24,8 +24,12 @@
     sidebarWorkspaces?: WorkspaceRow[];
     workspaceFilter?: string;
     activeWorkspaceId?: string | null;
+    pageIndicatorHidden?: boolean;
+    pageCount?: number;
+    currentPage?: number;
     onSidebarSort?: () => void;
     onWorkspaceFilter?: (workspaceId: string) => void;
+    onPage?: (page: number) => void;
   };
 
   let {
@@ -41,9 +45,15 @@
     sidebarWorkspaces = [],
     workspaceFilter = "all",
     activeWorkspaceId = null,
+    pageIndicatorHidden = true,
+    pageCount = 1,
+    currentPage = 1,
     onSidebarSort,
     onWorkspaceFilter,
+    onPage,
   }: Props = $props();
+
+  const pages = $derived(Array.from({ length: Math.max(0, pageCount) }, (_, index) => index + 1));
 </script>
 
 <div id="palette">
@@ -64,5 +74,18 @@
       {onWorkspaceFilter}
     />
   </div>
-  <div id="page-indicator" class="hidden"></div>
+  <div id="page-indicator" class:hidden={pageIndicatorHidden}>
+    {#if !pageIndicatorHidden}
+      {#each pages as page (page)}
+        <button
+          type="button"
+          class="page-dot"
+          class:active={page === currentPage}
+          data-page={page}
+          aria-label={`Page ${page}`}
+          onclick={() => onPage?.(page)}
+        ></button>
+      {/each}
+    {/if}
+  </div>
 </div>

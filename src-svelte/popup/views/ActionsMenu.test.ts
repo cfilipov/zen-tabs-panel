@@ -19,15 +19,17 @@ describe("ActionsMenu", () => {
   });
 
   it("renders second-page shift badges", () => {
-    render(ActionsMenu, {
+    const { container } = render(ActionsMenu, {
       props: {
         sections: buildActionsMenuModel(),
         currentPage: 2,
       },
     });
 
-    expect(screen.getByText("Hard reload")).toBeTruthy();
-    expect(screen.getByText("⇧L")).toBeTruthy();
+    expect(container.querySelectorAll(".actions-page")).toHaveLength(2);
+    const page2 = container.querySelector('[data-page="2"]');
+    expect(page2?.textContent).toContain("Hard reload");
+    expect(page2?.textContent).toContain("⇧L");
   });
 
   it("groups consecutive column sections into the vanilla actions grid", () => {
@@ -38,7 +40,7 @@ describe("ActionsMenu", () => {
       },
     });
 
-    const rows = container.querySelectorAll(".actions-page > .sections-row");
+    const rows = container.querySelectorAll('[data-page="1"] > .sections-row');
     expect(rows).toHaveLength(1);
 
     const columns = Array.from(rows[0].children).filter((child) =>
