@@ -441,7 +441,7 @@
       rows = win.rows;
       total = win.total;
       if (resetSelection) {
-        selectedIndex = win.rows.length ? win.offset : -1;
+        selectedIndex = -1;
       }
     } catch (err) {
       if (generation !== loadGeneration) {
@@ -487,7 +487,7 @@
       const entries = await historyClient.getRecentlyClosed();
       if (generation !== loadGeneration || currentView !== "recently-closed") return;
       recentlyClosedRows = entries;
-      selectedIndex = entries.length ? 0 : -1;
+      selectedIndex = -1;
     } catch (err) {
       if (generation !== loadGeneration) return;
       recentlyClosedRows = [];
@@ -507,7 +507,7 @@
       const workspaces = await workspaceClient.getWorkspacesWithIcons();
       if (generation !== loadGeneration || currentView !== "move-to-workspace") return;
       workspaceRows = workspaces.filter((workspace) => !workspace.isActive);
-      selectedIndex = workspaceRows.length ? 0 : -1;
+      selectedIndex = -1;
     } catch (err) {
       if (generation !== loadGeneration) return;
       workspaceRows = [];
@@ -527,7 +527,7 @@
       const containers = await containerClient.getContainers();
       if (generation !== loadGeneration || currentView !== "open-in-container") return;
       containerRows = containers;
-      selectedIndex = containers.length ? 0 : -1;
+      selectedIndex = -1;
     } catch (err) {
       if (generation !== loadGeneration) return;
       containerRows = [];
@@ -551,7 +551,7 @@
       if (generation !== loadGeneration || currentView !== "move-to-folder") return;
       folderRows = folders;
       folderWorkspaces = workspaces;
-      selectedIndex = folders.length ? 0 : -1;
+      selectedIndex = -1;
     } catch (err) {
       if (generation !== loadGeneration) return;
       folderRows = [];
@@ -563,10 +563,6 @@
     }
   }
 
-  function firstSelectableProfileIndex(rows: ProfileRow[]) {
-    return rows.findIndex((row) => !row.isCurrent);
-  }
-
   async function loadProfiles() {
     const generation = ++loadGeneration;
     loading = true;
@@ -576,7 +572,7 @@
       const profiles = await profileClient.getProfiles();
       if (generation !== loadGeneration || currentView !== "profiles") return;
       profileRows = profiles;
-      selectedIndex = firstSelectableProfileIndex(profiles);
+      selectedIndex = -1;
     } catch (err) {
       if (generation !== loadGeneration) return;
       profileRows = [];
@@ -690,7 +686,7 @@
     currentView = "duplicate-prompt";
     duplicatePromptUrl = params.get("url") || "";
     duplicatePromptDomId = params.get("domId");
-    selectedIndex = 0;
+    selectedIndex = -1;
   }
 
   function encodedParams(params?: URLSearchParams | Record<string, unknown>) {
@@ -734,7 +730,7 @@
     }
     if (isNativePrefixView(view)) {
       currentView = view;
-      selectedIndex = 0;
+      selectedIndex = -1;
       error = null;
       return finishOpenView(view);
     }
