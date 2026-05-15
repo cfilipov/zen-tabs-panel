@@ -15,15 +15,36 @@ export type InteractionCommand =
   | { kind: "cancel" }
   | { kind: "back" }
   | { kind: "move-selection"; delta: 1 | -1 }
+  | { kind: "jump-section"; delta: 1 | -1 }
   | { kind: "activate-selection" }
   | { kind: "activate-row"; index: number }
-  | { kind: "cycle-page"; delta: 1 | -1 };
+  | { kind: "cycle-page"; delta: 1 | -1 }
+  | { kind: "close-selection" }
+  | { kind: "close-all" }
+  | { kind: "restore-selection-keep-open" }
+  | { kind: "drill-selection" }
+  | { kind: "toggle-sort" };
 
 function commandForNode(node: TerminalNode, source: "tree" | "view" | "mouse"): InteractionCommand {
   if (node.kind === "action") return { kind: "action", actionId: node.id, source };
   if (node.kind === "open-view") return { kind: "open-view", view: node.view, source };
   return { kind: "enter-prefix", view: node.view, path: [node.id], source: source === "mouse" ? "view" : source };
 }
+
+const closeableViews = new Set<ViewId>([
+  "child-tabs",
+  "sibling-tabs",
+  "parent-tabs",
+  "unvisited-tabs",
+  "last-visited",
+  "domain-tabs",
+  "most-visited",
+  "tabs-by-age",
+]);
+const closeAllViews = new Set<ViewId>(["child-tabs"]);
+const restoreableViews = new Set<ViewId>(["recently-closed"]);
+const sortableViews = new Set<ViewId>(["domains", "domain-tabs", "tabs-by-age"]);
+const drillableViews = new Set<ViewId>(["parent-tabs"]);
 
 function childrenForPath(tree: readonly NavNode[], path: readonly string[]): readonly TerminalNode[] {
   if (path.length === 0) return tree;
@@ -78,6 +99,12 @@ export function interpretStructuralKey(
       return { kind: "cancel" };
     case "Backspace":
       return context.view === "actions" ? { kind: "none" } : { kind: "back" };
+    case "Tab":
+      return { kind: "jump-section", delta: input.shiftKey ? -1 : 1 };
+    case "ArrowLeft":
+      return context.view === "actions" ? { kind: "none" } : { kind: "back" };
+    case "ArrowRight":
+      return drillableViews.has(context.view) ? { kind: "drill-selection" } : { kind: "none" };
     case " ":
       return context.view === "actions" ? { kind: "cycle-page", delta: input.shiftKey ? -1 : 1 } : { kind: "none" };
     case "ArrowDown":
@@ -87,6 +114,19 @@ export function interpretStructuralKey(
     case "Enter":
       return { kind: "activate-selection" };
     default:
+      if (!input.metaKey && !input.ctrlKey && !input.altKey) {
+        const upper = input.key.toUpperCase();
+        if (upper === "W") {
+          if (input.shiftKey && closeAllViews.has(context.view)) return { kind: "close-all" };
+          if (!input.shiftKey && closeableViews.has(context.view)) return { kind: "close-selection" };
+        }
+        if (upper === "O" && !input.shiftKey && restoreableViews.has(context.view)) {
+          return { kind: "restore-selection-keep-open" };
+        }
+        if (upper === "S" && !input.shiftKey && sortableViews.has(context.view)) {
+          return { kind: "toggle-sort" };
+        }
+      }
       if (context.view !== "actions" && /^[1-9]$/.test(input.key) && !input.shiftKey) {
         return { kind: "activate-row", index: Number(input.key) - 1 };
       }

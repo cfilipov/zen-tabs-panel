@@ -109,6 +109,8 @@
   let tabInfoWorkspaces = $state<WorkspaceRow[]>([]);
   let duplicatePromptUrl = $state("");
   let duplicatePromptDomId = $state<string | null>(null);
+  let domainsSortAlpha = $state(false);
+  let tabsByAgeNewestFirst = $state(false);
   let loadGeneration = 0;
 
   const headerHidden = $derived(currentView === "actions");
@@ -216,7 +218,10 @@
   }
 
   function viewParams(view: NativeListView) {
-    return view === "domain-tabs" && currentDomain ? { domain: currentDomain } : {};
+    if (view === "domain-tabs" && currentDomain) return { domain: currentDomain };
+    if (view === "domains") return { sortAlpha: domainsSortAlpha };
+    if (view === "tabs-by-age") return { newestFirst: tabsByAgeNewestFirst };
+    return {};
   }
 
   async function loadListView(view: NativeListView, nextOffset = 0, limit = 80, resetSelection = true, params = viewParams(view)) {
@@ -626,6 +631,58 @@
       .filter((group) => group.tabs.length > 1);
   }
 
+  function closeSelectedTabRow() {
+    const row = selectedTabRow;
+    if (!row) return;
+    fireMessage({ type: "close-tab", domId: row.domId });
+    rows = rows.filter((candidate) => !isTabRow(candidate) || candidate.domId !== row.domId);
+    total = Math.max(0, total - 1);
+    if (total === 0) {
+      selectedIndex = -1;
+    } else if (selectedIndex >= total) {
+      selectedIndex = total - 1;
+    }
+  }
+
+  async function closeAllRowsInView() {
+    if (!isNativeTabView(currentView)) return;
+    const domIds = rows.filter(isTabRow).map((row) => row.domId);
+    if (!domIds.length) return;
+    await Promise.all(domIds.map((domId) => sendMessage({ type: "close-tab", domId }).catch(() => {})));
+    loadListView(currentView, 0, 80, true, viewParams(currentView));
+  }
+
+  function restoreSelectedRecentlyClosed() {
+    if (currentView !== "recently-closed") return;
+    const row = recentlyClosedRows[selectedIndex];
+    if (!row) return;
+    restoreClosedTab(row, true);
+    recentlyClosedRows = recentlyClosedRows.filter((candidate) => candidate.sessionId !== row.sessionId);
+    if (recentlyClosedRows.length === 0) {
+      selectedIndex = -1;
+    } else if (selectedIndex >= recentlyClosedRows.length) {
+      selectedIndex = recentlyClosedRows.length - 1;
+    }
+  }
+
+  function drillSelectedParent() {
+    if (currentView !== "parent-tabs" || !selectedTabRow) return;
+    loadListView("child-tabs", 0, 80, true, { parentDomId: selectedTabRow.domId });
+  }
+
+  function toggleCurrentSort() {
+    if (currentView === "domains" || currentView === "domain-tabs") {
+      domainsSortAlpha = !domainsSortAlpha;
+      if (currentView === "domains") loadListView("domains", 0, 80, true, { sortAlpha: domainsSortAlpha });
+      else loadListView("domain-tabs", 0, 80, true, viewParams("domain-tabs"));
+      return;
+    }
+    if (currentView === "tabs-by-age") {
+      tabsByAgeNewestFirst = !tabsByAgeNewestFirst;
+      loadListView("tabs-by-age", 0, 80, true, { newestFirst: tabsByAgeNewestFirst });
+    }
+  }
+
   function closeTabInfoDuplicate(row: TabIndexRow) {
     fireMessage({ type: "close-tab", domId: row.domId });
     tabInfoDuplicates = tabInfoDuplicates.filter((tab) => tab.domId !== row.domId);
@@ -747,6 +804,24 @@
   function cyclePage(delta: 1 | -1) {
     currentPage = ((currentPage - 1 + delta + pageCount) % pageCount) + 1;
     selectedIndex = 0;
+  }
+
+  function jumpSection(delta: 1 | -1) {
+    if (currentView !== "actions") return;
+    const starts: number[] = [];
+    let index = 0;
+    for (const section of actionSections) {
+      if (section.page !== currentPage) continue;
+      if (section.items.length > 0) starts.push(index);
+      index += section.items.length;
+    }
+    if (!starts.length) return;
+    const currentStartIndex = starts.findIndex((start, i) => {
+      const next = starts[i + 1] ?? visibleActionItems.length;
+      return selectedIndex >= start && selectedIndex < next;
+    });
+    const base = currentStartIndex >= 0 ? currentStartIndex : 0;
+    selectedIndex = starts[(base + delta + starts.length) % starts.length];
   }
 
   function activateSelected() {
@@ -905,6 +980,24 @@
         return;
       case "cycle-page":
         cyclePage(command.delta);
+        return;
+      case "jump-section":
+        jumpSection(command.delta);
+        return;
+      case "close-selection":
+        closeSelectedTabRow();
+        return;
+      case "close-all":
+        closeAllRowsInView();
+        return;
+      case "restore-selection-keep-open":
+        restoreSelectedRecentlyClosed();
+        return;
+      case "drill-selection":
+        drillSelectedParent();
+        return;
+      case "toggle-sort":
+        toggleCurrentSort();
         return;
       case "none":
         return;

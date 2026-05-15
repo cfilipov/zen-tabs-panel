@@ -132,7 +132,10 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     if (view === "last-visited" || view === "domain-tabs" || view === "unvisited-tabs") {
       out = [...out].sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
     } else if (view === "tabs-by-age") {
-      out = [...out].sort((a, b) => (a.id || 0) - (b.id || 0));
+      const createdAt = (row) => Number.parseInt(String(row.domId || "").split("-")[0], 10) || 0;
+      out = [...out].sort(params?.newestFirst
+        ? (a, b) => createdAt(b) - createdAt(a)
+        : (a, b) => createdAt(a) - createdAt(b));
     } else if (view === "most-visited") {
       out = out
         .filter((row) => row.url && !String(row.url).startsWith("about:"))
@@ -177,12 +180,15 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
   function domainRows(params) {
     const counts = new Map();
     for (const row of filteredRows("all", params)) {
-      const domain = row.domain || "(no domain)";
+      const domain = row.domain;
+      if (!domain) continue;
       counts.set(domain, (counts.get(domain) || 0) + 1);
     }
     return [...counts.entries()]
       .map(([domain, count]) => ({ kind: "domain", domain, count }))
-      .sort((a, b) => b.count - a.count || a.domain.localeCompare(b.domain));
+      .sort(params?.sortAlpha
+        ? (a, b) => a.domain.localeCompare(b.domain)
+        : (a, b) => b.count - a.count || a.domain.localeCompare(b.domain));
   }
 
   function rowsForView(view, params) {

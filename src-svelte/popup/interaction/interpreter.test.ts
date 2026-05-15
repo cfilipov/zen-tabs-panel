@@ -53,4 +53,17 @@ describe("interaction interpreter", () => {
     expect(interpretVisibleInput({ kind: "key", key: "3" }, { view: "last-visited" }, fixtureTree))
       .toEqual({ kind: "activate-row", index: 2 });
   });
+
+  it("keeps list augmentation keys in the interpreter", () => {
+    expect(interpretVisibleInput({ kind: "key", key: "w" }, { view: "last-visited" }, []))
+      .toEqual({ kind: "close-selection" });
+    expect(interpretVisibleInput({ kind: "key", key: "W", shiftKey: true }, { view: "child-tabs" }, []))
+      .toEqual({ kind: "close-all" });
+    expect(interpretVisibleInput({ kind: "key", key: "o" }, { view: "recently-closed" }, []))
+      .toEqual({ kind: "restore-selection-keep-open" });
+    expect(interpretVisibleInput({ kind: "key", key: "S" }, { view: "domains" }, []))
+      .toEqual({ kind: "toggle-sort" });
+    expect(interpretVisibleInput({ kind: "key", key: "ArrowRight" }, { view: "parent-tabs" }, []))
+      .toEqual({ kind: "drill-selection" });
+  });
 });
