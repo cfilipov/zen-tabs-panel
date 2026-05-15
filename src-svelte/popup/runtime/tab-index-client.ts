@@ -1,6 +1,15 @@
 import { sendMessage } from "./ipc";
 
-export type TabIndexView = "last-visited" | "unvisited-tabs" | "domain-tabs" | "tabs-by-age" | "domains" | "all";
+export type TabIndexView =
+  | "child-tabs"
+  | "sibling-tabs"
+  | "parent-tabs"
+  | "last-visited"
+  | "unvisited-tabs"
+  | "domain-tabs"
+  | "tabs-by-age"
+  | "domains"
+  | "all";
 
 export type TabIndexRow = {
   kind?: "tab";

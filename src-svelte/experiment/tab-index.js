@@ -111,6 +111,19 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     if (view === "domain-tabs" && params?.domain) {
       out = out.filter((row) => row.domain === params.domain);
     }
+    if (view === "child-tabs") {
+      const anchor = params?.parentDomId
+        ? rows.find((row) => row.domId === params.parentDomId)
+        : rows.find((row) => row.active);
+      out = anchor ? childrenOfParent(out, anchor) : [];
+    }
+    if (view === "sibling-tabs") {
+      const active = rows.find((row) => row.active);
+      out = active ? siblingsOf(active, out) : [];
+    }
+    if (view === "parent-tabs") {
+      out = parentRows(out);
+    }
     if (view === "unvisited-tabs") {
       out = out.filter((row) => row.unread);
     }
@@ -120,6 +133,39 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       out = [...out].sort((a, b) => (a.id || 0) - (b.id || 0));
     }
     return out;
+  }
+
+  function childrenOfParent(sourceRows, parent) {
+    return sourceRows.filter((row) =>
+      (parent.panelTabUuid && row.panelParentUuid === parent.panelTabUuid) ||
+      (!row.panelParentUuid && row.openerTabDomId === parent.domId)
+    );
+  }
+
+  function siblingsOf(active, sourceRows) {
+    const hasUuidParent = !!active.panelParentUuid;
+    const hasDomOpener = !!active.openerTabDomId;
+    if (!hasUuidParent && !hasDomOpener) return [];
+    return sourceRows.filter((row) => {
+      if (row.panelTabUuid && active.panelTabUuid && row.panelTabUuid === active.panelTabUuid) return false;
+      if (row.domId === active.domId) return false;
+      if (hasUuidParent && row.panelParentUuid === active.panelParentUuid) return true;
+      if (!row.panelParentUuid && hasDomOpener && row.openerTabDomId === active.openerTabDomId) return true;
+      return false;
+    });
+  }
+
+  function parentRows(sourceRows) {
+    const parentUuids = new Set();
+    const parentDomIds = new Set();
+    for (const row of sourceRows) {
+      if (row.panelParentUuid) parentUuids.add(row.panelParentUuid);
+      else if (row.openerTabDomId) parentDomIds.add(row.openerTabDomId);
+    }
+    return sourceRows.filter((row) => {
+      const isParent = (row.panelTabUuid && parentUuids.has(row.panelTabUuid)) || parentDomIds.has(row.domId);
+      return isParent && childrenOfParent(sourceRows, row).length > 0;
+    });
   }
 
   function domainRows(params) {

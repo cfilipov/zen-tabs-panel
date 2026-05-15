@@ -16,7 +16,10 @@
   } from "./views/actions-model";
   import type { ViewId } from "../shared/types";
 
-  type NativeTabView = Extract<ViewId, "last-visited" | "unvisited-tabs" | "tabs-by-age" | "domain-tabs">;
+  type NativeTabView = Extract<
+    ViewId,
+    "child-tabs" | "sibling-tabs" | "parent-tabs" | "last-visited" | "unvisited-tabs" | "tabs-by-age" | "domain-tabs"
+  >;
   type NativeDomainView = Extract<ViewId, "domains">;
   type NativeListView = NativeTabView | NativeDomainView;
   type NativeRow = TabIndexRow | DomainIndexRow;
@@ -28,6 +31,9 @@
     "unvisited-tabs": "New tabs",
     "tabs-by-age": "Tabs by age",
     "domain-tabs": "",
+    "child-tabs": "Children",
+    "sibling-tabs": "Siblings",
+    "parent-tabs": "Parent tabs",
     "domains": "Domains",
   };
 
@@ -68,7 +74,15 @@
   }
 
   function isNativeTabView(view: ViewId | undefined): view is NativeTabView {
-    return view === "last-visited" || view === "unvisited-tabs" || view === "tabs-by-age" || view === "domain-tabs";
+    return (
+      view === "child-tabs" ||
+      view === "sibling-tabs" ||
+      view === "parent-tabs" ||
+      view === "last-visited" ||
+      view === "unvisited-tabs" ||
+      view === "tabs-by-age" ||
+      view === "domain-tabs"
+    );
   }
 
   function isDomainRow(row: NativeRow | null): row is DomainIndexRow {
