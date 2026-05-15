@@ -29,4 +29,24 @@ describe("ActionsMenu", () => {
     expect(screen.getByText("Hard reload")).toBeTruthy();
     expect(screen.getByText("⇧L")).toBeTruthy();
   });
+
+  it("groups consecutive column sections into the vanilla actions grid", () => {
+    const { container } = render(ActionsMenu, {
+      props: {
+        sections: buildActionsMenuModel(),
+        currentPage: 1,
+      },
+    });
+
+    const rows = container.querySelectorAll(".actions-page > .sections-row");
+    expect(rows).toHaveLength(1);
+
+    const columns = Array.from(rows[0].children).filter((child) =>
+      child.classList.contains("section-column")
+    );
+    expect(columns).toHaveLength(4);
+    expect(columns[0].querySelectorAll(".list-section-header")).toHaveLength(2);
+    expect(columns[0].textContent).toContain("This tab");
+    expect(columns[0].textContent).toContain("Tab actions");
+  });
 });
