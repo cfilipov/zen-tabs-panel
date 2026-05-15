@@ -12,7 +12,7 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 
 ## Features
 
-**Command palette** (`Cmd+Option+.` or toolbar icon) - a Zen-styled floating panel with:
+**Command palette** (`Cmd+.` / `Cmd+Option+.` or toolbar icon) - a Zen-styled floating panel with:
 
 - Navigate panel — a 3×2 grid at the top of the menu showing what tab/page you'd land on for each direction, each with a live preview of the target. Three columns: jumps to known tabs (Previous lastAccessed, Parent opener), browser-style history (Back/Forward in the current tab), and vertical-bar neighbors (Above/Below in the sidebar). Hovering a cell highlights the target in the sidebar; the icon shown is the target tab's favicon when it's a tab.
 - Child tabs - list all tabs spawned from the current tab
@@ -44,9 +44,7 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 
 **Keyboard shortcuts** (configurable via `about:addons` › Manage Extension Shortcuts):
 
-**Double-tap Cmd** — the primary way to open the palette. Tap the Cmd key twice within ~350 ms (no other keys in between) and the palette opens. This is detected entirely in chrome scope, not registered as a global shortcut, so it doesn't conflict with macOS defaults (Spotlight, emoji picker, Finder search) or with apps that grab `Ctrl+Opt+*`. Normal `Cmd+letter` shortcuts (like `Cmd+T`, `Cmd+W`, `Cmd+L`) won't false-trigger it because the gesture only counts releases of Cmd that were never combined with another key.
-
-Press `Ctrl+Cmd+.` as a fallback to open the palette (this is the registered keybinding in `about:addons` > Manage Extension Shortcuts and can be changed there). From the palette, use single-key shortcuts to navigate:
+Press `Cmd+.` to arm the palette/chord engine. `Cmd+Option+.` is registered as a backup leader, and two additional leader slots are available but unset by default. All four commands do the same thing and can be changed in `about:addons` > Manage Extension Shortcuts. From the palette, use single-key shortcuts to navigate:
 
 The main menu groups actions into columns:
 
@@ -56,10 +54,10 @@ The main menu groups actions into columns:
 |---|---|
 | `P` | Previous tab (last-active) |
 | `T` | Parent tab (opener) |
-| `[` | Back (in this tab's history) |
-| `]` | Forward (in this tab's history) |
-| `<` | Above (tab above current in sidebar) |
-| `>` | Below (tab below current in sidebar) |
+| `[` | Back (in this tab's history, page 2) |
+| `]` | Forward (in this tab's history, page 2) |
+| `J` | Above (tab above current in sidebar) |
+| `K` | Below (tab below current in sidebar) |
 
 **This tab** (current-tab-scoped views):
 
@@ -102,7 +100,7 @@ The main menu groups actions into columns:
 | `O` | Reorder tabs (submenu) |
 | `M` | Move to workspace |
 | `L` | Scroll to tab |
-| `K` | Split view (submenu) |
+| `\` | Split view (submenu) |
 
 **Workspaces**:
 
@@ -118,22 +116,22 @@ The main menu groups actions into columns:
 |---|---|
 | `,` | Settings |
 
-**Chord shortcuts** - the same keys work as leader-key chords. Either trigger (double-tap Cmd, or `Ctrl+Cmd+.`) followed by a panel key within ~400 ms fires the action without the menu appearing. The 350 ms gesture window is only for detecting the double-tap itself; once you're in, the chord engine uses its own 400/600 ms timeouts:
+**Chord shortcuts** - the same keys work as leader-key chords. Press a leader (`Cmd+.`, `Cmd+Option+.`, or any configured backup) followed by a panel key within the chord timeout to fire the action without the menu appearing:
 
-- `Ctrl+Cmd+. P` / `T` - jump to previous tab / parent tab, no menu shown
-- `Ctrl+Cmd+. [` / `]` - back / forward in the current tab's history (like the browser back/forward buttons)
-- `Ctrl+Cmd+. <` / `>` - jump to the tab visually above / below the current tab in the vertical sidebar
-- `Ctrl+Cmd+. {` / `}` - previous / next workspace (with wraparound)
-- `Ctrl+Cmd+. D` - open the Duplicates submenu directly, skipping the main menu
-- `Ctrl+Cmd+. O R` - sort tabs by recent newest (any of the reorder mnemonics work after `O` — `R`/`⇧R`, `D`/`⇧D`, `A`/`⇧A`, `I`, `V`, `G`)
-- `Ctrl+Cmd+. W W` - close current tab, browser picks next (Cmd+W equivalent)
-- `Ctrl+Cmd+. W P` / `T` / `C` / `⇧C` / `N` / `⇧N` - close current tab and jump to previous / parent / next-or-previous sibling / next-or-previous in the sidebar. Pause after `W` to see a menu of all options with live previews of the target tab in each row.
-- `Ctrl+Cmd+. K N` / `C` / `H` / `V` - split view: new, close, horizontal (top/bottom), vertical (side-by-side). Pause after `K` for the menu.
-- `Ctrl+Cmd+. F` - toggle pin on current tab
-- `Ctrl+Cmd+. Y` - copy current URL as Markdown link
-- `Ctrl+Cmd+. Z` - restore the most recently closed tab
-- `Ctrl+Cmd+. 1` … `9`, `0` - switch directly to workspace 1–10
-- `Ctrl+Cmd+. S` / `E` / `L` / `U` / `,` - move to start/end, scroll to current, unload, settings
+- `Cmd+. P` / `T` - jump to previous tab / parent tab, no menu shown
+- `Cmd+. [` / `]` - back / forward in the current tab's history (like the browser back/forward buttons)
+- `Cmd+. J` / `K` - jump to the tab visually above / below the current tab in the vertical sidebar
+- `Cmd+. {` / `}` - previous / next workspace (with wraparound)
+- `Cmd+. D` - open the Duplicates submenu directly, skipping the main menu
+- `Cmd+. O R` - sort tabs by recent newest (any of the reorder mnemonics work after `O` — `R`/`⇧R`, `D`/`⇧D`, `A`/`⇧A`, `I`, `V`, `G`)
+- `Cmd+. W W` - close current tab, browser picks next (Cmd+W equivalent)
+- `Cmd+. W P` / `T` / `C` / `⇧C` / `N` / `⇧N` - close current tab and jump to previous / parent / next-or-previous sibling / next-or-previous in the sidebar. Pause after `W` to see a menu of all options with live previews of the target tab in each row.
+- `Cmd+. \ N` / `C` / `H` / `V` - split view: new, close, horizontal (top/bottom), vertical (side-by-side). Pause after `\` for the menu.
+- `Cmd+. F` - toggle pin on current tab
+- `Cmd+. Y` - copy current URL as Markdown link
+- `Cmd+. Z` - restore the most recently closed tab
+- `Cmd+. 1` … `9`, `0` - switch directly to workspace 1–10
+- `Cmd+. S` / `E` / `L` / `U` / `,` - move to start/end, scroll to current, unload, settings
 
 If you don't press a follow-up key, the main menu opens after the timeout. Pressing any unrecognized key or Escape during the chord window cancels silently. Toolbar clicks bypass the chord and open the menu immediately.
 
@@ -216,7 +214,7 @@ Build the variant you want to test, then load the generated `dist/` extension:
 
 ```bash
 npm run build:vanilla   # known-good vanilla source
-npm run build:svelte    # Svelte migration source, currently a parity copy
+npm run build:svelte    # Svelte migration source
 ```
 
 1. Open `about:debugging#/runtime/this-firefox`
