@@ -1512,7 +1512,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       // Generation-tagged so stale frame scripts (from prior extension
       // loads) ignore it and only the current popup-process listener
-      // dispatches the ztt:warm-rearm CustomEvent.
+      // forwards it to the Svelte bridge module.
       if (br && br.messageManager) {
         try {
           br.messageManager.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
@@ -2351,16 +2351,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Forward a chord key to the popup's content process. If the popup
     // has signaled POPUP_READY, deliver immediately via its message
     // manager — the popup's frame-script-side ZenChord:DeliverKey listener
-    // dispatches a synthetic keydown on content.document. Before
+    // forwards typed key data into the Svelte bridge module. Before
     // POPUP_READY, queue in bridgeBuffer (drained on POPUP_READY).
     function forwardKeyToPopup(keyData) {
-      // Note: don't track the bridge key here — the popup will trace it
-      // back via MSG.TRACE_REPLAY_KEY once handleListViewKey processes
-      // the (replayed) synthetic keydown, and that's the authoritative
-      // trace path (it also catches slow-typed chord chains where the
-      // engine never sees the key). Tracking both here AND in the
-      // popup duplicated entries, so repeated replays accumulated bogus
-      // bridgeKeys and eventually broke.
+      // Note: don't track the bridge key here. The popup/interpreter path
+      // is the authoritative replay trace path because it also catches
+      // slow-typed chord chains where the engine never sees the key.
+      // Tracking both here AND in the popup duplicated entries, so repeated
+      // replays accumulated bogus bridgeKeys and eventually broke.
       //
       // Any chord key after the initial leader means the user is committed
       // to a chord chain — kill chrome's reveal timer so the menu doesn't
@@ -2571,11 +2569,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       //   2. Extension pages (moz-extension:// — our popup and foreign-
       //      extension popups): do NOT attach the engine (their content
       //      handles its own keys via the popup runtime). But DO listen
-      //      for ZenChord:DeliverKey messages from chrome — each one
-      //      causes a synthetic KeyboardEvent to be dispatched on
-      //      content.document, which the popup's keydown listener picks
-      //      up and routes via dispatchKey. This is how chord-chain
-      //      digits reach the popup while it's still invisible.
+      //      for ZenChord:* bridge messages from chrome and forward them
+      //      as typed bridge payloads to the Svelte app. This is how
+      //      chord-chain digits reach the popup while it's still invisible
+      //      without synthesizing DOM KeyboardEvents.
       const body =
         "(function(){\n" +
         "var __GEN = " + JSON.stringify(CHORD_GENERATION) + ";\n" +
@@ -2589,26 +2586,23 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  try { return String(content && content.location && content.location.href || '').startsWith('moz-extension://'); } catch (e) { return false; }\n" +
         "}\n" +
         "function tag(data){ var o = data || {}; o.__gen = __GEN; return o; }\n" +
-        // Synthetic-key dispatch into content.document for the popup
-        // (and foreign extension popups, harmlessly — they ignore unknown
-        // keys). The popup's keydown listener has no isTrusted gate and
-        // processes via dispatchKey just like a live keypress.
+        "function bridgeEvent(type, data){\n" +
+        "  try {\n" +
+        "    if (!isExtensionPage() || !content || !content.document) return;\n" +
+        "    var payload = JSON.stringify({ type: type, data: data || {} });\n" +
+        "    var ev = new content.CustomEvent('ztt:bridge-message', { detail: payload });\n" +
+        "    content.document.dispatchEvent(ev);\n" +
+        "  } catch(e){}\n" +
+        "}\n" +
+        // Typed bridge dispatch into the popup. The Svelte chord-bridge
+        // module receives these payloads and feeds the same interpreter
+        // queue used by real visible keydown handling.
         // Generation-tagged listener name. Only this generation's chrome
         // side sends to this name; stale frame scripts from prior loads
         // listen on their old generation's name and stay silent.
         "addMessageListener('ZenChord:DeliverKey:' + __GEN, function(m){\n" +
         "  if (__shutdown) return;\n" +
-        "  try {\n" +
-        "    if (!isExtensionPage() || !content || !content.document) return;\n" +
-        "    var d = (m && m.data) || {};\n" +
-        "    var ev = new content.KeyboardEvent('keydown', {\n" +
-        "      key: d.key, code: d.code,\n" +
-        "      shiftKey: !!d.shiftKey, altKey: !!d.altKey,\n" +
-        "      ctrlKey: !!d.ctrlKey, metaKey: !!d.metaKey,\n" +
-        "      bubbles: true, cancelable: true,\n" +
-        "    });\n" +
-        "    content.document.dispatchEvent(ev);\n" +
-        "  } catch(e){}\n" +
+        "  bridgeEvent('deliver-key', (m && m.data) || {});\n" +
         "});\n" +
         // Warm-popup rearm: chrome tells the loaded popup to reset its UI
         // state (selection, preview, scroll), navigate to the requested
@@ -2618,26 +2612,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // boundary.
         "addMessageListener('ZenChord:WarmRearm:' + __GEN, function(m){\n" +
         "  if (__shutdown) return;\n" +
-        "  try {\n" +
-        "    if (!isExtensionPage() || !content || !content.document) return;\n" +
-        "    var d = (m && m.data) || {};\n" +
-        "    var payload = JSON.stringify(d);\n" +
-        "    var ev = new content.CustomEvent('ztt:warm-rearm', { detail: payload });\n" +
-        "    content.document.dispatchEvent(ev);\n" +
-        "  } catch(e){}\n" +
+        "  bridgeEvent('warm-rearm', (m && m.data) || {});\n" +
         "});\n" +
         // Safety fallback for a visible popup whose POPUP_READY handshake
         // was missed. Chrome treats this like a late empty drain so live
         // menu keys stop being held behind chordBridgeReady=false.
         "addMessageListener('ZenChord:ForceReady:' + __GEN, function(m){\n" +
         "  if (__shutdown) return;\n" +
-        "  try {\n" +
-        "    if (!isExtensionPage() || !content || !content.document) return;\n" +
-        "    var d = (m && m.data) || {};\n" +
-        "    var payload = JSON.stringify(d);\n" +
-        "    var ev = new content.CustomEvent('ztt:force-ready', { detail: payload });\n" +
-        "    content.document.dispatchEvent(ev);\n" +
-        "  } catch(e){}\n" +
+        "  bridgeEvent('force-ready', (m && m.data) || {});\n" +
         "});\n" +
         // Cancel-reveal: chrome dismisses the overlay and needs the popup
         // to drop any in-flight reveal-on-pause timer before the next
@@ -2646,11 +2628,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // "menu stays open after cmd+.,p" bug).
         "addMessageListener('ZenChord:CancelReveal:' + __GEN, function(){\n" +
         "  if (__shutdown) return;\n" +
-        "  try {\n" +
-        "    if (!isExtensionPage() || !content || !content.document) return;\n" +
-        "    var ev = new content.CustomEvent('ztt:cancel-reveal');\n" +
-        "    content.document.dispatchEvent(ev);\n" +
-        "  } catch(e){}\n" +
+        "  bridgeEvent('cancel-reveal', {});\n" +
         "});\n" +
         // Leader pressed while the menu is on a submenu → cross-fade
         // navigate back to actions. Distinct from WarmRearm (which
@@ -2659,11 +2637,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // the standard sub-menu transition.
         "addMessageListener('ZenChord:GoToActions:' + __GEN, function(){\n" +
         "  if (__shutdown) return;\n" +
-        "  try {\n" +
-        "    if (!isExtensionPage() || !content || !content.document) return;\n" +
-        "    var ev = new content.CustomEvent('ztt:go-to-actions');\n" +
-        "    content.document.dispatchEvent(ev);\n" +
-        "  } catch(e){}\n" +
+        "  bridgeEvent('go-to-actions', {});\n" +
         "});\n" +
         // The chord-engine path runs only on non-extension pages. The popup
         // and foreign extension popups own their own keybindings.

@@ -2,6 +2,12 @@
   import { onMount, tick } from "svelte";
   import PaletteShell from "./components/PaletteShell.svelte";
   import ActionsMenu from "./views/ActionsMenu.svelte";
+  import {
+    installChordBridgeHandlers,
+    type BridgeKeyData,
+    type BridgeReply,
+    type ForceReadyPayload,
+  } from "./chord-bridge";
   import ContainerList from "./views/ContainerList.svelte";
   import DomainList from "./views/DomainList.svelte";
   import DuplicateGroups from "./views/DuplicateGroups.svelte";
@@ -64,14 +70,6 @@
     badge: string;
     hidden?: boolean;
     onclick: () => void;
-  };
-  type KeyData = {
-    key: string;
-    code?: string;
-    shiftKey?: boolean;
-    altKey?: boolean;
-    ctrlKey?: boolean;
-    metaKey?: boolean;
   };
   type NativeDuplicateView = Extract<ViewId, "duplicates">;
   type NativeTabInfoView = Extract<ViewId, "tab-info">;
@@ -147,8 +145,8 @@
   let dispatchRunning = false;
   let warmRearmGeneration = 0;
   let pageAlive = true;
-  const heldLiveKeys: KeyData[] = [];
-  const liveDispatchQueue: KeyData[] = [];
+  const heldLiveKeys: BridgeKeyData[] = [];
+  const liveDispatchQueue: BridgeKeyData[] = [];
 
   const headerHidden = $derived(currentView === "actions");
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
@@ -1360,7 +1358,7 @@
     }
   }
 
-  function snapshotKeyEvent(event: KeyboardEvent): KeyData {
+  function snapshotKeyEvent(event: KeyboardEvent): BridgeKeyData {
     return {
       key: event.key,
       code: event.code,
@@ -1371,7 +1369,7 @@
     };
   }
 
-  async function handleKeyInput(input: KeyData) {
+  async function handleKeyInput(input: BridgeKeyData) {
     const actionNodes = currentView === "actions" ? allActionNodes : isNativePrefixView(currentView) ? prefixNodes : [];
     const command = interpretVisibleInput({ kind: "key", ...input }, { view: currentView }, actionNodes);
     if (command.kind === "none") {
@@ -1397,9 +1395,17 @@
     }
   }
 
-  function enqueueKeyInput(input: KeyData) {
+  function enqueueKeyInput(input: BridgeKeyData) {
     liveDispatchQueue.push(input);
     void runLiveDispatchQueue();
+  }
+
+  function handleBridgeKey(input: BridgeKeyData) {
+    if (!chordBridgeReady) {
+      heldLiveKeys.push(input);
+      return;
+    }
+    enqueueKeyInput(input);
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -1461,18 +1467,11 @@
   async function signalPopupReady() {
     if (!pageAlive) return null;
     try {
-      return await sendMessage<{
-        buffered?: KeyData[];
-        stale?: boolean;
-        view?: string | null;
-      }>({ type: "popup-ready", inst: popupInst });
+      return await sendMessage<BridgeReply>({ type: "popup-ready", inst: popupInst });
     } catch {
       return null;
     }
   }
-
-  type BridgeReply = { buffered?: KeyData[]; stale?: boolean; view?: string | null };
-  type ForceReadyPayload = { buffered?: KeyData[] };
 
   async function drainBridge(reply: BridgeReply | null, generation?: number) {
     if (reply?.stale) return;
@@ -1548,26 +1547,6 @@
     }
   }
 
-  function parseWarmRearmPayload(event: Event) {
-    const detail = event instanceof CustomEvent ? event.detail : null;
-    if (typeof detail !== "string") return {};
-    try {
-      return JSON.parse(detail) as { inst?: number; view?: ViewId; params?: Record<string, unknown> };
-    } catch {
-      return {};
-    }
-  }
-
-  function parseForceReadyPayload(event: Event) {
-    const detail = event instanceof CustomEvent ? event.detail : null;
-    if (typeof detail !== "string") return {};
-    try {
-      return JSON.parse(detail) as ForceReadyPayload;
-    } catch {
-      return {};
-    }
-  }
-
   onMount(() => {
     const params = new URLSearchParams(location.search);
     const initialView = params.get("view") as ViewId | null;
@@ -1576,19 +1555,19 @@
     window.addEventListener("keydown", handleKeydown);
     pageAlive = true;
     window.addEventListener("pagehide", handlePageHide);
-    document.addEventListener("ztt:cancel-reveal", clearPopupRevealTimer);
-    document.addEventListener("ztt:warm-rearm", warmRearmListener);
-    document.addEventListener("ztt:force-ready", forceReadyListener);
-    document.addEventListener("ztt:go-to-actions", goToActionsListener);
+    const uninstallBridge = installChordBridgeHandlers({
+      onDeliverKey: handleBridgeKey,
+      onWarmRearm: (data) => void handleWarmRearm(data),
+      onForceReady: handleForceReady,
+      onCancelReveal: clearPopupRevealTimer,
+      onGoToActions: goToActions,
+    });
     void initializeBridge(initialViewReady);
     return () => {
       clearPopupRevealTimer();
       window.removeEventListener("keydown", handleKeydown);
       window.removeEventListener("pagehide", handlePageHide);
-      document.removeEventListener("ztt:cancel-reveal", clearPopupRevealTimer);
-      document.removeEventListener("ztt:warm-rearm", warmRearmListener);
-      document.removeEventListener("ztt:force-ready", forceReadyListener);
-      document.removeEventListener("ztt:go-to-actions", goToActionsListener);
+      uninstallBridge();
     };
   });
 
@@ -1597,15 +1576,7 @@
     clearPopupRevealTimer();
   }
 
-  function warmRearmListener(event: Event) {
-    void handleWarmRearm(parseWarmRearmPayload(event));
-  }
-
-  function forceReadyListener(event: Event) {
-    handleForceReady(parseForceReadyPayload(event));
-  }
-
-  function goToActionsListener() {
+  function goToActions() {
     if (currentView !== "actions") {
       void openNativeView("actions").then(() => requestPanelResize("actions"));
     }
