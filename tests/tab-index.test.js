@@ -91,3 +91,17 @@ test("tab index duplicate groups respect workspace filters", () => {
     ["https://other.test/b", 2],
   ]);
 });
+
+test("tab index returns active rows and requested DOM-id rows without a full transfer", () => {
+  const index = makeIndex([
+    fakeTab("tab-1", "https://example.test/a", "ws-1"),
+    fakeTab("tab-2", "https://example.test/b", "ws-1", { active: true }),
+    fakeTab("tab-3", "https://example.test/c", "ws-2"),
+  ]);
+
+  assert.equal(index.getActiveRow().domId, "tab-2");
+  assert.deepEqual(index.getRowsByDomIds(["tab-3", "missing", "tab-1"]).map((row) => row.domId), [
+    "tab-3",
+    "tab-1",
+  ]);
+});

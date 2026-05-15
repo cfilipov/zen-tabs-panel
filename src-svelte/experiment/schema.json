@@ -244,6 +244,22 @@
         ]
       },
       {
+        "name": "getActiveRow",
+        "type": "function",
+        "async": true,
+        "description": "Get the active tab row from the tab index",
+        "parameters": []
+      },
+      {
+        "name": "getRowsByDomIds",
+        "type": "function",
+        "async": true,
+        "description": "Get compact tab-index rows for DOM ids",
+        "parameters": [
+          { "name": "domIdsJson", "type": "string", "optional": true }
+        ]
+      },
+      {
         "name": "getWorkspaceTabCounts",
         "type": "function",
         "async": true,

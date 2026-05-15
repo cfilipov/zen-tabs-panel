@@ -54,6 +54,7 @@
     loadRecentlyClosedView,
   } from "./view-loaders/basic-loaders";
   import { loadDuplicateGroupsView } from "./view-loaders/duplicates-loader";
+  import { loadTabInfoView } from "./view-loaders/tab-info-loader";
   import {
     actionItemsForPage,
     actionNodesForSections,
@@ -574,54 +575,13 @@
   async function loadTabInfo() {
     const load = viewLoad.begin("tab-info");
     try {
-      const allTabs = await sendMessage<TabIndexRow[]>({ type: "get-all-tabs" });
-      const active = allTabs.find((tab) => tab.active);
-      if (!active) {
-        await load.commit(() => {
-          tabInfo = null;
-          tabInfoVisits = [];
-          tabInfoDuplicates = [];
-          tabInfoWorkspaces = [];
-          selectedIndex = -1;
-        });
-        return;
-      }
-      const info = await tabInfoClient.getTabInfo(active.domId);
-      if (!load.isCurrent()) return;
-      if (!info) {
-        await load.commit(() => {
-          tabInfo = null;
-          tabInfoVisits = [];
-          tabInfoDuplicates = [];
-          tabInfoWorkspaces = [];
-          selectedIndex = -1;
-        });
-        return;
-      }
-
-      const titleByUrl = new Map<string, string>();
-      for (const entry of info.sessionEntries) {
-        if (entry.url && !titleByUrl.has(entry.url)) titleByUrl.set(entry.url, entry.title);
-      }
-      if (info.url && !titleByUrl.has(info.url)) titleByUrl.set(info.url, info.title);
-      const urls = new Set<string>();
-      if (info.url && !info.url.startsWith("about:")) urls.add(info.url);
-      for (const entry of info.sessionEntries) {
-        if (entry.url && !entry.url.startsWith("about:")) urls.add(entry.url);
-      }
-      const [visitLists, workspaces] = await Promise.all([
-        Promise.all([...urls].map((url) => tabInfoClient.getHistoryVisits(url).then(
-          (visits) => visits.map((visit) => ({ ...visit, url, title: titleByUrl.get(url) || url })),
-          () => [],
-        ))),
-        workspaceClient.getWorkspacesWithIcons().catch(() => []),
-      ]);
+      const result = await loadTabInfoView(tabIndexClient, tabInfoClient, workspaceClient);
       await load.commit(() => {
-        tabInfo = info;
-        tabInfoVisits = visitLists.flat();
-        tabInfoDuplicates = allTabs.filter((tab) => info.duplicateDomIds.includes(tab.domId));
-        tabInfoWorkspaces = workspaces;
-        selectedIndex = -1;
+        tabInfo = result.info;
+        tabInfoVisits = result.visits;
+        tabInfoDuplicates = result.duplicates;
+        tabInfoWorkspaces = result.workspaces;
+        selectedIndex = result.selectedIndex;
       });
     } catch (err) {
       await load.fail(err, (message) => {

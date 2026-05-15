@@ -39,6 +39,8 @@ describe("tab index client", () => {
           return { version: 1, view, offset, limit, total: 1, rows: [] } as T;
         },
         getRowTarget: async () => null,
+        getActiveRow: async () => null,
+        getRowsByDomIds: async () => [],
         getWorkspaceTabCounts: async () => ({}),
         getDuplicateGroups: async () => [],
         getActionsSnapshot: async () => ({
@@ -75,6 +77,22 @@ describe("tab index client", () => {
 
     expect(sent).toEqual([
       { type: "tab-index:get-duplicate-groups", params: { workspaceId: "ws-1" } },
+    ]);
+  });
+
+  it("loads active and dom-id rows through focused tab-index requests", async () => {
+    const sent: unknown[] = [];
+    const client = createTabIndexClient(async <T>(message: unknown) => {
+      sent.push(message);
+      return [] as T;
+    });
+
+    await client.getActiveRow();
+    await client.getRowsByDomIds(["tab-1", "tab-2"]);
+
+    expect(sent).toEqual([
+      { type: "tab-index:get-active-row" },
+      { type: "tab-index:get-rows-by-dom-ids", domIds: ["tab-1", "tab-2"] },
     ]);
   });
 });

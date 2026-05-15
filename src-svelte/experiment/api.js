@@ -3735,6 +3735,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return tabIndex.getRowTarget(domId);
         },
 
+        async getActiveRow() {
+          return tabIndex.getActiveRow();
+        },
+
+        async getRowsByDomIds(domIdsJson) {
+          let domIds = [];
+          if (typeof domIdsJson === "string" && domIdsJson) {
+            try { domIds = JSON.parse(domIdsJson); } catch (e) { domIds = []; }
+          } else if (Array.isArray(domIdsJson)) {
+            domIds = domIdsJson;
+          }
+          return tabIndex.getRowsByDomIds(domIds);
+        },
+
         async getWorkspaceTabCounts() {
           return tabIndex.getWorkspaceTabCounts();
         },
