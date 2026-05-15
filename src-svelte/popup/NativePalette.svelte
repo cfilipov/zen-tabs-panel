@@ -27,6 +27,7 @@
     type InteractionCommand,
   } from "./interaction/interpreter";
   import { applyInteractionCommand, type InteractionRuntimeHandlers } from "./interaction/runtime";
+  import { nextSelectionIndex, type SelectionContext } from "./interaction/selection";
   import {
     resolveSelectionActivation,
     resolveViewActivation,
@@ -962,63 +963,30 @@
     void loadActionsData();
   }
 
-  function isSelectableIndex(index: number) {
-    if (currentView === "profiles") {
-      return !!profileRows[index] && !profileRows[index].isCurrent;
-    }
-    if (currentView === "duplicates") {
-      return false;
-    }
-    if (currentView === "tab-info") {
-      return false;
-    }
-    if (currentView === "duplicate-prompt") {
-      return index >= 0 && index < 3;
-    }
-    return index >= 0;
-  }
-
   function moveSelection(delta: 1 | -1) {
-    const length = currentView === "actions"
-      ? visibleActionItems.length
-      : isNativePrefixView(currentView)
-        ? prefixItems.length
-        : currentView === "navigation"
-          ? navigationEntries.length
-        : currentView === "recently-closed"
-          ? recentlyClosedRows.length
-          : currentView === "move-to-workspace"
-            ? workspaceRows.length
-            : currentView === "open-in-container"
-              ? containerRows.length
-              : currentView === "move-to-folder"
-                ? folderRows.length
-              : currentView === "profiles"
-                ? profileRows.length
-              : currentView === "duplicates"
-                ? 0
-              : currentView === "tab-info"
-                ? 0
-              : currentView === "duplicate-prompt"
-                ? 3
-        : rows.length;
-    if (!length) {
-      selectedIndex = -1;
-      return;
-    }
-
-    let next = selectedIndex < 0 ? (delta > 0 ? -1 : 0) : selectedIndex;
-    for (let attempts = 0; attempts < length; attempts += 1) {
-      next = (next + delta + length) % length;
-      if (isSelectableIndex(next)) {
-        selectedIndex = next;
-        break;
-      }
-    }
+    selectedIndex = nextSelectionIndex(selectionContext(), delta);
     if (currentView !== "actions" && !isNativePrefixView(currentView)) {
       ensureListIndexLoaded(selectedIndex);
       scrollListIndexIntoView(selectedIndex);
     }
+  }
+
+  function selectionContext(): SelectionContext {
+    return {
+      view: currentView,
+      selectedIndex,
+      actionCount: visibleActionItems.length,
+      prefixCount: prefixItems.length,
+      navigationCount: navigationEntries.length,
+      recentlyClosedCount: recentlyClosedRows.length,
+      workspaceCount: workspaceRows.length,
+      containerCount: containerRows.length,
+      folderCount: folderRows.length,
+      profileRows,
+      duplicatePromptCount: DUPLICATE_PROMPT_ACTIONS.length,
+      rowCount: rows.length,
+      isPrefixView: isNativePrefixView(currentView),
+    };
   }
 
   function cyclePage(delta: 1 | -1) {
