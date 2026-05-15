@@ -26,6 +26,7 @@
     type DuplicatePromptAction,
     type InteractionCommand,
   } from "./interaction/interpreter";
+  import { applyInteractionCommand, type InteractionRuntimeHandlers } from "./interaction/runtime";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
@@ -232,6 +233,37 @@
       ? selectedIndex < 0
       : !isWorkspaceFilterView(currentView) && sidebarHints.length === 0 && !sidebarSortLabel,
   );
+  const interactionRuntime: InteractionRuntimeHandlers = {
+    runAction: async (actionId) => {
+      const item = [...allActionItems, ...prefixItems].find((candidate) => candidate.id === actionId);
+      if (item) await performActionItem(item);
+    },
+    openView: (view) => openNativeView(view, undefined, true),
+    runDuplicatePromptAction,
+    navigateHistoryDelta: (delta) => {
+      const current = navigationHistory?.index ?? -1;
+      const target = current + delta;
+      if (target >= 0 && target < navigationEntries.length) {
+        navigateToHistoryIndex(target);
+      }
+    },
+    cancel: () => fireMessage({ type: "hide-palette" }),
+    back: goBack,
+    moveSelection,
+    activateSelection: activateSelected,
+    activateRow,
+    cyclePage,
+    jumpSection,
+    closeSelection: closeSelectedTabRow,
+    closeAll: closeAllRowsInView,
+    restoreSelectionKeepOpen: restoreSelectedRecentlyClosed,
+    drillSelection: drillSelectedParent,
+    toggleSort: toggleCurrentSort,
+    toggleWorkspaceFilter,
+    filterWorkspaceIndex: filterWorkspaceByIndex,
+    switchWorkspaceIndex: switchWorkspaceByIndex,
+    openExtensionIndex: openExtensionByIndex,
+  };
 
   function isNativeListView(view: ViewId | undefined): view is NativeListView {
     return isNativeTabView(view) || view === "domains";
@@ -1285,80 +1317,7 @@
   }
 
   async function runCommand(command: InteractionCommand) {
-    switch (command.kind) {
-      case "action": {
-        const item = [...allActionItems, ...prefixItems].find((candidate) => candidate.id === command.actionId);
-        if (item) await performActionItem(item);
-        return;
-      }
-      case "open-view":
-        await openNativeView(command.view, undefined, true);
-        return;
-      case "enter-prefix":
-        await openNativeView(command.view, undefined, true);
-        return;
-      case "duplicate-prompt-action":
-        runDuplicatePromptAction(command.action);
-        return;
-      case "navigate-history-delta": {
-        const current = navigationHistory?.index ?? -1;
-        const target = current + command.delta;
-        if (target >= 0 && target < navigationEntries.length) {
-          navigateToHistoryIndex(target);
-        }
-        return;
-      }
-      case "cancel":
-        fireMessage({ type: "hide-palette" });
-        return;
-      case "back":
-        goBack();
-        return;
-      case "move-selection":
-        moveSelection(command.delta);
-        return;
-      case "activate-selection":
-        await activateSelected();
-        return;
-      case "activate-row":
-        await activateRow(command.index);
-        return;
-      case "cycle-page":
-        cyclePage(command.delta);
-        return;
-      case "jump-section":
-        jumpSection(command.delta);
-        return;
-      case "close-selection":
-        closeSelectedTabRow();
-        return;
-      case "close-all":
-        await closeAllRowsInView();
-        return;
-      case "restore-selection-keep-open":
-        restoreSelectedRecentlyClosed();
-        return;
-      case "drill-selection":
-        await drillSelectedParent();
-        return;
-      case "toggle-sort":
-        await toggleCurrentSort();
-        return;
-      case "toggle-workspace-filter":
-        await toggleWorkspaceFilter();
-        return;
-      case "filter-workspace-index":
-        await filterWorkspaceByIndex(command.index);
-        return;
-      case "switch-workspace-index":
-        switchWorkspaceByIndex(command.index);
-        return;
-      case "open-extension-index":
-        openExtensionByIndex(command.index);
-        return;
-      case "none":
-        return;
-    }
+    await applyInteractionCommand(command, interactionRuntime);
   }
 
   function snapshotKeyEvent(event: KeyboardEvent): BridgeKeyData {
