@@ -135,6 +135,7 @@
   let actionWorkspaceTabCounts = $state<Record<string, number>>({});
   let actionCounts = $state<Record<string, number>>({});
   let disabledActionIds = $state<Set<string>>(new Set());
+  let actionIconHtmlById = $state<Record<string, string | null>>({});
   let actionExtensions = $state<ExtensionRow[]>([]);
   let loadGeneration = 0;
   let popupInst: number | null = null;
@@ -154,6 +155,7 @@
       appendWorkspaceSwitchItems(actionSections, actionsWorkspaces, actionWorkspaceTabCounts),
       actionCounts,
       disabledActionIds,
+      actionIconHtmlById,
     ),
   );
   const visibleActionItems = $derived(actionItemsForPage(renderedActionSections, currentPage));
@@ -354,6 +356,7 @@
       actionsWorkspaces = workspaces;
       actionWorkspaceTabCounts = counts;
       actionExtensions = extensions;
+      actionIconHtmlById = workspaceNavigationIconMap(workspaces);
       actionCounts = {
         "child-tabs": childSummary.total,
         "sibling-tabs": siblingSummary.total,
@@ -377,7 +380,19 @@
       actionExtensions = [];
       actionCounts = {};
       disabledActionIds = new Set();
+      actionIconHtmlById = {};
     }
+  }
+
+  function workspaceNavigationIconMap(workspaces: WorkspaceRow[]) {
+    const activeIndex = workspaces.findIndex((workspace) => workspace.isActive);
+    if (activeIndex < 0 || workspaces.length <= 1) return {};
+    const prev = workspaces[(activeIndex - 1 + workspaces.length) % workspaces.length];
+    const next = workspaces[(activeIndex + 1) % workspaces.length];
+    return {
+      "go-to-prev-workspace": prev.svgContent ? `<span class="workspace-icon">${prev.svgContent}</span>` : null,
+      "go-to-next-workspace": next.svgContent ? `<span class="workspace-icon">${next.svgContent}</span>` : null,
+    };
   }
 
   async function loadListView(view: NativeListView, nextOffset = 0, limit = 80, resetSelection = true, params = viewParams(view)) {

@@ -11,7 +11,9 @@
   };
 
   let { item, compact = false, selected = false, onactivate }: Props = $props();
-  const icon = $derived(item.kind === "workspace-switch" && item.workspaceIconHtml
+  const icon = $derived(item.iconHtml
+    ? item.iconHtml
+    : item.kind === "workspace-switch" && item.workspaceIconHtml
     ? `<span class="workspace-icon">${item.workspaceIconHtml}</span>`
     : iconHtml(item.icon));
 </script>

@@ -26,6 +26,7 @@ export type ActionMenuItem = {
   count?: number;
   label: string;
   icon?: string;
+  iconHtml?: string | null;
   hotkey: string;
   badge: string;
   isView: boolean;
@@ -166,11 +167,13 @@ export function applyActionMetadata(
   sections: readonly ActionSection[],
   counts: Readonly<Record<string, number>>,
   disabledIds: ReadonlySet<string>,
+  iconHtmlById: Readonly<Record<string, string | null>> = {},
 ): ActionSection[] {
   return sections.map((section) => ({
     ...section,
     items: section.items.map((item) => ({
       ...item,
+      iconHtml: iconHtmlById[item.id] ?? item.iconHtml,
       count: item.kind === "workspace-switch" ? item.count : counts[item.id] || 0,
       disabled: item.disabled || disabledIds.has(item.id),
     })),
