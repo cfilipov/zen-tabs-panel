@@ -266,5 +266,14 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       const row = byDomId.get(domId);
       return row ? { domId: row.domId, workspaceId: row.workspaceId, url: row.url, title: row.title } : null;
     },
+    getWorkspaceTabCounts() {
+      rebuildIfNeeded();
+      const counts = Object.create(null);
+      for (const row of rows) {
+        if (!row.workspaceId) continue;
+        counts[row.workspaceId] = (counts[row.workspaceId] || 0) + 1;
+      }
+      return counts;
+    },
   };
 };

@@ -1,15 +1,19 @@
 <script lang="ts">
   import ActionRow from "../components/ActionRow.svelte";
+  import ExtensionStrip from "../components/ExtensionStrip.svelte";
+  import type { ExtensionRow } from "../runtime/extension-client";
   import type { ActionMenuItem, ActionSection } from "./actions-model";
 
   type Props = {
     sections: ActionSection[];
     currentPage?: number;
     selectedId?: string | null;
+    extensions?: ExtensionRow[];
     onactivate?: (item: ActionMenuItem) => void;
+    onextension?: (extension: ExtensionRow) => void;
   };
 
-  let { sections, currentPage = 1, selectedId = null, onactivate }: Props = $props();
+  let { sections, currentPage = 1, selectedId = null, extensions = [], onactivate, onextension }: Props = $props();
   const pageSections = $derived(sections.filter((section) => section.page === currentPage));
 </script>
 
@@ -46,5 +50,8 @@
         {/each}
       {/if}
     {/each}
+    {#if currentPage === 1}
+      <ExtensionStrip {extensions} onactivate={onextension} />
+    {/if}
   </div>
 </div>

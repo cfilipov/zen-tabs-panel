@@ -39,6 +39,7 @@ describe("tab index client", () => {
           return { version: 1, view, offset, limit, total: 1, rows: [] } as T;
         },
         getRowTarget: async () => null,
+        getWorkspaceTabCounts: async () => ({}),
       },
     );
 

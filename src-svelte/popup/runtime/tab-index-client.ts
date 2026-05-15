@@ -79,6 +79,7 @@ type ZenWorkspacesApi = {
     paramsJson?: string,
   ): Promise<ViewWindow<T>>;
   getRowTarget(domId: string): Promise<{ domId: string; workspaceId: string | null; url: string; title: string } | null>;
+  getWorkspaceTabCounts(): Promise<Record<string, number>>;
 };
 
 type BrowserWithExperiment = {
@@ -124,6 +125,10 @@ export function createTabIndexClient(send: Send = sendMessage, directApi: ZenWor
         type: "tab-index:get-row-target",
         domId,
       });
+    },
+    getWorkspaceTabCounts() {
+      if (directApi) return directApi.getWorkspaceTabCounts();
+      return send<Record<string, number>>({ type: "tab-index:get-workspace-counts" });
     },
   };
 }

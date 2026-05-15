@@ -16,6 +16,7 @@
   import WorkspaceList from "./views/WorkspaceList.svelte";
   import { interpretVisibleInput, type InteractionCommand } from "./interaction/interpreter";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
+  import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
   import { createHistoryClient, type NavigationHistory, type RecentlyClosedRow } from "./runtime/history-client";
   import { fireMessage, sendMessage } from "./runtime/ipc";
@@ -33,6 +34,7 @@
   import {
     actionItemsForPage,
     actionNodesForSections,
+    appendWorkspaceSwitchItems,
     buildActionsMenuModel,
     prefixChildNodesForView,
     prefixItemsForView,
@@ -81,6 +83,7 @@
 
   const client = createTabIndexClient();
   const containerClient = createContainerClient();
+  const extensionClient = createExtensionClient();
   const folderClient = createFolderClient();
   const historyClient = createHistoryClient();
   const profileClient = createProfileClient();
@@ -127,6 +130,9 @@
   let tabsByAgeNewestFirst = $state(false);
   let sidebarWorkspaces = $state<WorkspaceRow[]>([]);
   let workspaceFilter = $state("all");
+  let actionsWorkspaces = $state<WorkspaceRow[]>([]);
+  let actionWorkspaceTabCounts = $state<Record<string, number>>({});
+  let actionExtensions = $state<ExtensionRow[]>([]);
   let loadGeneration = 0;
   let popupInst: number | null = null;
   let popupChordDelay = 350;
@@ -140,9 +146,10 @@
 
   const headerHidden = $derived(currentView === "actions");
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
-  const visibleActionItems = $derived(actionItemsForPage(actionSections, currentPage));
-  const allActionItems = $derived(actionSections.flatMap((section) => section.items));
-  const allActionNodes = $derived(actionNodesForSections(actionSections));
+  const renderedActionSections = $derived(appendWorkspaceSwitchItems(actionSections, actionsWorkspaces, actionWorkspaceTabCounts));
+  const visibleActionItems = $derived(actionItemsForPage(renderedActionSections, currentPage));
+  const allActionItems = $derived(renderedActionSections.flatMap((section) => section.items));
+  const allActionNodes = $derived(actionNodesForSections(renderedActionSections));
   const prefixItems = $derived(isNativePrefixView(currentView) ? prefixItemsForView(currentView) : []);
   const prefixNodes = $derived(isNativePrefixView(currentView) ? prefixChildNodesForView(currentView) : []);
   const title = $derived(
@@ -307,6 +314,23 @@
       }
     } catch {
       if (generation === loadGeneration) sidebarWorkspaces = [];
+    }
+  }
+
+  async function loadActionsData() {
+    try {
+      const [workspaces, counts, extensions] = await Promise.all([
+        workspaceClient.getWorkspacesWithIcons().catch(() => []),
+        client.getWorkspaceTabCounts().catch(() => ({})),
+        extensionClient.listExtensions().catch(() => []),
+      ]);
+      actionsWorkspaces = workspaces;
+      actionWorkspaceTabCounts = counts;
+      actionExtensions = extensions;
+    } catch {
+      actionsWorkspaces = [];
+      actionWorkspaceTabCounts = {};
+      actionExtensions = [];
     }
   }
 
@@ -611,6 +635,7 @@
     if (notifyChrome) notifyChromeView(view, params);
     if (view === "actions") {
       goBack();
+      await loadActionsData();
       return finishOpenView(view);
     }
     if (isNativeListView(view)) {
@@ -705,6 +730,11 @@
       return;
     }
 
+    if (item.kind === "workspace-switch" && item.workspaceId && !item.disabled) {
+      switchWorkspace(item.workspaceId);
+      return;
+    }
+
     if (item.kind === "prefix" && isNativePrefixView(item.view as ViewId | undefined)) {
       await openNativeView(item.view as NativePrefixView, undefined, true);
       return;
@@ -760,6 +790,28 @@
     if (row.isCurrent) return;
     clearPopupRevealTimer();
     fireMessage({ type: "launch-profile", name: row.name });
+  }
+
+  function switchWorkspace(workspaceId: string) {
+    clearPopupRevealTimer();
+    fireMessage({ type: "switch-workspace", workspaceId });
+  }
+
+  function openExtensionPopup(extension: ExtensionRow) {
+    clearPopupRevealTimer();
+    fireMessage({ type: "open-extension-popup", extensionId: extension.id });
+  }
+
+  function switchWorkspaceByIndex(index: number) {
+    const workspace = actionsWorkspaces[index];
+    if (!workspace || workspace.isActive) return;
+    switchWorkspace(workspace.uuid);
+  }
+
+  function openExtensionByIndex(index: number) {
+    const extension = actionExtensions[index];
+    if (!extension) return;
+    openExtensionPopup(extension);
   }
 
   function closeDuplicateTab(row: TabIndexRow) {
@@ -905,6 +957,7 @@
     sidebarWorkspaces = [];
     selectedIndex = 0;
     error = null;
+    void loadActionsData();
   }
 
   function isSelectableIndex(index: number) {
@@ -1170,6 +1223,12 @@
       case "filter-workspace-index":
         await filterWorkspaceByIndex(command.index);
         return;
+      case "switch-workspace-index":
+        switchWorkspaceByIndex(command.index);
+        return;
+      case "open-extension-index":
+        openExtensionByIndex(command.index);
+        return;
       case "none":
         return;
     }
@@ -1386,7 +1445,7 @@
   onMount(() => {
     const params = new URLSearchParams(location.search);
     const initialView = params.get("view") as ViewId | null;
-    const initialViewReady = initialView ? openNativeView(initialView, params) : Promise.resolve();
+    const initialViewReady = initialView ? openNativeView(initialView, params) : loadActionsData();
 
     window.addEventListener("keydown", handleKeydown);
     pageAlive = true;
@@ -1446,7 +1505,14 @@
   {#if error}
     <div class="empty-state">{error}</div>
   {:else if currentView === "actions"}
-    <ActionsMenu sections={actionSections} {currentPage} selectedId={selectedActionId} onactivate={activateAction} />
+    <ActionsMenu
+      sections={renderedActionSections}
+      {currentPage}
+      selectedId={selectedActionId}
+      extensions={actionExtensions}
+      onactivate={activateAction}
+      onextension={openExtensionPopup}
+    />
   {:else if isNativePrefixView(currentView)}
     <PrefixMenu view={currentView} items={prefixItems} selectedId={selectedPrefixId} onactivate={activateAction} />
   {:else if loading}

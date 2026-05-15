@@ -25,7 +25,9 @@ export type InteractionCommand =
   | { kind: "drill-selection" }
   | { kind: "toggle-sort" }
   | { kind: "toggle-workspace-filter" }
-  | { kind: "filter-workspace-index"; index: number };
+  | { kind: "filter-workspace-index"; index: number }
+  | { kind: "switch-workspace-index"; index: number }
+  | { kind: "open-extension-index"; index: number };
 
 function commandForNode(node: TerminalNode, source: "tree" | "view" | "mouse"): InteractionCommand {
   if (node.kind === "action") return { kind: "action", actionId: node.id, source };
@@ -150,6 +152,13 @@ export function interpretStructuralKey(
       }
       if (context.view !== "actions" && /^[1-9]$/.test(input.key) && !input.shiftKey) {
         return { kind: "activate-row", index: Number(input.key) - 1 };
+      }
+      if (context.view === "actions" && /^[1-9]$/.test(input.key) && !input.shiftKey) {
+        return { kind: "switch-workspace-index", index: Number(input.key) - 1 };
+      }
+      if (context.view === "actions" && input.shiftKey && input.code?.startsWith("Digit")) {
+        const index = Number.parseInt(input.code.slice("Digit".length), 10) - 1;
+        if (index >= 0 && index < 9) return { kind: "open-extension-index", index };
       }
       return { kind: "none" };
   }

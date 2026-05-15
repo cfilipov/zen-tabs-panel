@@ -405,6 +405,13 @@
         "parameters": []
       },
       {
+        "name": "getWorkspaceTabCounts",
+        "type": "function",
+        "async": true,
+        "description": "Get a compact workspace UUID to tab-count map from the experiment-owned tab index",
+        "parameters": []
+      },
+      {
         "name": "moveSelectedTabsToWorkspace",
         "type": "function",
         "async": true,

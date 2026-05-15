@@ -11,7 +11,9 @@
   };
 
   let { item, compact = false, selected = false, onactivate }: Props = $props();
-  const icon = $derived(iconHtml(item.icon));
+  const icon = $derived(item.kind === "workspace-switch" && item.workspaceIconHtml
+    ? `<span class="workspace-icon">${item.workspaceIconHtml}</span>`
+    : iconHtml(item.icon));
 </script>
 
 <button
@@ -26,7 +28,12 @@
 >
   <span class="item-icon-placeholder">{@html icon}</span>
   <span class="item-text">
-    <span class="item-title">{item.label}</span>
+    <span class="item-title">
+      {item.label}
+      {#if item.kind === "workspace-switch"}
+        <span class="item-count">{item.count ?? 0}</span>
+      {/if}
+    </span>
   </span>
   <span class="item-right">
     <Badge value={item.badge} />

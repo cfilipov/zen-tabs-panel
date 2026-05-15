@@ -1,5 +1,6 @@
 import { NAVIGATION_TREE, displayKey } from "../../shared/navigation-tree";
 import type { NavNode, PrefixNode, TerminalNode, ViewId } from "../../shared/types";
+import type { WorkspaceRow } from "../runtime/workspace-client";
 
 export type ActionSectionId =
   | "navigate"
@@ -18,8 +19,11 @@ export type ActionSectionId =
 
 export type ActionMenuItem = {
   id: string;
-  kind: "action" | "open-view" | "prefix";
+  kind: "action" | "open-view" | "prefix" | "workspace-switch";
   view?: string;
+  workspaceId?: string;
+  workspaceIconHtml?: string;
+  count?: number;
   label: string;
   icon?: string;
   hotkey: string;
@@ -109,6 +113,7 @@ export function actionItemsForPage(sections: readonly ActionSection[], page: num
 export function actionNodesForSections(sections: readonly ActionSection[]): TerminalNode[] {
   return sections
     .flatMap((section) => section.items)
+    .filter((item) => item.kind !== "workspace-switch")
     .map((item) => {
       const node = nodeById.get(item.id);
       if (!node) throw new Error(`Missing navigation node: ${item.id}`);
@@ -129,4 +134,30 @@ export function prefixItemsForView(view: ViewId): ActionMenuItem[] {
 
 export function prefixChildNodesForView(view: ViewId): TerminalNode[] {
   return prefixNodeForView(view)?.children ?? [];
+}
+
+export function appendWorkspaceSwitchItems(
+  sections: readonly ActionSection[],
+  workspaces: readonly WorkspaceRow[],
+  tabCounts: Readonly<Record<string, number>>,
+): ActionSection[] {
+  return sections.map((section) => {
+    if (section.id !== "workspaces" || section.page !== 1) {
+      return { ...section, items: [...section.items] };
+    }
+    const workspaceItems: ActionMenuItem[] = workspaces.map((workspace, index) => ({
+      id: `workspace-switch:${workspace.uuid}`,
+      kind: "workspace-switch",
+      workspaceId: workspace.uuid,
+      workspaceIconHtml: workspace.svgContent,
+      label: workspace.name,
+      hotkey: index < 9 ? String(index + 1) : "",
+      badge: index < 9 ? String(index + 1) : "",
+      isView: false,
+      page: section.page,
+      disabled: workspace.isActive,
+      count: tabCounts[workspace.uuid] || 0,
+    }));
+    return { ...section, items: [...section.items, ...workspaceItems] };
+  });
 }

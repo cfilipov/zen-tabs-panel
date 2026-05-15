@@ -75,4 +75,11 @@ describe("interaction interpreter", () => {
     expect(interpretVisibleInput({ kind: "key", key: "0" }, { view: "recently-closed" }, []))
       .toEqual({ kind: "none" });
   });
+
+  it("routes actions-menu dynamic row shortcuts through structural commands", () => {
+    expect(interpretVisibleInput({ kind: "key", key: "3" }, { view: "actions" }, []))
+      .toEqual({ kind: "switch-workspace-index", index: 2 });
+    expect(interpretVisibleInput({ kind: "key", key: "@", code: "Digit2", shiftKey: true }, { view: "actions" }, []))
+      .toEqual({ kind: "open-extension-index", index: 1 });
+  });
 });

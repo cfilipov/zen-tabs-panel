@@ -557,6 +557,7 @@ const QUERIES = Object.freeze({
   [MSG.TAB_INDEX_GET_SUMMARY]:         (m) => api.getViewSummary(m.view, JSON.stringify(m.params || {})),
   [MSG.TAB_INDEX_GET_WINDOW]:          (m) => api.getViewWindow(m.view, m.offset || 0, m.limit || 50, JSON.stringify(m.params || {})),
   [MSG.TAB_INDEX_GET_ROW_TARGET]:      (m) => api.getRowTarget(m.domId),
+  [MSG.TAB_INDEX_GET_WORKSPACE_COUNTS]: () => api.getWorkspaceTabCounts(),
   [MSG.GET_FOLDERS]:                   ()  => api.getFolders(),
   [MSG.CHECK_COMPANION_MOD]:           ()  => api.getCompanionMods(),
   [MSG.INSTALL_COMPANION_MOD]:         (m) => api.installCompanionMod(m.modId),
