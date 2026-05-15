@@ -34,6 +34,7 @@
   import { fireMessage, sendMessage } from "./runtime/ipc";
   import { createProfileClient, type ProfileRow } from "./runtime/profile-client";
   import { createTabInfoClient, type HistoryVisit, type TabInfo } from "./runtime/tab-info-client";
+  import { createViewLoadController } from "./runtime/view-load-controller";
   import {
     createTabIndexClient,
     type ActionPreview,
@@ -143,7 +144,6 @@
   let disabledActionIds = $state<Set<string>>(new Set());
   let actionIconHtmlById = $state<Record<string, string | null>>({});
   let actionExtensions = $state<ExtensionRow[]>([]);
-  let loadGeneration = 0;
   let popupInst: number | null = null;
   let popupChordDelay = 350;
   let popupRevealTimer: ReturnType<typeof setTimeout> | null = null;
@@ -156,6 +156,12 @@
 
   const headerHidden = $derived(currentView === "actions");
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
+  const viewLoad = createViewLoadController<ViewId>({
+    getCurrentView: () => currentView,
+    setCurrentView: (view) => { currentView = view; },
+    setLoading: (value) => { loading = value; },
+    setError: (value) => { error = value; },
+  });
   const renderedActionSections = $derived(
     applyActionMetadata(
       appendWorkspaceSwitchItems(actionSections, actionsWorkspaces, actionWorkspaceTabCounts),
@@ -352,17 +358,17 @@
     return params;
   }
 
-  async function refreshSidebarWorkspaces(generation = loadGeneration) {
+  async function refreshSidebarWorkspaces(generation = viewLoad.generation) {
     if (!isWorkspaceFilterView(currentView)) return;
     try {
       const workspaces = await workspaceClient.getWorkspacesWithIcons();
-      if (generation !== loadGeneration || !isWorkspaceFilterView(currentView)) return;
+      if (generation !== viewLoad.generation || !isWorkspaceFilterView(currentView)) return;
       sidebarWorkspaces = workspaces;
       if (workspaceFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === workspaceFilter)) {
         workspaceFilter = "all";
       }
     } catch {
-      if (generation === loadGeneration) sidebarWorkspaces = [];
+      if (generation === viewLoad.generation) sidebarWorkspaces = [];
     }
   }
 
@@ -459,222 +465,206 @@
   }
 
   async function loadListView(view: NativeListView, nextOffset = 0, limit = 80, resetSelection = true, params = viewParams(view)) {
-    const generation = ++loadGeneration;
-    if (resetSelection) {
-      loading = true;
-    }
-    error = null;
-    currentView = view;
+    const load = viewLoad.begin(view, { loading: resetSelection });
     offset = nextOffset;
-    void refreshSidebarWorkspaces(generation);
+    void refreshSidebarWorkspaces(load.id);
     try {
       await client.ensureStarted();
       const win = await client.getWindow<NativeRow>(view as TabIndexView, nextOffset, limit, params);
-      if (generation !== loadGeneration || currentView !== view) {
-        return;
-      }
-      rows = win.rows;
-      total = win.total;
-      if (resetSelection) {
-        selectedIndex = -1;
-      }
+      await load.commit(() => {
+        rows = win.rows;
+        total = win.total;
+        if (resetSelection) {
+          selectedIndex = -1;
+        }
+      });
     } catch (err) {
-      if (generation !== loadGeneration) {
-        return;
-      }
-      rows = [];
-      total = 0;
-      selectedIndex = -1;
-      error = err instanceof Error ? err.message : String(err);
+      await load.fail(err, (message) => {
+        rows = [];
+        total = 0;
+        selectedIndex = -1;
+        error = message;
+      });
     } finally {
-      if (generation === loadGeneration) {
-        loading = false;
-      }
+      load.finish();
     }
   }
 
   async function loadNavigation() {
-    const generation = ++loadGeneration;
-    loading = true;
-    error = null;
-    currentView = "navigation";
+    const load = viewLoad.begin("navigation");
     try {
       const history = await historyClient.getNavigationHistory();
-      if (generation !== loadGeneration || currentView !== "navigation") return;
-      navigationHistory = history;
-      selectedIndex = history?.entries.length ? history.index : -1;
+      await load.commit(() => {
+        navigationHistory = history;
+        selectedIndex = history?.entries.length ? history.index : -1;
+      });
     } catch (err) {
-      if (generation !== loadGeneration) return;
-      navigationHistory = null;
-      selectedIndex = -1;
-      error = err instanceof Error ? err.message : String(err);
+      await load.fail(err, (message) => {
+        navigationHistory = null;
+        selectedIndex = -1;
+        error = message;
+      });
     } finally {
-      if (generation === loadGeneration) loading = false;
+      load.finish();
     }
   }
 
   async function loadRecentlyClosed() {
-    const generation = ++loadGeneration;
-    loading = true;
-    error = null;
-    currentView = "recently-closed";
+    const load = viewLoad.begin("recently-closed");
     try {
       const entries = await historyClient.getRecentlyClosed();
-      if (generation !== loadGeneration || currentView !== "recently-closed") return;
-      recentlyClosedRows = entries;
-      selectedIndex = -1;
+      await load.commit(() => {
+        recentlyClosedRows = entries;
+        selectedIndex = -1;
+      });
     } catch (err) {
-      if (generation !== loadGeneration) return;
-      recentlyClosedRows = [];
-      selectedIndex = -1;
-      error = err instanceof Error ? err.message : String(err);
+      await load.fail(err, (message) => {
+        recentlyClosedRows = [];
+        selectedIndex = -1;
+        error = message;
+      });
     } finally {
-      if (generation === loadGeneration) loading = false;
+      load.finish();
     }
   }
 
   async function loadMoveToWorkspace() {
-    const generation = ++loadGeneration;
-    loading = true;
-    error = null;
-    currentView = "move-to-workspace";
+    const load = viewLoad.begin("move-to-workspace");
     try {
       const workspaces = await workspaceClient.getWorkspacesWithIcons();
-      if (generation !== loadGeneration || currentView !== "move-to-workspace") return;
-      workspaceRows = workspaces.filter((workspace) => !workspace.isActive);
-      selectedIndex = -1;
+      await load.commit(() => {
+        workspaceRows = workspaces.filter((workspace) => !workspace.isActive);
+        selectedIndex = -1;
+      });
     } catch (err) {
-      if (generation !== loadGeneration) return;
-      workspaceRows = [];
-      selectedIndex = -1;
-      error = err instanceof Error ? err.message : String(err);
+      await load.fail(err, (message) => {
+        workspaceRows = [];
+        selectedIndex = -1;
+        error = message;
+      });
     } finally {
-      if (generation === loadGeneration) loading = false;
+      load.finish();
     }
   }
 
   async function loadOpenInContainer() {
-    const generation = ++loadGeneration;
-    loading = true;
-    error = null;
-    currentView = "open-in-container";
+    const load = viewLoad.begin("open-in-container");
     try {
       const containers = await containerClient.getContainers();
-      if (generation !== loadGeneration || currentView !== "open-in-container") return;
-      containerRows = containers;
-      selectedIndex = -1;
+      await load.commit(() => {
+        containerRows = containers;
+        selectedIndex = -1;
+      });
     } catch (err) {
-      if (generation !== loadGeneration) return;
-      containerRows = [];
-      selectedIndex = -1;
-      error = err instanceof Error ? err.message : String(err);
+      await load.fail(err, (message) => {
+        containerRows = [];
+        selectedIndex = -1;
+        error = message;
+      });
     } finally {
-      if (generation === loadGeneration) loading = false;
+      load.finish();
     }
   }
 
   async function loadMoveToFolder() {
-    const generation = ++loadGeneration;
-    loading = true;
-    error = null;
-    currentView = "move-to-folder";
+    const load = viewLoad.begin("move-to-folder");
     try {
       const [folders, workspaces] = await Promise.all([
         folderClient.getFolders(),
         workspaceClient.getWorkspacesWithIcons().catch(() => []),
       ]);
-      if (generation !== loadGeneration || currentView !== "move-to-folder") return;
-      folderRows = folders;
-      folderWorkspaces = workspaces;
-      selectedIndex = -1;
+      await load.commit(() => {
+        folderRows = folders;
+        folderWorkspaces = workspaces;
+        selectedIndex = -1;
+      });
     } catch (err) {
-      if (generation !== loadGeneration) return;
-      folderRows = [];
-      folderWorkspaces = [];
-      selectedIndex = -1;
-      error = err instanceof Error ? err.message : String(err);
+      await load.fail(err, (message) => {
+        folderRows = [];
+        folderWorkspaces = [];
+        selectedIndex = -1;
+        error = message;
+      });
     } finally {
-      if (generation === loadGeneration) loading = false;
+      load.finish();
     }
   }
 
   async function loadProfiles() {
-    const generation = ++loadGeneration;
-    loading = true;
-    error = null;
-    currentView = "profiles";
+    const load = viewLoad.begin("profiles");
     try {
       const profiles = await profileClient.getProfiles();
-      if (generation !== loadGeneration || currentView !== "profiles") return;
-      profileRows = profiles;
-      selectedIndex = -1;
+      await load.commit(() => {
+        profileRows = profiles;
+        selectedIndex = -1;
+      });
     } catch (err) {
-      if (generation !== loadGeneration) return;
-      profileRows = [];
-      selectedIndex = -1;
-      error = err instanceof Error ? err.message : String(err);
+      await load.fail(err, (message) => {
+        profileRows = [];
+        selectedIndex = -1;
+        error = message;
+      });
     } finally {
-      if (generation === loadGeneration) loading = false;
+      load.finish();
     }
   }
 
   async function loadDuplicates() {
-    const generation = ++loadGeneration;
-    loading = true;
-    error = null;
-    currentView = "duplicates";
+    const load = viewLoad.begin("duplicates");
     try {
       const [allTabs, workspaces] = await Promise.all([
         sendMessage<TabIndexRow[]>({ type: "get-all-tabs" }),
         workspaceClient.getWorkspacesWithIcons().catch(() => []),
       ]);
-      if (generation !== loadGeneration || currentView !== "duplicates") return;
-      sidebarWorkspaces = workspaces;
-      duplicateWorkspaces = workspaces;
-      if (workspaceFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === workspaceFilter)) {
-        workspaceFilter = "all";
-      }
-      const filteredTabs = workspaceFilter === "all"
-        ? allTabs
-        : allTabs.filter((tab) => tab.workspaceId === workspaceFilter);
-      duplicateGroups = buildDuplicateGroups(filteredTabs);
-      selectedIndex = -1;
+      await load.commit(() => {
+        sidebarWorkspaces = workspaces;
+        duplicateWorkspaces = workspaces;
+        if (workspaceFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === workspaceFilter)) {
+          workspaceFilter = "all";
+        }
+        const filteredTabs = workspaceFilter === "all"
+          ? allTabs
+          : allTabs.filter((tab) => tab.workspaceId === workspaceFilter);
+        duplicateGroups = buildDuplicateGroups(filteredTabs);
+        selectedIndex = -1;
+      });
     } catch (err) {
-      if (generation !== loadGeneration) return;
-      duplicateGroups = [];
-      duplicateWorkspaces = [];
-      selectedIndex = -1;
-      error = err instanceof Error ? err.message : String(err);
+      await load.fail(err, (message) => {
+        duplicateGroups = [];
+        duplicateWorkspaces = [];
+        selectedIndex = -1;
+        error = message;
+      });
     } finally {
-      if (generation === loadGeneration) loading = false;
+      load.finish();
     }
   }
 
   async function loadTabInfo() {
-    const generation = ++loadGeneration;
-    loading = true;
-    error = null;
-    currentView = "tab-info";
+    const load = viewLoad.begin("tab-info");
     try {
       const allTabs = await sendMessage<TabIndexRow[]>({ type: "get-all-tabs" });
       const active = allTabs.find((tab) => tab.active);
       if (!active) {
-        if (generation !== loadGeneration || currentView !== "tab-info") return;
-        tabInfo = null;
-        tabInfoVisits = [];
-        tabInfoDuplicates = [];
-        tabInfoWorkspaces = [];
-        selectedIndex = -1;
+        await load.commit(() => {
+          tabInfo = null;
+          tabInfoVisits = [];
+          tabInfoDuplicates = [];
+          tabInfoWorkspaces = [];
+          selectedIndex = -1;
+        });
         return;
       }
       const info = await tabInfoClient.getTabInfo(active.domId);
-      if (generation !== loadGeneration || currentView !== "tab-info") return;
+      if (!load.isCurrent()) return;
       if (!info) {
-        tabInfo = null;
-        tabInfoVisits = [];
-        tabInfoDuplicates = [];
-        tabInfoWorkspaces = [];
-        selectedIndex = -1;
+        await load.commit(() => {
+          tabInfo = null;
+          tabInfoVisits = [];
+          tabInfoDuplicates = [];
+          tabInfoWorkspaces = [];
+          selectedIndex = -1;
+        });
         return;
       }
 
@@ -695,30 +685,29 @@
         ))),
         workspaceClient.getWorkspacesWithIcons().catch(() => []),
       ]);
-      if (generation !== loadGeneration || currentView !== "tab-info") return;
-      tabInfo = info;
-      tabInfoVisits = visitLists.flat();
-      tabInfoDuplicates = allTabs.filter((tab) => info.duplicateDomIds.includes(tab.domId));
-      tabInfoWorkspaces = workspaces;
-      selectedIndex = -1;
+      await load.commit(() => {
+        tabInfo = info;
+        tabInfoVisits = visitLists.flat();
+        tabInfoDuplicates = allTabs.filter((tab) => info.duplicateDomIds.includes(tab.domId));
+        tabInfoWorkspaces = workspaces;
+        selectedIndex = -1;
+      });
     } catch (err) {
-      if (generation !== loadGeneration) return;
-      tabInfo = null;
-      tabInfoVisits = [];
-      tabInfoDuplicates = [];
-      tabInfoWorkspaces = [];
-      selectedIndex = -1;
-      error = err instanceof Error ? err.message : String(err);
+      await load.fail(err, (message) => {
+        tabInfo = null;
+        tabInfoVisits = [];
+        tabInfoDuplicates = [];
+        tabInfoWorkspaces = [];
+        selectedIndex = -1;
+        error = message;
+      });
     } finally {
-      if (generation === loadGeneration) loading = false;
+      load.finish();
     }
   }
 
   function loadDuplicatePrompt(params = new URLSearchParams(location.search)) {
-    ++loadGeneration;
-    loading = false;
-    error = null;
-    currentView = "duplicate-prompt";
+    viewLoad.begin("duplicate-prompt", { loading: false });
     duplicatePromptUrl = params.get("url") || "";
     duplicatePromptDomId = params.get("domId");
     selectedIndex = -1;
