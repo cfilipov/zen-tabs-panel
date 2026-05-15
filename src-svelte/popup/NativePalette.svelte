@@ -34,6 +34,7 @@
     type ViewActivation,
     type ViewActivationContext,
   } from "./interaction/view-activation";
+  import { isCloseableView, isWorkspaceFilterView } from "./interaction/view-capabilities";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
@@ -238,7 +239,7 @@
       : null,
   );
   const sidebarHints = $derived<SidebarHint[]>([
-    ...(isCloseableSidebarView(currentView)
+    ...(isCloseableView(currentView)
       ? [{ id: "close", label: "Close tab", badge: "W", hidden: selectedIndex < 0, onclick: closeSelectedTabRow }]
       : []),
     ...(currentView === "child-tabs"
@@ -349,23 +350,6 @@
 
   function isNativePrefixView(view: ViewId | undefined): view is NativePrefixView {
     return view === "reorder-tabs" || view === "close-and-select" || view === "split-view";
-  }
-
-  function isWorkspaceFilterView(view: ViewId | undefined) {
-    return isNativeListView(view) || view === "duplicates";
-  }
-
-  function isCloseableSidebarView(view: ViewId | undefined) {
-    return (
-      view === "child-tabs" ||
-      view === "sibling-tabs" ||
-      view === "parent-tabs" ||
-      view === "unvisited-tabs" ||
-      view === "last-visited" ||
-      view === "domain-tabs" ||
-      view === "most-visited" ||
-      view === "tabs-by-age"
-    );
   }
 
   function isDomainRow(row: NativeRow | null): row is DomainIndexRow {

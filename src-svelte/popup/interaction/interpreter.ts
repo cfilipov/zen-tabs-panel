@@ -1,6 +1,14 @@
 import { NAVIGATION_TREE } from "../../shared/navigation-tree";
 import type { NavNode, TerminalNode, ViewId } from "../../shared/types";
 import { chordFromKey, type InteractionInput } from "./inputs";
+import {
+  canCloseAllInView,
+  canDrillSelectionInView,
+  canRestoreInView,
+  isCloseableView,
+  isSortableView,
+  isWorkspaceFilterView,
+} from "./view-capabilities";
 
 export type InteractionContext = {
   view: ViewId;
@@ -43,33 +51,6 @@ function commandForNode(node: TerminalNode, source: "tree" | "view" | "mouse"): 
   if (node.kind === "open-view") return { kind: "open-view", view: node.view, source };
   return { kind: "enter-prefix", view: node.view, path: [node.id], source: source === "mouse" ? "view" : source };
 }
-
-const closeableViews = new Set<ViewId>([
-  "child-tabs",
-  "sibling-tabs",
-  "parent-tabs",
-  "unvisited-tabs",
-  "last-visited",
-  "domain-tabs",
-  "most-visited",
-  "tabs-by-age",
-]);
-const closeAllViews = new Set<ViewId>(["child-tabs"]);
-const restoreableViews = new Set<ViewId>(["recently-closed"]);
-const sortableViews = new Set<ViewId>(["domains", "domain-tabs", "tabs-by-age"]);
-const drillableViews = new Set<ViewId>(["parent-tabs"]);
-const workspaceFilterViews = new Set<ViewId>([
-  "child-tabs",
-  "sibling-tabs",
-  "parent-tabs",
-  "unvisited-tabs",
-  "last-visited",
-  "domain-tabs",
-  "most-visited",
-  "tabs-by-age",
-  "domains",
-  "duplicates",
-]);
 
 function childrenForPath(tree: readonly NavNode[], path: readonly string[]): readonly TerminalNode[] {
   if (path.length === 0) return tree;
@@ -129,7 +110,7 @@ export function interpretStructuralKey(
     case "ArrowLeft":
       return context.view === "actions" ? { kind: "none" } : { kind: "back" };
     case "ArrowRight":
-      return drillableViews.has(context.view) ? { kind: "drill-selection" } : { kind: "none" };
+      return canDrillSelectionInView(context.view) ? { kind: "drill-selection" } : { kind: "none" };
     case " ":
       return context.view === "actions" ? { kind: "cycle-page", delta: input.shiftKey ? -1 : 1 } : { kind: "none" };
     case "ArrowDown":
@@ -151,19 +132,19 @@ export function interpretStructuralKey(
           if (upper === "F") return { kind: "navigate-history-delta", delta: 1 };
         }
         if (upper === "W") {
-          if (input.shiftKey && closeAllViews.has(context.view)) return { kind: "close-all" };
-          if (!input.shiftKey && closeableViews.has(context.view)) return { kind: "close-selection" };
+          if (input.shiftKey && canCloseAllInView(context.view)) return { kind: "close-all" };
+          if (!input.shiftKey && isCloseableView(context.view)) return { kind: "close-selection" };
         }
-        if (upper === "O" && !input.shiftKey && restoreableViews.has(context.view)) {
+        if (upper === "O" && !input.shiftKey && canRestoreInView(context.view)) {
           return { kind: "restore-selection-keep-open" };
         }
-        if (upper === "S" && !input.shiftKey && sortableViews.has(context.view)) {
+        if (upper === "S" && !input.shiftKey && isSortableView(context.view)) {
           return { kind: "toggle-sort" };
         }
-        if (input.key === "0" && !input.shiftKey && workspaceFilterViews.has(context.view)) {
+        if (input.key === "0" && !input.shiftKey && isWorkspaceFilterView(context.view)) {
           return { kind: "toggle-workspace-filter" };
         }
-        if (input.shiftKey && input.code?.startsWith("Digit") && workspaceFilterViews.has(context.view)) {
+        if (input.shiftKey && input.code?.startsWith("Digit") && isWorkspaceFilterView(context.view)) {
           const index = Number.parseInt(input.code.slice("Digit".length), 10) - 1;
           if (index >= 0 && index < 9) return { kind: "filter-workspace-index", index };
         }
