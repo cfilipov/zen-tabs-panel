@@ -1,11 +1,19 @@
 <script lang="ts">
   import Header from "./Header.svelte";
 
-  let { children }: { children?: import("svelte").Snippet } = $props();
+  type Props = {
+    children?: import("svelte").Snippet;
+    headerHidden?: boolean;
+    title?: string;
+    hint?: string | null;
+    onback?: () => void;
+  };
+
+  let { children, headerHidden = false, title = "", hint = null, onback }: Props = $props();
 </script>
 
 <div id="palette">
-  <Header />
+  <Header hidden={headerHidden} {title} {hint} {onback} />
   <div id="content">
     <div id="list">
       {@render children?.()}
