@@ -64,6 +64,15 @@
   import { loadDuplicateGroupsView } from "./view-loaders/duplicates-loader";
   import { loadTabInfoView } from "./view-loaders/tab-info-loader";
   import {
+    LIST_VIEW_TITLES,
+    isNativeListView,
+    isNativePrefixView,
+    isNativeTabView,
+    resolveViewOpenPlan,
+    type NativeListView,
+    type ViewLoaderId,
+  } from "./view-loaders/view-registry";
+  import {
     actionItemsForPage,
     actionNodesForSections,
     appendWorkspaceSwitchItems,
@@ -75,19 +84,6 @@
   } from "./views/actions-model";
   import type { ViewId } from "../shared/types";
 
-  type NativeTabView = Extract<
-    ViewId,
-    | "child-tabs"
-    | "sibling-tabs"
-    | "parent-tabs"
-    | "last-visited"
-    | "unvisited-tabs"
-    | "tabs-by-age"
-    | "most-visited"
-    | "domain-tabs"
-  >;
-  type NativeDomainView = Extract<ViewId, "domains">;
-  type NativeListView = NativeTabView | NativeDomainView;
   type NativeRow = TabIndexRow | DomainIndexRow;
   type SidebarHint = {
     id: string;
@@ -96,15 +92,6 @@
     hidden?: boolean;
     onclick: () => void;
   };
-  type NativeDuplicateView = Extract<ViewId, "duplicates">;
-  type NativeTabInfoView = Extract<ViewId, "tab-info">;
-  type NativeDuplicatePromptView = Extract<ViewId, "duplicate-prompt">;
-  type NativePrefixView = Extract<ViewId, "reorder-tabs" | "close-and-select" | "split-view">;
-  type NativeHistoryView = Extract<ViewId, "navigation" | "recently-closed">;
-  type NativeWorkspaceView = Extract<ViewId, "move-to-workspace">;
-  type NativeContainerView = Extract<ViewId, "open-in-container">;
-  type NativeFolderView = Extract<ViewId, "move-to-folder">;
-  type NativeProfileView = Extract<ViewId, "profiles">;
 
   const client = createTabIndexClient();
   const containerClient = createContainerClient();
@@ -115,17 +102,6 @@
   const tabInfoClient = createTabInfoClient();
   const workspaceClient = createWorkspaceClient();
   const actionSections = buildActionsMenuModel();
-  const listViewTitles: Record<NativeListView, string> = {
-    "last-visited": "Recent",
-    "unvisited-tabs": "New tabs",
-    "tabs-by-age": "Tabs by age",
-    "most-visited": "Most visited",
-    "domain-tabs": "",
-    "child-tabs": "Children",
-    "sibling-tabs": "Siblings",
-    "parent-tabs": "Parent tabs",
-    "domains": "Domains",
-  };
 
   let currentView = $state<ViewId>("actions");
   let rows = $state<NativeRow[]>([]);
@@ -197,8 +173,8 @@
   const title = $derived(
     currentView === "domain-tabs" && currentDomain
       ? currentDomain
-      : currentView in listViewTitles
-      ? listViewTitles[currentView as NativeListView]
+      : currentView in LIST_VIEW_TITLES
+      ? LIST_VIEW_TITLES[currentView as NativeListView]
       : currentView === "navigation"
       ? "Tab history"
       : currentView === "recently-closed"
@@ -297,59 +273,6 @@
     actionPreviewsById = data.previewsById;
     actionCounts = data.counts;
     disabledActionIds = data.disabledIds;
-  }
-
-  function isNativeListView(view: ViewId | undefined): view is NativeListView {
-    return isNativeTabView(view) || view === "domains";
-  }
-
-  function isNativeHistoryView(view: ViewId | undefined): view is NativeHistoryView {
-    return view === "navigation" || view === "recently-closed";
-  }
-
-  function isNativeWorkspaceView(view: ViewId | undefined): view is NativeWorkspaceView {
-    return view === "move-to-workspace";
-  }
-
-  function isNativeContainerView(view: ViewId | undefined): view is NativeContainerView {
-    return view === "open-in-container";
-  }
-
-  function isNativeFolderView(view: ViewId | undefined): view is NativeFolderView {
-    return view === "move-to-folder";
-  }
-
-  function isNativeProfileView(view: ViewId | undefined): view is NativeProfileView {
-    return view === "profiles";
-  }
-
-  function isNativeDuplicateView(view: ViewId | undefined): view is NativeDuplicateView {
-    return view === "duplicates";
-  }
-
-  function isNativeTabInfoView(view: ViewId | undefined): view is NativeTabInfoView {
-    return view === "tab-info";
-  }
-
-  function isNativeDuplicatePromptView(view: ViewId | undefined): view is NativeDuplicatePromptView {
-    return view === "duplicate-prompt";
-  }
-
-  function isNativeTabView(view: ViewId | undefined): view is NativeTabView {
-    return (
-      view === "child-tabs" ||
-      view === "sibling-tabs" ||
-      view === "parent-tabs" ||
-      view === "last-visited" ||
-      view === "unvisited-tabs" ||
-      view === "tabs-by-age" ||
-      view === "most-visited" ||
-      view === "domain-tabs"
-    );
-  }
-
-  function isNativePrefixView(view: ViewId | undefined): view is NativePrefixView {
-    return view === "reorder-tabs" || view === "close-and-select" || view === "split-view";
   }
 
   function isDomainRow(row: NativeRow | null): row is DomainIndexRow {
@@ -595,18 +518,27 @@
     selectedIndex = -1;
   }
 
+  const registeredViewLoaders: Record<
+    ViewLoaderId,
+    (params?: URLSearchParams | Record<string, unknown>) => Promise<void> | void
+  > = {
+    navigation: loadNavigation,
+    "recently-closed": loadRecentlyClosed,
+    "move-to-workspace": loadMoveToWorkspace,
+    "open-in-container": loadOpenInContainer,
+    "move-to-folder": loadMoveToFolder,
+    profiles: loadProfiles,
+    duplicates: loadDuplicates,
+    "tab-info": loadTabInfo,
+    "duplicate-prompt": (params) => loadDuplicatePrompt(params instanceof URLSearchParams ? params : undefined),
+  };
+
   function encodedParams(params?: URLSearchParams | Record<string, unknown>) {
     if (!params) return undefined;
     if (params instanceof URLSearchParams) {
       return JSON.stringify(Object.fromEntries(params.entries()));
     }
     return JSON.stringify(params);
-  }
-
-  function paramsRecord(params?: URLSearchParams | Record<string, unknown>) {
-    if (!params) return {};
-    if (params instanceof URLSearchParams) return Object.fromEntries(params.entries());
-    return params;
   }
 
   function notifyChromeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>) {
@@ -624,66 +556,25 @@
 
   async function openNativeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>, notifyChrome = false) {
     if (notifyChrome) notifyChromeView(view, params);
-    if (view === "actions") {
+    const plan = resolveViewOpenPlan(view, params);
+
+    if (plan.kind === "actions") {
       goBack();
       await loadActionsData();
-      return finishOpenView(view);
-    }
-    if (isNativeListView(view)) {
-      currentDomain = paramValue(params, "domain");
-      await loadListView(view, 0, 80, true, { ...paramsRecord(params), ...viewParams(view) });
-      return finishOpenView(view);
-    }
-    if (isNativePrefixView(view)) {
-      currentView = view;
+    } else if (plan.kind === "list") {
+      currentDomain = plan.domain;
+      await loadListView(plan.view, 0, 80, true, { ...plan.params, ...viewParams(plan.view) });
+    } else if (plan.kind === "prefix") {
+      currentView = plan.view;
       selectedIndex = -1;
       error = null;
-      return finishOpenView(view);
+    } else if (plan.kind === "loader") {
+      await registeredViewLoaders[plan.loader](params);
+    } else {
+      return false;
     }
-    if (view === "navigation") {
-      await loadNavigation();
-      return finishOpenView(view);
-    }
-    if (view === "recently-closed") {
-      await loadRecentlyClosed();
-      return finishOpenView(view);
-    }
-    if (view === "move-to-workspace") {
-      await loadMoveToWorkspace();
-      return finishOpenView(view);
-    }
-    if (view === "open-in-container") {
-      await loadOpenInContainer();
-      return finishOpenView(view);
-    }
-    if (view === "move-to-folder") {
-      await loadMoveToFolder();
-      return finishOpenView(view);
-    }
-    if (view === "profiles") {
-      await loadProfiles();
-      return finishOpenView(view);
-    }
-    if (view === "duplicates") {
-      await loadDuplicates();
-      return finishOpenView(view);
-    }
-    if (view === "tab-info") {
-      await loadTabInfo();
-      return finishOpenView(view);
-    }
-    if (view === "duplicate-prompt") {
-      loadDuplicatePrompt(params instanceof URLSearchParams ? params : undefined);
-      return finishOpenView(view);
-    }
-    return false;
-  }
 
-  function paramValue(params: URLSearchParams | Record<string, unknown> | undefined, key: string) {
-    if (!params) return null;
-    if (params instanceof URLSearchParams) return params.get(key);
-    const value = params[key];
-    return typeof value === "string" ? value : null;
+    return finishOpenView(view);
   }
 
   async function performActionItem(item: ActionMenuItem) {
@@ -703,7 +594,7 @@
     }
 
     if (item.kind === "prefix" && isNativePrefixView(item.view as ViewId | undefined)) {
-      await openNativeView(item.view as NativePrefixView, undefined, true);
+      await openNativeView(item.view as ViewId, undefined, true);
       return;
     }
 
