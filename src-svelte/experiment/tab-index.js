@@ -318,6 +318,18 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
         .filter(Boolean)
         .map(compactTabRow);
     },
+    getAutoCloseCandidates(cutoffMs) {
+      rebuildIfNeeded();
+      const cutoff = Number(cutoffMs) || 0;
+      return rows
+        .filter((row) => !row.pinned && !row.active && (row.lastAccessed || 0) < cutoff)
+        .map((row) => ({
+          domId: row.domId,
+          id: row.id,
+          lastAccessed: row.lastAccessed,
+          workspaceId: row.workspaceId,
+        }));
+    },
     getWorkspaceTabCounts() {
       rebuildIfNeeded();
       const counts = Object.create(null);

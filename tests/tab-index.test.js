@@ -105,3 +105,14 @@ test("tab index returns active rows and requested DOM-id rows without a full tra
     "tab-1",
   ]);
 });
+
+test("tab index returns only stale close targets for auto-close sweeps", () => {
+  const index = makeIndex([
+    fakeTab("tab-1", "https://example.test/a", "ws-1", { lastAccessed: 100 }),
+    fakeTab("tab-2", "https://example.test/b", "ws-1", { lastAccessed: 100, pinned: true }),
+    fakeTab("tab-3", "https://example.test/c", "ws-1", { lastAccessed: 100, active: true }),
+    fakeTab("tab-4", "https://example.test/d", "ws-1", { lastAccessed: 5000 }),
+  ]);
+
+  assert.deepEqual(index.getAutoCloseCandidates(1000).map((row) => row.domId), ["tab-1"]);
+});

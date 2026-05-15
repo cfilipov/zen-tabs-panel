@@ -28,7 +28,6 @@ this.MSG = Object.freeze({
   CLOSE_TAB:                      "close-tab",
 
   // Tab queries
-  GET_ALL_TABS:                   "get-all-tabs",
   GET_TAB_INFO:                   "get-tab-info",
   GET_ACTIVE_TAB_INFO:             "get-active-tab-info",
   GET_DEFAULT_CLOSE_TARGET:       "get-default-close-target",

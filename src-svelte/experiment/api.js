@@ -3749,6 +3749,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return tabIndex.getRowsByDomIds(domIds);
         },
 
+        async getAutoCloseCandidates(cutoffMs) {
+          return tabIndex.getAutoCloseCandidates(cutoffMs);
+        },
+
         async getWorkspaceTabCounts() {
           return tabIndex.getWorkspaceTabCounts();
         },

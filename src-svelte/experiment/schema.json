@@ -260,6 +260,15 @@
         ]
       },
       {
+        "name": "getAutoCloseCandidates",
+        "type": "function",
+        "async": true,
+        "description": "Get stale unpinned inactive tab targets for background auto-close",
+        "parameters": [
+          { "name": "cutoffMs", "type": "number" }
+        ]
+      },
+      {
         "name": "getWorkspaceTabCounts",
         "type": "function",
         "async": true,

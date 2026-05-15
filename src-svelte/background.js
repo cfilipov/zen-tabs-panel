@@ -134,10 +134,13 @@ async function autoCloseSweep() {
   const threshold = THRESHOLD_MS[settings.autoCloseThreshold] || THRESHOLD_MS["48h"];
   const now = Date.now();
 
-  // Use the experiment API to get tabs across all workspaces
+  const cutoff = now - threshold;
+
+  // Use the experiment-owned tab index so the background sweep transfers
+  // only close targets, not a rich snapshot of every tab in every workspace.
   let tabs;
   try {
-    tabs = await api.getAllTabs();
+    tabs = await api.getAutoCloseCandidates(cutoff);
   } catch (e) {
     // Fallback to standard API (current workspace only)
     tabs = await browser.tabs.query({ pinned: false });
@@ -148,7 +151,8 @@ async function autoCloseSweep() {
     if (tab.active) continue;
     if (now - tab.lastAccessed > threshold) {
       try {
-        await api.closeTabByDomId(tab.domId);
+        if (tab.domId) await api.closeTabByDomId(tab.domId);
+        else if (tab.id != null) await browser.tabs.remove(tab.id);
       } catch (e) {
         // Tab may already be gone
       }
@@ -424,9 +428,8 @@ async function runSortAction(actionId) {
 // ---------------------------------------------------------------------------
 
 async function getActiveTabInfo() {
-  const allTabs = await api.getAllTabs();
-  const activeTab = allTabs.find((t) => t.active);
-  return { hasParent: !!(activeTab && activeTab.openerTabDomId) };
+  const activeTab = await api.getActiveRow();
+  return { hasParent: !!(activeTab && (activeTab.openerTabDomId || activeTab.panelParentUuid)) };
 }
 
 function getRecentlyClosed() {
@@ -542,7 +545,6 @@ const QUERIES = Object.freeze({
   //                    keys resume the in-flight chord rather than restart at root.
   [MSG.POPUP_READY]:                   (m) => api.takeChordBridgeBuffer(m && typeof m.inst === "number" ? m.inst : null),
   [MSG.REVEAL_PALETTE]:                (m) => api.revealPalette(m && typeof m.inst === "number" ? m.inst : null),
-  [MSG.GET_ALL_TABS]:                  ()  => api.getAllTabs(),
   [MSG.GET_DEFAULT_CLOSE_TARGET]:      ()  => api.getDefaultCloseTargetDomId(),
   [MSG.GET_ACTIVE_TAB_INFO]:           ()  => getActiveTabInfo(),
   [MSG.GET_NAVIGATION_HISTORY]:        ()  => api.getNavigationHistory(),
