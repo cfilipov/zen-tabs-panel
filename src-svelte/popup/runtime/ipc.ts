@@ -7,12 +7,16 @@ type BrowserLike = {
 declare const browser: BrowserLike | undefined;
 declare const chrome: BrowserLike | undefined;
 
-export const ext: BrowserLike = (typeof browser !== "undefined" ? browser : chrome) as BrowserLike;
+function getExt(): BrowserLike {
+  if (typeof browser !== "undefined") return browser;
+  if (typeof chrome !== "undefined") return chrome;
+  throw new Error("WebExtension runtime is not available");
+}
 
 export function sendMessage<T = unknown>(message: unknown): Promise<T> {
-  return ext.runtime.sendMessage<T>(message);
+  return getExt().runtime.sendMessage<T>(message);
 }
 
 export function fireMessage(message: unknown): void {
-  ext.runtime.sendMessage(message).catch(() => {});
+  getExt().runtime.sendMessage(message).catch(() => {});
 }
