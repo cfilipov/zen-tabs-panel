@@ -4,9 +4,12 @@
   import ActionsMenu from "./views/ActionsMenu.svelte";
   import DomainList from "./views/DomainList.svelte";
   import PrefixMenu from "./views/PrefixMenu.svelte";
+  import NavigationList from "./views/NavigationList.svelte";
+  import RecentlyClosedList from "./views/RecentlyClosedList.svelte";
   import TabList from "./views/TabList.svelte";
   import { inputFromKeyboardEvent } from "./interaction/inputs";
   import { interpretVisibleInput, type InteractionCommand } from "./interaction/interpreter";
+  import { createHistoryClient, type NavigationHistory, type RecentlyClosedRow } from "./runtime/history-client";
   import { fireMessage } from "./runtime/ipc";
   import { createTabIndexClient, type DomainIndexRow, type TabIndexRow, type TabIndexView } from "./runtime/tab-index-client";
   import {
@@ -27,8 +30,10 @@
   type NativeListView = NativeTabView | NativeDomainView;
   type NativeRow = TabIndexRow | DomainIndexRow;
   type NativePrefixView = Extract<ViewId, "reorder-tabs" | "close-and-select" | "split-view">;
+  type NativeHistoryView = Extract<ViewId, "navigation" | "recently-closed">;
 
   const client = createTabIndexClient();
+  const historyClient = createHistoryClient();
   const actionSections = buildActionsMenuModel();
   const listViewTitles: Record<NativeListView, string> = {
     "last-visited": "Recent",
@@ -50,6 +55,8 @@
   let currentPage = $state(1);
   let selectedIndex = $state(0);
   let currentDomain = $state<string | null>(null);
+  let navigationHistory = $state<NavigationHistory | null>(null);
+  let recentlyClosedRows = $state<RecentlyClosedRow[]>([]);
   let loadGeneration = 0;
 
   const headerHidden = $derived(currentView === "actions");
@@ -64,6 +71,10 @@
       ? currentDomain
       : currentView in listViewTitles
       ? listViewTitles[currentView as NativeListView]
+      : currentView === "navigation"
+      ? "Tab history"
+      : currentView === "recently-closed"
+      ? "Recently closed"
       : allActionItems.find((item) => item.view === currentView)?.label ?? "",
   );
   const selectedActionId = $derived(currentView === "actions" ? visibleActionItems[selectedIndex]?.id ?? null : null);
@@ -75,9 +86,14 @@
   const domainRows = $derived(rows.filter(isDomainRow));
   const selectedRowDomId = $derived(selectedTabRow?.domId ?? null);
   const selectedDomain = $derived(selectedDomainRow?.domain ?? null);
+  const navigationEntries = $derived(navigationHistory?.entries ?? []);
 
   function isNativeListView(view: ViewId | undefined): view is NativeListView {
     return isNativeTabView(view) || view === "domains";
+  }
+
+  function isNativeHistoryView(view: ViewId | undefined): view is NativeHistoryView {
+    return view === "navigation" || view === "recently-closed";
   }
 
   function isNativeTabView(view: ViewId | undefined): view is NativeTabView {
@@ -142,6 +158,46 @@
     }
   }
 
+  async function loadNavigation() {
+    const generation = ++loadGeneration;
+    loading = true;
+    error = null;
+    currentView = "navigation";
+    try {
+      const history = await historyClient.getNavigationHistory();
+      if (generation !== loadGeneration || currentView !== "navigation") return;
+      navigationHistory = history;
+      selectedIndex = history?.entries.length ? history.index : -1;
+    } catch (err) {
+      if (generation !== loadGeneration) return;
+      navigationHistory = null;
+      selectedIndex = -1;
+      error = err instanceof Error ? err.message : String(err);
+    } finally {
+      if (generation === loadGeneration) loading = false;
+    }
+  }
+
+  async function loadRecentlyClosed() {
+    const generation = ++loadGeneration;
+    loading = true;
+    error = null;
+    currentView = "recently-closed";
+    try {
+      const entries = await historyClient.getRecentlyClosed();
+      if (generation !== loadGeneration || currentView !== "recently-closed") return;
+      recentlyClosedRows = entries;
+      selectedIndex = entries.length ? 0 : -1;
+    } catch (err) {
+      if (generation !== loadGeneration) return;
+      recentlyClosedRows = [];
+      selectedIndex = -1;
+      error = err instanceof Error ? err.message : String(err);
+    } finally {
+      if (generation === loadGeneration) loading = false;
+    }
+  }
+
   function activateAction(item: ActionMenuItem) {
     if (item.disabled) {
       return;
@@ -165,6 +221,16 @@
       return;
     }
 
+    if (item.view === "navigation") {
+      loadNavigation();
+      return;
+    }
+
+    if (item.view === "recently-closed") {
+      loadRecentlyClosed();
+      return;
+    }
+
     error = `${item.label} has not been ported to native Svelte yet`;
   }
 
@@ -175,6 +241,17 @@
   function activateDomain(row: DomainIndexRow) {
     currentDomain = row.domain;
     loadListView("domain-tabs", 0, 80, true, { domain: row.domain });
+  }
+
+  function navigateToHistoryIndex(index: number) {
+    fireMessage({ type: "navigate-to-history-index", index });
+  }
+
+  function restoreClosedTab(row: RecentlyClosedRow, keepOpen = false) {
+    fireMessage({
+      type: keepOpen ? "restore-closed-tab-keep-open" : "restore-closed-tab",
+      sessionId: row.sessionId,
+    });
   }
 
   function previewTab(row: TabIndexRow) {
@@ -192,6 +269,8 @@
     total = 0;
     offset = 0;
     currentDomain = null;
+    navigationHistory = null;
+    recentlyClosedRows = [];
     selectedIndex = 0;
     error = null;
   }
@@ -201,6 +280,10 @@
       ? visibleActionItems.length
       : isNativePrefixView(currentView)
         ? prefixItems.length
+        : currentView === "navigation"
+          ? navigationEntries.length
+          : currentView === "recently-closed"
+            ? recentlyClosedRows.length
         : rows.length;
     if (!length) {
       selectedIndex = -1;
@@ -235,9 +318,29 @@
 
     if (selectedTabRow) activateTab(selectedTabRow);
     else if (selectedDomainRow) activateDomain(selectedDomainRow);
+    else if (currentView === "navigation" && selectedIndex !== navigationHistory?.index) navigateToHistoryIndex(selectedIndex);
+    else if (currentView === "recently-closed") {
+      const row = recentlyClosedRows[selectedIndex];
+      if (row) restoreClosedTab(row);
+    }
   }
 
   function activateRow(index: number) {
+    if (currentView === "navigation") {
+      const targets = navigationEntries
+        .map((entry, navIndex) => ({ entry, navIndex }))
+        .filter((candidate) => candidate.navIndex !== navigationHistory?.index);
+      const target = targets[index];
+      if (target) navigateToHistoryIndex(target.navIndex);
+      return;
+    }
+
+    if (currentView === "recently-closed") {
+      const row = recentlyClosedRows[index];
+      if (row) restoreClosedTab(row);
+      return;
+    }
+
     const row = rowForIndex(index);
     if (isTabRow(row)) activateTab(row);
     else if (isDomainRow(row)) activateDomain(row);
@@ -286,6 +389,10 @@
         if (isNativeListView(command.view)) {
           currentDomain = null;
           loadListView(command.view);
+        } else if (command.view === "navigation") {
+          loadNavigation();
+        } else if (command.view === "recently-closed") {
+          loadRecentlyClosed();
         } else {
           currentView = command.view;
           rows = [];
@@ -332,6 +439,19 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (currentView === "navigation" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      const upper = event.key.toUpperCase();
+      if (upper === "B" || upper === "F") {
+        const current = navigationHistory?.index ?? -1;
+        const target = current + (upper === "B" ? -1 : 1);
+        if (target >= 0 && target < navigationEntries.length) {
+          event.preventDefault();
+          navigateToHistoryIndex(target);
+        }
+        return;
+      }
+    }
+
     const actionNodes = currentView === "actions" ? allActionNodes : isNativePrefixView(currentView) ? prefixNodes : [];
     const command = interpretVisibleInput(inputFromKeyboardEvent(event), { view: currentView }, actionNodes);
     if (command.kind === "none") {
@@ -351,6 +471,10 @@
     } else if (isNativePrefixView(initialView ?? undefined)) {
       currentView = initialView as NativePrefixView;
       selectedIndex = 0;
+    } else if (initialView === "navigation") {
+      loadNavigation();
+    } else if (initialView === "recently-closed") {
+      loadRecentlyClosed();
     }
 
     window.addEventListener("keydown", handleKeydown);
@@ -375,6 +499,19 @@
     <PrefixMenu view={currentView} items={prefixItems} selectedId={selectedPrefixId} onactivate={activateAction} />
   {:else if loading}
     <div class="empty-state">Loading...</div>
+  {:else if currentView === "navigation"}
+    <NavigationList
+      history={navigationHistory}
+      {selectedIndex}
+      onactivate={navigateToHistoryIndex}
+    />
+  {:else if currentView === "recently-closed"}
+    <RecentlyClosedList
+      rows={recentlyClosedRows}
+      {selectedIndex}
+      onactivate={(row) => restoreClosedTab(row)}
+      onrestore={(row) => restoreClosedTab(row, true)}
+    />
   {:else if isNativeTabView(currentView)}
     <TabList
       rows={tabRows}
