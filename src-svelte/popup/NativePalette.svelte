@@ -5,6 +5,7 @@
   import ContainerList from "./views/ContainerList.svelte";
   import DomainList from "./views/DomainList.svelte";
   import DuplicateGroups from "./views/DuplicateGroups.svelte";
+  import DuplicatePrompt, { type DuplicatePromptAction } from "./views/DuplicatePrompt.svelte";
   import FolderList from "./views/FolderList.svelte";
   import PrefixMenu from "./views/PrefixMenu.svelte";
   import NavigationList from "./views/NavigationList.svelte";
@@ -56,6 +57,7 @@
   type NativeRow = TabIndexRow | DomainIndexRow;
   type NativeDuplicateView = Extract<ViewId, "duplicates">;
   type NativeTabInfoView = Extract<ViewId, "tab-info">;
+  type NativeDuplicatePromptView = Extract<ViewId, "duplicate-prompt">;
   type NativePrefixView = Extract<ViewId, "reorder-tabs" | "close-and-select" | "split-view">;
   type NativeHistoryView = Extract<ViewId, "navigation" | "recently-closed">;
   type NativeWorkspaceView = Extract<ViewId, "move-to-workspace">;
@@ -105,6 +107,8 @@
   let tabInfoVisits = $state<HistoryVisit[]>([]);
   let tabInfoDuplicates = $state<TabIndexRow[]>([]);
   let tabInfoWorkspaces = $state<WorkspaceRow[]>([]);
+  let duplicatePromptUrl = $state("");
+  let duplicatePromptDomId = $state<string | null>(null);
   let loadGeneration = 0;
 
   const headerHidden = $derived(currentView === "actions");
@@ -127,6 +131,8 @@
       ? "Duplicates"
       : currentView === "tab-info"
       ? "Tab info"
+      : currentView === "duplicate-prompt"
+      ? "Duplicate tab already open"
       : currentView === "move-to-workspace"
       ? "Move to workspace"
       : currentView === "open-in-container"
@@ -178,6 +184,10 @@
 
   function isNativeTabInfoView(view: ViewId | undefined): view is NativeTabInfoView {
     return view === "tab-info";
+  }
+
+  function isNativeDuplicatePromptView(view: ViewId | undefined): view is NativeDuplicatePromptView {
+    return view === "duplicate-prompt";
   }
 
   function isNativeTabView(view: ViewId | undefined): view is NativeTabView {
@@ -461,6 +471,16 @@
     }
   }
 
+  function loadDuplicatePrompt(params = new URLSearchParams(location.search)) {
+    ++loadGeneration;
+    loading = false;
+    error = null;
+    currentView = "duplicate-prompt";
+    duplicatePromptUrl = params.get("url") || "";
+    duplicatePromptDomId = params.get("domId");
+    selectedIndex = 0;
+  }
+
   function buildDuplicateGroups(allTabs: TabIndexRow[]): DuplicateGroupRow[] {
     const groups = new Map<string, TabIndexRow[]>();
     for (const tab of allTabs) {
@@ -615,6 +635,10 @@
     tabInfoDuplicates = tabInfoDuplicates.filter((tab) => tab.domId === selfDomId);
   }
 
+  function runDuplicatePromptAction(action: DuplicatePromptAction) {
+    fireMessage({ type: action });
+  }
+
 
   function previewTab(row: TabIndexRow) {
     fireMessage({ type: "preview-tab", domId: row.domId });
@@ -648,6 +672,8 @@
     tabInfoVisits = [];
     tabInfoDuplicates = [];
     tabInfoWorkspaces = [];
+    duplicatePromptUrl = "";
+    duplicatePromptDomId = null;
     selectedIndex = 0;
     error = null;
   }
@@ -661,6 +687,9 @@
     }
     if (currentView === "tab-info") {
       return false;
+    }
+    if (currentView === "duplicate-prompt") {
+      return index >= 0 && index < 3;
     }
     return index >= 0;
   }
@@ -686,6 +715,8 @@
                 ? 0
               : currentView === "tab-info"
                 ? 0
+              : currentView === "duplicate-prompt"
+                ? 3
         : rows.length;
     if (!length) {
       selectedIndex = -1;
@@ -742,6 +773,10 @@
     } else if (currentView === "profiles") {
       const row = profileRows[selectedIndex];
       if (row) launchProfile(row);
+    } else if (currentView === "duplicate-prompt") {
+      const action: DuplicatePromptAction[] = ["duplicate-switch", "duplicate-open-anyway", "hide-palette"];
+      const selected = action[selectedIndex];
+      if (selected) runDuplicatePromptAction(selected);
     }
   }
 
@@ -782,6 +817,13 @@
     if (currentView === "profiles") {
       const row = profileRows[index];
       if (row) launchProfile(row);
+      return;
+    }
+
+    if (currentView === "duplicate-prompt") {
+      const action: DuplicatePromptAction[] = ["duplicate-switch", "duplicate-open-anyway", "hide-palette"];
+      const selected = action[index];
+      if (selected) runDuplicatePromptAction(selected);
       return;
     }
 
@@ -853,6 +895,8 @@
           loadDuplicates();
         } else if (command.view === "tab-info") {
           loadTabInfo();
+        } else if (command.view === "duplicate-prompt") {
+          loadDuplicatePrompt();
         } else {
           currentView = command.view;
           rows = [];
@@ -899,6 +943,21 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (currentView === "duplicate-prompt" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      const key = event.key.toUpperCase();
+      const actionByKey: Record<string, DuplicatePromptAction> = {
+        S: "duplicate-switch",
+        O: "duplicate-open-anyway",
+        C: "hide-palette",
+      };
+      const action = actionByKey[key];
+      if (action) {
+        event.preventDefault();
+        runDuplicatePromptAction(action);
+        return;
+      }
+    }
+
     if (currentView === "navigation" && !event.metaKey && !event.ctrlKey && !event.altKey) {
       const upper = event.key.toUpperCase();
       if (upper === "B" || upper === "F") {
@@ -947,6 +1006,8 @@
       loadDuplicates();
     } else if (initialView === "tab-info") {
       loadTabInfo();
+    } else if (initialView === "duplicate-prompt") {
+      loadDuplicatePrompt(params);
     }
 
     window.addEventListener("keydown", handleKeydown);
@@ -1028,6 +1089,15 @@
       onclose={closeTabInfoDuplicate}
       oncloseothers={closeOtherTabInfoDuplicates}
       onpreview={previewTabLike}
+      onclearpreview={clearPreview}
+    />
+  {:else if currentView === "duplicate-prompt"}
+    <DuplicatePrompt
+      url={duplicatePromptUrl}
+      existingDomId={duplicatePromptDomId}
+      {selectedIndex}
+      onactivate={runDuplicatePromptAction}
+      onpreview={(domId) => previewTabLike({ domId })}
       onclearpreview={clearPreview}
     />
   {:else if isNativeTabView(currentView)}
