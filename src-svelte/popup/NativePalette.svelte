@@ -32,7 +32,14 @@
 
   type NativeTabView = Extract<
     ViewId,
-    "child-tabs" | "sibling-tabs" | "parent-tabs" | "last-visited" | "unvisited-tabs" | "tabs-by-age" | "domain-tabs"
+    | "child-tabs"
+    | "sibling-tabs"
+    | "parent-tabs"
+    | "last-visited"
+    | "unvisited-tabs"
+    | "tabs-by-age"
+    | "most-visited"
+    | "domain-tabs"
   >;
   type NativeDomainView = Extract<ViewId, "domains">;
   type NativeListView = NativeTabView | NativeDomainView;
@@ -55,6 +62,7 @@
     "last-visited": "Recent",
     "unvisited-tabs": "New tabs",
     "tabs-by-age": "Tabs by age",
+    "most-visited": "Most visited",
     "domain-tabs": "",
     "child-tabs": "Children",
     "sibling-tabs": "Siblings",
@@ -149,6 +157,7 @@
       view === "last-visited" ||
       view === "unvisited-tabs" ||
       view === "tabs-by-age" ||
+      view === "most-visited" ||
       view === "domain-tabs"
     );
   }
@@ -611,6 +620,10 @@
     loadListView(currentView, nextOffset, Math.max(60, limit), false, viewParams(currentView));
   }
 
+  function tabSubtitle(row: TabIndexRow) {
+    return currentView === "most-visited" ? `${row.focusCount ?? 0} focuses` : null;
+  }
+
   function runCommand(command: InteractionCommand) {
     switch (command.kind) {
       case "action": {
@@ -796,6 +809,7 @@
       onpreview={previewTab}
       onclearpreview={clearPreview}
       onrange={loadVisibleRange}
+      subtitle={tabSubtitle}
     />
   {:else if currentView === "domains"}
     <DomainList

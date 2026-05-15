@@ -8,6 +8,7 @@ export type TabIndexView =
   | "unvisited-tabs"
   | "domain-tabs"
   | "tabs-by-age"
+  | "most-visited"
   | "domains"
   | "all";
 
@@ -32,6 +33,7 @@ export type TabIndexRow = {
   pending: boolean;
   panelTabUuid: string | null;
   panelParentUuid: string | null;
+  focusCount?: number;
 };
 
 export type DomainIndexRow = {

@@ -12,9 +12,20 @@
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
     onrange?: (offset: number, limit: number) => void;
+    subtitle?: (row: TabIndexRow) => string | null;
   };
 
-  let { rows, total, offset = 0, selectedDomId = null, onactivate, onpreview, onclearpreview, onrange }: Props = $props();
+  let {
+    rows,
+    total,
+    offset = 0,
+    selectedDomId = null,
+    onactivate,
+    onpreview,
+    onclearpreview,
+    onrange,
+    subtitle = () => null,
+  }: Props = $props();
 </script>
 
 {#if total === 0}
@@ -25,6 +36,7 @@
       <TabRow
         {row}
         badge={offset + index < 9 ? String(offset + index + 1) : null}
+        subtitle={subtitle(row)}
         selected={row.domId === selectedDomId}
         onactivate={onactivate}
         onpreview={onpreview}

@@ -6,14 +6,16 @@
   type Props = {
     row: TabIndexRow;
     badge?: string | null;
+    subtitle?: string | null;
     selected?: boolean;
     onactivate?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
   };
 
-  let { row, badge = null, selected = false, onactivate, onpreview, onclearpreview }: Props = $props();
+  let { row, badge = null, subtitle = null, selected = false, onactivate, onpreview, onclearpreview }: Props = $props();
   const title = $derived(row.title || "Untitled");
+  const hasSubtitle = $derived(Boolean(row.domain || subtitle));
 </script>
 
 <button
@@ -40,9 +42,14 @@
       {/if}
       {title}
     </span>
-    {#if row.domain}
+    {#if hasSubtitle}
       <span class="item-subtitle">
-        <span class="subtitle-domain">{row.domain}</span>
+        {#if row.domain}
+          <span class="subtitle-domain">{row.domain}</span>
+        {/if}
+        {#if subtitle}
+          <span class="subtitle-age subtitle-pill">{subtitle}</span>
+        {/if}
       </span>
     {/if}
   </span>

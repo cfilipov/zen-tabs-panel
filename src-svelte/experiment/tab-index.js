@@ -50,6 +50,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       pending: row.pending,
       panelTabUuid: row.panelTabUuid,
       panelParentUuid: row.panelParentUuid,
+      focusCount: row.focusCount,
     };
   }
 
@@ -88,6 +89,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       panelTabUuid: deps.ensureTabUuid(tab),
       panelParentUuid: deps.readTabValue(tab, "panelParentUuid") || null,
       panelStats,
+      focusCount: (panelStats && panelStats.focusCount) || 0,
     };
   }
 
@@ -131,6 +133,10 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       out = [...out].sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
     } else if (view === "tabs-by-age") {
       out = [...out].sort((a, b) => (a.id || 0) - (b.id || 0));
+    } else if (view === "most-visited") {
+      out = out
+        .filter((row) => row.url && !String(row.url).startsWith("about:"))
+        .sort((a, b) => (b.focusCount || 0) - (a.focusCount || 0));
     }
     return out;
   }
