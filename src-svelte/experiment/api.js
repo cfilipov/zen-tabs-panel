@@ -2304,9 +2304,27 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!w) return;
       w.setTimeout(() => {
         if (!pendingReveal || !revealDeferred || popupReady) return;
+        forcePopupBridgeReady();
         revealDeferred = false;
         revealOverlay();
       }, 250);
+    }
+
+    function forcePopupBridgeReady() {
+      const drained = bridgeBuffer || [];
+      bridgeBuffer = [];
+      popupReady = true;
+
+      const w = getWin();
+      const br = w && w.document.getElementById(BROWSER_ID);
+      if (br && br.messageManager) {
+        try {
+          br.messageManager.sendAsyncMessage(
+            "ZenChord:ForceReady:" + CHORD_GENERATION,
+            { buffered: drained }
+          );
+        } catch (e) {}
+      }
     }
 
     function armRevealTimer() {
@@ -2605,6 +2623,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    var d = (m && m.data) || {};\n" +
         "    var payload = JSON.stringify(d);\n" +
         "    var ev = new content.CustomEvent('ztt:warm-rearm', { detail: payload });\n" +
+        "    content.document.dispatchEvent(ev);\n" +
+        "  } catch(e){}\n" +
+        "});\n" +
+        // Safety fallback for a visible popup whose POPUP_READY handshake
+        // was missed. Chrome treats this like a late empty drain so live
+        // menu keys stop being held behind chordBridgeReady=false.
+        "addMessageListener('ZenChord:ForceReady:' + __GEN, function(m){\n" +
+        "  if (__shutdown) return;\n" +
+        "  try {\n" +
+        "    if (!isExtensionPage() || !content || !content.document) return;\n" +
+        "    var d = (m && m.data) || {};\n" +
+        "    var payload = JSON.stringify(d);\n" +
+        "    var ev = new content.CustomEvent('ztt:force-ready', { detail: payload });\n" +
         "    content.document.dispatchEvent(ev);\n" +
         "  } catch(e){}\n" +
         "});\n" +

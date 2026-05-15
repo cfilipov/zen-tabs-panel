@@ -1467,7 +1467,10 @@
     }
   }
 
-  async function drainBridge(reply: { buffered?: KeyData[]; stale?: boolean; view?: string | null } | null, generation?: number) {
+  type BridgeReply = { buffered?: KeyData[]; stale?: boolean; view?: string | null };
+  type ForceReadyPayload = { buffered?: KeyData[] };
+
+  async function drainBridge(reply: BridgeReply | null, generation?: number) {
     if (reply?.stale) return;
     if (reply?.view && reply.view !== currentView) {
       await openNativeView(reply.view as ViewId);
@@ -1528,11 +1531,34 @@
     await drainBridge(reply, generation);
   }
 
+  function handleForceReady(data: ForceReadyPayload) {
+    const buffered = Array.isArray(data.buffered) ? data.buffered : [];
+    const held = heldLiveKeys.splice(0);
+    chordBridgeReady = true;
+    clearPopupRevealTimer();
+    for (const input of buffered) {
+      enqueueKeyInput(input);
+    }
+    for (const input of held) {
+      enqueueKeyInput(input);
+    }
+  }
+
   function parseWarmRearmPayload(event: Event) {
     const detail = event instanceof CustomEvent ? event.detail : null;
     if (typeof detail !== "string") return {};
     try {
       return JSON.parse(detail) as { inst?: number; view?: ViewId; params?: Record<string, unknown> };
+    } catch {
+      return {};
+    }
+  }
+
+  function parseForceReadyPayload(event: Event) {
+    const detail = event instanceof CustomEvent ? event.detail : null;
+    if (typeof detail !== "string") return {};
+    try {
+      return JSON.parse(detail) as ForceReadyPayload;
     } catch {
       return {};
     }
@@ -1548,6 +1574,7 @@
     window.addEventListener("pagehide", handlePageHide);
     document.addEventListener("ztt:cancel-reveal", clearPopupRevealTimer);
     document.addEventListener("ztt:warm-rearm", warmRearmListener);
+    document.addEventListener("ztt:force-ready", forceReadyListener);
     document.addEventListener("ztt:go-to-actions", goToActionsListener);
     void initializeBridge(initialViewReady);
     return () => {
@@ -1556,6 +1583,7 @@
       window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("ztt:cancel-reveal", clearPopupRevealTimer);
       document.removeEventListener("ztt:warm-rearm", warmRearmListener);
+      document.removeEventListener("ztt:force-ready", forceReadyListener);
       document.removeEventListener("ztt:go-to-actions", goToActionsListener);
     };
   });
@@ -1567,6 +1595,10 @@
 
   function warmRearmListener(event: Event) {
     void handleWarmRearm(parseWarmRearmPayload(event));
+  }
+
+  function forceReadyListener(event: Event) {
+    handleForceReady(parseForceReadyPayload(event));
   }
 
   function goToActionsListener() {
