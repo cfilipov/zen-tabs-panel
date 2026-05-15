@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { NAVIGATION_TREE } from "../../shared/navigation-tree";
-import { actionItemsForPage, actionNodesForSections, buildActionsMenuModel } from "./actions-model";
+import {
+  actionItemsForPage,
+  actionNodesForSections,
+  buildActionsMenuModel,
+  prefixChildNodesForView,
+  prefixItemsForView,
+} from "./actions-model";
 
 describe("actions menu model", () => {
   it("renders only ids from the navigation tree", () => {
@@ -37,5 +43,13 @@ describe("actions menu model", () => {
 
     expect(pageTwoItems.some((item) => item.id === "reload-tab")).toBe(true);
     expect(nodes.find((node) => node.id === "reload-tab")?.chord).toBe("Shift+R");
+  });
+
+  it("derives prefix submenu rows from the navigation tree", () => {
+    const items = prefixItemsForView("reorder-tabs");
+    const nodes = prefixChildNodesForView("reorder-tabs");
+
+    expect(items.map((item) => item.id)).toContain("sort-tabs-domain-alpha");
+    expect(nodes.find((node) => node.id === "sort-tabs-domain-alpha")?.chord).toBe("D");
   });
 });

@@ -1,5 +1,5 @@
 import { NAVIGATION_TREE, displayKey } from "../../shared/navigation-tree";
-import type { NavNode, TerminalNode } from "../../shared/types";
+import type { NavNode, PrefixNode, TerminalNode, ViewId } from "../../shared/types";
 
 export type ActionSectionId =
   | "navigate"
@@ -68,6 +68,21 @@ function flatten(nodes: readonly NavNode[]): NavNode[] {
 
 const nodeById = new Map(flatten(NAVIGATION_TREE).map((node) => [node.id, node]));
 
+function itemFromNode(node: TerminalNode, page = 1, disabled = false): ActionMenuItem {
+  return {
+    id: node.id,
+    kind: node.kind,
+    view: node.kind === "open-view" || node.kind === "prefix" ? node.view : undefined,
+    label: node.label,
+    icon: node.icon,
+    hotkey: node.chord,
+    badge: displayKey(node.chord),
+    isView: node.kind === "open-view" || node.kind === "prefix",
+    page,
+    disabled,
+  };
+}
+
 export function buildActionsMenuModel(disabledIds: ReadonlySet<string> = new Set()): ActionSection[] {
   return sections.map((section) => ({
     id: section.id,
@@ -80,18 +95,7 @@ export function buildActionsMenuModel(disabledIds: ReadonlySet<string> = new Set
     items: section.actionIds.map((id) => {
       const node = nodeById.get(id);
       if (!node) throw new Error(`Missing navigation node: ${id}`);
-      return {
-        id: node.id,
-        kind: node.kind,
-        view: node.kind === "open-view" || node.kind === "prefix" ? node.view : undefined,
-        label: node.label,
-        icon: node.icon,
-        hotkey: node.chord,
-        badge: displayKey(node.chord),
-        isView: node.kind === "open-view" || node.kind === "prefix",
-        page: section.page,
-        disabled: disabledIds.has(node.id),
-      };
+      return itemFromNode(node, section.page, disabledIds.has(node.id));
     }),
   }));
 }
@@ -110,4 +114,19 @@ export function actionNodesForSections(sections: readonly ActionSection[]): Term
       if (!node) throw new Error(`Missing navigation node: ${item.id}`);
       return node;
     });
+}
+
+export function prefixNodeForView(view: ViewId): PrefixNode | null {
+  const node = (NAVIGATION_TREE as readonly NavNode[]).find((candidate) =>
+    candidate.kind === "prefix" && candidate.view === view
+  );
+  return node && node.kind === "prefix" ? node : null;
+}
+
+export function prefixItemsForView(view: ViewId): ActionMenuItem[] {
+  return prefixNodeForView(view)?.children.map((node) => itemFromNode(node)) ?? [];
+}
+
+export function prefixChildNodesForView(view: ViewId): TerminalNode[] {
+  return prefixNodeForView(view)?.children ?? [];
 }

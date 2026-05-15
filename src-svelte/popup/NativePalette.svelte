@@ -3,6 +3,7 @@
   import PaletteShell from "./components/PaletteShell.svelte";
   import ActionsMenu from "./views/ActionsMenu.svelte";
   import DomainList from "./views/DomainList.svelte";
+  import PrefixMenu from "./views/PrefixMenu.svelte";
   import TabList from "./views/TabList.svelte";
   import { inputFromKeyboardEvent } from "./interaction/inputs";
   import { interpretVisibleInput, type InteractionCommand } from "./interaction/interpreter";
@@ -12,6 +13,8 @@
     actionItemsForPage,
     actionNodesForSections,
     buildActionsMenuModel,
+    prefixChildNodesForView,
+    prefixItemsForView,
     type ActionMenuItem,
   } from "./views/actions-model";
   import type { ViewId } from "../shared/types";
@@ -23,6 +26,7 @@
   type NativeDomainView = Extract<ViewId, "domains">;
   type NativeListView = NativeTabView | NativeDomainView;
   type NativeRow = TabIndexRow | DomainIndexRow;
+  type NativePrefixView = Extract<ViewId, "reorder-tabs" | "close-and-select" | "split-view">;
 
   const client = createTabIndexClient();
   const actionSections = buildActionsMenuModel();
@@ -53,6 +57,8 @@
   const visibleActionItems = $derived(actionItemsForPage(actionSections, currentPage));
   const allActionItems = $derived(actionSections.flatMap((section) => section.items));
   const allActionNodes = $derived(actionNodesForSections(actionSections));
+  const prefixItems = $derived(isNativePrefixView(currentView) ? prefixItemsForView(currentView) : []);
+  const prefixNodes = $derived(isNativePrefixView(currentView) ? prefixChildNodesForView(currentView) : []);
   const title = $derived(
     currentView === "domain-tabs" && currentDomain
       ? currentDomain
@@ -61,6 +67,7 @@
       : allActionItems.find((item) => item.view === currentView)?.label ?? "",
   );
   const selectedActionId = $derived(currentView === "actions" ? visibleActionItems[selectedIndex]?.id ?? null : null);
+  const selectedPrefixId = $derived(isNativePrefixView(currentView) ? prefixItems[selectedIndex]?.id ?? null : null);
   const selectedRow = $derived(isNativeListView(currentView) ? rowForIndex(selectedIndex) : null);
   const selectedTabRow = $derived(isTabRow(selectedRow) ? selectedRow : null);
   const selectedDomainRow = $derived(isDomainRow(selectedRow) ? selectedRow : null);
@@ -83,6 +90,10 @@
       view === "tabs-by-age" ||
       view === "domain-tabs"
     );
+  }
+
+  function isNativePrefixView(view: ViewId | undefined): view is NativePrefixView {
+    return view === "reorder-tabs" || view === "close-and-select" || view === "split-view";
   }
 
   function isDomainRow(row: NativeRow | null): row is DomainIndexRow {
@@ -141,6 +152,13 @@
       return;
     }
 
+    if (item.kind === "prefix" && isNativePrefixView(item.view as ViewId | undefined)) {
+      currentView = item.view as NativePrefixView;
+      selectedIndex = 0;
+      error = null;
+      return;
+    }
+
     if (isNativeListView(item.view as ViewId | undefined)) {
       currentDomain = null;
       loadListView(item.view as NativeListView);
@@ -179,7 +197,11 @@
   }
 
   function moveSelection(delta: 1 | -1) {
-    const length = currentView === "actions" ? visibleActionItems.length : rows.length;
+    const length = currentView === "actions"
+      ? visibleActionItems.length
+      : isNativePrefixView(currentView)
+        ? prefixItems.length
+        : rows.length;
     if (!length) {
       selectedIndex = -1;
       return;
@@ -187,7 +209,7 @@
 
     const start = selectedIndex < 0 ? (delta > 0 ? -1 : 0) : selectedIndex;
     selectedIndex = (start + delta + length) % length;
-    if (currentView !== "actions") {
+    if (currentView !== "actions" && !isNativePrefixView(currentView)) {
       ensureListIndexLoaded(selectedIndex);
       scrollListIndexIntoView(selectedIndex);
     }
@@ -201,6 +223,12 @@
   function activateSelected() {
     if (currentView === "actions") {
       const item = visibleActionItems[selectedIndex];
+      if (item) activateAction(item);
+      return;
+    }
+
+    if (isNativePrefixView(currentView)) {
+      const item = prefixItems[selectedIndex];
       if (item) activateAction(item);
       return;
     }
@@ -250,7 +278,7 @@
   function runCommand(command: InteractionCommand) {
     switch (command.kind) {
       case "action": {
-        const item = allActionItems.find((candidate) => candidate.id === command.actionId);
+        const item = [...allActionItems, ...prefixItems].find((candidate) => candidate.id === command.actionId);
         if (item) activateAction(item);
         return;
       }
@@ -268,11 +296,17 @@
         }
         return;
       case "enter-prefix":
-        currentView = command.view;
-        rows = [];
-        total = 0;
-        selectedIndex = -1;
-        error = `${command.view} has not been ported to native Svelte yet`;
+        if (isNativePrefixView(command.view)) {
+          currentView = command.view;
+          selectedIndex = 0;
+          error = null;
+        } else {
+          currentView = command.view;
+          rows = [];
+          total = 0;
+          selectedIndex = -1;
+          error = `${command.view} has not been ported to native Svelte yet`;
+        }
         return;
       case "cancel":
         fireMessage({ type: "hide-palette" });
@@ -298,7 +332,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    const actionNodes = currentView === "actions" ? allActionNodes : [];
+    const actionNodes = currentView === "actions" ? allActionNodes : isNativePrefixView(currentView) ? prefixNodes : [];
     const command = interpretVisibleInput(inputFromKeyboardEvent(event), { view: currentView }, actionNodes);
     if (command.kind === "none") {
       return;
@@ -314,6 +348,9 @@
     if (isNativeListView(initialView ?? undefined)) {
       currentDomain = params.get("domain");
       loadListView(initialView as NativeListView, 0, 80, true, viewParams(initialView as NativeListView));
+    } else if (isNativePrefixView(initialView ?? undefined)) {
+      currentView = initialView as NativePrefixView;
+      selectedIndex = 0;
     }
 
     window.addEventListener("keydown", handleKeydown);
@@ -334,6 +371,8 @@
     <div class="empty-state">{error}</div>
   {:else if currentView === "actions"}
     <ActionsMenu sections={actionSections} {currentPage} selectedId={selectedActionId} onactivate={activateAction} />
+  {:else if isNativePrefixView(currentView)}
+    <PrefixMenu view={currentView} items={prefixItems} selectedId={selectedPrefixId} onactivate={activateAction} />
   {:else if loading}
     <div class="empty-state">Loading...</div>
   {:else if isNativeTabView(currentView)}
