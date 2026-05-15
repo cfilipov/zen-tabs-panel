@@ -481,6 +481,61 @@
     selectedIndex = 0;
   }
 
+  function openNativeView(view: ViewId, params?: URLSearchParams) {
+    if (view === "actions") {
+      goBack();
+      return true;
+    }
+    if (isNativeListView(view)) {
+      currentDomain = params?.get("domain") ?? null;
+      loadListView(view, 0, 80, true, viewParams(view));
+      return true;
+    }
+    if (isNativePrefixView(view)) {
+      currentView = view;
+      selectedIndex = 0;
+      error = null;
+      return true;
+    }
+    if (view === "navigation") {
+      loadNavigation();
+      return true;
+    }
+    if (view === "recently-closed") {
+      loadRecentlyClosed();
+      return true;
+    }
+    if (view === "move-to-workspace") {
+      loadMoveToWorkspace();
+      return true;
+    }
+    if (view === "open-in-container") {
+      loadOpenInContainer();
+      return true;
+    }
+    if (view === "move-to-folder") {
+      loadMoveToFolder();
+      return true;
+    }
+    if (view === "profiles") {
+      loadProfiles();
+      return true;
+    }
+    if (view === "duplicates") {
+      loadDuplicates();
+      return true;
+    }
+    if (view === "tab-info") {
+      loadTabInfo();
+      return true;
+    }
+    if (view === "duplicate-prompt") {
+      loadDuplicatePrompt(params);
+      return true;
+    }
+    return false;
+  }
+
   function buildDuplicateGroups(allTabs: TabIndexRow[]): DuplicateGroupRow[] {
     const groups = new Map<string, TabIndexRow[]>();
     for (const tab of allTabs) {
@@ -516,59 +571,11 @@
     }
 
     if (item.kind === "prefix" && isNativePrefixView(item.view as ViewId | undefined)) {
-      currentView = item.view as NativePrefixView;
-      selectedIndex = 0;
-      error = null;
+      openNativeView(item.view as NativePrefixView);
       return;
     }
 
-    if (isNativeListView(item.view as ViewId | undefined)) {
-      currentDomain = null;
-      loadListView(item.view as NativeListView);
-      return;
-    }
-
-    if (item.view === "navigation") {
-      loadNavigation();
-      return;
-    }
-
-    if (item.view === "duplicates") {
-      loadDuplicates();
-      return;
-    }
-
-    if (item.view === "tab-info") {
-      loadTabInfo();
-      return;
-    }
-
-    if (item.view === "recently-closed") {
-      loadRecentlyClosed();
-      return;
-    }
-
-    if (item.view === "move-to-workspace") {
-      loadMoveToWorkspace();
-      return;
-    }
-
-    if (item.view === "open-in-container") {
-      loadOpenInContainer();
-      return;
-    }
-
-    if (item.view === "move-to-folder") {
-      loadMoveToFolder();
-      return;
-    }
-
-    if (item.view === "profiles") {
-      loadProfiles();
-      return;
-    }
-
-    error = `${item.label} has not been ported to native Svelte yet`;
+    if (item.view) openNativeView(item.view as ViewId);
   }
 
   function activateTab(row: TabIndexRow) {
@@ -876,48 +883,10 @@
         return;
       }
       case "open-view":
-        if (isNativeListView(command.view)) {
-          currentDomain = null;
-          loadListView(command.view);
-        } else if (command.view === "navigation") {
-          loadNavigation();
-        } else if (command.view === "recently-closed") {
-          loadRecentlyClosed();
-        } else if (command.view === "move-to-workspace") {
-          loadMoveToWorkspace();
-        } else if (command.view === "open-in-container") {
-          loadOpenInContainer();
-        } else if (command.view === "move-to-folder") {
-          loadMoveToFolder();
-        } else if (command.view === "profiles") {
-          loadProfiles();
-        } else if (command.view === "duplicates") {
-          loadDuplicates();
-        } else if (command.view === "tab-info") {
-          loadTabInfo();
-        } else if (command.view === "duplicate-prompt") {
-          loadDuplicatePrompt();
-        } else {
-          currentView = command.view;
-          rows = [];
-          total = 0;
-          selectedIndex = -1;
-          const item = allActionItems.find((candidate) => candidate.view === command.view);
-          error = `${item?.label ?? command.view} has not been ported to native Svelte yet`;
-        }
+        openNativeView(command.view);
         return;
       case "enter-prefix":
-        if (isNativePrefixView(command.view)) {
-          currentView = command.view;
-          selectedIndex = 0;
-          error = null;
-        } else {
-          currentView = command.view;
-          rows = [];
-          total = 0;
-          selectedIndex = -1;
-          error = `${command.view} has not been ported to native Svelte yet`;
-        }
+        openNativeView(command.view);
         return;
       case "cancel":
         fireMessage({ type: "hide-palette" });
@@ -984,31 +953,7 @@
   onMount(() => {
     const params = new URLSearchParams(location.search);
     const initialView = params.get("view") as ViewId | null;
-    if (isNativeListView(initialView ?? undefined)) {
-      currentDomain = params.get("domain");
-      loadListView(initialView as NativeListView, 0, 80, true, viewParams(initialView as NativeListView));
-    } else if (isNativePrefixView(initialView ?? undefined)) {
-      currentView = initialView as NativePrefixView;
-      selectedIndex = 0;
-    } else if (initialView === "navigation") {
-      loadNavigation();
-    } else if (initialView === "recently-closed") {
-      loadRecentlyClosed();
-    } else if (initialView === "move-to-workspace") {
-      loadMoveToWorkspace();
-    } else if (initialView === "open-in-container") {
-      loadOpenInContainer();
-    } else if (initialView === "move-to-folder") {
-      loadMoveToFolder();
-    } else if (initialView === "profiles") {
-      loadProfiles();
-    } else if (initialView === "duplicates") {
-      loadDuplicates();
-    } else if (initialView === "tab-info") {
-      loadTabInfo();
-    } else if (initialView === "duplicate-prompt") {
-      loadDuplicatePrompt(params);
-    }
+    if (initialView) openNativeView(initialView, params);
 
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);

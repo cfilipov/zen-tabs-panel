@@ -35,15 +35,6 @@ const extensionEntries = [
   "LICENSE",
 ];
 
-const sveltePopupLegacyEntries = [
-  "popup/popup.css",
-  "popup/state.js",
-  "popup/render.js",
-  "popup/keyboard.js",
-  "popup/popup.js",
-  "popup/views",
-];
-
 async function exists(filePath) {
   try {
     await stat(filePath);
@@ -89,9 +80,6 @@ for (const entry of entriesToCopy) {
 }
 
 if (variant === "svelte") {
-  for (const entry of sveltePopupLegacyEntries) {
-    await copyEntry(entry);
-  }
   await run("node", ["scripts/generate-keybindings.mjs"]);
   await run("npx", ["vite", "build"]);
 }

@@ -2480,7 +2480,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       //
       //   2. Extension pages (moz-extension:// — our popup and foreign-
       //      extension popups): do NOT attach the engine (their content
-      //      handles its own keys via popup/keyboard.js). But DO listen
+      //      handles its own keys via the popup runtime). But DO listen
       //      for ZenChord:DeliverKey messages from chrome — each one
       //      causes a synthetic KeyboardEvent to be dispatched on
       //      content.document, which the popup's keydown listener picks
