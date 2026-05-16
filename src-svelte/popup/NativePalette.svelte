@@ -320,29 +320,32 @@
   }
 
   async function loadListView(view: NativeListView, nextOffset = 0, limit = 80, resetSelection = true, params = viewParams(view)) {
-    const load = viewLoad.begin(view, { loading: resetSelection });
-    offset = nextOffset;
-    void refreshSidebarWorkspaces(load.id);
-    try {
-      await client.ensureStarted();
-      const win = await client.getWindow<NativeRow>(view as TabIndexView, nextOffset, limit, params);
-      await load.commit(() => {
+    await runViewLoad({
+      controller: viewLoad,
+      view,
+      loading: resetSelection,
+      afterBegin: (load) => {
+        offset = nextOffset;
+        void refreshSidebarWorkspaces(load.id);
+      },
+      load: async () => {
+        await client.ensureStarted();
+        return client.getWindow<NativeRow>(view as TabIndexView, nextOffset, limit, params);
+      },
+      commit: (win) => {
         rows = win.rows;
         total = win.total;
         if (resetSelection) {
           selectedIndex = -1;
         }
-      });
-    } catch (err) {
-      await load.fail(err, (message) => {
+      },
+      fail: (message) => {
         rows = [];
         total = 0;
         selectedIndex = -1;
         error = message;
-      });
-    } finally {
-      load.finish();
-    }
+      },
+    });
   }
 
   async function loadNavigation() {

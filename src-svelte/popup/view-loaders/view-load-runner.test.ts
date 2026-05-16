@@ -108,4 +108,30 @@ describe("view load runner", () => {
 
     expect(events).toContain("loading:false");
   });
+
+  it("runs afterBegin with the load token before loading", async () => {
+    const { controller, events } = createHarness();
+
+    await runViewLoad({
+      controller,
+      view: "parent-tabs",
+      afterBegin: (token) => {
+        events.push(`after:${token.view}:${token.id}:${token.isCurrent()}`);
+      },
+      load: async () => {
+        events.push("load");
+        return 1;
+      },
+      commit: () => {
+        events.push("commit");
+      },
+      fail: () => {
+        events.push("fail");
+      },
+    });
+
+    expect(events).toContain("after:parent-tabs:1:true");
+    expect(events.indexOf("after:parent-tabs:1:true")).toBeLessThan(events.indexOf("load"));
+    expect(events).toContain("commit");
+  });
 });
