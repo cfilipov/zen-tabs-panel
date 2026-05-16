@@ -29,6 +29,14 @@
   import { applyInteractionCommand, type InteractionRuntimeHandlers } from "./interaction/runtime";
   import { nextSelectionIndex, type SelectionContext } from "./interaction/selection";
   import {
+    listViewParams,
+    normalizeWorkspaceFilter,
+    toggleSortForView,
+    toggleWorkspaceFilterValue,
+    workspaceFilterByIndex,
+    workspaceReloadKind,
+  } from "./interaction/sort-filter";
+  import {
     resolveSelectionActivation,
     resolveViewActivation,
     type ViewActivation,
@@ -278,12 +286,12 @@
   }
 
   function viewParams(view: NativeListView) {
-    const params: Record<string, unknown> = {};
-    if (workspaceFilter !== "all") params.workspaceId = workspaceFilter;
-    if (view === "domain-tabs" && currentDomain) params.domain = currentDomain;
-    if (view === "domains") params.sortAlpha = domainsSortAlpha;
-    if (view === "tabs-by-age") params.newestFirst = tabsByAgeNewestFirst;
-    return params;
+    return listViewParams(view, {
+      workspaceFilter,
+      currentDomain,
+      domainsSortAlpha,
+      tabsByAgeNewestFirst,
+    });
   }
 
   async function refreshSidebarWorkspaces(generation = viewLoad.generation) {
@@ -732,41 +740,35 @@
   }
 
   async function toggleCurrentSort() {
-    if (currentView === "domains" || currentView === "domain-tabs") {
-      domainsSortAlpha = !domainsSortAlpha;
-      if (currentView === "domains") await loadListView("domains");
-      else await loadListView("domain-tabs", 0, 80, true, viewParams("domain-tabs"));
-      return;
-    }
-    if (currentView === "tabs-by-age") {
-      tabsByAgeNewestFirst = !tabsByAgeNewestFirst;
-      await loadListView("tabs-by-age");
-    }
+    const result = toggleSortForView(currentView, { domainsSortAlpha, tabsByAgeNewestFirst });
+    domainsSortAlpha = result.domainsSortAlpha;
+    tabsByAgeNewestFirst = result.tabsByAgeNewestFirst;
+    if (result.reloadView) await loadListView(result.reloadView, 0, 80, true, viewParams(result.reloadView));
   }
 
   async function reloadWorkspaceFilteredView() {
-    if (isNativeListView(currentView)) {
+    const reloadKind = workspaceReloadKind(currentView);
+    if (reloadKind === "list" && isNativeListView(currentView)) {
       await loadListView(currentView);
       return;
     }
-    if (currentView === "duplicates") {
+    if (reloadKind === "duplicates") {
       await loadDuplicates();
     }
   }
 
   async function setWorkspaceFilter(nextFilter: string) {
-    workspaceFilter = nextFilter || "all";
+    workspaceFilter = normalizeWorkspaceFilter(nextFilter);
     await reloadWorkspaceFilteredView();
   }
 
   async function toggleWorkspaceFilter() {
-    await setWorkspaceFilter(workspaceFilter === "all" ? activeWorkspaceId || "all" : "all");
+    await setWorkspaceFilter(toggleWorkspaceFilterValue(workspaceFilter, activeWorkspaceId));
   }
 
   async function filterWorkspaceByIndex(index: number) {
-    const workspace = sidebarWorkspaces[index];
-    if (!workspace) return;
-    await setWorkspaceFilter(workspaceFilter === workspace.uuid ? "all" : workspace.uuid);
+    const nextFilter = workspaceFilterByIndex(workspaceFilter, sidebarWorkspaces, index);
+    if (nextFilter) await setWorkspaceFilter(nextFilter);
   }
 
   function closeTabInfoDuplicate(row: TabIndexRow) {
