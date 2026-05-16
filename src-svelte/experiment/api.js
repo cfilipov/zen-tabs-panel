@@ -1001,11 +1001,21 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return VIEW_SIZES[view] || VIEW_SIZES["actions"];
     }
 
+    function browserMessageManager(br) {
+      if (!br) return null;
+      try {
+        if (br.messageManager) return br.messageManager;
+      } catch (e) {}
+      try {
+        if (br.frameLoader && br.frameLoader.messageManager) return br.frameLoader.messageManager;
+      } catch (e) {}
+      return null;
+    }
+
     function createBrowserElement(w, size, opts) {
       const br = w.document.createXULElement("browser");
       br.id = BROWSER_ID;
       br.setAttribute("type", "content");
-      br.setAttribute("remote", "true");
       br.setAttribute("maychangeremoteness", "true");
       br.setAttribute("disableglobalhistory", "true");
       br.setAttribute("messagemanagergroup", "webext-browsers");
@@ -1019,7 +1029,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const viewType = opts && "viewType" in opts ? opts.viewType : "popup";
       if (viewType !== null) br.setAttribute("webextension-view-type", viewType);
       br.setAttribute("transparent", "true");
-      if (opts?.remoteType) br.setAttribute("remoteType", opts.remoteType);
+      if (opts?.remoteType) {
+        br.setAttribute("remote", "true");
+        br.setAttribute("remoteType", opts.remoteType);
+      }
       br.setAttribute("src", opts?.src || getPaletteURL(opts?.view, opts?.params));
       // Declare the size transition up front so resizePanelToView's
       // width/height changes animate in sync with the panel's transition
@@ -1332,7 +1345,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // rearm path — popup browser stays loaded, we just reset its state
       // and (re)arm pendingReveal for the next chord arm.
       const existing = w.document.getElementById(OVERLAY_ID);
-      if (existing) return rearmExistingOverlay(view, params, existing);
+      if (existing) {
+        const existingBrowser = w.document.getElementById(BROWSER_ID);
+        if (browserMessageManager(existingBrowser)) {
+          return rearmExistingOverlay(view, params, existing);
+        }
+        existing.remove();
+      }
 
       // Each overlay gets its own instance number. The popup reads it from
       // its URL (?inst=N) and includes it in POPUP_READY. Lets chrome
@@ -1513,9 +1532,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Generation-tagged so stale frame scripts (from prior extension
       // loads) ignore it and only the current popup-process listener
       // forwards it to the Svelte bridge module.
-      if (br && br.messageManager) {
+      const mm = browserMessageManager(br);
+      if (mm) {
         try {
-          br.messageManager.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
+          mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
             inst: popupInstance,
             view: view || null,
             params: params || null,
@@ -1820,9 +1840,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function resetWarmPopupToActions() {
       const w = getWin();
       const br = w && w.document.getElementById(BROWSER_ID);
-      if (!br || !br.messageManager) return;
+      const mm = browserMessageManager(br);
+      if (!mm) return;
       try {
-        br.messageManager.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
+        mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
           inst: popupInstance,
           view: null,
           params: null,
@@ -1845,8 +1866,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // it, and re-reveal the just-armed popup at the wrong moment.
       // Tell the popup to clear its timer right now.
       const _br = w.document.getElementById(BROWSER_ID);
-      if (_br && _br.messageManager) {
-        try { _br.messageManager.sendAsyncMessage("ZenChord:CancelReveal:" + CHORD_GENERATION, {}); } catch (e) {}
+      const cancelMm = browserMessageManager(_br);
+      if (cancelMm) {
+        try { cancelMm.sendAsyncMessage("ZenChord:CancelReveal:" + CHORD_GENERATION, {}); } catch (e) {}
       }
 
       // `hard: true` actually removes the overlay DOM (only used during
@@ -2317,9 +2339,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       const w = getWin();
       const br = w && w.document.getElementById(BROWSER_ID);
-      if (br && br.messageManager) {
+      const mm = browserMessageManager(br);
+      if (mm) {
         try {
-          br.messageManager.sendAsyncMessage(
+          mm.sendAsyncMessage(
             "ZenChord:ForceReady:" + CHORD_GENERATION,
             { buffered: drained }
           );
@@ -2373,7 +2396,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
       const w = getWin();
       const br = w && w.document.getElementById(BROWSER_ID);
-      if (br && br.messageManager) {
+      const mm = browserMessageManager(br);
+      if (mm) {
         // Generation-tagged message name: only the frame script that
         // matches this CHORD_GENERATION receives. Stale frame scripts
         // from prior extension loads (Firefox doesn't unload them) listen
@@ -2381,7 +2405,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // each stale script would dispatch a duplicate bridge payload
         // for every chord-chain key, producing the double-fire
         // bug (e.g. cmd+., q, 1 → drill + activate as if "1, 1").
-        try { br.messageManager.sendAsyncMessage("ZenChord:DeliverKey:" + CHORD_GENERATION, keyData); } catch (e) {}
+        try { mm.sendAsyncMessage("ZenChord:DeliverKey:" + CHORD_GENERATION, keyData); } catch (e) {}
       }
     }
 
@@ -2422,9 +2446,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
         currentViewName = "actions";
         const w0 = getWin();
         const br0 = w0 && w0.document.getElementById(BROWSER_ID);
-        if (br0 && br0.messageManager) {
+        const mm0 = browserMessageManager(br0);
+        if (mm0) {
           try {
-            br0.messageManager.sendAsyncMessage(
+            mm0.sendAsyncMessage(
               "ZenChord:GoToActions:" + CHORD_GENERATION,
               {}
             );
@@ -2437,8 +2462,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       const tab = w && w.gBrowser && w.gBrowser.selectedTab;
       const br = tab && tab.linkedBrowser;
-      if (br && br.messageManager) {
-        try { br.messageManager.sendAsyncMessage("ZenChord:Arm"); } catch (e) {}
+      const mm = browserMessageManager(br);
+      if (mm) {
+        try { mm.sendAsyncMessage("ZenChord:Arm"); } catch (e) {}
       }
     }
 
