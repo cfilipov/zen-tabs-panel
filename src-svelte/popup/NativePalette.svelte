@@ -29,6 +29,12 @@
     type InteractionCommand,
   } from "./interaction/interpreter";
   import { applyInteractionCommand, type InteractionRuntimeHandlers } from "./interaction/runtime";
+  import {
+    loadWindowForIndex,
+    rowInWindow,
+    scrollTopForIndex,
+    visibleRangeRequest,
+  } from "./interaction/list-window";
   import { nextSelectionIndex, type SelectionContext } from "./interaction/selection";
   import {
     listViewParams,
@@ -919,35 +925,31 @@
   }
 
   function rowForIndex(index: number) {
-    const relativeIndex = index - offset;
-    return relativeIndex >= 0 ? rows[relativeIndex] ?? null : null;
+    return rowInWindow(rows, offset, index);
   }
 
   function ensureListIndexLoaded(index: number) {
     if (!isNativeListView(currentView)) return;
-    if (index >= offset && index < offset + rows.length) return;
-    const nextOffset = Math.max(0, index - 20);
-    loadListView(currentView, nextOffset, 80, false);
+    const request = loadWindowForIndex({ index, offset, rowCount: rows.length });
+    if (request) loadListView(currentView, request.offset, request.limit, false);
   }
 
   function scrollListIndexIntoView(index: number) {
     requestAnimationFrame(() => {
       const list = document.getElementById("list");
       if (!list) return;
-      const rowHeight = 40;
-      const top = index * rowHeight;
-      const bottom = top + rowHeight;
-      if (top < list.scrollTop) {
-        list.scrollTop = top;
-      } else if (bottom > list.scrollTop + list.clientHeight) {
-        list.scrollTop = bottom - list.clientHeight;
-      }
+      list.scrollTop = scrollTopForIndex({
+        index,
+        scrollTop: list.scrollTop,
+        clientHeight: list.clientHeight,
+      });
     });
   }
 
   function loadVisibleRange(nextOffset: number, limit: number) {
     if (!isNativeListView(currentView)) return;
-    loadListView(currentView, nextOffset, Math.max(60, limit), false, viewParams(currentView));
+    const request = visibleRangeRequest(nextOffset, limit);
+    loadListView(currentView, request.offset, request.limit, false, viewParams(currentView));
   }
 
   function tabSubtitle(row: TabIndexRow) {
