@@ -35,6 +35,7 @@
     scrollTopForIndex,
     visibleRangeRequest,
   } from "./interaction/list-window";
+  import { naturalPanelHeight } from "./interaction/panel-measure";
   import { nextSelectionIndex, type SelectionContext } from "./interaction/selection";
   import {
     keepOnlyTabInfoDuplicate,
@@ -1011,21 +1012,25 @@
     const header = document.getElementById("header");
     const list = document.getElementById("list");
     const indicator = document.getElementById("page-indicator");
-    let listContentHeight = 8;
     const children = list?.children ?? [];
+    let listFirstTop: number | null = null;
+    let listLastBottom: number | null = null;
     if (children.length > 0) {
       const first = children[0].getBoundingClientRect();
       const last = children[children.length - 1].getBoundingClientRect();
-      listContentHeight += Math.max(0, last.bottom - first.top);
+      listFirstTop = first.top;
+      listLastBottom = last.bottom;
     }
-    let totalHeight = listContentHeight;
-    if (header && !header.classList.contains("hidden") && header.children.length > 0) {
-      totalHeight += header.getBoundingClientRect().height;
-    }
-    if (indicator && !indicator.classList.contains("hidden")) {
-      totalHeight += indicator.getBoundingClientRect().height;
-    }
-    return totalHeight;
+    const headerVisible = !!header && !header.classList.contains("hidden") && header.children.length > 0;
+    const indicatorVisible = !!indicator && !indicator.classList.contains("hidden");
+    return naturalPanelHeight({
+      listFirstTop,
+      listLastBottom,
+      headerVisible,
+      headerHeight: headerVisible ? header.getBoundingClientRect().height : 0,
+      indicatorVisible,
+      indicatorHeight: indicatorVisible ? indicator.getBoundingClientRect().height : 0,
+    });
   }
 
   async function requestPanelResize(view: ViewId = currentView) {
