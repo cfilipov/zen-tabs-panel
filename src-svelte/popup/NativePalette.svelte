@@ -88,6 +88,7 @@
   } from "./view-loaders/basic-loaders";
   import { loadDuplicateGroupsView } from "./view-loaders/duplicates-loader";
   import { loadTabInfoView } from "./view-loaders/tab-info-loader";
+  import { runViewLoad } from "./view-loaders/view-load-runner";
   import {
     isNativeListView,
     isNativePrefixView,
@@ -345,167 +346,151 @@
   }
 
   async function loadNavigation() {
-    const load = viewLoad.begin("navigation");
-    try {
-      const result = await loadNavigationView(historyClient);
-      await load.commit(() => {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "navigation",
+      load: () => loadNavigationView(historyClient),
+      commit: (result) => {
         navigationHistory = result.history;
         selectedIndex = result.selectedIndex;
-      });
-    } catch (err) {
-      await load.fail(err, (message) => {
+      },
+      fail: (message) => {
         navigationHistory = null;
         selectedIndex = -1;
         error = message;
-      });
-    } finally {
-      load.finish();
-    }
+      },
+    });
   }
 
   async function loadRecentlyClosed() {
-    const load = viewLoad.begin("recently-closed");
-    try {
-      const result = await loadRecentlyClosedView(historyClient);
-      await load.commit(() => {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "recently-closed",
+      load: () => loadRecentlyClosedView(historyClient),
+      commit: (result) => {
         recentlyClosedRows = result.rows;
         selectedIndex = result.selectedIndex;
-      });
-    } catch (err) {
-      await load.fail(err, (message) => {
+      },
+      fail: (message) => {
         recentlyClosedRows = [];
         selectedIndex = -1;
         error = message;
-      });
-    } finally {
-      load.finish();
-    }
+      },
+    });
   }
 
   async function loadMoveToWorkspace() {
-    const load = viewLoad.begin("move-to-workspace");
-    try {
-      const result = await loadMoveToWorkspaceView(workspaceClient);
-      await load.commit(() => {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "move-to-workspace",
+      load: () => loadMoveToWorkspaceView(workspaceClient),
+      commit: (result) => {
         workspaceRows = result.rows;
         selectedIndex = result.selectedIndex;
-      });
-    } catch (err) {
-      await load.fail(err, (message) => {
+      },
+      fail: (message) => {
         workspaceRows = [];
         selectedIndex = -1;
         error = message;
-      });
-    } finally {
-      load.finish();
-    }
+      },
+    });
   }
 
   async function loadOpenInContainer() {
-    const load = viewLoad.begin("open-in-container");
-    try {
-      const result = await loadOpenInContainerView(containerClient);
-      await load.commit(() => {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "open-in-container",
+      load: () => loadOpenInContainerView(containerClient),
+      commit: (result) => {
         containerRows = result.rows;
         selectedIndex = result.selectedIndex;
-      });
-    } catch (err) {
-      await load.fail(err, (message) => {
+      },
+      fail: (message) => {
         containerRows = [];
         selectedIndex = -1;
         error = message;
-      });
-    } finally {
-      load.finish();
-    }
+      },
+    });
   }
 
   async function loadMoveToFolder() {
-    const load = viewLoad.begin("move-to-folder");
-    try {
-      const result = await loadMoveToFolderView(folderClient, workspaceClient);
-      await load.commit(() => {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "move-to-folder",
+      load: () => loadMoveToFolderView(folderClient, workspaceClient),
+      commit: (result) => {
         folderRows = result.folders;
         folderWorkspaces = result.workspaces;
         selectedIndex = result.selectedIndex;
-      });
-    } catch (err) {
-      await load.fail(err, (message) => {
+      },
+      fail: (message) => {
         folderRows = [];
         folderWorkspaces = [];
         selectedIndex = -1;
         error = message;
-      });
-    } finally {
-      load.finish();
-    }
+      },
+    });
   }
 
   async function loadProfiles() {
-    const load = viewLoad.begin("profiles");
-    try {
-      const result = await loadProfilesView(profileClient);
-      await load.commit(() => {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "profiles",
+      load: () => loadProfilesView(profileClient),
+      commit: (result) => {
         profileRows = result.rows;
         selectedIndex = result.selectedIndex;
-      });
-    } catch (err) {
-      await load.fail(err, (message) => {
+      },
+      fail: (message) => {
         profileRows = [];
         selectedIndex = -1;
         error = message;
-      });
-    } finally {
-      load.finish();
-    }
+      },
+    });
   }
 
   async function loadDuplicates() {
-    const load = viewLoad.begin("duplicates");
-    try {
-      const result = await loadDuplicateGroupsView(tabIndexClient, workspaceClient, workspaceFilter);
-      await load.commit(() => {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "duplicates",
+      load: () => loadDuplicateGroupsView(tabIndexClient, workspaceClient, workspaceFilter),
+      commit: (result) => {
         sidebarWorkspaces = result.workspaces;
         duplicateWorkspaces = result.workspaces;
         workspaceFilter = result.workspaceFilter;
         duplicateGroups = result.groups;
         selectedIndex = result.selectedIndex;
-      });
-    } catch (err) {
-      await load.fail(err, (message) => {
+      },
+      fail: (message) => {
         duplicateGroups = [];
         duplicateWorkspaces = [];
         selectedIndex = -1;
         error = message;
-      });
-    } finally {
-      load.finish();
-    }
+      },
+    });
   }
 
   async function loadTabInfo() {
-    const load = viewLoad.begin("tab-info");
-    try {
-      const result = await loadTabInfoView(tabIndexClient, tabInfoClient, workspaceClient);
-      await load.commit(() => {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "tab-info",
+      load: () => loadTabInfoView(tabIndexClient, tabInfoClient, workspaceClient),
+      commit: (result) => {
         tabInfo = result.info;
         tabInfoVisits = result.visits;
         tabInfoDuplicates = result.duplicates;
         tabInfoWorkspaces = result.workspaces;
         selectedIndex = result.selectedIndex;
-      });
-    } catch (err) {
-      await load.fail(err, (message) => {
+      },
+      fail: (message) => {
         tabInfo = null;
         tabInfoVisits = [];
         tabInfoDuplicates = [];
         tabInfoWorkspaces = [];
         selectedIndex = -1;
         error = message;
-      });
-    } finally {
-      load.finish();
-    }
+      },
+    });
   }
 
   function loadDuplicatePrompt(params = new URLSearchParams(location.search)) {
