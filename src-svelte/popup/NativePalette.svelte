@@ -3,6 +3,7 @@
   import PaletteShell from "./components/PaletteShell.svelte";
   import ActionsMenu from "./views/ActionsMenu.svelte";
   import { nextActionSectionIndex, nextActionsPage } from "./interaction/actions-navigation";
+  import { createBridgeDispatchController } from "./interaction/bridge-dispatch";
   import {
     installChordBridgeHandlers,
     type BridgeKeyData,
@@ -151,12 +152,12 @@
   let popupInst: number | null = null;
   let popupChordDelay = 350;
   let popupRevealTimer: ReturnType<typeof setTimeout> | null = null;
-  let chordBridgeReady = false;
-  let dispatchRunning = false;
-  let warmRearmGeneration = 0;
   let pageAlive = true;
-  const heldLiveKeys: BridgeKeyData[] = [];
-  const liveDispatchQueue: BridgeKeyData[] = [];
+  const bridgeDispatch = createBridgeDispatchController({
+    dispatchKey: handleKeyInput,
+    armRevealTimer: armPopupRevealTimer,
+    clearRevealTimer: clearPopupRevealTimer,
+  });
 
   const headerHidden = $derived(currentView === "actions");
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
@@ -979,44 +980,14 @@
     return true;
   }
 
-  async function runLiveDispatchQueue() {
-    if (dispatchRunning) return;
-    dispatchRunning = true;
-    try {
-      while (liveDispatchQueue.length > 0) {
-        const input = liveDispatchQueue.shift();
-        if (!input) continue;
-        armPopupRevealTimer();
-        await handleKeyInput(input);
-      }
-    } finally {
-      dispatchRunning = false;
-    }
-  }
-
-  function enqueueKeyInput(input: BridgeKeyData) {
-    liveDispatchQueue.push(input);
-    void runLiveDispatchQueue();
-  }
-
   function handleBridgeKey(input: BridgeKeyData) {
-    if (!chordBridgeReady) {
-      heldLiveKeys.push(input);
-      return;
-    }
-    enqueueKeyInput(input);
+    bridgeDispatch.queueOrHold(input);
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    const input = snapshotKeyEvent(event);
-    if (!chordBridgeReady) {
-      event.preventDefault();
-      event.stopPropagation();
-      heldLiveKeys.push(input);
-      return;
-    }
-    event.preventDefault();
-    enqueueKeyInput(input);
+    const result = bridgeDispatch.keydownInput(snapshotKeyEvent(event));
+    if (result.preventDefault) event.preventDefault();
+    if (result.stopPropagation) event.stopPropagation();
   }
 
   function clearPopupRevealTimer() {
@@ -1082,24 +1053,7 @@
     await tick();
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    const buffered = Array.isArray(reply?.buffered) ? reply.buffered : [];
-    const held = heldLiveKeys.splice(0);
-    for (const input of buffered) {
-      if (generation !== undefined && generation !== warmRearmGeneration) return;
-      armPopupRevealTimer();
-      await handleKeyInput(input);
-    }
-    for (const input of held) {
-      if (generation !== undefined && generation !== warmRearmGeneration) return;
-      armPopupRevealTimer();
-      await handleKeyInput(input);
-    }
-
-    if (generation !== undefined && generation !== warmRearmGeneration) return;
-    chordBridgeReady = true;
-    if (buffered.length === 0 && held.length === 0) {
-      armPopupRevealTimer();
-    }
+    await bridgeDispatch.drainReply(reply, generation);
   }
 
   async function initializeBridge(initialViewReady: Promise<unknown>) {
@@ -1116,34 +1070,21 @@
   }
 
   async function handleWarmRearm(data: { inst?: number; view?: ViewId; params?: Record<string, unknown> }) {
-    const generation = ++warmRearmGeneration;
+    const generation = bridgeDispatch.resetForWarmRearm();
     if (typeof data.inst === "number") popupInst = data.inst;
-    chordBridgeReady = false;
-    clearPopupRevealTimer();
-    liveDispatchQueue.length = 0;
-    heldLiveKeys.length = 0;
     clearPreview();
 
     const view = data.view || "actions";
     await openNativeView(view, data.params || {});
-    if (generation !== warmRearmGeneration) return;
+    if (!bridgeDispatch.isCurrentWarmGeneration(generation)) return;
     await requestPanelResize(view);
-    if (generation !== warmRearmGeneration) return;
+    if (!bridgeDispatch.isCurrentWarmGeneration(generation)) return;
     const reply = await signalPopupReady();
     await drainBridge(reply, generation);
   }
 
   function handleForceReady(data: ForceReadyPayload) {
-    const buffered = Array.isArray(data.buffered) ? data.buffered : [];
-    const held = heldLiveKeys.splice(0);
-    chordBridgeReady = true;
-    clearPopupRevealTimer();
-    for (const input of buffered) {
-      enqueueKeyInput(input);
-    }
-    for (const input of held) {
-      enqueueKeyInput(input);
-    }
+    bridgeDispatch.forceReady(data);
   }
 
   onMount(() => {
