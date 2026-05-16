@@ -99,18 +99,26 @@ def main():
         print("Error: could not get console actor", file=sys.stderr)
         sys.exit(1)
 
+    def print_result(msg):
+        val = msg["result"]
+        if isinstance(val, str):
+            print(val)
+        else:
+            print(json.dumps(val, indent=2))
+
     # Evaluate JS
     results = send_recv(sock, {"to": console_actor, "type": "evaluateJSAsync", "text": js}, wait=3)
+    # Newer Firefox/Zen builds often send resultID and evaluationResult in the
+    # same packet. Prefer any concrete result already present before waiting
+    # for a later packet, otherwise a successful eval can appear to hang.
     for r in results:
         if "result" in r:
-            val = r["result"]
-            if isinstance(val, str):
-                print(val)
-            else:
-                print(json.dumps(val, indent=2))
+            print_result(r)
             sock.close()
             return
-        elif "resultID" in r:
+
+    for r in results:
+        if "resultID" in r:
             time.sleep(2)
             buf2 = b""
             while True:
@@ -120,11 +128,7 @@ def main():
                     break
             for r2 in parse_messages(buf2):
                 if "result" in r2:
-                    val = r2["result"]
-                    if isinstance(val, str):
-                        print(val)
-                    else:
-                        print(json.dumps(val, indent=2))
+                    print_result(r2)
                     sock.close()
                     return
 

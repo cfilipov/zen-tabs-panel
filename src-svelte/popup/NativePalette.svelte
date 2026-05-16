@@ -1022,7 +1022,7 @@
     await tick();
     await new Promise((resolve) => requestAnimationFrame(resolve));
     if (!pageAlive) return;
-    fireMessage({ type: "resize-panel", view, height: measureNaturalHeight() });
+    await sendMessage({ type: "resize-panel", view, height: measureNaturalHeight() }).catch(() => {});
   }
 
   async function signalPopupReady() {

@@ -9,7 +9,8 @@
     "build:svelte": "node scripts/build-extension.mjs --variant=svelte",
     "test": "npm run test:node && npm run test:svelte",
     "test:node": "node --test tests/*.test.js",
-    "test:svelte": "vitest run"
+    "test:svelte": "vitest run",
+    "smoke:popup": "tools/popup-smoke.py"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

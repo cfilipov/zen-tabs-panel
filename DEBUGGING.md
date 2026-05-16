@@ -316,6 +316,35 @@ profile references, not naive pixel-perfect goldens for arbitrary future state.
 For automated comparison, use deterministic fixture data or mask dynamic regions
 such as tab titles, counts, favicons, history, and workspace names.
 
+## Popup live smoke test
+
+After building and reloading the Svelte variant, run:
+
+```bash
+npm run smoke:popup
+```
+
+This uses `tools/firefox-eval.py` against the running debug Zen instance and
+drives the extension through the background page plus the popup bridge. It
+checks the failure modes that unit tests do not see:
+
+- the chrome overlay browser reaches `popup.html` instead of staying at
+  `about:blank`
+- the main actions menu renders with page dots and no permanent row selection
+- the actions panel returns to the full actions width after warm rearm
+- Space flips to page 2 and page 2 is non-empty
+- `R` opens Recent through the popup bridge
+
+The smoke sends popup bridge events rather than OS-level key events; it is an
+integration check for the extension/popup dispatch path, not a replacement for
+manual checks of the configurable browser command shortcut (`Cmd+.` by
+default). It leaves the palette hidden when it finishes.
+
+2026-05-16 note: current Firefox/Zen can return DevTools `resultID` and the
+actual `evaluationResult` in the same RDP packet. `tools/firefox-eval.py` now
+checks the whole packet for a concrete result before waiting for a later one;
+without that, successful evals can look like hangs.
+
 ## Tab-index event probes
 
 For the Svelte migration's experiment-authoritative tab index, verify which chrome events and DOM mutations are reliable before trusting an incremental index.
