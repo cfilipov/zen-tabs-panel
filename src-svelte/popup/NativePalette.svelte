@@ -37,6 +37,13 @@
   } from "./interaction/list-window";
   import { nextSelectionIndex, type SelectionContext } from "./interaction/selection";
   import {
+    keepOnlyTabInfoDuplicate,
+    removeRecentlyClosedRow,
+    removeTabFromDuplicateGroups,
+    removeTabFromRows,
+    removeTabInfoDuplicate,
+  } from "./interaction/row-state";
+  import {
     listViewParams,
     normalizeWorkspaceFilter,
     toggleSortForView,
@@ -682,22 +689,17 @@
 
   function closeDuplicateTab(row: TabIndexRow) {
     fireMessage({ type: "close-tab", domId: row.domId });
-    duplicateGroups = duplicateGroups
-      .map((group) => ({ ...group, tabs: group.tabs.filter((tab) => tab.domId !== row.domId) }))
-      .filter((group) => group.tabs.length > 1);
+    duplicateGroups = removeTabFromDuplicateGroups(duplicateGroups, row.domId);
   }
 
   function closeSelectedTabRow() {
     const row = selectedTabRow;
     if (!row) return;
     fireMessage({ type: "close-tab", domId: row.domId });
-    rows = rows.filter((candidate) => !isTabRow(candidate) || candidate.domId !== row.domId);
-    total = Math.max(0, total - 1);
-    if (total === 0) {
-      selectedIndex = -1;
-    } else if (selectedIndex >= total) {
-      selectedIndex = total - 1;
-    }
+    const result = removeTabFromRows({ rows, total, selectedIndex, domId: row.domId });
+    rows = result.rows;
+    total = result.total;
+    selectedIndex = result.selectedIndex;
   }
 
   async function closeAllRowsInView() {
@@ -713,12 +715,9 @@
     const row = recentlyClosedRows[selectedIndex];
     if (!row) return;
     restoreClosedTab(row, true);
-    recentlyClosedRows = recentlyClosedRows.filter((candidate) => candidate.sessionId !== row.sessionId);
-    if (recentlyClosedRows.length === 0) {
-      selectedIndex = -1;
-    } else if (selectedIndex >= recentlyClosedRows.length) {
-      selectedIndex = recentlyClosedRows.length - 1;
-    }
+    const result = removeRecentlyClosedRow({ rows: recentlyClosedRows, selectedIndex, sessionId: row.sessionId });
+    recentlyClosedRows = result.rows;
+    selectedIndex = result.selectedIndex;
   }
 
   async function drillSelectedParent() {
@@ -760,7 +759,7 @@
 
   function closeTabInfoDuplicate(row: TabIndexRow) {
     fireMessage({ type: "close-tab", domId: row.domId });
-    tabInfoDuplicates = tabInfoDuplicates.filter((tab) => tab.domId !== row.domId);
+    tabInfoDuplicates = removeTabInfoDuplicate(tabInfoDuplicates, row.domId);
   }
 
   function closeOtherTabInfoDuplicates() {
@@ -771,7 +770,7 @@
         fireMessage({ type: "close-tab", domId: duplicate.domId });
       }
     }
-    tabInfoDuplicates = tabInfoDuplicates.filter((tab) => tab.domId === selfDomId);
+    tabInfoDuplicates = keepOnlyTabInfoDuplicate(tabInfoDuplicates, selfDomId);
   }
 
   function runDuplicatePromptAction(action: DuplicatePromptAction) {
