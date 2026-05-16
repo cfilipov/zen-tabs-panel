@@ -34,7 +34,8 @@
     type ViewActivation,
     type ViewActivationContext,
   } from "./interaction/view-activation";
-  import { isCloseableView, isWorkspaceFilterView } from "./interaction/view-capabilities";
+  import { isWorkspaceFilterView } from "./interaction/view-capabilities";
+  import { buildSidebarModel, type SidebarHintId } from "./interaction/sidebar-model";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
@@ -206,33 +207,19 @@
   const selectedDomain = $derived(selectedDomainRow?.domain ?? null);
   const navigationEntries = $derived(navigationHistory?.entries ?? []);
   const activeWorkspaceId = $derived(sidebarWorkspaces.find((workspace) => workspace.isActive)?.uuid ?? null);
-  const sidebarHintsOnly = $derived(currentView === "recently-closed");
-  const sidebarSortLabel = $derived(
-    currentView === "domains"
-      ? `Sort by ${domainsSortAlpha ? "count" : "A-Z"}`
-      : currentView === "tabs-by-age"
-      ? `Sort by ${tabsByAgeNewestFirst ? "oldest" : "newest"}`
-      : null,
-  );
-  const sidebarHints = $derived<SidebarHint[]>([
-    ...(isCloseableView(currentView)
-      ? [{ id: "close", label: "Close tab", badge: "W", hidden: selectedIndex < 0, onclick: closeSelectedTabRow }]
-      : []),
-    ...(currentView === "child-tabs"
-      ? [{ id: "close-all", label: "Close all", badge: "⇧W", onclick: closeAllRowsInView }]
-      : []),
-    ...(currentView === "recently-closed"
-      ? [{ id: "restore", label: "Restore tab", badge: "O", hidden: selectedIndex < 0, onclick: restoreSelectedRecentlyClosed }]
-      : []),
-    ...(currentView === "parent-tabs"
-      ? [{ id: "children", label: "Show children", badge: "→", hidden: selectedIndex < 0, onclick: drillSelectedParent }]
-      : []),
-  ]);
-  const sidebarHidden = $derived(
-    sidebarHintsOnly
-      ? selectedIndex < 0
-      : !isWorkspaceFilterView(currentView) && sidebarHints.length === 0 && !sidebarSortLabel,
-  );
+  const sidebarModel = $derived(buildSidebarModel({
+    view: currentView,
+    selectedIndex,
+    domainsSortAlpha,
+    tabsByAgeNewestFirst,
+  }));
+  const sidebarHintsOnly = $derived(sidebarModel.hintsOnly);
+  const sidebarSortLabel = $derived(sidebarModel.sortLabel);
+  const sidebarHints = $derived<SidebarHint[]>(sidebarModel.hints.map((hint) => ({
+    ...hint,
+    onclick: sidebarHintAction(hint.id),
+  })));
+  const sidebarHidden = $derived(sidebarModel.hidden);
   const interactionRuntime: InteractionRuntimeHandlers = {
     runAction: async (actionId) => {
       const item = [...allActionItems, ...prefixItems].find((candidate) => candidate.id === actionId);
@@ -273,6 +260,13 @@
     actionPreviewsById = data.previewsById;
     actionCounts = data.counts;
     disabledActionIds = data.disabledIds;
+  }
+
+  function sidebarHintAction(id: SidebarHintId) {
+    if (id === "close") return closeSelectedTabRow;
+    if (id === "close-all") return closeAllRowsInView;
+    if (id === "restore") return restoreSelectedRecentlyClosed;
+    return drillSelectedParent;
   }
 
   function isDomainRow(row: NativeRow | null): row is DomainIndexRow {
