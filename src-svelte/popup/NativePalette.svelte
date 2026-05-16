@@ -541,8 +541,8 @@
     const plan = resolveViewOpenPlan(view, params);
 
     if (plan.kind === "actions") {
-      goBack();
-      await loadActionsData();
+      await goBack();
+      return true;
     } else if (plan.kind === "list") {
       currentDomain = plan.domain;
       await loadListView(plan.view, 0, 80, true, { ...plan.params, ...viewParams(plan.view) });
@@ -785,7 +785,7 @@
     fireMessage({ type: "clear-preview" });
   }
 
-  function goBack() {
+  function resetToActions() {
     clearPreview();
     currentView = "actions";
     rows = [];
@@ -811,7 +811,12 @@
     currentPage = 1;
     selectedIndex = -1;
     error = null;
-    void loadActionsData();
+  }
+
+  async function goBack() {
+    resetToActions();
+    await loadActionsData();
+    await requestPanelResize("actions");
   }
 
   function moveSelection(delta: 1 | -1) {
