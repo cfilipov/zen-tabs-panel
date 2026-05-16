@@ -67,6 +67,18 @@ export const VIEW_LOADERS = {
 export type LoaderView = keyof typeof VIEW_LOADERS;
 export type ViewLoaderId = (typeof VIEW_LOADERS)[LoaderView];
 
+const CONCRETE_VIEW_TITLES: Partial<Record<ViewId, string>> = {
+  navigation: "Tab history",
+  "recently-closed": "Recently closed",
+  duplicates: "Duplicates",
+  "tab-info": "Tab info",
+  "duplicate-prompt": "Duplicate tab already open",
+  "move-to-workspace": "Move to workspace",
+  "open-in-container": "New container tab",
+  "move-to-folder": "Move to folder",
+  profiles: "Profiles",
+};
+
 export type ViewOpenPlan =
   | { kind: "actions" }
   | { kind: "list"; view: NativeListView; params: Record<string, unknown>; domain: string | null }
@@ -84,6 +96,18 @@ export function isNativeListView(view: ViewId | undefined): view is NativeListVi
 
 export function isNativePrefixView(view: ViewId | undefined): view is NativePrefixView {
   return !!view && prefixViews.has(view);
+}
+
+export function resolveViewTitle(
+  view: ViewId,
+  options: {
+    currentDomain?: string | null;
+    actionLabel?: string | null;
+  } = {},
+) {
+  if (view === "domain-tabs" && options.currentDomain) return options.currentDomain;
+  if (isNativeListView(view)) return LIST_VIEW_TITLES[view];
+  return CONCRETE_VIEW_TITLES[view] ?? options.actionLabel ?? "";
 }
 
 export function paramsRecord(params?: URLSearchParams | Record<string, unknown>) {

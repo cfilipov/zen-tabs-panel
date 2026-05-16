@@ -4,6 +4,7 @@ import {
   isNativeListView,
   isNativePrefixView,
   isNativeTabView,
+  resolveViewTitle,
   resolveViewOpenPlan,
 } from "./view-registry";
 
@@ -33,5 +34,13 @@ describe("view registry", () => {
     expect(resolveViewOpenPlan("split-view")).toEqual({ kind: "prefix", view: "split-view" });
     expect(resolveViewOpenPlan("tab-info")).toEqual({ kind: "loader", view: "tab-info", loader: "tab-info" });
     expect(resolveViewOpenPlan("extension-popup")).toEqual({ kind: "unsupported", view: "extension-popup" });
+  });
+
+  it("resolves display titles without view components owning labels", () => {
+    expect(resolveViewTitle("domains")).toBe("Domains");
+    expect(resolveViewTitle("domain-tabs", { currentDomain: "example.test" })).toBe("example.test");
+    expect(resolveViewTitle("navigation")).toBe("Tab history");
+    expect(resolveViewTitle("reorder-tabs", { actionLabel: "Reorder tabs" })).toBe("Reorder tabs");
+    expect(resolveViewTitle("extension-popup")).toBe("");
   });
 });

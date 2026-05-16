@@ -73,10 +73,10 @@
   import { loadDuplicateGroupsView } from "./view-loaders/duplicates-loader";
   import { loadTabInfoView } from "./view-loaders/tab-info-loader";
   import {
-    LIST_VIEW_TITLES,
     isNativeListView,
     isNativePrefixView,
     isNativeTabView,
+    resolveViewTitle,
     resolveViewOpenPlan,
     type NativeListView,
     type ViewLoaderId,
@@ -179,31 +179,10 @@
   const allActionNodes = $derived(actionNodesForSections(renderedActionSections));
   const prefixItems = $derived(isNativePrefixView(currentView) ? prefixItemsForView(currentView) : []);
   const prefixNodes = $derived(isNativePrefixView(currentView) ? prefixChildNodesForView(currentView) : []);
-  const title = $derived(
-    currentView === "domain-tabs" && currentDomain
-      ? currentDomain
-      : currentView in LIST_VIEW_TITLES
-      ? LIST_VIEW_TITLES[currentView as NativeListView]
-      : currentView === "navigation"
-      ? "Tab history"
-      : currentView === "recently-closed"
-      ? "Recently closed"
-      : currentView === "duplicates"
-      ? "Duplicates"
-      : currentView === "tab-info"
-      ? "Tab info"
-      : currentView === "duplicate-prompt"
-      ? "Duplicate tab already open"
-      : currentView === "move-to-workspace"
-      ? "Move to workspace"
-      : currentView === "open-in-container"
-      ? "New container tab"
-      : currentView === "move-to-folder"
-      ? "Move to folder"
-      : currentView === "profiles"
-      ? "Profiles"
-      : allActionItems.find((item) => item.view === currentView)?.label ?? "",
-  );
+  const title = $derived(resolveViewTitle(currentView, {
+    currentDomain,
+    actionLabel: allActionItems.find((item) => item.view === currentView)?.label ?? null,
+  }));
   const selectedActionId = $derived(currentView === "actions" ? visibleActionItems[selectedIndex]?.id ?? null : null);
   const selectedPrefixId = $derived(isNativePrefixView(currentView) ? prefixItems[selectedIndex]?.id ?? null : null);
   const selectedRow = $derived(isNativeListView(currentView) ? rowForIndex(selectedIndex) : null);
