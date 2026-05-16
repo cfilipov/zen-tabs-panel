@@ -2,6 +2,7 @@
   import { onMount, tick } from "svelte";
   import PaletteShell from "./components/PaletteShell.svelte";
   import ActionsMenu from "./views/ActionsMenu.svelte";
+  import { nextActionSectionIndex, nextActionsPage } from "./interaction/actions-navigation";
   import {
     installChordBridgeHandlers,
     type BridgeKeyData,
@@ -845,10 +846,8 @@
 
   function setActionsPage(targetPage: number) {
     if (currentView !== "actions" || pageCount <= 1) return;
-    let nextPage = targetPage;
-    if (nextPage < 1) nextPage = pageCount;
-    if (nextPage > pageCount) nextPage = 1;
-    if (nextPage === currentPage) return;
+    const nextPage = nextActionsPage(currentPage, targetPage, pageCount);
+    if (nextPage === null) return;
     currentPage = nextPage;
     selectedIndex = -1;
     clearPreview();
@@ -856,20 +855,14 @@
 
   function jumpSection(delta: 1 | -1) {
     if (currentView !== "actions") return;
-    const starts: number[] = [];
-    let index = 0;
-    for (const section of actionSections) {
-      if (section.page !== currentPage) continue;
-      if (section.items.length > 0) starts.push(index);
-      index += section.items.length;
-    }
-    if (!starts.length) return;
-    const currentStartIndex = starts.findIndex((start, i) => {
-      const next = starts[i + 1] ?? visibleActionItems.length;
-      return selectedIndex >= start && selectedIndex < next;
+    const nextIndex = nextActionSectionIndex({
+      sections: actionSections,
+      currentPage,
+      visibleItemCount: visibleActionItems.length,
+      selectedIndex,
+      delta,
     });
-    const base = currentStartIndex >= 0 ? currentStartIndex : 0;
-    selectedIndex = starts[(base + delta + starts.length) % starts.length];
+    if (nextIndex !== null) selectedIndex = nextIndex;
   }
 
   async function activateSelected() {
