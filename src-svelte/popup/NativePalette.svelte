@@ -74,7 +74,6 @@
     type DomainIndexRow,
     type DuplicateGroupRow,
     type TabIndexRow,
-    type TabIndexView,
   } from "./runtime/tab-index-client";
   import { createWorkspaceClient, type WorkspaceRow } from "./runtime/workspace-client";
   import { emptyActionsMenuData, loadActionsMenuData, type ActionsMenuData } from "./view-loaders/actions-loader";
@@ -87,6 +86,7 @@
     loadRecentlyClosedView,
   } from "./view-loaders/basic-loaders";
   import { loadDuplicateGroupsView } from "./view-loaders/duplicates-loader";
+  import { loadNativeListWindow, type NativeListRow } from "./view-loaders/list-loader";
   import { loadTabInfoView } from "./view-loaders/tab-info-loader";
   import { runViewLoad } from "./view-loaders/view-load-runner";
   import {
@@ -110,7 +110,7 @@
   } from "./views/actions-model";
   import type { ViewId } from "../shared/types";
 
-  type NativeRow = TabIndexRow | DomainIndexRow;
+  type NativeRow = NativeListRow;
   type SidebarHint = {
     id: string;
     label: string;
@@ -329,8 +329,12 @@
         void refreshSidebarWorkspaces(load.id);
       },
       load: async () => {
-        await client.ensureStarted();
-        return client.getWindow<NativeRow>(view as TabIndexView, nextOffset, limit, params);
+        return loadNativeListWindow<NativeRow>(client, {
+          view,
+          offset: nextOffset,
+          limit,
+          params,
+        });
       },
       commit: (win) => {
         rows = win.rows;
