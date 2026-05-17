@@ -137,6 +137,25 @@ test("tab index windows stay bounded for large tab sets", () => {
   ]);
 });
 
+test("tab index hides new-tab pages from recents and action previews", () => {
+  const index = makeIndex([
+    fakeTab("tab-1", "https://active.test", "ws-1", { active: true, lastAccessed: 100 }),
+    fakeTab("tab-2", "about:newtab", "ws-1", { title: "New Tab", lastAccessed: 900 }),
+    fakeTab("tab-3", "about:blank", "ws-1", { title: "Blank", lastAccessed: 800 }),
+    fakeTab("tab-4", "about:home", "ws-1", { title: "Home", lastAccessed: 700 }),
+    fakeTab("tab-5", "https://unread.test", "ws-1", { lastAccessed: 600, unread: true }),
+    fakeTab("tab-6", "https://previous.test", "ws-1", { lastAccessed: 500 }),
+  ]);
+
+  const recents = index.getWindow("last-visited", 0, 20, {});
+  assert.deepEqual(recents.rows.map((row) => row.domId), ["tab-6"]);
+
+  const snapshot = index.getActionsSnapshot();
+  assert.equal(snapshot.previews["go-to-previous-tab"].title, "tab-6");
+  assert.equal(snapshot.unvisitedTabCount, 1);
+  assert.equal(snapshot.domainCount, 3);
+});
+
 test("tab index returns only stale close targets for auto-close sweeps", () => {
   const index = makeIndex([
     fakeTab("tab-1", "https://example.test/a", "ws-1", { lastAccessed: 100 }),

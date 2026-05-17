@@ -3,6 +3,7 @@ import type { FolderRow } from "../runtime/folder-client";
 import type { NavigationHistory, RecentlyClosedRow } from "../runtime/history-client";
 import type { ProfileRow } from "../runtime/profile-client";
 import type { WorkspaceRow } from "../runtime/workspace-client";
+import { filterNavigationHistory } from "./navigation-history";
 
 export type HistoryClient = {
   getNavigationHistory(): Promise<NavigationHistory | null>;
@@ -26,10 +27,10 @@ export type ProfileClient = {
 };
 
 export async function loadNavigationView(historyClient: HistoryClient) {
-  const history = await historyClient.getNavigationHistory();
+  const history = filterNavigationHistory(await historyClient.getNavigationHistory());
   return {
     history,
-    selectedIndex: history?.entries.length ? history.index : -1,
+    selectedIndex: history?.entries.length && history.index >= 0 ? history.index : -1,
   };
 }
 

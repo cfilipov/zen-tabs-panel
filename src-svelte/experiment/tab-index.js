@@ -22,6 +22,14 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     return match ? match[1].replace(/^www\./, "") : "";
   }
 
+  function isNewTabUrl(url) {
+    return !url || url === "about:newtab" || url === "about:blank" || url === "about:home";
+  }
+
+  function isDisplayTabRow(row) {
+    return row && !isNewTabUrl(row.url);
+  }
+
   function compactFavicon(url) {
     if (!url) return "";
     const s = String(url);
@@ -112,7 +120,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
 
   function filteredRows(view, params) {
     rebuildIfNeeded();
-    let out = rows;
+    let out = rows.filter(isDisplayTabRow);
     if (params?.workspaceId && params.workspaceId !== "all") {
       out = out.filter((row) => row.workspaceId === params.workspaceId);
     }
@@ -134,6 +142,17 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     }
     if (view === "unvisited-tabs") {
       out = out.filter((row) => row.unread);
+    }
+    if (view === "last-visited") {
+      const active = rows.find((row) => row.active) || null;
+      const activeSplitGroupId = active?.splitGroupId || null;
+      const activeDomId = active?.domId || null;
+      out = out.filter((row) => {
+        if (row.domId === activeDomId) return false;
+        if (activeSplitGroupId && row.splitGroupId === activeSplitGroupId) return false;
+        if (row.unread) return false;
+        return true;
+      });
     }
     if (view === "last-visited" || view === "domain-tabs" || view === "unvisited-tabs") {
       out = [...out].sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
@@ -200,7 +219,6 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
   function duplicateGroups(params) {
     const groups = new Map();
     for (const row of filteredRows("all", params)) {
-      if (!row.url || row.url === "about:newtab" || row.url === "about:blank") continue;
       const group = groups.get(row.url);
       if (group) group.push(row);
       else groups.set(row.url, [row]);
@@ -356,16 +374,15 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       let newestUnvisitedAccess = -Infinity;
       let oldestUnvisited = null;
       let oldestUnvisitedAccess = Infinity;
+      const displayRows = rows.filter(isDisplayTabRow);
 
-      for (const row of rows) {
+      for (const row of displayRows) {
         if (row.panelTabUuid) uuidToRow.set(row.panelTabUuid, row);
         if (row.panelParentUuid) parentUuids.add(row.panelParentUuid);
         else if (row.openerTabDomId) parentDomIds.add(row.openerTabDomId);
         if (row.workspaceId) workspaceTabCounts[row.workspaceId] = (workspaceTabCounts[row.workspaceId] || 0) + 1;
         if (row.domain) domains.add(row.domain);
-        if (row.url && row.url !== "about:newtab" && row.url !== "about:blank") {
-          urlCounts.set(row.url, (urlCounts.get(row.url) || 0) + 1);
-        }
+        urlCounts.set(row.url, (urlCounts.get(row.url) || 0) + 1);
         if (row.unread) {
           unvisitedTabCount++;
           const access = row.lastAccessed || 0;
@@ -381,7 +398,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       }
 
       if (activeParentUuid) parentTab = uuidToRow.get(activeParentUuid) || null;
-      if (!parentTab && activeOpener) parentTab = rows.find((row) => row.domId === activeOpener) || null;
+      if (!parentTab && activeOpener) parentTab = displayRows.find((row) => row.domId === activeOpener) || null;
 
       let childTabCount = 0;
       let siblingTabCount = 0;
@@ -391,7 +408,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       const sameWorkspaceTabs = activeWorkspaceId ? [] : null;
       let verticalIndex = -1;
 
-      for (const row of rows) {
+      for (const row of displayRows) {
         if ((row.panelTabUuid && parentUuids.has(row.panelTabUuid)) || parentDomIds.has(row.domId)) {
           parentTabCount++;
         }
@@ -413,8 +430,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
 
         const isActive = row.domId === activeDomId;
         const isSplitSibling = activeSplitGroupId != null && row.splitGroupId === activeSplitGroupId;
-        const isNewTab = !row.url || row.url === "about:newtab" || row.url === "about:blank" || row.url === "about:home";
-        if (!isActive && !isSplitSibling && !row.unread && !isNewTab) {
+        if (!isActive && !isSplitSibling && !row.unread) {
           const access = row.lastAccessed || 0;
           if (access > prevBestAccess) {
             prevBestAccess = access;

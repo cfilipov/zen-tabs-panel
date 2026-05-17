@@ -2,6 +2,7 @@ import type { ExtensionRow } from "../runtime/extension-client";
 import type { NavigationHistory } from "../runtime/history-client";
 import type { ActionPreview, ActionsSnapshot } from "../runtime/tab-index-client";
 import type { WorkspaceRow } from "../runtime/workspace-client";
+import { filterNavigationHistory } from "./navigation-history";
 
 export type ActionsTabIndexClient = {
   getActionsSnapshot(): Promise<ActionsSnapshot>;
@@ -83,14 +84,15 @@ export async function loadActionsMenuData(deps: LoadActionsDeps): Promise<Action
     deps.tabIndexClient.getActionsSnapshot().catch(() => null),
     deps.extensionClient.listExtensions().catch(() => []),
     deps.historyClient.getRecentlyClosed().catch(() => []),
-    deps.historyClient.getNavigationHistory().catch(() => null),
+    deps.historyClient.getNavigationHistory().then(filterNavigationHistory).catch(() => null),
     deps.getSelectedTabDomIds().catch(() => []),
   ]);
 
-  const backPreview = navHistory && navHistory.index > 0
+  const hasVisibleHistoryCurrent = !!navHistory && navHistory.index >= 0;
+  const backPreview = hasVisibleHistoryCurrent && navHistory.index > 0
     ? historyPreview(navHistory.entries[navHistory.index - 1])
     : null;
-  const forwardPreview = navHistory && navHistory.index < navHistory.entries.length - 1
+  const forwardPreview = hasVisibleHistoryCurrent && navHistory.index < navHistory.entries.length - 1
     ? historyPreview(navHistory.entries[navHistory.index + 1])
     : null;
   const previewsById: Record<string, ActionPreview | null> = {

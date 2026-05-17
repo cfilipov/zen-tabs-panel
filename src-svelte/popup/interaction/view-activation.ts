@@ -50,12 +50,13 @@ function rowForIndex(rows: readonly NativeRow[], offset: number, index: number) 
 function navigationIndexFor(history: NavigationHistory | null, index: number, source: "selection" | "shortcut") {
   if (!history) return null;
   if (source === "selection") {
-    return index >= 0 && index < history.entries.length && index !== history.index ? index : null;
+    if (index < 0 || index >= history.entries.length || index === history.index) return null;
+    return history.entries[index].historyIndex ?? index;
   }
   const target = history.entries
     .map((entry, navIndex) => ({ entry, navIndex }))
     .filter((candidate) => candidate.navIndex !== history.index)[index];
-  return target ? target.navIndex : null;
+  return target ? target.entry.historyIndex ?? target.navIndex : null;
 }
 
 export function resolveViewActivation(

@@ -25,6 +25,25 @@ describe("basic view loaders", () => {
     expect(result.history?.entries).toHaveLength(2);
   });
 
+  it("removes blank new-tab entries from navigation history while preserving browser indexes", async () => {
+    const result = await loadNavigationView({
+      getNavigationHistory: async () => ({
+        index: 2,
+        entries: [
+          { title: "New Tab", url: "about:newtab" },
+          { title: "Back", url: "https://back.test" },
+          { title: "Current", url: "https://current.test" },
+          { title: "Blank", url: "about:blank" },
+        ],
+      }),
+      getRecentlyClosed: async () => [],
+    });
+
+    expect(result.selectedIndex).toBe(1);
+    expect(result.history?.entries.map((entry) => entry.title)).toEqual(["Back", "Current"]);
+    expect(result.history?.entries.map((entry) => entry.historyIndex)).toEqual([1, 2]);
+  });
+
   it("normalizes an empty navigation history to no selection", async () => {
     const result = await loadNavigationView({
       getNavigationHistory: async () => null,

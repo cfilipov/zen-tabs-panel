@@ -68,6 +68,22 @@ describe("view activation resolver", () => {
       .toEqual({ kind: "navigate-history-index", index: 2 });
   });
 
+  it("uses original browser history indexes after blank entries are filtered out", () => {
+    const navigationHistory = {
+      index: 1,
+      entries: [
+        { title: "Back", url: "https://back.test", historyIndex: 3 },
+        { title: "Current", url: "https://current.test", historyIndex: 5 },
+        { title: "Forward", url: "https://forward.test", historyIndex: 7 },
+      ],
+    };
+
+    expect(resolveSelectionActivation(context({ view: "navigation", selectedIndex: 0, navigationHistory })))
+      .toEqual({ kind: "navigate-history-index", index: 3 });
+    expect(resolveViewActivation(context({ view: "navigation", navigationHistory }), 1, "shortcut"))
+      .toEqual({ kind: "navigate-history-index", index: 7 });
+  });
+
   it("resolves static list views and duplicate prompt actions", () => {
     const closed = { sessionId: "s1", title: "Closed", url: "", favIconUrl: "", pinned: false, lastModified: 1 };
     const workspace = { uuid: "ws", name: "Work", svgContent: "", isActive: false };

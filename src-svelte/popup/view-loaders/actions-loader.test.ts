@@ -90,6 +90,29 @@ describe("actions loader", () => {
     expect(data.disabledIds.has("navigation")).toBe(true);
   });
 
+  it("does not use blank new-tab history entries for actions-menu previews", async () => {
+    const data = await loadActionsMenuData({
+      workspaceClient: { getWorkspacesWithIcons: async () => [] },
+      tabIndexClient: { getActionsSnapshot: async () => emptySnapshot },
+      extensionClient: { listExtensions: async () => [] },
+      historyClient: {
+        getRecentlyClosed: async () => [],
+        getNavigationHistory: async () => ({
+          index: 1,
+          entries: [
+            { title: "Real back", url: "https://back.test" },
+            { title: "Current", url: "https://current.test" },
+            { title: "New Tab", url: "about:newtab" },
+          ],
+        }),
+      },
+      getSelectedTabDomIds: async () => [],
+    });
+
+    expect(data.previewsById["go-back-in-tab"]?.title).toBe("Real back");
+    expect(data.previewsById["go-forward-in-tab"]).toBeNull();
+  });
+
   it("creates a fresh empty action-data object", () => {
     const first = emptyActionsMenuData();
     const second = emptyActionsMenuData();

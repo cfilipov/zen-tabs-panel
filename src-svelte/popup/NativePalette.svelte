@@ -650,8 +650,9 @@
   }
 
   function navigateToHistoryIndex(index: number) {
+    const historyIndex = navigationHistory?.entries[index]?.historyIndex ?? index;
     clearPopupRevealTimer();
-    fireMessage({ type: "navigate-to-history-index", index });
+    fireMessage({ type: "navigate-to-history-index", index: historyIndex });
   }
 
   function navigateToHistoryIndexWithTrace(index: number) {

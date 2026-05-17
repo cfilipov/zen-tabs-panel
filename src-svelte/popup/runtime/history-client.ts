@@ -3,6 +3,7 @@ import { sendMessage } from "./ipc";
 export type NavigationEntry = {
   url: string;
   title: string;
+  historyIndex?: number;
 };
 
 export type NavigationHistory = {
