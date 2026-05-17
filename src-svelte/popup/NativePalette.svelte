@@ -2,6 +2,7 @@
   import { onMount, tick } from "svelte";
   import PaletteShell from "./components/PaletteShell.svelte";
   import ActionsMenu from "./views/ActionsMenu.svelte";
+  import { resolveActionItemActivation, type ActionItemActivation } from "./interaction/action-activation";
   import { nextActionSectionIndex, nextActionsPage } from "./interaction/actions-navigation";
   import { createBridgeDispatchController } from "./interaction/bridge-dispatch";
   import {
@@ -566,35 +567,31 @@
     return finishOpenView(view);
   }
 
-  async function performActionItem(item: ActionMenuItem) {
-    if (item.disabled) {
-      return;
-    }
-
-    if (item.kind === "action") {
+  async function performActionItemActivation(activation: ActionItemActivation) {
+    if (activation.kind === "fire-action") {
       clearPopupRevealTimer();
-      fireMessage({ type: item.id });
+      fireMessage({ type: activation.actionId });
       return;
     }
-
-    if (item.kind === "workspace-switch" && item.workspaceId && !item.disabled) {
-      switchWorkspace(item.workspaceId);
+    if (activation.kind === "switch-workspace") {
+      switchWorkspace(activation.workspaceId);
       return;
     }
-
-    if (item.kind === "prefix" && isNativePrefixView(item.view as ViewId | undefined)) {
-      await openNativeView(item.view as ViewId, undefined, true);
+    if (activation.kind === "open-view") {
+      await openNativeView(activation.view, undefined, true);
       return;
     }
+  }
 
-    if (item.view) await openNativeView(item.view as ViewId, undefined, true);
+  async function performActionItem(item: ActionMenuItem) {
+    await performActionItemActivation(resolveActionItemActivation(item));
   }
 
   async function activateAction(item: ActionMenuItem) {
-    if (item.disabled) return;
-
-    if (item.kind === "workspace-switch" && item.workspaceId) {
-      switchWorkspace(item.workspaceId);
+    const activation = resolveActionItemActivation(item);
+    if (activation.kind === "none") return;
+    if (activation.kind === "switch-workspace") {
+      switchWorkspace(activation.workspaceId);
       return;
     }
 
