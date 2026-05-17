@@ -62,6 +62,7 @@
   import { commandForViewActivation, type ViewCommand } from "./interaction/view-command";
   import { isWorkspaceFilterView } from "./interaction/view-capabilities";
   import { buildSidebarModel, type SidebarHintId } from "./interaction/sidebar-model";
+  import { chromeNavigationMessage } from "./interaction/view-navigation";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
@@ -538,20 +539,8 @@
     "duplicate-prompt": (params) => loadDuplicatePrompt(params instanceof URLSearchParams ? params : undefined),
   };
 
-  function encodedParams(params?: URLSearchParams | Record<string, unknown>) {
-    if (!params) return undefined;
-    if (params instanceof URLSearchParams) {
-      return JSON.stringify(Object.fromEntries(params.entries()));
-    }
-    return JSON.stringify(params);
-  }
-
   function notifyChromeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>) {
-    if (view === "actions") {
-      fireMessage({ type: "navigate-back" });
-      return;
-    }
-    fireMessage({ type: "navigate-view", view, params: encodedParams(params) });
+    fireMessage(chromeNavigationMessage(view, params));
   }
 
   async function finishOpenView(view: ViewId) {
