@@ -88,6 +88,7 @@
     loadRecentlyClosedView,
   } from "./view-loaders/basic-loaders";
   import { loadDuplicateGroupsView } from "./view-loaders/duplicates-loader";
+  import { loadDuplicatePromptView } from "./view-loaders/duplicate-prompt-loader";
   import { loadNativeListWindow, type NativeListRow } from "./view-loaders/list-loader";
   import { loadTabInfoView } from "./view-loaders/tab-info-loader";
   import { runViewLoad } from "./view-loaders/view-load-runner";
@@ -502,11 +503,24 @@
     });
   }
 
-  function loadDuplicatePrompt(params = new URLSearchParams(location.search)) {
-    viewLoad.begin("duplicate-prompt", { loading: false });
-    duplicatePromptUrl = params.get("url") || "";
-    duplicatePromptDomId = params.get("domId");
-    selectedIndex = -1;
+  async function loadDuplicatePrompt(params = new URLSearchParams(location.search)) {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "duplicate-prompt",
+      loading: false,
+      load: async () => loadDuplicatePromptView(params),
+      commit: (result) => {
+        duplicatePromptUrl = result.url;
+        duplicatePromptDomId = result.domId;
+        selectedIndex = result.selectedIndex;
+      },
+      fail: (message) => {
+        duplicatePromptUrl = "";
+        duplicatePromptDomId = null;
+        selectedIndex = -1;
+        error = message;
+      },
+    });
   }
 
   const registeredViewLoaders: Record<
