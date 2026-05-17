@@ -106,6 +106,46 @@ test("tab index returns active rows and requested DOM-id rows without a full tra
   ]);
 });
 
+test("tab index windows stay bounded for large tab sets", () => {
+  const tabs = Array.from({ length: 3000 }, (_, i) =>
+    fakeTab(`tab-${i + 1}`, `https://example.test/${i + 1}`, i % 2 ? "ws-1" : "ws-2", {
+      lastAccessed: i,
+    })
+  );
+  const index = makeIndex(tabs);
+
+  const summary = index.getSummary("last-visited", {});
+  const win = index.getWindow("last-visited", 2500, 1000, {});
+
+  assert.equal(summary.total, 3000);
+  assert.equal(win.offset, 2500);
+  assert.equal(win.limit, 200);
+  assert.equal(win.total, 3000);
+  assert.equal(win.rows.length, 200);
+  assert.deepEqual(Object.keys(win.rows[0]).sort(), [
+    "active",
+    "domId",
+    "domain",
+    "essential",
+    "favIconUrl",
+    "focusCount",
+    "id",
+    "index",
+    "lastAccessed",
+    "openerTabDomId",
+    "panelParentUuid",
+    "panelTabUuid",
+    "pending",
+    "pinned",
+    "splitGroupId",
+    "splitView",
+    "title",
+    "unread",
+    "url",
+    "workspaceId",
+  ]);
+});
+
 test("tab index returns only stale close targets for auto-close sweeps", () => {
   const index = makeIndex([
     fakeTab("tab-1", "https://example.test/a", "ws-1", { lastAccessed: 100 }),
