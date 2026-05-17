@@ -59,6 +59,7 @@
     type ViewActivation,
     type ViewActivationContext,
   } from "./interaction/view-activation";
+  import { commandForViewActivation, type ViewCommand } from "./interaction/view-command";
   import { isWorkspaceFilterView } from "./interaction/view-capabilities";
   import { buildSidebarModel, type SidebarHintId } from "./interaction/sidebar-model";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
@@ -606,12 +607,7 @@
     }
   }
 
-  function activateTab(row: TabIndexRow) {
-    clearPopupRevealTimer();
-    fireMessage({ type: "activate-tab", domId: row.domId });
-  }
-
-  function activateTabLike(row: { domId: string }) {
+  function activateTab(row: { domId: string }) {
     clearPopupRevealTimer();
     fireMessage({ type: "activate-tab", domId: row.domId });
   }
@@ -902,15 +898,18 @@
   }
 
   async function applyViewActivation(activation: ViewActivation) {
-    if (activation.kind === "activate-tab") activateTab(activation.row);
-    else if (activation.kind === "activate-domain") await activateDomain(activation.row);
-    else if (activation.kind === "navigate-history-index") navigateToHistoryIndex(activation.index);
-    else if (activation.kind === "restore-closed-tab") restoreClosedTab(activation.row);
-    else if (activation.kind === "move-to-workspace") moveToWorkspace(activation.row);
-    else if (activation.kind === "reopen-in-container") reopenInContainer(activation.row);
-    else if (activation.kind === "move-to-folder") moveToFolder(activation.row);
-    else if (activation.kind === "launch-profile") launchProfile(activation.row);
-    else if (activation.kind === "duplicate-prompt-action") runDuplicatePromptAction(activation.action);
+    await applyViewCommand(commandForViewActivation(activation));
+  }
+
+  async function applyViewCommand(command: ViewCommand) {
+    if (command.kind === "message") {
+      if (command.clearReveal) clearPopupRevealTimer();
+      fireMessage(command.message);
+    } else if (command.kind === "open-domain") {
+      await activateDomain({ kind: "domain", domain: command.domain, count: 0 });
+    } else if (command.kind === "duplicate-prompt-action") {
+      runDuplicatePromptAction(command.action);
+    }
   }
 
   function rowForIndex(index: number) {
