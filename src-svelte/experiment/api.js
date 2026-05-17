@@ -985,6 +985,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const isDark = isChromeDark();
       let url = context.extension.getURL("popup/popup.html") + "?theme=" + (isDark ? "dark" : "light");
       url += "&inst=" + popupInstance;
+      url += "&gen=" + encodeURIComponent(CHORD_GENERATION);
       // Current chord-delay setting — popup's keyboard.js reads it and
       // overrides its reveal-timer duration.
       url += "&delay=" + chordDelayMs;
@@ -1347,7 +1348,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const existing = w.document.getElementById(OVERLAY_ID);
       if (existing) {
         const existingBrowser = w.document.getElementById(BROWSER_ID);
-        if (browserMessageManager(existingBrowser)) {
+        if (browserMessageManager(existingBrowser) && browserHasCurrentGeneration(existingBrowser)) {
           return rearmExistingOverlay(view, params, existing);
         }
         existing.remove();
@@ -2953,6 +2954,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (u === url) return tab;
       }
       return null;
+    }
+
+    function browserHasCurrentGeneration(br) {
+      if (!br) return false;
+      const expected = "gen=" + encodeURIComponent(CHORD_GENERATION);
+      try {
+        if (String(br.currentURI?.spec || "").includes(expected)) return true;
+      } catch (e) {}
+      try {
+        if (String(br.getAttribute("src") || "").includes(expected)) return true;
+      } catch (e) {}
+      return false;
     }
 
     function installDuplicateLinkInterceptor() {

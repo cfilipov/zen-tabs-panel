@@ -334,6 +334,8 @@ checks the failure modes that unit tests do not see:
 - the actions panel returns to the full actions width after warm rearm
 - Space flips to page 2 and page 2 is non-empty
 - `R` opens Recent through the popup bridge
+- direct `Domains` submenu opening renders a bounded list view, and `S`
+  remains wired to the list sort path
 
 The smoke sends popup bridge events rather than OS-level key events; it is an
 integration check for the extension/popup dispatch path, not a replacement for

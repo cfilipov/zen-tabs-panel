@@ -99,11 +99,17 @@ def start_smoke() -> str:
 
   function runInBackground(source) {
     return new Promise((resolve, reject) => {
-      const mm = getBackgroundMessageManager();
-      if (!mm) {
-        reject(new Error("no background messageManager"));
-        return;
-      }
+      const startedAt = Date.now();
+      function startWhenReady() {
+        const mm = getBackgroundMessageManager();
+        if (!mm) {
+          if (Date.now() - startedAt < 5000) {
+            w.setTimeout(startWhenReady, 100);
+          } else {
+            reject(new Error("no background messageManager"));
+          }
+          return;
+        }
       const name = "ZenTabsPanel:PopupSmokeBg:" + Date.now() + ":" + Math.random();
       const timeout = w.setTimeout(() => {
         try { mm.removeMessageListener(name, handler); } catch (e) {}
@@ -131,6 +137,8 @@ def start_smoke() -> str:
         })();
       })();`;
       mm.loadFrameScript("data:application/javascript," + encodeURIComponent(code), false);
+      }
+      startWhenReady();
     }).then(reply => {
       if (!reply || !reply.ok) throw new Error(reply?.message || "background probe failed");
       return reply.value;
@@ -252,7 +260,7 @@ def start_smoke() -> str:
         await cw.browser.zenWorkspaces.hidePalette();
         return true;
       }`);
-      await sleep(120);
+      await sleep(700);
 
       record("show-palette");
       const opened = await runInBackground(`async (cw) => {
@@ -337,6 +345,64 @@ def start_smoke() -> str:
       const recent = await runInPopup(snapshotSource());
       record("after-r", { textHead: recent.textHead.slice(0, 12), href: recent.href });
       requireText(recent, "Recent", "R key");
+
+      record("hide-before-domains-direct");
+      await runInBackground(`async (cw) => {
+        await cw.browser.zenWorkspaces.hidePalette();
+        return true;
+      }`);
+      await sleep(700);
+
+      record("show-domains-direct");
+      const domainsOpened = await runInBackground(`async (cw) => {
+        return await cw.browser.zenWorkspaces.showPalette("domains");
+      }`);
+      record("domains-show-result", { opened: domainsOpened });
+
+      await waitFor("domains overlay width", () => {
+        const state = overlayState();
+        const width = state.panelWidth || Number.parseInt(state.browserWidth, 10);
+        if (
+          state.overlay &&
+          state.visibility !== "hidden" &&
+          state.hasMessageManager &&
+          width >= 700 &&
+          width < 900
+        ) {
+          return { ok: true, state };
+        }
+        return { ok: false, state };
+      }, 3000, 100);
+
+      const domains = await waitFor("domains list content", async () => {
+        const snap = await runInPopup(snapshotSource());
+        const text = snap.textHead.join("\n");
+        if (text.includes("Domains") && !text.includes("Loading...") && snap.textLength > 20) {
+          return { ok: true, snap };
+        }
+        return { ok: false, snap };
+      }, 4000, 100);
+      record("domains-direct", { textHead: domains.snap.textHead.slice(0, 12), href: domains.snap.href });
+
+      record("force-ready-domains");
+      await runInPopup(`(content) => {
+        const payload = { type: "force-ready", data: { buffered: [] } };
+        content.document.dispatchEvent(new content.CustomEvent("ztt:bridge-message", { detail: JSON.stringify(payload) }));
+        return true;
+      }`);
+      await sleep(80);
+
+      record("press-s-domain-sort");
+      await runInPopup(keySource("S"));
+      const sorted = await waitFor("domains after sort", async () => {
+        const snap = await runInPopup(snapshotSource());
+        const text = snap.textHead.join("\n");
+        if (text.includes("Domains") && !text.includes("Loading...") && snap.textLength > 20) {
+          return { ok: true, snap };
+        }
+        return { ok: false, snap };
+      }, 4000, 100);
+      record("after-s-domains", { textHead: sorted.snap.textHead.slice(0, 12), href: sorted.snap.href });
 
       const finalState = overlayState();
       await runInBackground(`async (cw) => {
