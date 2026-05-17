@@ -1,5 +1,6 @@
 import { NAVIGATION_TREE } from "../../shared/navigation-tree";
 import type { NavNode, TerminalNode, ViewId } from "../../shared/types";
+import { duplicatePromptActionForHotkey, type DuplicatePromptAction } from "./duplicate-prompt-options";
 import { chordFromKey, type InteractionInput } from "./inputs";
 import {
   canCloseAllInView,
@@ -14,13 +15,6 @@ export type InteractionContext = {
   view: ViewId;
   treePath?: string[];
 };
-
-export type DuplicatePromptAction = "duplicate-switch" | "duplicate-open-anyway" | "hide-palette";
-export const DUPLICATE_PROMPT_ACTIONS: readonly DuplicatePromptAction[] = [
-  "duplicate-switch",
-  "duplicate-open-anyway",
-  "hide-palette",
-];
 
 export type InteractionCommand =
   | { kind: "none" }
@@ -123,9 +117,8 @@ export function interpretStructuralKey(
       if (!input.metaKey && !input.ctrlKey && !input.altKey) {
         const upper = input.key.toUpperCase();
         if (context.view === "duplicate-prompt" && !input.shiftKey) {
-          if (upper === "S") return { kind: "duplicate-prompt-action", action: "duplicate-switch" };
-          if (upper === "O") return { kind: "duplicate-prompt-action", action: "duplicate-open-anyway" };
-          if (upper === "C") return { kind: "duplicate-prompt-action", action: "hide-palette" };
+          const action = duplicatePromptActionForHotkey(upper);
+          if (action) return { kind: "duplicate-prompt-action", action };
         }
         if (context.view === "navigation" && !input.shiftKey) {
           if (upper === "B") return { kind: "navigate-history-delta", delta: -1 };

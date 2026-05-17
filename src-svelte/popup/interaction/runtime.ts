@@ -1,5 +1,6 @@
 import type { ViewId } from "../../shared/types";
-import type { DuplicatePromptAction, InteractionCommand } from "./interpreter";
+import type { DuplicatePromptAction } from "./duplicate-prompt-options";
+import type { InteractionCommand } from "./interpreter";
 
 type MaybePromise<T> = T | Promise<T>;
 

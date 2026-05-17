@@ -1,15 +1,11 @@
 <script lang="ts">
   import Badge from "../components/Badge.svelte";
   import { iconHtml } from "../components/icons";
-  import type { DuplicatePromptAction } from "../interaction/interpreter";
-
-  type PromptOption = {
-    label: string;
-    hotkey: string;
-    action: DuplicatePromptAction;
-    icon: string;
-    domId?: string | null;
-  };
+  import {
+    DUPLICATE_PROMPT_OPTIONS,
+    type DuplicatePromptAction,
+    type DuplicatePromptOption,
+  } from "../interaction/duplicate-prompt-options";
 
   type Props = {
     url: string;
@@ -22,11 +18,12 @@
 
   let { url, existingDomId = null, selectedIndex = 0, onactivate, onpreview, onclearpreview }: Props = $props();
 
-  const options = $derived<PromptOption[]>([
-    { label: "Switch to existing tab", hotkey: "S", action: "duplicate-switch", icon: "svg:arrow-right", domId: existingDomId },
-    { label: "Open anyway", hotkey: "O", action: "duplicate-open-anyway", icon: "svg:plus" },
-    { label: "Cancel", hotkey: "C", action: "hide-palette", icon: "svg:x-circle" },
-  ]);
+  const options = $derived<(DuplicatePromptOption & { domId?: string | null })[]>(
+    DUPLICATE_PROMPT_OPTIONS.map((option, index) => ({
+      ...option,
+      domId: index === 0 ? existingDomId : null,
+    })),
+  );
 </script>
 
 <div class="duplicate-prompt-url">{url}</div>

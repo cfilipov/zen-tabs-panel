@@ -5,7 +5,7 @@ import type { ProfileRow } from "../runtime/profile-client";
 import type { DomainIndexRow, TabIndexRow } from "../runtime/tab-index-client";
 import type { WorkspaceRow } from "../runtime/workspace-client";
 import type { ViewId } from "../../shared/types";
-import { DUPLICATE_PROMPT_ACTIONS, type DuplicatePromptAction } from "./interpreter";
+import { DUPLICATE_PROMPT_ACTIONS, type DuplicatePromptAction } from "./duplicate-prompt-options";
 
 export type NativeRow = TabIndexRow | DomainIndexRow;
 

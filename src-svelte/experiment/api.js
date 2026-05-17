@@ -872,6 +872,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // / revealOverlay surface to display the already-loaded popup with no
     // further delay.
     let pendingReveal = null;
+    let explicitRevealToken = 0;
 
     // Chrome engine instance is constructed later in this getAPI body once
     // the helpers it depends on (createOverlay, runChordAction, etc.) are
@@ -1495,6 +1496,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return overlay;
     }
 
+    function createFreshOverlayForDirectOpen(view, params) {
+      const w = getWin();
+      const existing = w && w.document.getElementById(OVERLAY_ID);
+      if (existing) {
+        destroyOverlay({ hard: true, silent: true });
+      }
+      return createOverlay(view, params);
+    }
+
     // Warm popup is mounted from a previous chord chain (or initial
     // pre-create at extension load). Reset state for a fresh chord arm,
     // tell the popup to navigate to the requested view, and arm a new
@@ -1547,20 +1557,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       overlay.style.animation = "";
       delete overlay.dataset.closing;
 
-      // Generation-tagged so stale frame scripts (from prior extension
-      // loads) ignore it and only the current popup-process listener
-      // forwards it to the Svelte bridge module.
-      const mm = browserMessageManager(br);
-      if (mm) {
-        try {
-          mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
-            inst: popupInstance,
-            view: view || null,
-            params: params || null,
-          });
-        } catch (e) {}
-      }
-
       const reveal = () => {
         if (pendingReveal !== reveal) return;
         pendingReveal = null;
@@ -1583,6 +1579,23 @@ this.zenWorkspaces = class extends ExtensionAPI {
       };
       pendingReveal = reveal;
 
+      // Generation-tagged so stale frame scripts (from prior extension
+      // loads) ignore it and only the current popup-process listener
+      // forwards it to the Svelte bridge module. Assign pendingReveal before
+      // sending: very small views can resize and signal ready in the same
+      // turn as this message, and deferred explicit opens need a reveal
+      // closure available when that happens.
+      const mm = browserMessageManager(br);
+      if (mm) {
+        try {
+          mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
+            inst: popupInstance,
+            view: view || null,
+            params: params || null,
+          });
+        } catch (e) {}
+      }
+
       return overlay;
     }
 
@@ -1601,6 +1614,38 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (br) {
         try { br.focus(); } catch (e) {}
       }
+    }
+
+    function scheduleExplicitViewReveal(view) {
+      const token = ++explicitRevealToken;
+      const w = getWin();
+      if (!w) return;
+      const targetWidth = getViewSize(view || "actions").width;
+      const startedAt = Date.now();
+
+      const tryReveal = () => {
+        if (token !== explicitRevealToken) return;
+        const w2 = getWin();
+        if (!w2) return;
+        const overlay = w2.document.getElementById(OVERLAY_ID);
+        const br = w2.document.getElementById(BROWSER_ID);
+        if (!overlay || overlay.dataset.closing) return;
+        if (currentViewName !== (view || "actions")) return;
+        if (overlay.style.visibility !== "hidden") return;
+
+        const width = Math.round(Number.parseFloat(br?.style?.width || "0"));
+        if (width === targetWidth) {
+          if (pendingReveal) revealOverlay();
+          else forceRevealOverlay();
+          return;
+        }
+
+        if (Date.now() - startedAt < 2000) {
+          w2.setTimeout(tryReveal, 100);
+        }
+      };
+
+      w.setTimeout(tryReveal, 350);
     }
 
     // Cross-fade the existing browser out and swap in a fresh one. Used for
@@ -1916,6 +1961,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // pendingReveal still set and unhide the overlay right before we
       // remove it, producing a flash.
       revealBlocked = true;
+      explicitRevealToken++;
 
       // Bridge mode can't outlive the chord chain it was driving. If a
       // bridge is active when the overlay is being destroyed, tear it down
@@ -4354,31 +4400,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
           try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
 
           if (view) {
-            createOverlay(view, null);
             revealDeferred = true;
+            createFreshOverlayForDirectOpen(view, null);
+            scheduleExplicitViewReveal(view);
             return { kind: "opened" };
           }
 
-          // If a prerender of the actions menu is already in flight from
-          // an aborted chord and the caller didn't request a specific
-          // submenu, just reveal it (avoids churning a fresh overlay).
-          if (pendingReveal && !view) {
-            const w = getWin();
-            const br = w && w.document.getElementById(BROWSER_ID);
-            if (browserHasCurrentGeneration(br)) {
-              revealOverlay();
-              forceRevealOverlay();
-              if (w) w.setTimeout(forceRevealOverlay, 0);
-              return { kind: "opened" };
-            }
-            destroyOverlay({ hard: true, silent: true });
-          }
-          openOverlayWithView(view);
-          forceRevealOverlay();
-          {
-            const w = getWin();
-            if (w) w.setTimeout(forceRevealOverlay, 0);
-          }
+          // Direct main-menu opens use the same warm-rearm path as
+          // submenus. Use a fresh overlay for this external path so an
+          // in-flight soft-hide reset from the previous submenu cannot
+          // race the new requested view.
+          revealDeferred = true;
+          createFreshOverlayForDirectOpen(null, null);
+          scheduleExplicitViewReveal("actions");
           return { kind: "opened" };
         },
 

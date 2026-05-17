@@ -24,11 +24,10 @@
   import TabInfoView from "./views/TabInfoView.svelte";
   import WorkspaceList from "./views/WorkspaceList.svelte";
   import {
-    DUPLICATE_PROMPT_ACTIONS,
     interpretVisibleInput,
-    type DuplicatePromptAction,
     type InteractionCommand,
   } from "./interaction/interpreter";
+  import { DUPLICATE_PROMPT_ACTIONS, type DuplicatePromptAction } from "./interaction/duplicate-prompt-options";
   import { applyInteractionCommand, type InteractionRuntimeHandlers } from "./interaction/runtime";
   import {
     loadWindowForIndex,
@@ -470,7 +469,7 @@
     await runViewLoad({
       controller: viewLoad,
       view: "duplicates",
-      load: () => loadDuplicateGroupsView(tabIndexClient, workspaceClient, workspaceFilter),
+      load: () => loadDuplicateGroupsView(client, workspaceClient, workspaceFilter),
       commit: (result) => {
         sidebarWorkspaces = result.workspaces;
         duplicateWorkspaces = result.workspaces;
@@ -491,7 +490,7 @@
     await runViewLoad({
       controller: viewLoad,
       view: "tab-info",
-      load: () => loadTabInfoView(tabIndexClient, tabInfoClient, workspaceClient),
+      load: () => loadTabInfoView(client, tabInfoClient, workspaceClient),
       commit: (result) => {
         tabInfo = result.info;
         tabInfoVisits = result.visits;

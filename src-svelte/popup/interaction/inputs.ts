@@ -5,6 +5,15 @@ export type InteractionInput =
   | { kind: "chord"; chord: Chord }
   | { kind: "mouse"; targetId: string };
 
+export type KeyboardEventLike = {
+  key: string;
+  code?: string;
+  shiftKey?: boolean;
+  altKey?: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+};
+
 export function chordFromKey(input: InteractionInput): Chord | null {
   if (input.kind === "chord") return input.chord;
   if (input.kind !== "key") return null;
@@ -14,7 +23,7 @@ export function chordFromKey(input: InteractionInput): Chord | null {
   return input.key;
 }
 
-export function inputFromKeyboardEvent(event: KeyboardEvent): InteractionInput {
+export function inputFromKeyboardEvent(event: KeyboardEventLike): InteractionInput {
   return {
     kind: "key",
     key: event.key,

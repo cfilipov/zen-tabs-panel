@@ -27,6 +27,19 @@ function collectSourceFiles(dir: string, files: string[] = []) {
   return files;
 }
 
+function collectSourceFilesFrom(relativeDirs: string[]) {
+  return relativeDirs.flatMap((dir) => collectSourceFiles(join(popupRoot, dir)));
+}
+
+function matchingOffenders(files: string[], forbidden: RegExp[]) {
+  return files.flatMap((path) => {
+    const source = readFileSync(path, "utf8");
+    return forbidden
+      .filter((pattern) => pattern.test(source))
+      .map((pattern) => `${relative(popupRoot, path)} matches ${pattern}`);
+  });
+}
+
 describe("popup architecture boundary", () => {
   it("does not call the experiment API directly", () => {
     const forbidden = [
@@ -36,12 +49,63 @@ describe("popup architecture boundary", () => {
       /\bchrome\s*\[\s*["']zenWorkspaces["']\s*\]/,
     ];
 
-    const offenders = collectSourceFiles(popupRoot).flatMap((path) => {
-      const source = readFileSync(path, "utf8");
-      return forbidden
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relative(popupRoot, path)} matches ${pattern}`);
-    });
+    const offenders = matchingOffenders(collectSourceFiles(popupRoot), forbidden);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps WebExtension tab APIs out of the popup", () => {
+    const forbidden = [
+      /\bbrowser\s*\.\s*tabs\b/,
+      /\bchrome\s*\.\s*tabs\b/,
+      /\bbrowser\s*\[\s*["']tabs["']\s*\]/,
+      /\bchrome\s*\[\s*["']tabs["']\s*\]/,
+    ];
+
+    const offenders = matchingOffenders(collectSourceFiles(popupRoot), forbidden);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps IPC in runtime shells, not leaf views or components", () => {
+    const forbidden = [
+      /\bbrowser\s*\.\s*runtime\b/,
+      /\bchrome\s*\.\s*runtime\b/,
+      /\bsendMessage\s*\(/,
+      /\bfireMessage\s*\(/,
+    ];
+
+    const offenders = matchingOffenders(collectSourceFilesFrom(["views", "components"]), forbidden);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps DOM access out of pure state and interaction modules", () => {
+    const forbidden = [
+      /\bdocument\s*\./,
+      /\bwindow\s*\./,
+      /\bquerySelector\b/,
+      /\bgetElementById\b/,
+      /\baddEventListener\b/,
+      /\bremoveEventListener\b/,
+      /\bHTMLElement\b/,
+      /\bKeyboardEvent\b/,
+    ];
+
+    const offenders = matchingOffenders(collectSourceFilesFrom(["store", "interaction"]), forbidden);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps hard-coded chord and hotkey metadata out of leaf views or components", () => {
+    const forbidden = [
+      /\bchord\s*:\s*["']/,
+      /\bhotkey\s*:\s*["']/,
+      /\bkey\s*:\s*["'][A-Za-z0-9]/,
+      /Shift\+[A-Za-z0-9]/,
+    ];
+
+    const offenders = matchingOffenders(collectSourceFilesFrom(["views", "components"]), forbidden);
 
     expect(offenders).toEqual([]);
   });

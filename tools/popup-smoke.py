@@ -253,6 +253,80 @@ def start_smoke() -> str:
     return snapshot.actionPages.map(page => ({ page: page.page, textLength: page.textLength }));
   }
 
+  function compactSuccessSteps(steps) {
+    return steps.map((step) => {
+      const compact = { name: step.name };
+      if ("width" in step) compact.width = step.width;
+      if ("activePage" in step) compact.activePage = step.activePage;
+      if ("opened" in step) compact.opened = step.opened;
+      if ("browserWidth" in step) compact.browserWidth = step.browserWidth;
+      if ("browserHeight" in step) compact.browserHeight = step.browserHeight;
+      return compact;
+    });
+  }
+
+  async function hidePaletteForNextOpen(label) {
+    record(label);
+    await runInBackground(`async (cw) => {
+      await cw.browser.zenWorkspaces.hidePalette();
+      return true;
+    }`);
+    await waitFor(label + " hidden", () => {
+      const state = overlayState();
+      if (!state.overlay || state.visibility === "hidden") {
+        return { ok: true, state };
+      }
+      return { ok: false, state };
+    }, 3000, 50);
+    await sleep(250);
+  }
+
+  async function openDirectView(view, expectedText, opts = {}) {
+    await hidePaletteForNextOpen("hide-before-" + view);
+    record("show-" + view);
+    const opened = await runInBackground(`async (cw) => {
+      return await cw.browser.zenWorkspaces.showPalette(${JSON.stringify(view)});
+    }`);
+    record("show-" + view + "-result", { opened });
+
+    const minWidth = opts.minWidth || 200;
+    const maxWidth = opts.maxWidth || 1100;
+    const state = await waitFor(view + " overlay", () => {
+      const current = overlayState();
+      const width = current.panelWidth || Number.parseInt(current.browserWidth, 10);
+      if (
+        current.overlay &&
+        current.visibility !== "hidden" &&
+        current.hasMessageManager &&
+        current.currentURI.includes("popup.html") &&
+        width >= minWidth &&
+        width <= maxWidth
+      ) {
+        return { ok: true, state: current };
+      }
+      return { ok: false, state: current };
+    }, opts.overlayTimeout || 5000, 100);
+
+    const snap = await waitFor(view + " content", async () => {
+      const current = await runInPopup(snapshotSource());
+      const text = current.textHead.join("\n");
+      if (text.includes(expectedText) && !text.includes("Loading...")) {
+        return { ok: true, snap: current };
+      }
+      return { ok: false, snap: current };
+    }, opts.contentTimeout || 7000, 100);
+
+    if (snap.snap.selectedId) {
+      throw new Error(view + " has unexpected permanent selection: " + snap.snap.selectedId);
+    }
+    record("view-" + view, {
+      textHead: snap.snap.textHead.slice(0, 12),
+      href: snap.snap.href,
+      width: state.state.panelWidth || Number.parseInt(state.state.browserWidth, 10)
+    });
+    return snap.snap;
+  }
+
   (async () => {
     try {
       record("hide-palette");
@@ -404,6 +478,35 @@ def start_smoke() -> str:
       }, 4000, 100);
       record("after-s-domains", { textHead: sorted.snap.textHead.slice(0, 12), href: sorted.snap.href });
 
+      const directViews = [
+        ["child-tabs", "Children", { minWidth: 650, maxWidth: 760 }],
+        ["sibling-tabs", "Siblings", { minWidth: 650, maxWidth: 760 }],
+        ["parent-tabs", "Parent tabs", { minWidth: 650, maxWidth: 760 }],
+        ["navigation", "Tab history", { minWidth: 580, maxWidth: 640 }],
+        ["unvisited-tabs", "New tabs", { minWidth: 650, maxWidth: 760 }],
+        ["last-visited", "Recent", { minWidth: 650, maxWidth: 760 }],
+        ["recently-closed", "Recently closed", { minWidth: 580, maxWidth: 640 }],
+        ["duplicates", "Duplicates", { minWidth: 650, maxWidth: 760 }],
+        ["tab-info", "Tab info", { minWidth: 580, maxWidth: 640, overlayTimeout: 12000, contentTimeout: 12000 }],
+        ["tabs-by-age", "Tabs by age", { minWidth: 650, maxWidth: 760 }],
+        ["most-visited", "Most visited", { minWidth: 650, maxWidth: 760 }],
+        ["move-to-workspace", "Move to workspace", { minWidth: 340, maxWidth: 430 }],
+        ["open-in-container", "New container tab", { minWidth: 300, maxWidth: 340 }],
+        ["profiles", "Profiles", { minWidth: 340, maxWidth: 430 }],
+        ["move-to-folder", "Move to folder", { minWidth: 340, maxWidth: 430 }],
+        ["split-view", "Split", { minWidth: 340, maxWidth: 430 }],
+        ["reorder-tabs", "Reorder tabs", { minWidth: 580, maxWidth: 640 }],
+        ["close-and-select", "Close & select", { minWidth: 580, maxWidth: 640 }],
+      ];
+      for (const [view, expected, opts] of directViews) {
+        await openDirectView(view, expected, opts);
+      }
+
+      const mainAgain = await openDirectView("actions", "Navigate", { minWidth: 900, maxWidth: 1000 });
+      if (!mainAgain.textHead.join("\n").includes("All tabs")) {
+        throw new Error("direct actions reopen did not restore the main menu content");
+      }
+
       const finalState = overlayState();
       await runInBackground(`async (cw) => {
         await cw.browser.zenWorkspaces.hidePalette();
@@ -414,6 +517,7 @@ def start_smoke() -> str:
         ok: true,
         done: true,
         message: "popup smoke passed",
+        steps: compactSuccessSteps(w[resultKey].steps),
         finalState,
         finishedAt: Date.now()
       };
@@ -449,7 +553,7 @@ def poll_smoke(timeout: float) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the live Zen Tabs Panel popup smoke test.")
-    parser.add_argument("--timeout", type=float, default=20.0, help="seconds to wait for the smoke to finish")
+    parser.add_argument("--timeout", type=float, default=90.0, help="seconds to wait for the smoke to finish")
     args = parser.parse_args()
 
     try:
