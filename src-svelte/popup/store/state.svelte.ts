@@ -56,9 +56,14 @@ export function createPopupState() {
     state.selectedIndex = -1;
   }
 
+  function isActionsView() {
+    return state.currentView === "actions";
+  }
+
   function currentPageBounds(): [number, number] {
-    if (state.currentView !== "actions") return [0, state.items.length];
-    return state.pageBounds[state.currentPage - 1] ?? [0, state.items.length];
+    return isActionsView()
+      ? state.pageBounds[state.currentPage - 1] ?? [0, state.items.length]
+      : [0, state.items.length];
   }
 
   function setWorkspaceMap(map: Record<string, WorkspaceInfo>, activeWorkspaceId: string | null) {
