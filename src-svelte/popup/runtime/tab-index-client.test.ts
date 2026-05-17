@@ -25,7 +25,7 @@ describe("tab index client", () => {
     await expect(client.getRowTarget("tab-1")).resolves.toMatchObject({ domId: "tab-1" });
   });
 
-  it("prefers the direct experiment API with JSON-encoded params when available", async () => {
+  it("uses an explicitly injected API with JSON-encoded params for unit seams", async () => {
     const calls: unknown[] = [];
     const client = createTabIndexClient(
       async () => {
@@ -64,6 +64,45 @@ describe("tab index client", () => {
     expect(calls).toEqual([
       { view: "domain-tabs", offset: 0, limit: 5, paramsJson: "{\"domain\":\"example.com\"}" },
     ]);
+  });
+
+  it("does not discover browser.zenWorkspaces from the popup global", async () => {
+    const globals = globalThis as typeof globalThis & {
+      browser?: {
+        zenWorkspaces?: {
+          ensureIndexStarted: () => Promise<boolean>;
+        };
+      };
+    };
+    const previousBrowser = globals.browser;
+    const directCalls: string[] = [];
+    globals.browser = {
+      zenWorkspaces: {
+        ensureIndexStarted: async () => {
+          directCalls.push("ensureIndexStarted");
+          return true;
+        },
+      },
+    };
+
+    try {
+      const sent: unknown[] = [];
+      const client = createTabIndexClient(async <T>(message: unknown) => {
+        sent.push(message);
+        return true as T;
+      });
+
+      await client.ensureStarted();
+
+      expect(directCalls).toEqual([]);
+      expect(sent).toEqual([{ type: "tab-index:ensure-started" }]);
+    } finally {
+      if (previousBrowser === undefined) {
+        delete globals.browser;
+      } else {
+        globals.browser = previousBrowser;
+      }
+    }
   });
 
   it("loads duplicate groups through the message fallback", async () => {
