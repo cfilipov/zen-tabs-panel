@@ -1,5 +1,5 @@
 XPI = zen-tabs-panel.xpi
-VARIANT ?= vanilla
+VARIANT ?= svelte
 
 .PHONY: build build-vanilla build-svelte package clean test
 

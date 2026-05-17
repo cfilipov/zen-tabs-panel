@@ -214,7 +214,7 @@ Build the variant you want to test, then load the generated `dist/` extension:
 
 ```bash
 npm run build:vanilla   # known-good vanilla source
-npm run build:svelte    # Svelte migration source
+npm run build:svelte    # default Svelte source
 ```
 
 1. Open `about:debugging#/runtime/this-firefox`
@@ -246,14 +246,15 @@ The Browser Toolbox is essential for inspecting Zen's chrome DOM, testing CSS se
 ### Building from source
 
 ```bash
-npm run build:vanilla
+npm run build
 make package
 ```
 
 `npm run build:vanilla` and `npm run build:svelte` both write the chosen variant to
-`dist/`. `make package` builds the vanilla variant by default, then zips `dist/`
-into `zen-tabs-panel.xpi`; use `make package VARIANT=svelte` to package the
-Svelte migration variant. Install the `.xpi` from `about:addons` as described above.
+`dist/`. `npm run build` and `make package` build the Svelte variant by default,
+then zip `dist/` into `zen-tabs-panel.xpi`; use `make package VARIANT=vanilla`
+to package the known-good vanilla baseline. Install the `.xpi` from
+`about:addons` as described above.
 
 ### Architecture notes
 
