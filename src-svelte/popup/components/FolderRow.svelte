@@ -5,13 +5,15 @@
 
   type Props = {
     row: FolderRow;
+    index?: number;
+    selectedIndex?: number;
     badge?: string | null;
-    selected?: boolean;
     workspaceName?: string | null;
     onactivate?: (row: FolderRow) => void;
   };
 
-  let { row, badge = null, selected = false, workspaceName = null, onactivate }: Props = $props();
+  let { row, index = -1, selectedIndex = -1, badge = null, workspaceName = null, onactivate }: Props = $props();
+  const selected = $derived(index === selectedIndex);
 </script>
 
 <button

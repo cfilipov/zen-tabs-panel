@@ -44,7 +44,10 @@ def send_recv(sock, msg, wait=2):
     sock.sendall(str(len(data)).encode() + b":" + data)
     time.sleep(wait)
     buf = b""
+    deadline = time.monotonic() + max(1, wait) + 5
     while True:
+        if time.monotonic() >= deadline:
+            break
         try:
             chunk = sock.recv(262144)
             if not chunk:

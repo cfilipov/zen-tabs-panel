@@ -5,13 +5,15 @@
 
   type Props = {
     row: ProfileRow;
+    index?: number;
+    selectedIndex?: number;
     badge?: string | null;
-    selected?: boolean;
     onactivate?: (row: ProfileRow) => void;
   };
 
-  let { row, badge = null, selected = false, onactivate }: Props = $props();
+  let { row, index = -1, selectedIndex = -1, badge = null, onactivate }: Props = $props();
   const status = $derived(row.isCurrent ? "Current" : row.isDefault ? "Default" : null);
+  const selected = $derived(index === selectedIndex);
 </script>
 
 <button

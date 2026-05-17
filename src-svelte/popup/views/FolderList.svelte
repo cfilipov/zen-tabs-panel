@@ -20,9 +20,10 @@
   {#each rows as row, index (row.id)}
     <FolderRowView
       {row}
+      {index}
+      {selectedIndex}
       workspaceName={row.workspaceId ? workspaceById.get(row.workspaceId)?.name ?? null : null}
       badge={index < 9 ? String(index + 1) : null}
-      selected={index === selectedIndex}
       onactivate={onactivate}
     />
   {/each}

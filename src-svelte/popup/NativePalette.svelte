@@ -107,6 +107,7 @@
     actionNodesForSections,
     appendWorkspaceSwitchItems,
     applyActionMetadata,
+    applyActionSelection,
     buildActionsMenuModel,
     prefixChildNodesForView,
     prefixItemsForView,
@@ -205,7 +206,12 @@
     actionLabel: allActionItems.find((item) => item.view === currentView)?.label ?? null,
   }));
   const selectedActionId = $derived(currentView === "actions" ? visibleActionItems[selectedIndex]?.id ?? null : null);
+  const actionSectionsForRender = $derived(applyActionSelection(renderedActionSections, selectedActionId));
   const selectedPrefixId = $derived(isNativePrefixView(currentView) ? prefixItems[selectedIndex]?.id ?? null : null);
+  const prefixItemsForRender = $derived(prefixItems.map((item) => ({
+    ...item,
+    selected: selectedPrefixId !== null && item.id === selectedPrefixId,
+  })));
   const selectedRow = $derived(isNativeListView(currentView) ? rowForIndex(selectedIndex) : null);
   const selectedTabRow = $derived(isTabRow(selectedRow) ? selectedRow : null);
   const selectedDomainRow = $derived(isDomainRow(selectedRow) ? selectedRow : null);
@@ -1150,9 +1156,8 @@
     <div class="empty-state">{error}</div>
   {:else if currentView === "actions"}
     <ActionsMenu
-      sections={renderedActionSections}
+      sections={actionSectionsForRender}
       {currentPage}
-      selectedId={selectedActionId}
       extensions={actionExtensions}
       workspaces={actionsWorkspaces}
       onactivate={activateAction}
@@ -1161,7 +1166,7 @@
       onclearpreview={clearPreview}
     />
   {:else if isNativePrefixView(currentView)}
-    <PrefixMenu view={currentView} items={prefixItems} selectedId={selectedPrefixId} onactivate={activateAction} />
+    <PrefixMenu view={currentView} items={prefixItemsForRender} onactivate={activateAction} />
   {:else if loading}
     <div class="empty-state">Loading...</div>
   {:else if currentView === "navigation"}
@@ -1217,7 +1222,7 @@
       visits={tabInfoVisits}
       duplicates={tabInfoDuplicates}
       workspaces={tabInfoWorkspaces}
-      onactivate={activateTabLike}
+      onactivate={activateTab}
       onclose={closeTabInfoDuplicate}
       oncloseothers={closeOtherTabInfoDuplicates}
       onpreview={previewTabLike}

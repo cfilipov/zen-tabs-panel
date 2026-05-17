@@ -23,7 +23,7 @@
       <DomainRow
         {row}
         badge={offset + index < 9 ? String(offset + index + 1) : null}
-        selected={row.domain === selectedDomain}
+        {selectedDomain}
         onactivate={onactivate}
       />
     {/snippet}

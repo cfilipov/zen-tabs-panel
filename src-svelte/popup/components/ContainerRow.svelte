@@ -4,12 +4,14 @@
 
   type Props = {
     row: ContainerRow;
+    index?: number;
+    selectedIndex?: number;
     badge?: string | null;
-    selected?: boolean;
     onactivate?: (row: ContainerRow) => void;
   };
 
-  let { row, badge = null, selected = false, onactivate }: Props = $props();
+  let { row, index = -1, selectedIndex = -1, badge = null, onactivate }: Props = $props();
+  const selected = $derived(index === selectedIndex);
 </script>
 
 <button

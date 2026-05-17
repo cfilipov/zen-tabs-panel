@@ -18,8 +18,9 @@
   {#each rows as row, index (row.sessionId)}
     <RecentlyClosedRowView
       {row}
+      {index}
+      {selectedIndex}
       badge={index < 9 ? String(index + 1) : null}
-      selected={index === selectedIndex}
       onactivate={onactivate}
       onrestore={onrestore}
     />

@@ -37,7 +37,7 @@
         {row}
         badge={offset + index < 9 ? String(offset + index + 1) : null}
         subtitle={subtitle(row)}
-        selected={row.domId === selectedDomId}
+        {selectedDomId}
         onactivate={onactivate}
         onpreview={onpreview}
         onclearpreview={onclearpreview}

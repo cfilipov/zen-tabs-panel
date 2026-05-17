@@ -1,15 +1,14 @@
 <script lang="ts">
-  import ActionRow from "../components/ActionRow.svelte";
   import ExtensionStrip from "../components/ExtensionStrip.svelte";
-  import NavigateActionRow from "../components/NavigateActionRow.svelte";
+  import { iconHtml } from "../components/icons";
   import type { ExtensionRow } from "../runtime/extension-client";
   import type { WorkspaceRow } from "../runtime/workspace-client";
   import type { ActionMenuItem, ActionSection } from "./actions-model";
+  import { domainOf } from "./url";
 
   type Props = {
     sections: ActionSection[];
     currentPage?: number;
-    selectedId?: string | null;
     extensions?: ExtensionRow[];
     workspaces?: WorkspaceRow[];
     onactivate?: (item: ActionMenuItem) => void;
@@ -88,7 +87,6 @@
   let {
     sections,
     currentPage = 1,
-    selectedId = null,
     extensions = [],
     workspaces = [],
     onactivate,
@@ -97,7 +95,99 @@
     onclearpreview,
   }: Props = $props();
   const pageModels = $derived(buildPageModels(sections));
+
+  function actionIcon(item: ActionMenuItem) {
+    if (item.iconHtml) return item.iconHtml;
+    if (item.kind === "workspace-switch" && item.workspaceIconHtml) {
+      return `<span class="workspace-icon">${item.workspaceIconHtml}</span>`;
+    }
+    return iconHtml(item.icon);
+  }
+
+  function badgeLabel(value: string | null | undefined) {
+    return value ? String(value) : "";
+  }
 </script>
+
+{#snippet Badge(value: string | null | undefined)}
+  {@const label = badgeLabel(value)}
+  <span class={`item-badge${label.length > 1 ? " badge-wide" : ""}`} hidden={!label}>{label}</span>
+{/snippet}
+
+{#snippet ActionItem(item: ActionMenuItem, compact = false)}
+  <button
+    type="button"
+    class="list-item"
+    class:compact-item={compact}
+    class:disabled={item.disabled}
+    class:selected={Boolean(item.selected)}
+    data-id={item.id}
+    disabled={item.disabled}
+    onclick={() => onactivate?.(item)}
+  >
+    <span class="item-icon-placeholder">{@html actionIcon(item)}</span>
+    <span class="item-text">
+      <span class="item-title">
+        {item.label}
+        {#if item.kind === "workspace-switch" || (item.count ?? 0) > 0}
+          <span class="item-count">{item.count ?? 0}</span>
+        {/if}
+      </span>
+    </span>
+    <span class="item-right">
+      {@render Badge(item.badge)}
+      <span class="item-arrow">{item.isView ? "›" : ""}</span>
+    </span>
+  </button>
+{/snippet}
+
+{#snippet NavigateItem(item: ActionMenuItem)}
+  {@const preview = item.preview ?? null}
+  {@const disabled = item.disabled || !preview}
+  {@const workspace = preview?.workspaceId ? workspaces.find((row) => row.uuid === preview.workspaceId) : null}
+  {@const historyDomain = preview?.isHistory ? domainOf(preview.url || "") : ""}
+  <button
+    type="button"
+    class="navigate-cell list-item compact-item"
+    class:disabled
+    class:selected={Boolean(item.selected)}
+    class:tab-pending={preview?.pending}
+    data-id={item.id}
+    disabled={disabled}
+    onclick={() => {
+      if (!disabled) onactivate?.(item);
+    }}
+    onmouseenter={() => {
+      if (preview?.domId) onpreview?.(preview.domId);
+    }}
+    onmouseleave={() => onclearpreview?.()}
+  >
+    <span class="item-icon-placeholder">{@html item.iconHtml ?? iconHtml(item.icon)}</span>
+    <span class="navigate-cell-label">{item.label}</span>
+    <span class="navigate-cell-title">
+      {#if preview && !preview.isHistory && preview.favIconUrl}
+        <img class="navigate-cell-favicon" src={preview.favIconUrl} alt="" />
+      {/if}
+      {#if preview?.essential}
+        <span class="tab-indicator essential" title="Essential">{@html iconHtml("svg:star")}</span>
+      {:else if preview?.pinned}
+        <span class="tab-indicator pinned" title="Pinned">{@html iconHtml("svg:pin")}</span>
+      {/if}
+      {preview?.title ?? ""}
+    </span>
+    {#if workspace && !preview?.isHistory}
+      <span class="row-workspace">
+        {#if workspace.svgContent}
+          <span class="row-ws-icon">{@html workspace.svgContent}</span>
+        {/if}
+        {workspace.name}
+      </span>
+    {:else if historyDomain}
+      <span class="row-workspace">{historyDomain}</span>
+    {/if}
+    {@render Badge(item.badge)}
+  </button>
+{/snippet}
 
 <div class="actions-pager no-anim" style={`transform: translateX(-${(currentPage - 1) * 100}%)`}>
   {#each pageModels as page (page.page)}
@@ -112,13 +202,13 @@
                   {#if section.scrollable}
                     <div class="section-scroll">
                       {#each section.items as item (item.id)}
-                        <ActionRow {item} compact selected={item.id === selectedId} onactivate={onactivate} />
+                        {@render ActionItem(item, true)}
                       {/each}
                     </div>
                     <div class="section-scroll-fade"></div>
                   {:else}
                     {#each section.items as item (item.id)}
-                      <ActionRow {item} compact selected={item.id === selectedId} onactivate={onactivate} />
+                      {@render ActionItem(item, true)}
                     {/each}
                   {/if}
                 {/each}
@@ -130,19 +220,12 @@
           {#if block.section.navigateGrid}
             <div class="navigate-grid">
               {#each block.section.items as item (item.id)}
-                <NavigateActionRow
-                  {item}
-                  {workspaces}
-                  selected={item.id === selectedId}
-                  onactivate={onactivate}
-                  onpreview={onpreview}
-                  onclearpreview={onclearpreview}
-                />
+                {@render NavigateItem(item)}
               {/each}
             </div>
           {:else}
             {#each block.section.items as item (item.id)}
-              <ActionRow {item} selected={item.id === selectedId} onactivate={onactivate} />
+              {@render ActionItem(item)}
             {/each}
           {/if}
         {/if}

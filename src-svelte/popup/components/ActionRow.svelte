@@ -6,16 +6,16 @@
   type Props = {
     item: ActionMenuItem;
     compact?: boolean;
-    selected?: boolean;
     onactivate?: (item: ActionMenuItem) => void;
   };
 
-  let { item, compact = false, selected = false, onactivate }: Props = $props();
+  let { item, compact = false, onactivate }: Props = $props();
   const icon = $derived(item.iconHtml
     ? item.iconHtml
     : item.kind === "workspace-switch" && item.workspaceIconHtml
     ? `<span class="workspace-icon">${item.workspaceIconHtml}</span>`
     : iconHtml(item.icon));
+  const selected = $derived(Boolean(item.selected));
 </script>
 
 <button

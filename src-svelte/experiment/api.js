@@ -1017,6 +1017,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const br = w.document.createXULElement("browser");
       br.id = BROWSER_ID;
       br.setAttribute("type", "content");
+      br.setAttribute("remote", "true");
       br.setAttribute("maychangeremoteness", "true");
       br.setAttribute("disableglobalhistory", "true");
       br.setAttribute("messagemanagergroup", "webext-browsers");
@@ -1030,10 +1031,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const viewType = opts && "viewType" in opts ? opts.viewType : "popup";
       if (viewType !== null) br.setAttribute("webextension-view-type", viewType);
       br.setAttribute("transparent", "true");
-      if (opts?.remoteType) {
-        br.setAttribute("remote", "true");
-        br.setAttribute("remoteType", opts.remoteType);
-      }
+      if (opts?.remoteType) br.setAttribute("remoteType", opts.remoteType);
       br.setAttribute("src", opts?.src || getPaletteURL(opts?.view, opts?.params));
       // Declare the size transition up front so resizePanelToView's
       // width/height changes animate in sync with the panel's transition
@@ -1041,6 +1039,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // navigation and the panel arrives late.
       br.style.cssText = "width:" + size.width + "px;height:" + size.height + "px;border:none;opacity:1;transition:width 0.15s ease-out, height 0.15s ease-out";
       return br;
+    }
+
+    function kickBrowserLoad(br) {
+      if (!br) return;
+      let src = "";
+      try { src = br.getAttribute("src") || ""; } catch (e) {}
+      if (!src) return;
+      try {
+        br.removeAttribute("src");
+        br.setAttribute("src", src);
+      } catch (e) {}
+    }
+
+    function scheduleBrowserLoadKicks(w, br) {
+      if (!w || !br) return;
+      w.setTimeout(() => kickBrowserLoad(br), 0);
+      w.setTimeout(() => kickBrowserLoad(br), 50);
+      w.setTimeout(() => kickBrowserLoad(br), 200);
     }
 
     // Resolve foreign extension popup URL and pick a suitable icon size from
@@ -1462,6 +1478,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       });
 
       w.document.documentElement.appendChild(overlay);
+      scheduleBrowserLoadKicks(w, br);
 
       const reveal = () => {
         if (pendingReveal !== reveal) return;
@@ -1573,6 +1590,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (pendingReveal) pendingReveal();
     }
 
+    function forceRevealOverlay() {
+      const w = getWin();
+      if (!w) return;
+      const overlay = w.document.getElementById(OVERLAY_ID);
+      const br = w.document.getElementById(BROWSER_ID);
+      if (!overlay || overlay.dataset.closing) return;
+      pendingReveal = null;
+      overlay.style.visibility = "visible";
+      if (br) {
+        try { br.focus(); } catch (e) {}
+      }
+    }
+
     // Cross-fade the existing browser out and swap in a fresh one. Used for
     // extension-popup transitions where the new content lives at a
     // different URL (a foreign extension) and we have to load a new
@@ -1634,6 +1664,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         oldBrowser.remove();
         panel.appendChild(newBr);
+        scheduleBrowserLoadKicks(w, newBr);
 
         if (view === "extension-popup") {
           wireForeignPopupResizing(newBr, panel, gen, params?.extensionId);
@@ -2960,10 +2991,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!br) return false;
       const expected = "gen=" + encodeURIComponent(CHORD_GENERATION);
       try {
-        if (String(br.currentURI?.spec || "").includes(expected)) return true;
-      } catch (e) {}
-      try {
-        if (String(br.getAttribute("src") || "").includes(expected)) return true;
+        const current = String(br.currentURI?.spec || "");
+        if (current.includes(expected)) return true;
+        // A newly-created XUL <browser> often reports about:blank while the
+        // extension page is still being attached. During that window getAPI()
+        // can be re-entered by popup startup messages; treating the browser
+        // as stale here destroys the booting popup and creates a tight
+        // about:blank/recreate loop.
+        if (current === "about:blank" && String(br.getAttribute("src") || "").includes(expected)) {
+          return true;
+        }
       } catch (e) {}
       return false;
     }
@@ -4300,6 +4337,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
             return { kind: "closed" };
           }
 
+          {
+            const w = getWin();
+            const overlay = w && w.document.getElementById(OVERLAY_ID);
+            const br = w && w.document.getElementById(BROWSER_ID);
+            if (overlay && overlay.style.visibility === "hidden" && !browserHasCurrentGeneration(br)) {
+              destroyOverlay({ hard: true, silent: true });
+            }
+          }
+
           // A chord might be in flight (engine armed/bridging) when this
           // is invoked by an external path (toolbar icon click). Tear
           // down any in-flight chord state
@@ -4307,14 +4353,32 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (chromeEngine && chromeEngine.isArmed()) chromeEngine.reset();
           try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
 
+          if (view) {
+            createOverlay(view, null);
+            revealDeferred = true;
+            return { kind: "opened" };
+          }
+
           // If a prerender of the actions menu is already in flight from
           // an aborted chord and the caller didn't request a specific
           // submenu, just reveal it (avoids churning a fresh overlay).
           if (pendingReveal && !view) {
-            revealOverlay();
-            return { kind: "opened" };
+            const w = getWin();
+            const br = w && w.document.getElementById(BROWSER_ID);
+            if (browserHasCurrentGeneration(br)) {
+              revealOverlay();
+              forceRevealOverlay();
+              if (w) w.setTimeout(forceRevealOverlay, 0);
+              return { kind: "opened" };
+            }
+            destroyOverlay({ hard: true, silent: true });
           }
           openOverlayWithView(view);
+          forceRevealOverlay();
+          {
+            const w = getWin();
+            if (w) w.setTimeout(forceRevealOverlay, 0);
+          }
           return { kind: "opened" };
         },
 
@@ -4458,6 +4522,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async resizePanel(view, height) {
           if (!isOverlayOpen()) return;
           resizePanelToView(view, height);
+          if (revealDeferred && pendingReveal && (!bridgeBuffer || bridgeBuffer.length === 0)) {
+            revealDeferred = false;
+            const w = getWin();
+            if (w) w.setTimeout(() => { if (pendingReveal) revealOverlay(); }, 0);
+          }
         },
 
         async navigateBack() {

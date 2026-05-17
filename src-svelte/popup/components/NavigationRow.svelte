@@ -7,13 +7,14 @@
     entry: NavigationEntry;
     index: number;
     currentIndex: number;
+    selectedIndex?: number;
     badge?: string | null;
-    selected?: boolean;
     onactivate?: (index: number) => void;
   };
 
-  let { entry, index, currentIndex, badge = null, selected = false, onactivate }: Props = $props();
+  let { entry, index, currentIndex, selectedIndex = -1, badge = null, onactivate }: Props = $props();
   const isCurrent = $derived(index === currentIndex);
+  const selected = $derived(index === selectedIndex);
   const domain = $derived(domainOf(entry.url));
   const title = $derived(entry.title || entry.url || "Untitled");
   const direction = $derived(index < currentIndex ? "\u2190 " : index > currentIndex ? "\u2192 " : "\u25cf ");

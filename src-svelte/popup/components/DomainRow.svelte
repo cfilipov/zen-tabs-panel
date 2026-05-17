@@ -5,11 +5,12 @@
   type Props = {
     row: DomainIndexRow;
     badge?: string | null;
-    selected?: boolean;
+    selectedDomain?: string | null;
     onactivate?: (row: DomainIndexRow) => void;
   };
 
-  let { row, badge = null, selected = false, onactivate }: Props = $props();
+  let { row, badge = null, selectedDomain = null, onactivate }: Props = $props();
+  const selected = $derived(row.domain === selectedDomain);
 </script>
 
 <button

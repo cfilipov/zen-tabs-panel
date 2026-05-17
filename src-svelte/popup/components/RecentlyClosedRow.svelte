@@ -6,15 +6,17 @@
 
   type Props = {
     row: RecentlyClosedRow;
+    index?: number;
+    selectedIndex?: number;
     badge?: string | null;
-    selected?: boolean;
     onactivate?: (row: RecentlyClosedRow) => void;
     onrestore?: (row: RecentlyClosedRow) => void;
   };
 
-  let { row, badge = null, selected = false, onactivate, onrestore }: Props = $props();
+  let { row, index = -1, selectedIndex = -1, badge = null, onactivate, onrestore }: Props = $props();
   const title = $derived(row.title || row.url || "Untitled");
   const domain = $derived(domainOf(row.url));
+  const selected = $derived(index === selectedIndex);
 
   function activateFromKeyboard(event: KeyboardEvent) {
     if (event.key !== "Enter" && event.key !== " ") return;

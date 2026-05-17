@@ -34,6 +34,7 @@ export type ActionMenuItem = {
   page: number;
   disabled?: boolean;
   preview?: ActionPreview | null;
+  selected?: boolean;
 };
 
 export type ActionSection = {
@@ -180,6 +181,19 @@ export function applyActionMetadata(
       count: item.kind === "workspace-switch" ? item.count : counts[item.id] || 0,
       disabled: item.disabled || disabledIds.has(item.id),
       preview: previewsById[item.id] ?? item.preview,
+    })),
+  }));
+}
+
+export function applyActionSelection(
+  sections: readonly ActionSection[],
+  selectedId: string | null,
+): ActionSection[] {
+  return sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => ({
+      ...item,
+      selected: selectedId !== null && item.id === selectedId,
     })),
   }));
 }

@@ -112,25 +112,11 @@ type ZenWorkspacesApi = {
   getDuplicateGroups(paramsJson?: string): Promise<DuplicateGroupRow[]>;
 };
 
-type BrowserWithExperiment = {
-  zenWorkspaces?: ZenWorkspacesApi;
-};
-
-function getDirectApi(): ZenWorkspacesApi | null {
-  const globals = globalThis as typeof globalThis & {
-    browser?: BrowserWithExperiment;
-    chrome?: BrowserWithExperiment;
-  };
-  if (globals.browser?.zenWorkspaces) return globals.browser.zenWorkspaces;
-  if (globals.chrome?.zenWorkspaces) return globals.chrome.zenWorkspaces;
-  return null;
-}
-
 function encodeParams(params: Record<string, unknown>) {
   return JSON.stringify(params || {});
 }
 
-export function createTabIndexClient(send: Send = sendMessage, directApi: ZenWorkspacesApi | null = getDirectApi()) {
+export function createTabIndexClient(send: Send = sendMessage, directApi: ZenWorkspacesApi | null = null) {
   return {
     ensureStarted() {
       if (directApi) return directApi.ensureIndexStarted();

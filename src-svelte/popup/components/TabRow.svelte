@@ -7,15 +7,16 @@
     row: TabIndexRow;
     badge?: string | null;
     subtitle?: string | null;
-    selected?: boolean;
+    selectedDomId?: string | null;
     onactivate?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
   };
 
-  let { row, badge = null, subtitle = null, selected = false, onactivate, onpreview, onclearpreview }: Props = $props();
+  let { row, badge = null, subtitle = null, selectedDomId = null, onactivate, onpreview, onclearpreview }: Props = $props();
   const title = $derived(row.title || "Untitled");
   const hasSubtitle = $derived(Boolean(row.domain || subtitle));
+  const selected = $derived(row.domId === selectedDomId);
 </script>
 
 <button

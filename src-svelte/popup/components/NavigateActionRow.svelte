@@ -7,16 +7,16 @@
 
   type Props = {
     item: ActionMenuItem;
-    selected?: boolean;
     workspaces?: WorkspaceRow[];
     onactivate?: (item: ActionMenuItem) => void;
     onpreview?: (domId: string) => void;
     onclearpreview?: () => void;
   };
 
-  let { item, selected = false, workspaces = [], onactivate, onpreview, onclearpreview }: Props = $props();
+  let { item, workspaces = [], onactivate, onpreview, onclearpreview }: Props = $props();
   const preview = $derived(item.preview ?? null);
   const disabled = $derived(item.disabled || !preview);
+  const selected = $derived(Boolean(item.selected));
   const workspace = $derived(preview?.workspaceId ? workspaces.find((row) => row.uuid === preview.workspaceId) : null);
   const historyDomain = $derived(preview?.isHistory ? domainOf(preview.url || "") : "");
   const showWorkspace = $derived(Boolean(workspace && !preview?.isHistory));

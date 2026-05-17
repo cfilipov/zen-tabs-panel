@@ -17,8 +17,9 @@
   {#each rows as row, index (row.uuid)}
     <WorkspaceRowView
       {row}
+      {index}
+      {selectedIndex}
       badge={index < 9 ? String(index + 1) : null}
-      selected={index === selectedIndex}
       onactivate={onactivate}
     />
   {/each}

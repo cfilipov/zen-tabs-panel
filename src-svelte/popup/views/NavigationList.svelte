@@ -27,8 +27,8 @@
       {entry}
       {index}
       {currentIndex}
+      {selectedIndex}
       badge={badgeFor(index)}
-      selected={index === selectedIndex}
       onactivate={onactivate}
     />
   {/each}

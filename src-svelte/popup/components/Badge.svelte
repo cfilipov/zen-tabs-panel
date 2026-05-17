@@ -1,8 +1,8 @@
 <script lang="ts">
   let { value }: { value: string | null | undefined } = $props();
-  const isWide = $derived(Boolean(value && value.length > 1));
 </script>
 
-{#if value}
-  <span class:item-badge={true} class:badge-wide={isWide}>{value}</span>
-{/if}
+<span
+  class={`item-badge${value && String(value).length > 1 ? " badge-wide" : ""}`}
+  hidden={!value}
+>{value ? String(value) : ""}</span>
