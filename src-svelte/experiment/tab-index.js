@@ -32,24 +32,15 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
   function compactTabRow(row) {
     return {
       index: row.index,
-      id: row.id,
       domId: row.domId,
       title: row.title,
-      url: row.url,
       domain: row.domain,
       workspaceId: row.workspaceId,
       pinned: row.pinned,
       essential: row.essential,
       active: row.active,
-      lastAccessed: row.lastAccessed,
       favIconUrl: compactFavicon(row.favIconUrl),
-      unread: row.unread,
-      openerTabDomId: row.openerTabDomId,
-      splitView: row.splitView,
-      splitGroupId: row.splitGroupId,
       pending: row.pending,
-      panelTabUuid: row.panelTabUuid,
-      panelParentUuid: row.panelParentUuid,
       focusCount: row.focusCount,
     };
   }

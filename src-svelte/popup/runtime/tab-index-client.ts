@@ -15,24 +15,24 @@ export type TabIndexView =
 export type TabIndexRow = {
   kind?: "tab";
   index: number;
-  id: number | null;
+  id?: number | null;
   domId: string;
   title: string;
-  url: string;
+  url?: string;
   domain: string;
   workspaceId: string | null;
   pinned: boolean;
   essential: boolean;
   active: boolean;
-  lastAccessed: number;
+  lastAccessed?: number;
   favIconUrl: string;
-  unread: boolean;
-  openerTabDomId: string | null;
-  splitView: boolean;
-  splitGroupId: string | null;
+  unread?: boolean;
+  openerTabDomId?: string | null;
+  splitView?: boolean;
+  splitGroupId?: string | null;
   pending: boolean;
-  panelTabUuid: string | null;
-  panelParentUuid: string | null;
+  panelTabUuid?: string | null;
+  panelParentUuid?: string | null;
   focusCount?: number;
 };
 

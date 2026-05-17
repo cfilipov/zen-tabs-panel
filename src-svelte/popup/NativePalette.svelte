@@ -36,6 +36,7 @@
     visibleRangeRequest,
   } from "./interaction/list-window";
   import { naturalPanelHeight } from "./interaction/panel-measure";
+  import { replayKeyForBadgeIndex, replayKeyForNavigationIndex } from "./interaction/replay-trace";
   import { nextSelectionIndex, type SelectionContext } from "./interaction/selection";
   import {
     keepOnlyTabInfoDuplicate,
@@ -620,6 +621,29 @@
     fireMessage({ type: "activate-tab", domId: row.domId });
   }
 
+  function traceReplayKey(key: string | null | undefined) {
+    if (!key || key.length !== 1) return;
+    fireMessage({ type: "trace-replay-key", key });
+  }
+
+  function traceReplayForListIndex(index: number) {
+    traceReplayKey(replayKeyForBadgeIndex(index));
+  }
+
+  function traceReplayForSelection() {
+    if (currentView === "actions" || isNativePrefixView(currentView)) return;
+    if (currentView === "navigation") {
+      traceReplayKey(replayKeyForNavigationIndex(navigationHistory, selectedIndex));
+      return;
+    }
+    traceReplayForListIndex(selectedIndex);
+  }
+
+  function traceReplayForRowIndex<T>(rows: readonly T[], row: T) {
+    const index = rows.indexOf(row);
+    traceReplayForListIndex(index);
+  }
+
   async function activateDomain(row: DomainIndexRow) {
     currentDomain = row.domain;
     await openNativeView("domain-tabs", { domain: row.domain }, true);
@@ -630,6 +654,11 @@
     fireMessage({ type: "navigate-to-history-index", index });
   }
 
+  function navigateToHistoryIndexWithTrace(index: number) {
+    traceReplayKey(replayKeyForNavigationIndex(navigationHistory, index));
+    navigateToHistoryIndex(index);
+  }
+
   function restoreClosedTab(row: RecentlyClosedRow, keepOpen = false) {
     if (!keepOpen) clearPopupRevealTimer();
     fireMessage({
@@ -638,9 +667,19 @@
     });
   }
 
+  function restoreClosedTabWithTrace(row: RecentlyClosedRow) {
+    traceReplayForRowIndex(recentlyClosedRows, row);
+    restoreClosedTab(row);
+  }
+
   function moveToWorkspace(row: WorkspaceRow) {
     clearPopupRevealTimer();
     fireMessage({ type: "move-selected-tabs-to-workspace", workspaceId: row.uuid });
+  }
+
+  function moveToWorkspaceWithTrace(row: WorkspaceRow) {
+    traceReplayForRowIndex(workspaceRows, row);
+    moveToWorkspace(row);
   }
 
   function reopenInContainer(row: ContainerRow) {
@@ -648,15 +687,30 @@
     fireMessage({ type: "reopen-in-container", userContextId: row.userContextId });
   }
 
+  function reopenInContainerWithTrace(row: ContainerRow) {
+    traceReplayForRowIndex(containerRows, row);
+    reopenInContainer(row);
+  }
+
   function moveToFolder(row: FolderRow) {
     clearPopupRevealTimer();
     fireMessage({ type: "move-tab-to-folder", folderId: row.id });
+  }
+
+  function moveToFolderWithTrace(row: FolderRow) {
+    traceReplayForRowIndex(folderRows, row);
+    moveToFolder(row);
   }
 
   function launchProfile(row: ProfileRow) {
     if (row.isCurrent) return;
     clearPopupRevealTimer();
     fireMessage({ type: "launch-profile", name: row.name });
+  }
+
+  function launchProfileWithTrace(row: ProfileRow) {
+    traceReplayForRowIndex(profileRows, row);
+    launchProfile(row);
   }
 
   function switchWorkspace(workspaceId: string) {
@@ -667,6 +721,16 @@
   function openExtensionPopup(extension: ExtensionRow) {
     clearPopupRevealTimer();
     fireMessage({ type: "open-extension-popup", extensionId: extension.id });
+  }
+
+  function activateTabRowWithTrace(row: TabIndexRow) {
+    traceReplayForListIndex(row.index);
+    activateTab(row);
+  }
+
+  async function activateDomainWithTrace(row: DomainIndexRow) {
+    traceReplayForRowIndex(domainRows, row);
+    await activateDomain(row);
   }
 
   function switchWorkspaceByIndex(index: number) {
@@ -871,6 +935,8 @@
   }
 
   async function activateSelected() {
+    traceReplayForSelection();
+
     if (currentView === "actions") {
       const item = visibleActionItems[selectedIndex];
       if (item) await activateAction(item);
@@ -887,6 +953,7 @@
   }
 
   async function activateRow(index: number) {
+    traceReplayForListIndex(index);
     await applyViewActivation(resolveViewActivation(viewActivationContext(), index, "shortcut"));
   }
 
@@ -1172,39 +1239,39 @@
     <NavigationList
       history={navigationHistory}
       {selectedIndex}
-      onactivate={navigateToHistoryIndex}
+      onactivate={navigateToHistoryIndexWithTrace}
     />
   {:else if currentView === "recently-closed"}
     <RecentlyClosedList
       rows={recentlyClosedRows}
       {selectedIndex}
-      onactivate={(row) => restoreClosedTab(row)}
+      onactivate={restoreClosedTabWithTrace}
       onrestore={(row) => restoreClosedTab(row, true)}
     />
   {:else if currentView === "move-to-workspace"}
     <WorkspaceList
       rows={workspaceRows}
       {selectedIndex}
-      onactivate={moveToWorkspace}
+      onactivate={moveToWorkspaceWithTrace}
     />
   {:else if currentView === "open-in-container"}
     <ContainerList
       rows={containerRows}
       {selectedIndex}
-      onactivate={reopenInContainer}
+      onactivate={reopenInContainerWithTrace}
     />
   {:else if currentView === "move-to-folder"}
     <FolderList
       rows={folderRows}
       workspaces={folderWorkspaces}
       {selectedIndex}
-      onactivate={moveToFolder}
+      onactivate={moveToFolderWithTrace}
     />
   {:else if currentView === "profiles"}
     <ProfileList
       rows={profileRows}
       {selectedIndex}
-      onactivate={launchProfile}
+      onactivate={launchProfileWithTrace}
     />
   {:else if currentView === "duplicates"}
     <DuplicateGroups
@@ -1242,7 +1309,7 @@
       {total}
       {offset}
       selectedDomId={selectedRowDomId}
-      onactivate={activateTab}
+      onactivate={activateTabRowWithTrace}
       onpreview={previewTab}
       onclearpreview={clearPreview}
       onrange={loadVisibleRange}
@@ -1254,7 +1321,7 @@
       {total}
       {offset}
       {selectedDomain}
-      onactivate={activateDomain}
+      onactivate={activateDomainWithTrace}
       onrange={loadVisibleRange}
     />
   {/if}
