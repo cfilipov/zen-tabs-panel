@@ -1850,7 +1850,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       //      this because Fission keeps content keystrokes in the
       //      content process — the parent only gets what we forward.
       const SCRIPT_BODY =
-        '(()=>{const installed="__zenTabsPanelHostedPopupSizing";const send=()=>{' +
+        '(()=>{const sizeInstalled="__zenTabsPanelHostedPopupSizing";' +
+        'const escapeInstalled="__zenTabsPanelHostedPopupEscape";const send=()=>{' +
         'const d=content.document;const b=d.body;const r=d.documentElement;' +
         'let w,h;if(b&&b.scrollWidth){w=b.scrollWidth;h=b.scrollHeight;}' +
         'else if(r){w=r.scrollWidth;h=r.scrollHeight;}' +
@@ -1858,12 +1859,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
         'const observe=()=>{const b=content.document.body;if(!b)return false;' +
         'try{const ro=new content.ResizeObserver(send);ro.observe(b);' +
         'ro.observe(content.document.documentElement);}catch(e){}return true;};' +
-        'if(!content[installed]){content[installed]=true;' +
+        'if(!content[sizeInstalled]){content[sizeInstalled]=true;' +
         'if(!observe())content.addEventListener("DOMContentLoaded",observe,{once:true});}' +
+        'if(!content[escapeInstalled]){content[escapeInstalled]=true;' +
+        'const onKey=(e)=>{if(e.key==="Escape"){' +
+        'try{e.preventDefault();e.stopPropagation();}catch(_){}' +
+        'sendAsyncMessage("ztt:popup-escape",{});}};' +
+        'try{content.addEventListener("keydown",onKey,{capture:true,mozSystemGroup:true});}catch(_){ }' +
+        'content.addEventListener("keydown",onKey,true);}' +
         'send();' +
-        'content.addEventListener("keydown",(e)=>{' +
-        'if(e.key==="Escape")sendAsyncMessage("ztt:popup-escape",{});' +
-        '},true);' +
         '})();';
 
       // Load the measurement script as soon as the foreign popup's
@@ -2745,6 +2749,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       };
       w.addEventListener("keydown", fallbackLeaderKeydown, { capture: true, mozSystemGroup: true });
 
+      const hostedPopupEscapeKeydown = (e) => {
+        if (e.key !== "Escape") return;
+        if (currentViewName !== "extension-popup" || !isOverlayVisible()) return;
+        try { e.preventDefault(); } catch (_) {}
+        try { e.stopImmediatePropagation(); } catch (_) {}
+        destroyOverlay();
+      };
+      w.addEventListener("keydown", hostedPopupEscapeKeydown, { capture: true, mozSystemGroup: true });
+      w.addEventListener("keydown", hostedPopupEscapeKeydown, true);
+
       const fallbackChordKeydown = (e) => {
         if (!chromeEngine.isArmed()) {
           debugChordTrace("fallback-skip-not-armed", { key: e.key, target: e.target && e.target.localName });
@@ -2789,6 +2803,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       context.callOnClose({
         close() {
           try { w.removeEventListener("keydown", fallbackLeaderKeydown, { capture: true, mozSystemGroup: true }); } catch (e) {}
+          try { w.removeEventListener("keydown", hostedPopupEscapeKeydown, { capture: true, mozSystemGroup: true }); } catch (e) {}
+          try { w.removeEventListener("keydown", hostedPopupEscapeKeydown, true); } catch (e) {}
           try { w.removeEventListener("keydown", fallbackChordKeydown, { capture: true }); } catch (e) {}
         },
       });
