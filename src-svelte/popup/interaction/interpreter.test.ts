@@ -50,6 +50,10 @@ describe("interaction interpreter", () => {
       .toEqual({ kind: "back" });
     expect(interpretVisibleInput({ kind: "key", key: " " }, { view: "actions" }, fixtureTree))
       .toEqual({ kind: "cycle-page", delta: 1 });
+    expect(interpretVisibleInput({ kind: "key", key: "ArrowRight" }, { view: "actions" }, fixtureTree))
+      .toEqual({ kind: "move-selection-directional", delta: 1 });
+    expect(interpretVisibleInput({ kind: "key", key: "ArrowLeft" }, { view: "reorder-tabs" }, fixtureTree))
+      .toEqual({ kind: "move-selection-directional", delta: -1 });
     expect(interpretVisibleInput({ kind: "key", key: "3" }, { view: "last-visited" }, fixtureTree))
       .toEqual({ kind: "activate-row", index: 2 });
   });

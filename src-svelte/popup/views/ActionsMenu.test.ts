@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
 import ActionsMenu from "./ActionsMenu.svelte";
-import { buildActionsMenuModel } from "./actions-model";
+import { appendWorkspaceSwitchItems, buildActionsMenuModel } from "./actions-model";
 
 describe("ActionsMenu", () => {
   it("renders first-page action labels and badges from the model", () => {
@@ -70,5 +70,29 @@ describe("ActionsMenu", () => {
 
     expect(container.querySelector(".navigate-cell")).toBeTruthy();
     expect(screen.getByText("Previous tab title")).toBeTruthy();
+  });
+
+  it("renders workspace switcher rows with vanilla fallback dot and scroll affordance", () => {
+    const sections = appendWorkspaceSwitchItems(
+      buildActionsMenuModel(),
+      [
+        { uuid: "ws-1", name: "No Icon", isActive: false, svgContent: "" },
+        { uuid: "ws-2", name: "Active", isActive: true, svgContent: "<svg></svg>" },
+      ],
+      { "ws-1": 4, "ws-2": 7 },
+    );
+    const { container } = render(ActionsMenu, {
+      props: {
+        sections,
+        currentPage: 1,
+      },
+    });
+
+    const fallbackRow = container.querySelector('[data-id="workspace-switch:ws-1"]');
+    const activeRow = container.querySelector('[data-id="workspace-switch:ws-2"]');
+
+    expect(fallbackRow?.querySelector(".item-icon-placeholder")?.textContent).toBe("○");
+    expect(activeRow?.classList.contains("ws-active")).toBe(true);
+    expect(container.querySelector(".section-column.scrollable-column .section-scroll-fade")).toBeTruthy();
   });
 });

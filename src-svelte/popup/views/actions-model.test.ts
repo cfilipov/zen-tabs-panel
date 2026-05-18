@@ -3,6 +3,7 @@ import { NAVIGATION_TREE } from "../../shared/navigation-tree";
 import {
   actionItemsForPage,
   actionNodesForSections,
+  appendWorkspaceSwitchItems,
   buildActionsMenuModel,
   prefixChildNodesForView,
   prefixItemsForView,
@@ -51,5 +52,38 @@ describe("actions menu model", () => {
 
     expect(items.map((item) => item.id)).toContain("sort-tabs-domain-alpha");
     expect(nodes.find((node) => node.id === "sort-tabs-domain-alpha")?.chord).toBe("D");
+  });
+
+  it("appends real workspace switch rows without inventing icons", () => {
+    const model = appendWorkspaceSwitchItems(
+      buildActionsMenuModel(),
+      [
+        { uuid: "ws-1", name: "Main", isActive: false, svgContent: "" },
+        { uuid: "ws-2", name: "Dev", isActive: true, svgContent: "<svg></svg>" },
+      ],
+      { "ws-1": 12, "ws-2": 3 },
+    );
+    const workspaces = model.find((section) => section.id === "workspaces" && section.page === 1);
+
+    expect(workspaces?.items.slice(-2)).toMatchObject([
+      {
+        id: "workspace-switch:ws-1",
+        kind: "workspace-switch",
+        workspaceId: "ws-1",
+        workspaceIconHtml: "",
+        badge: "1",
+        count: 12,
+        disabled: false,
+      },
+      {
+        id: "workspace-switch:ws-2",
+        kind: "workspace-switch",
+        workspaceId: "ws-2",
+        workspaceIconHtml: "<svg></svg>",
+        badge: "2",
+        count: 3,
+        disabled: true,
+      },
+    ]);
   });
 });

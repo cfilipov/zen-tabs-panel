@@ -101,11 +101,48 @@
     if (item.kind === "workspace-switch" && item.workspaceIconHtml) {
       return `<span class="workspace-icon">${item.workspaceIconHtml}</span>`;
     }
+    if (item.kind === "workspace-switch") return "○";
     return iconHtml(item.icon);
   }
 
   function badgeLabel(value: string | null | undefined) {
     return value ? String(value) : "";
+  }
+
+  function scrollOverflow(node: HTMLElement) {
+    const column = node.closest(".scrollable-column");
+    let didScrollActive = false;
+    let frame = 0;
+
+    const update = () => {
+      frame = 0;
+      const overflowing = node.scrollHeight > node.clientHeight + 1;
+      const atBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
+      column?.classList.toggle("has-overflow", overflowing && !atBottom);
+
+      if (!didScrollActive) {
+        didScrollActive = true;
+        const active = node.querySelector<HTMLElement>(".ws-active");
+        active?.scrollIntoView?.({ block: "nearest" });
+      }
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+
+    node.addEventListener("scroll", schedule);
+    resizeObserver?.observe(node);
+    schedule();
+
+    return {
+      destroy() {
+        node.removeEventListener("scroll", schedule);
+        resizeObserver?.disconnect();
+        if (frame) cancelAnimationFrame(frame);
+        column?.classList.remove("has-overflow");
+      },
+    };
   }
 </script>
 
@@ -121,6 +158,7 @@
     class:compact-item={compact}
     class:disabled={item.disabled}
     class:selected={Boolean(item.selected)}
+    class:ws-active={item.kind === "workspace-switch" && item.disabled}
     data-id={item.id}
     disabled={item.disabled}
     onclick={() => onactivate?.(item)}
@@ -200,7 +238,7 @@
                 {#each column.sections as section (`${section.id}-${section.page}`)}
                   <div class="list-section-header">{section.label}</div>
                   {#if section.scrollable}
-                    <div class="section-scroll">
+                    <div class="section-scroll" use:scrollOverflow>
                       {#each section.items as item (item.id)}
                         {@render ActionItem(item, true)}
                       {/each}

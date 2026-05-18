@@ -13,6 +13,7 @@ function createRuntime(calls: string[]): InteractionRuntimeHandlers {
     cancel: () => record("cancel"),
     back: () => record("back"),
     moveSelection: (delta) => record(`move:${delta}`),
+    moveSelectionDirectional: (delta) => record(`move-directional:${delta}`),
     activateSelection: () => record("activate-selection"),
     activateRow: (index) => record(`activate-row:${index}`),
     cyclePage: (delta) => record(`page:${delta}`),
@@ -51,6 +52,7 @@ describe("interaction runtime", () => {
 
     await applyInteractionCommand({ kind: "navigate-history-delta", delta: -1 }, runtime);
     await applyInteractionCommand({ kind: "move-selection", delta: 1 }, runtime);
+    await applyInteractionCommand({ kind: "move-selection-directional", delta: -1 }, runtime);
     await applyInteractionCommand({ kind: "activate-row", index: 2 }, runtime);
     await applyInteractionCommand({ kind: "filter-workspace-index", index: 4 }, runtime);
     await applyInteractionCommand({ kind: "open-extension-index", index: 1 }, runtime);
@@ -59,6 +61,7 @@ describe("interaction runtime", () => {
     expect(calls).toEqual([
       "history:-1",
       "move:1",
+      "move-directional:-1",
       "activate-row:2",
       "filter-workspace:4",
       "extension:1",

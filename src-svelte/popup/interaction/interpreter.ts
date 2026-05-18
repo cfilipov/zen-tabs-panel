@@ -26,6 +26,7 @@ export type InteractionCommand =
   | { kind: "cancel" }
   | { kind: "back" }
   | { kind: "move-selection"; delta: 1 | -1 }
+  | { kind: "move-selection-directional"; delta: 1 | -1 }
   | { kind: "jump-section"; delta: 1 | -1 }
   | { kind: "activate-selection" }
   | { kind: "activate-row"; index: number }
@@ -102,8 +103,14 @@ export function interpretStructuralKey(
     case "Tab":
       return { kind: "jump-section", delta: input.shiftKey ? -1 : 1 };
     case "ArrowLeft":
-      return context.view === "actions" ? { kind: "none" } : { kind: "back" };
+      if (context.view === "actions" || context.view === "reorder-tabs" || context.view === "close-and-select") {
+        return { kind: "move-selection-directional", delta: -1 };
+      }
+      return { kind: "back" };
     case "ArrowRight":
+      if (context.view === "actions" || context.view === "reorder-tabs" || context.view === "close-and-select") {
+        return { kind: "move-selection-directional", delta: 1 };
+      }
       return canDrillSelectionInView(context.view) ? { kind: "drill-selection" } : { kind: "none" };
     case " ":
       return context.view === "actions" ? { kind: "cycle-page", delta: input.shiftKey ? -1 : 1 } : { kind: "none" };

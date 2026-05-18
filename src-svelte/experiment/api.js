@@ -1008,6 +1008,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return url;
     }
 
+    function paletteURLView(br) {
+      const spec = String(br?.currentURI?.spec || br?.getAttribute?.("src") || "");
+      const match = /[?&]view=([^&]+)/.exec(spec);
+      if (!match) return "actions";
+      try { return decodeURIComponent(match[1]); }
+      catch (e) { return match[1]; }
+    }
+
     function getViewSize(view) {
       return VIEW_SIZES[view] || VIEW_SIZES["actions"];
     }
@@ -1552,6 +1560,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const viewName = view || "actions";
       const panel = w.document.getElementById(PANEL_ID);
       const br = w.document.getElementById(BROWSER_ID);
+      const idleHidden = overlay.style.visibility === "hidden" && !pendingReveal;
 
       // Intentionally NOT resizing panel here. The popup has been alive
       // (and at its last measured size) since extension startup;
@@ -1610,6 +1619,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // turn as this message, and deferred explicit opens need a reveal
       // closure available when that happens.
       const mm = browserMessageManager(br);
+      if (idleHidden && viewName === "actions" && paletteURLView(br) !== "actions") {
+        try {
+          br.setAttribute("src", getPaletteURL(null, params || null));
+          scheduleBrowserLoadKicks(w, br);
+        } catch (e) {}
+      }
       if (mm) {
         try {
           mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
@@ -1968,6 +1983,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const br = w && w.document.getElementById(BROWSER_ID);
       const mm = browserMessageManager(br);
       if (!mm) return;
+      navStack = [];
+      currentViewName = "actions";
+      popupReady = false;
+      if (paletteURLView(br) !== "actions") {
+        try {
+          br.setAttribute("src", getPaletteURL(null, null));
+          scheduleBrowserLoadKicks(w, br);
+        } catch (e) {}
+        return;
+      }
       try {
         mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
           inst: popupInstance,

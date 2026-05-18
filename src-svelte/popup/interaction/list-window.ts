@@ -1,7 +1,7 @@
 export const DEFAULT_LIST_WINDOW_LIMIT = 80;
 export const DEFAULT_SELECTION_LOOKBEHIND = 20;
 export const MIN_VISIBLE_RANGE_LIMIT = 60;
-export const DEFAULT_ROW_HEIGHT = 40;
+export const DEFAULT_ROW_HEIGHT = 48;
 
 export function relativeWindowIndex(index: number, offset: number) {
   const relativeIndex = index - offset;
@@ -48,11 +48,17 @@ export function scrollTopForIndex(options: {
   scrollTop: number;
   clientHeight: number;
   rowHeight?: number;
+  paddingTop?: number;
+  paddingBottom?: number;
 }) {
   const rowHeight = options.rowHeight ?? DEFAULT_ROW_HEIGHT;
-  const top = Math.max(0, options.index) * rowHeight;
+  const paddingTop = options.paddingTop ?? 0;
+  const paddingBottom = options.paddingBottom ?? 0;
+  const top = paddingTop + Math.max(0, options.index) * rowHeight;
   const bottom = top + rowHeight;
-  if (top < options.scrollTop) return top;
-  if (bottom > options.scrollTop + options.clientHeight) return bottom - options.clientHeight;
+  if (top < options.scrollTop + paddingTop) return Math.max(0, top - paddingTop);
+  if (bottom > options.scrollTop + options.clientHeight - paddingBottom) {
+    return bottom - options.clientHeight + paddingBottom;
+  }
   return options.scrollTop;
 }

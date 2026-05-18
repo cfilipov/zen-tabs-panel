@@ -36,8 +36,18 @@ describe("list window transitions", () => {
   });
 
   it("computes scrollTop needed to reveal a row", () => {
-    expect(scrollTopForIndex({ index: 2, scrollTop: 120, clientHeight: 160 })).toBe(80);
-    expect(scrollTopForIndex({ index: 8, scrollTop: 120, clientHeight: 160 })).toBe(200);
-    expect(scrollTopForIndex({ index: 5, scrollTop: 120, clientHeight: 160 })).toBe(120);
+    expect(scrollTopForIndex({ index: 2, scrollTop: 120, clientHeight: 160 })).toBe(96);
+    expect(scrollTopForIndex({ index: 8, scrollTop: 120, clientHeight: 160 })).toBe(272);
+    expect(scrollTopForIndex({ index: 5, scrollTop: 120, clientHeight: 160 })).toBe(128);
+  });
+
+  it("keeps rows clear of scroll container padding", () => {
+    expect(scrollTopForIndex({
+      index: 8,
+      scrollTop: 120,
+      clientHeight: 160,
+      paddingTop: 6,
+      paddingBottom: 2,
+    })).toBe(280);
   });
 });

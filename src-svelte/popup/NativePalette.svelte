@@ -66,7 +66,13 @@
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
   import { createHistoryClient, type NavigationHistory, type RecentlyClosedRow } from "./runtime/history-client";
   import { fireMessage, sendMessage } from "./runtime/ipc";
-  import { measurePaletteNaturalHeight, scrollPaletteListIndexIntoView, snapshotKeyEvent } from "./runtime/palette-dom";
+  import {
+    directionalListItemId,
+    measurePaletteNaturalHeight,
+    scrollPaletteListIndexIntoView,
+    scrollSelectedItemIntoView,
+    snapshotKeyEvent,
+  } from "./runtime/palette-dom";
   import { createPaletteRevealController } from "./runtime/palette-reveal";
   import { createProfileClient, type ProfileRow } from "./runtime/profile-client";
   import { createTabInfoClient, type HistoryVisit, type TabInfo } from "./runtime/tab-info-client";
@@ -219,6 +225,7 @@
     cancel: () => fireMessage({ type: "hide-palette" }),
     back: goBack,
     moveSelection,
+    moveSelectionDirectional,
     activateSelection: activateSelected,
     activateRow,
     cyclePage,
@@ -835,8 +842,26 @@
     palette.selectedIndex = nextSelectionIndex(selectionContext(), delta);
     if (palette.currentView !== "actions" && !isNativePrefixView(palette.currentView)) {
       ensureListIndexLoaded(palette.selectedIndex);
-      scrollListIndexIntoView(palette.selectedIndex);
     }
+    scrollCurrentSelectionIntoView();
+  }
+
+  function moveSelectionDirectional(delta: 1 | -1) {
+    const targetId = directionalListItemId(delta, {
+      currentPage: palette.currentView === "actions" ? palette.currentPage : undefined,
+    });
+    if (!targetId) return;
+
+    const items = palette.currentView === "actions"
+      ? visibleActionItems
+      : isNativePrefixView(palette.currentView)
+      ? prefixItems
+      : [];
+    const index = items.findIndex((item) => item.id === targetId);
+    if (index < 0) return;
+
+    palette.selectedIndex = index;
+    scrollCurrentSelectionIntoView();
   }
 
   function selectionContext(): SelectionContext {
@@ -852,7 +877,7 @@
       folderCount: palette.folderRows.length,
       profileRows: palette.profileRows,
       duplicatePromptCount: DUPLICATE_PROMPT_ACTIONS.length,
-      rowCount: palette.rows.length,
+      rowCount: isNativeListView(palette.currentView) ? palette.total : palette.rows.length,
       isPrefixView: isNativePrefixView(palette.currentView),
     };
   }
@@ -873,13 +898,16 @@
   function jumpSection(delta: 1 | -1) {
     if (palette.currentView !== "actions") return;
     const nextIndex = nextActionSectionIndex({
-      sections: actionSections,
+      sections: renderedActionSections,
       currentPage: palette.currentPage,
       visibleItemCount: visibleActionItems.length,
       selectedIndex: palette.selectedIndex,
       delta,
     });
-    if (nextIndex !== null) palette.selectedIndex = nextIndex;
+    if (nextIndex !== null) {
+      palette.selectedIndex = nextIndex;
+      scrollCurrentSelectionIntoView();
+    }
   }
 
   async function activateSelected() {
@@ -942,11 +970,32 @@
   function ensureListIndexLoaded(index: number) {
     if (!isNativeListView(palette.currentView)) return;
     const request = loadWindowForIndex({ index, offset: palette.offset, rowCount: palette.rows.length });
-    if (request) loadListView(palette.currentView, request.offset, request.limit, false);
+    if (request) {
+      void loadListView(palette.currentView, request.offset, request.limit, false)
+        .then(scrollCurrentSelectionIntoView);
+    }
   }
 
   function scrollListIndexIntoView(index: number) {
     scrollPaletteListIndexIntoView(index);
+  }
+
+  function scrollCurrentSelectionIntoView() {
+    void tick().then(() => {
+      if (!pageAlive) return;
+      const scroll = () => {
+        if (!pageAlive) return;
+        if (palette.currentView !== "actions" && !isNativePrefixView(palette.currentView)) {
+          scrollListIndexIntoView(palette.selectedIndex);
+        }
+        scrollSelectedItemIntoView();
+      };
+      scroll();
+      requestAnimationFrame(() => {
+        scroll();
+        setTimeout(scroll, 50);
+      });
+    });
   }
 
   function loadVisibleRange(nextOffset: number, limit: number) {

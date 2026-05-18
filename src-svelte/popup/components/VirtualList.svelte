@@ -12,7 +12,7 @@
     children: Snippet<[T, number]>;
   };
 
-  let { rows, total, offset = 0, rowHeight = 40, overscan = 8, onrange, children }: Props = $props();
+  let { rows, total, offset = 0, rowHeight = 48, overscan = 8, onrange, children }: Props = $props();
 
   let host: HTMLDivElement;
   let lastRequested = "";

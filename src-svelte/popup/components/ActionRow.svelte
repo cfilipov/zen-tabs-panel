@@ -14,6 +14,8 @@
     ? item.iconHtml
     : item.kind === "workspace-switch" && item.workspaceIconHtml
     ? `<span class="workspace-icon">${item.workspaceIconHtml}</span>`
+    : item.kind === "workspace-switch"
+    ? "○"
     : iconHtml(item.icon));
   const selected = $derived(Boolean(item.selected));
 </script>

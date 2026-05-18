@@ -17,6 +17,7 @@
     if (item.kind === "workspace-switch" && item.workspaceIconHtml) {
       return `<span class="workspace-icon">${item.workspaceIconHtml}</span>`;
     }
+    if (item.kind === "workspace-switch") return "○";
     return iconHtml(item.icon);
   }
 
