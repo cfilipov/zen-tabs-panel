@@ -10,11 +10,13 @@
     "test": "npm run test:node && npm run test:svelte",
     "test:node": "node --test tests/*.test.js",
     "test:svelte": "vitest run",
+    "typecheck": "tsc --noEmit",
     "smoke:popup": "tools/popup-smoke.py"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@testing-library/svelte": "^5.3.1",
+    "@types/node": "^25.8.0",
     "jsdom": "^29.1.1",
     "svelte": "^5.55.7",
     "typescript": "^6.0.3",
