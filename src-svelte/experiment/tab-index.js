@@ -5,7 +5,8 @@
 // WebExtension boundary. This file is loaded with Services.scriptloader.
 
 this.createZenTabIndex = function createZenTabIndex(deps) {
-  const MAX_FAVICON_URL_LENGTH = 65536;
+  const MAX_FAVICON_URL_LENGTH = 8192;
+  const MAX_DATA_FAVICON_URL_LENGTH = 1024;
   let started = false;
   let dirty = true;
   let version = 0;
@@ -44,6 +45,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       }
     }
     if (!s || s.startsWith("chrome://")) return "";
+    if (s.startsWith("data:") && s.length > MAX_DATA_FAVICON_URL_LENGTH) return "";
     if (s.length > MAX_FAVICON_URL_LENGTH) return "";
     return s;
   }

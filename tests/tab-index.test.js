@@ -252,7 +252,7 @@ test("tab index unwraps proxied data favicons and drops chrome favicons", () => 
   const rows = index.getWindow("last-visited", 0, 10, {}).rows;
 
   assert.equal(rows[0].favIconUrl, "data:image/svg+xml;base64,PHN2Zy8+");
-  assert.equal(rows[1].favIconUrl, largeDataIcon);
+  assert.equal(rows[1].favIconUrl, "");
   assert.equal(rows[2].favIconUrl, "");
   assert.equal(rows[3].favIconUrl, "");
 });
