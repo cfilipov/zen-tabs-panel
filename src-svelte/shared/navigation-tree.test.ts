@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import vm from "node:vm";
 import { NAVIGATION_TREE, WORKSPACE_DIGIT_CHORDS, displayKey } from "./navigation-tree";
 import type { NavNode } from "./types";
 
@@ -9,6 +12,24 @@ function flatten(nodes: readonly NavNode[]): NavNode[] {
     if (node.kind === "prefix") out.push(...node.children);
   }
   return out;
+}
+
+function vanillaKeybindings() {
+  const scope: { ZEN_KEYBINDINGS?: NavNode[] } = {};
+  const source = readFileSync(resolve(process.cwd(), "src-vanilla/shared/keybindings.js"), "utf8");
+  vm.runInNewContext(source, scope);
+  return scope.ZEN_KEYBINDINGS ?? [];
+}
+
+function parityShape(node: NavNode) {
+  return {
+    id: node.id,
+    kind: node.kind,
+    chord: node.chord,
+    label: node.label,
+    view: "view" in node ? node.view : undefined,
+    page: node.page,
+  };
 }
 
 describe("navigation tree", () => {
@@ -38,5 +59,9 @@ describe("navigation tree", () => {
     expect(displayKey("Shift+T")).toBe("⇧T");
     expect(displayKey(",")).toBe(",");
     expect(displayKey(null)).toBe("");
+  });
+
+  it("matches the vanilla keybinding registry while both sources coexist", () => {
+    expect(flatten(NAVIGATION_TREE).map(parityShape)).toEqual(flatten(vanillaKeybindings()).map(parityShape));
   });
 });

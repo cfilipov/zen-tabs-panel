@@ -169,6 +169,26 @@ test("tab index windows stay bounded for large tab sets", () => {
   ]);
 });
 
+test("tab index payloads stay bounded for 10000-tab sessions", () => {
+  const tabs = Array.from({ length: 10000 }, (_, i) =>
+    fakeTab(`tab-${i + 1}`, `https://site-${i % 500}.test/path/${i + 1}`, `ws-${i % 4}`, {
+      title: `Tab ${i + 1}`,
+      lastAccessed: i,
+    })
+  );
+  const index = makeRichIndex(tabs);
+
+  const summary = index.getSummary("last-visited", {});
+  const win = index.getWindow("last-visited", 2500, 1000, {});
+
+  assert.equal(summary.total, 10000);
+  assert.equal(win.offset, 2500);
+  assert.equal(win.limit, 200);
+  assert.equal(win.rows.length, 200);
+  assert.ok(JSON.stringify(summary).length < 200);
+  assert.ok(JSON.stringify(win).length < 50000);
+});
+
 test("domain windows use lightweight tab reads for large tab sets", () => {
   const tabs = Array.from({ length: 3000 }, (_, i) =>
     fakeTab(`tab-${i + 1}`, `https://site-${i % 100}.test/${i + 1}`, i % 2 ? "ws-1" : "ws-2", {
