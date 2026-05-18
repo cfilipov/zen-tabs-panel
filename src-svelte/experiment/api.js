@@ -899,7 +899,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // than buffered — see forwardKeyToPopup().
     let bridgeBuffer = null;
     let bridgeTimer = null;
-    const BRIDGE_TIMEOUT_MS = 1500;
+    // Keep this comfortably above cold Svelte view startup in large tab
+    // profiles. Fast chains like cmd+.,q,1 buffer row-selection digits in
+    // chrome until POPUP_READY; timing out too early discards the digits and
+    // leaves the user at the first view.
+    const BRIDGE_TIMEOUT_MS = 8000;
     // Reveal-on-pause: while in bridging state, chrome keeps the popup
     // invisible so fast chord chains can navigate without showing UI.
     // If no chord key arrives within CHORD_REVEAL_TIMEOUT_MS, the popup
@@ -2404,6 +2408,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!w) return;
       w.setTimeout(() => {
         if (!pendingReveal || !revealDeferred || popupReady) return;
+        // If the user has already typed chord-chain keys, do not fake
+        // readiness. Those keys must be delivered through the popup's real
+        // POPUP_READY drain so Svelte's bridge listener is definitely
+        // installed and can replay them in order.
+        if (bridgeBuffer && bridgeBuffer.length > 0) {
+          scheduleDeferredRevealFallback();
+          return;
+        }
         forcePopupBridgeReady();
         revealDeferred = false;
         revealOverlay();

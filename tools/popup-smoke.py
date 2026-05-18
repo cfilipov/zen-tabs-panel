@@ -478,6 +478,30 @@ def start_smoke() -> str:
       }, 4000, 100);
       record("after-s-domains", { textHead: sorted.snap.textHead.slice(0, 12), href: sorted.snap.href });
 
+      const firstDomain = await runInPopup(`(content) => {
+        return content.document.querySelector(".list-item .item-title")?.textContent?.trim() || "";
+      }`);
+      if (!firstDomain) throw new Error("Domains view did not expose a first domain row for buffered drill");
+
+      record("force-ready-domains-buffered-1");
+      await runInPopup(`(content) => {
+        const payload = {
+          type: "force-ready",
+          data: { buffered: [{ key: "1", code: "Digit1", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false }] }
+        };
+        content.document.dispatchEvent(new content.CustomEvent("ztt:bridge-message", { detail: JSON.stringify(payload) }));
+        return true;
+      }`);
+      const drilledDomain = await waitFor("domain buffered drill", async () => {
+        const snap = await runInPopup(snapshotSource());
+        const text = snap.textHead.join("\n");
+        if (text.includes(firstDomain) && !text.includes("Domains") && !text.includes("Loading...")) {
+          return { ok: true, snap };
+        }
+        return { ok: false, snap };
+      }, 5000, 100);
+      record("after-domain-buffered-drill", { domain: firstDomain, textHead: drilledDomain.snap.textHead.slice(0, 12), href: drilledDomain.snap.href });
+
       const directViews = [
         ["child-tabs", "Children", { minWidth: 650, maxWidth: 760 }],
         ["sibling-tabs", "Siblings", { minWidth: 650, maxWidth: 760 }],
