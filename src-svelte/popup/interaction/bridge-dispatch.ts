@@ -43,8 +43,8 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       while (liveDispatchQueue.length > 0) {
         const input = liveDispatchQueue.shift();
         if (!input) continue;
-        options.armRevealTimer();
         await options.dispatchKey(input);
+        if (liveDispatchQueue.length === 0) options.armRevealTimer();
       }
     } finally {
       dispatchRunning = false;
@@ -61,14 +61,18 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       heldLiveKeys.push(input);
       return;
     }
+    options.clearRevealTimer();
     enqueue(input);
   }
 
   async function dispatchDrained(inputs: BridgeKeyData[], generation?: number) {
-    for (const input of inputs) {
+    for (let index = 0; index < inputs.length; index += 1) {
+      const input = inputs[index];
+      const isLastPendingInput = index === inputs.length - 1;
       if (generation !== undefined && !isCurrentWarmGeneration(generation)) return false;
-      options.armRevealTimer();
       await options.dispatchKey(input);
+      if (generation !== undefined && !isCurrentWarmGeneration(generation)) return false;
+      if (isLastPendingInput) options.armRevealTimer();
     }
     return true;
   }
@@ -98,11 +102,11 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       if (reply?.stale) return;
       const buffered = replyBuffered(reply);
       const held = heldLiveKeys.splice(0);
-      if (!(await dispatchDrained(buffered, generation))) return;
-      if (!(await dispatchDrained(held, generation))) return;
+      const drained = buffered.concat(held);
+      if (!(await dispatchDrained(drained, generation))) return;
       if (generation !== undefined && !isCurrentWarmGeneration(generation)) return;
       ready = true;
-      if (buffered.length === 0 && held.length === 0) {
+      if (drained.length === 0) {
         options.armRevealTimer();
       }
     },
@@ -111,8 +115,8 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       const held = heldLiveKeys.splice(0);
       ready = true;
       options.clearRevealTimer();
-      for (const input of buffered) enqueue(input);
-      for (const input of held) enqueue(input);
+      liveDispatchQueue.push(...buffered, ...held);
+      void runLiveDispatchQueue();
     },
   };
 }

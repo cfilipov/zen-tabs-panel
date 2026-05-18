@@ -18,6 +18,11 @@ function createHarness() {
   return { controller, events };
 }
 
+async function flushDispatchQueue() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 describe("bridge dispatch controller", () => {
   it("holds keys before bridge ready and drains buffered keys before held live keys", async () => {
     const { controller, events } = createHarness();
@@ -26,7 +31,7 @@ describe("bridge dispatch controller", () => {
     await controller.drainReply({ buffered: [key("b")] });
 
     expect(controller.ready).toBe(true);
-    expect(events).toEqual(["arm", "key:b", "arm", "key:h"]);
+    expect(events).toEqual(["key:b", "key:h", "arm"]);
   });
 
   it("serializes live keys after the bridge is ready", async () => {
@@ -35,9 +40,9 @@ describe("bridge dispatch controller", () => {
     await controller.drainReply({ buffered: [] });
     controller.queueOrHold(key("a"));
     controller.queueOrHold(key("b"));
-    await Promise.resolve();
+    await flushDispatchQueue();
 
-    expect(events).toEqual(["arm", "arm", "key:a", "arm", "key:b"]);
+    expect(events).toEqual(["arm", "clear", "key:a", "clear", "key:b", "arm"]);
   });
 
   it("reports keydown capture requirements while not ready", async () => {
@@ -70,7 +75,7 @@ describe("bridge dispatch controller", () => {
     await drain;
 
     expect(controller.ready).toBe(false);
-    expect(events).toEqual(["clear", "arm", "key:old", "clear"]);
+    expect(events).toEqual(["clear", "key:old", "clear"]);
   });
 
   it("force-ready drains buffered keys before held keys through the live queue", async () => {
@@ -78,9 +83,61 @@ describe("bridge dispatch controller", () => {
 
     controller.queueOrHold(key("held"));
     controller.forceReady({ buffered: [key("buffered")] });
-    await Promise.resolve();
+    await flushDispatchQueue();
 
     expect(controller.ready).toBe(true);
-    expect(events).toEqual(["clear", "arm", "key:buffered", "arm", "key:held"]);
+    expect(events).toEqual(["clear", "key:buffered", "key:held", "arm"]);
+  });
+
+  it("arms reveal only after a single async buffered key finishes", async () => {
+    const events: string[] = [];
+    let release: () => void = () => {};
+    const controller = createBridgeDispatchController({
+      dispatchKey: async (input) => {
+        events.push(`start:${input.key}`);
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        events.push(`finish:${input.key}`);
+      },
+      armRevealTimer: () => events.push("arm"),
+      clearRevealTimer: () => events.push("clear"),
+    });
+
+    const drain = controller.drainReply({ buffered: [key("1")] });
+    await Promise.resolve();
+
+    expect(events).toEqual(["start:1"]);
+    release();
+    await drain;
+
+    expect(events).toEqual(["start:1", "finish:1", "arm"]);
+  });
+
+  it("does not arm reveal while an intermediate buffered drill key is running", async () => {
+    const events: string[] = [];
+    let release: () => void = () => {};
+    const controller = createBridgeDispatchController({
+      dispatchKey: async (input) => {
+        events.push(`start:${input.key}`);
+        if (input.key === "1") {
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        }
+        events.push(`finish:${input.key}`);
+      },
+      armRevealTimer: () => events.push("arm"),
+      clearRevealTimer: () => events.push("clear"),
+    });
+
+    const drain = controller.drainReply({ buffered: [key("1"), key("2")] });
+    await Promise.resolve();
+
+    expect(events).toEqual(["start:1"]);
+    release();
+    await drain;
+
+    expect(events).toEqual(["start:1", "finish:1", "start:2", "finish:2", "arm"]);
   });
 });

@@ -43,6 +43,38 @@ function fakeTab(id, url, workspaceId, attrs = {}) {
 }
 
 function makeIndex(tabs) {
+  return makeIndexWithDeps(tabs).index;
+}
+
+function makeIndexWithDeps(tabs) {
+  const calls = {
+    readTabStats: 0,
+    readTabValue: 0,
+    ensureTabUuid: 0,
+  };
+  const index = createZenTabIndex({
+    getWin: fakeWindow,
+    getAllTabElements: () => tabs,
+    readTabStats: () => {
+      calls.readTabStats++;
+      return { focusCount: 0 };
+    },
+    getExtTabId: (tab) => Number(tab.id.replace(/\D/g, "")) || null,
+    unwrapFavicon: (url) => url,
+    readTabValue: () => {
+      calls.readTabValue++;
+      return null;
+    },
+    ensureTabUuid: (tab) => {
+      calls.ensureTabUuid++;
+      return `uuid-${tab.id}`;
+    },
+    recordInterval() {},
+  });
+  return { index, calls };
+}
+
+function makeRichIndex(tabs) {
   return createZenTabIndex({
     getWin: fakeWindow,
     getAllTabElements: () => tabs,
@@ -135,6 +167,24 @@ test("tab index windows stay bounded for large tab sets", () => {
     "title",
     "workspaceId",
   ]);
+});
+
+test("domain windows use lightweight tab reads for large tab sets", () => {
+  const tabs = Array.from({ length: 3000 }, (_, i) =>
+    fakeTab(`tab-${i + 1}`, `https://site-${i % 100}.test/${i + 1}`, i % 2 ? "ws-1" : "ws-2", {
+      lastAccessed: i,
+    })
+  );
+  const { index, calls } = makeIndexWithDeps(tabs);
+
+  const domains = index.getWindow("domains", 0, 10, {});
+  const tabsForDomain = index.getWindow("domain-tabs", 0, 10, { domain: domains.rows[0].domain });
+
+  assert.equal(domains.rows.length, 10);
+  assert.equal(tabsForDomain.rows.length, 10);
+  assert.equal(calls.ensureTabUuid, 0);
+  assert.equal(calls.readTabStats, 0);
+  assert.equal(calls.readTabValue, 0);
 });
 
 test("tab index hides new-tab pages from recents and action previews", () => {

@@ -9,7 +9,7 @@ JS runs in chrome-privileged parent process — same scope as experiment/api.js.
 Access browser window via: Services.wm.getMostRecentWindow("navigator:browser")
 """
 
-import socket, json, time, sys
+import json, os, select, socket, sys, time
 
 HOST = "127.0.0.1"
 PORT = 6000
@@ -42,17 +42,33 @@ def parse_messages(buf):
 def send_recv(sock, msg, wait=2):
     data = json.dumps(msg).encode("utf-8")
     sock.sendall(str(len(data)).encode() + b":" + data)
-    time.sleep(wait)
     buf = b""
     deadline = time.monotonic() + max(1, wait) + 5
+    idle_timeout = float(os.environ.get("FIREFOX_EVAL_IDLE_TIMEOUT", "0.25"))
+    first_byte_deadline = time.monotonic() + max(0.1, wait)
+    idle_deadline = None
     while True:
-        if time.monotonic() >= deadline:
+        now = time.monotonic()
+        if now >= deadline:
             break
+        if idle_deadline is not None and now >= idle_deadline:
+            break
+        timeout = min(0.1, deadline - now)
+        if idle_deadline is None:
+            timeout = min(timeout, max(0.0, first_byte_deadline - now))
+        else:
+            timeout = min(timeout, max(0.0, idle_deadline - now))
+        readable, _, _ = select.select([sock], [], [], timeout)
+        if not readable:
+            if idle_deadline is None and time.monotonic() >= first_byte_deadline:
+                break
+            continue
         try:
             chunk = sock.recv(262144)
             if not chunk:
                 break
             buf += chunk
+            idle_deadline = time.monotonic() + idle_timeout
         except socket.timeout:
             break
     return parse_messages(buf)

@@ -1448,13 +1448,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "align-items: center",
         "justify-content: center",
         "background: " + overlayBackdropColor(),
-        // Start fully hidden. The popup browser still loads (visibility
-        // doesn't gate network/JS), so when the chord engine prerenders
-        // during its wait the popup is ready by the time we reveal.
+        // Start visually hidden but still paint-eligible. A remote XUL
+        // browser may not reliably reach the popup ready/drain path while
+        // an ancestor is visibility:hidden; opacity:0 keeps it invisible
+        // to the user without starving the content process.
         // Reveal animations are applied in pendingReveal below — both
         // backdrop and panel start their fades together so the dim
         // doesn't appear ahead of the panel.
-        "visibility: hidden",
+        "visibility: visible",
+        "opacity: 0",
+        "pointer-events: none",
       ].join(";");
 
       const panel = w.document.createElement("div");
@@ -1489,6 +1492,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (pendingReveal !== reveal) return;
         pendingReveal = null;
         overlay.style.visibility = "visible";
+        overlay.style.opacity = "1";
+        overlay.style.pointerEvents = "auto";
         if (!skipOverlayAnimations) {
           overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
           panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
@@ -1507,6 +1512,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
         destroyOverlay({ hard: true, silent: true });
       }
       return createOverlay(view, params);
+    }
+
+    function focusSelectedTabBrowser() {
+      const w = getWin();
+      try { w && w.gBrowser && w.gBrowser.selectedBrowser && w.gBrowser.selectedBrowser.focus(); } catch (e) {}
     }
 
     // Warm popup is mounted from a previous chord chain (or initial
@@ -1559,12 +1569,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
         panel.style.transition = "none";
       }
       overlay.style.animation = "";
+      overlay.style.visibility = "visible";
+      overlay.style.opacity = "0";
+      overlay.style.pointerEvents = "none";
       delete overlay.dataset.closing;
 
       const reveal = () => {
         if (pendingReveal !== reveal) return;
         pendingReveal = null;
         overlay.style.visibility = "visible";
+        overlay.style.opacity = "1";
+        overlay.style.pointerEvents = "auto";
         if (!skipOverlayAnimations) {
           overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
           if (panel) panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
@@ -1615,6 +1630,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!overlay || overlay.dataset.closing) return;
       pendingReveal = null;
       overlay.style.visibility = "visible";
+      overlay.style.opacity = "1";
+      overlay.style.pointerEvents = "auto";
       if (br) {
         try { br.focus(); } catch (e) {}
       }
@@ -1635,7 +1652,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const br = w2.document.getElementById(BROWSER_ID);
         if (!overlay || overlay.dataset.closing) return;
         if (currentViewName !== (view || "actions")) return;
-        if (overlay.style.visibility !== "hidden") return;
+        if (overlay.style.visibility !== "hidden" && overlay.style.opacity !== "0") return;
 
         const width = Math.round(Number.parseFloat(br?.style?.width || "0"));
         if (width === targetWidth) {
@@ -1995,11 +2012,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
         pendingReveal = null;
         if (hard) {
           overlay.remove();
+          focusSelectedTabBrowser();
         } else if (overlay.style.visibility !== "hidden") {
           const panel = w.document.getElementById(PANEL_ID);
           overlay.style.visibility = "hidden";
+          overlay.style.opacity = "0";
+          overlay.style.pointerEvents = "none";
           overlay.style.animation = "";
           if (panel) panel.style.animation = "";
+          focusSelectedTabBrowser();
         }
         return;
       }
@@ -2008,6 +2029,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // to animate. Hard mode removes the DOM; soft mode is a no-op.
       if (overlay.style.visibility === "hidden") {
         if (hard) overlay.remove();
+        focusSelectedTabBrowser();
         return;
       }
 
@@ -2020,12 +2042,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const finish = () => {
         if (hard) {
           if (overlay.isConnected) overlay.remove();
+          focusSelectedTabBrowser();
           return;
         }
         overlay.style.visibility = "hidden";
+        overlay.style.opacity = "0";
+        overlay.style.pointerEvents = "none";
         overlay.style.animation = "";
         if (panel) panel.style.animation = "";
         delete overlay.dataset.closing;
+        focusSelectedTabBrowser();
         // Tell the popup to navigate back to the default actions view
         // and re-render at its natural size while still hidden. Without
         // this, dismissing from a smaller submenu (e.g. reorder ~230px)
@@ -2078,7 +2104,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const overlay = w.document.getElementById(OVERLAY_ID);
       if (!overlay || overlay.dataset.closing) return false;
       if (pendingReveal) return false;
-      return overlay.style.visibility !== "hidden";
+      return overlay.style.visibility !== "hidden" && overlay.style.opacity !== "0";
     }
 
     // -----------------------------------------------------------------------
@@ -2110,6 +2136,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Pre-declared so functions defined earlier (destroyOverlay, etc.) can
     // call into the engine for state queries.
     let paletteRequestFire = null;
+
+    function debugChordTrace(type, data) {
+      const w = getWin();
+      if (!w || !w.__zenTabsPanelTraceEnabled) return;
+      if (!Array.isArray(w.__zenTabsPanelTrace)) w.__zenTabsPanelTrace = [];
+      w.__zenTabsPanelTrace.push(Object.assign({ at: Date.now(), type }, data || {}));
+    }
 
     // Rearm-and-reveal helper. The warm popup is already mounted, so this
     // resolves to a rearm to the requested view followed by an immediate
@@ -2461,6 +2494,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700);
     }
 
+    function armBufferedRevealTimer() {
+      const w = getWin();
+      clearRevealTimer();
+      if (!w) return;
+      revealTimer = w.setTimeout(() => {
+        revealTimer = null;
+        if (!pendingReveal || popupReady) return;
+        revealOverlay();
+      }, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700);
+    }
+
     // Forward a chord key to the popup's content process. If the popup
     // has signaled POPUP_READY, deliver immediately via its message
     // manager — the popup's frame-script-side ZenChord:DeliverKey listener
@@ -2481,7 +2525,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // its own setTimeout in keyboard.js.
       clearRevealTimer();
       if (!popupReady) {
-        if (bridgeBuffer) bridgeBuffer.push(keyData);
+        if (bridgeBuffer) {
+          bridgeBuffer.push(keyData);
+          if (bridgeBuffer.length === 1) armBufferedRevealTimer();
+        }
         return;
       }
       const w = getWin();
@@ -2520,8 +2567,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // ---- Chrome engine instance ----------------------------------------
     function armChordFromLeader() {
       const now = Date.now();
-      if (now - lastLeaderArmAt < 80) return;
+      if (now - lastLeaderArmAt < 80) {
+        debugChordTrace("arm-skip-debounce", { since: now - lastLeaderArmAt });
+        return;
+      }
       lastLeaderArmAt = now;
+      debugChordTrace("arm-leader", {
+        overlayVisible: isOverlayVisible(),
+        chromeArmed: !!(chromeEngine && chromeEngine.isArmed && chromeEngine.isArmed()),
+      });
 
       // Leader-shortcut routing while the menu is visible:
       //   - on actions   -> dismiss (toggle off).
@@ -2529,6 +2583,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       //   - menu hidden  -> arm the chord engines.
       if (isOverlayVisible()) {
         if (!currentViewName || currentViewName === "actions") {
+          debugChordTrace("arm-visible-destroy", {});
           destroyOverlay();
           return;
         }
@@ -2549,12 +2604,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
 
       try { if (chromeEngine) chromeEngine.arm(); } catch (e) {}
+      debugChordTrace("chrome-arm-called", {});
       const w = getWin();
       const tab = w && w.gBrowser && w.gBrowser.selectedTab;
       const br = tab && tab.linkedBrowser;
       const mm = browserMessageManager(br);
       if (mm) {
-        try { mm.sendAsyncMessage("ZenChord:Arm"); } catch (e) {}
+        try { mm.sendAsyncMessage("ZenChord:Arm"); debugChordTrace("content-arm-sent", {}); } catch (e) {}
       }
     }
 
@@ -2573,6 +2629,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // chrome). Content-routed keys have target=<browser>; let the
       // per-content-process engine handle them.
       filterEvent: (e) => {
+        if (e && e.__zenTabsPanelFallbackHandled) return false;
         const t = e && e.target;
         if (!t) return true;
         const name = (t.tagName || t.nodeName || "").toLowerCase();
@@ -2600,14 +2657,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Without this, the content engine's stale root timer would fire
       // ~400ms later and pop an unwanted menu after a chrome-side action.
       onAction: (payload) => {
+        debugChordTrace("chrome-on-action", payload);
         try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
         dispatchChordAction(payload);
       },
       onOpenView: (view, snapshot, source) => {
+        debugChordTrace("chrome-on-open-view", { view, snapshot, source });
         try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
         enterBridgeFromOpenView(view, snapshot, "chrome", source);
       },
       onStateChange: (snapshot) => {
+        debugChordTrace("chrome-on-state-change", { snapshot });
         // Chrome engine descended into a prefix. Reset content engines
         // (armed in parallel via armChord) so their stale root timers
         // don't fire ~250ms later and overwrite the prefix prerender
@@ -2617,10 +2677,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         prerenderPrefixView(snapshot);
       },
       onCancel: () => {
+        debugChordTrace("chrome-on-cancel", {});
         try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
         if (pendingReveal) destroyOverlay();
       },
-      onBridgeKey: (k) => forwardKeyToPopup(k),
+      onBridgeKey: (k) => {
+        debugChordTrace("chrome-on-bridge-key", k);
+        forwardKeyToPopup(k);
+      },
     });
 
     function installChromeEngine() {
@@ -2641,7 +2705,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const t = e && e.target;
         if (!t) return;
         const name = (t.tagName || t.nodeName || "").toLowerCase();
-        if (name === "browser") chromeEngine.reset();
+        if (name === "browser" && Date.now() - lastLeaderArmAt > CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS) {
+          debugChordTrace("chrome-reset-focus-browser", { since: Date.now() - lastLeaderArmAt });
+          chromeEngine.reset();
+        }
       }, true);
 
       const fallbackLeaderKeydown = (e) => {
@@ -2651,9 +2718,52 @@ this.zenWorkspaces = class extends ExtensionAPI {
         armChordFromLeader();
       };
       w.addEventListener("keydown", fallbackLeaderKeydown, { capture: true, mozSystemGroup: true });
+
+      const fallbackChordKeydown = (e) => {
+        if (!chromeEngine.isArmed()) {
+          debugChordTrace("fallback-skip-not-armed", { key: e.key, target: e.target && e.target.localName });
+          return;
+        }
+        if (e.defaultPrevented) {
+          debugChordTrace("fallback-skip-default-prevented", { key: e.key });
+          return;
+        }
+        if (e.key === "Meta" || e.key === "Control" || e.key === "Alt" || e.key === "Shift") return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        const t = e && e.target;
+        const name = (t && (t.tagName || t.nodeName) || "").toLowerCase();
+        if (name === "browser" && t && t.id === BROWSER_ID) {
+          debugChordTrace("fallback-skip-popup-browser", { key: e.key });
+          return;
+        }
+        const chordKey = engineScope.chordKeyFor ? engineScope.chordKeyFor(e) : null;
+        debugChordTrace("fallback-handle", {
+          key: e.key,
+          code: e.code,
+          target: name,
+          chordKey,
+          hasRootChild: !!(chordKey && CHORD_TREE && CHORD_TREE.children && CHORD_TREE.children[chordKey]),
+        });
+        try { Object.defineProperty(e, "__zenTabsPanelFallbackHandled", { value: true }); } catch (_) {}
+        chromeEngine.handleKey({
+          key: e.key,
+          code: e.code,
+          shiftKey: !!e.shiftKey,
+          altKey: !!e.altKey,
+          ctrlKey: !!e.ctrlKey,
+          metaKey: !!e.metaKey,
+          isTrusted: !!e.isTrusted,
+          target: name === "browser" ? null : e.target,
+          preventDefault: () => { try { e.preventDefault(); } catch (_) {} },
+          stopPropagation: () => { try { e.stopPropagation(); } catch (_) {} },
+        });
+        try { e.stopImmediatePropagation(); } catch (_) {}
+      };
+      w.addEventListener("keydown", fallbackChordKeydown, { capture: true });
       context.callOnClose({
         close() {
           try { w.removeEventListener("keydown", fallbackLeaderKeydown, { capture: true, mozSystemGroup: true }); } catch (e) {}
+          try { w.removeEventListener("keydown", fallbackChordKeydown, { capture: true }); } catch (e) {}
         },
       });
     }
@@ -2883,6 +2993,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function onContentArmed(m) {
       if (!isCurrentGen(m)) return;
+      // Content arm is sent asynchronously after the chrome leader path
+      // arms synchronously. If the user types the first chord key before
+      // that IPC arrives, chrome may already be bridging into a requested
+      // view. A late content-armed prerender must not rearm the warm popup
+      // back to actions and make buffered drill keys replay in the wrong
+      // view.
+      if (bridgingEngineKind != null) {
+        debugChordTrace("content-armed-skip-bridging", {});
+        return;
+      }
       // Content engine just self-armed. Clear the in-flight trace
       // (same as chrome engine's onArmed) and prerender the popup
       // so it's ready if the chord chain involves a view, or if the
