@@ -59,4 +59,32 @@ describe("list loader", () => {
 
     expect(calls).toEqual(["ensure", "window:parent-tabs:0:80:{}"]);
   });
+
+  it("hydrates deduplicated favicon refs", async () => {
+    const icon = "data:image/png;base64,abc";
+    const { client } = createClient({
+      version: 1,
+      view: "last-visited",
+      offset: 0,
+      limit: 80,
+      total: 1,
+      favicons: { f1: icon },
+      rows: [{
+        index: 0,
+        domId: "tab-1",
+        title: "Tab",
+        domain: "example.test",
+        workspaceId: "ws-1",
+        pinned: false,
+        essential: false,
+        active: false,
+        favIconUrl: "ztt-favicon:f1",
+        pending: false,
+      }],
+    });
+
+    const result = await loadNativeListWindow(client, { view: "last-visited", offset: 0, limit: 80 });
+
+    expect("favIconUrl" in result.rows[0] && result.rows[0].favIconUrl).toBe(icon);
+  });
 });

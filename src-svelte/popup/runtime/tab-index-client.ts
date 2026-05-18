@@ -65,6 +65,7 @@ export type ViewWindow<T = TabIndexRow | DomainIndexRow> = {
   limit: number;
   total: number;
   rows: T[];
+  favicons?: Record<string, string>;
 };
 
 export type ActionPreview = {

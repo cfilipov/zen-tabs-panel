@@ -226,7 +226,7 @@ test("tab index hides new-tab pages from recents and action previews", () => {
   assert.equal(snapshot.domainCount, 3);
 });
 
-test("tab index unwraps proxied data favicons and drops chrome favicons", () => {
+test("tab index unwraps proxied data favicons and keeps large data favicons", () => {
   const wrapped = "moz-remote-image://?url=" + encodeURIComponent("data:image/svg+xml;base64,PHN2Zy8+");
   const largeDataIcon = `data:image/svg+xml;base64,${"a".repeat(4096)}`;
   const tooLargeDataIcon = `data:image/svg+xml;base64,${"a".repeat(70000)}`;
@@ -249,12 +249,30 @@ test("tab index unwraps proxied data favicons and drops chrome favicons", () => 
     }),
   ]);
 
-  const rows = index.getWindow("last-visited", 0, 10, {}).rows;
+  const win = index.getWindow("last-visited", 0, 10, {});
+  const rows = win.rows;
 
   assert.equal(rows[0].favIconUrl, "data:image/svg+xml;base64,PHN2Zy8+");
-  assert.equal(rows[1].favIconUrl, "");
-  assert.equal(rows[2].favIconUrl, "");
+  assert.equal(rows[1].favIconUrl, "ztt-favicon:f1");
+  assert.equal(win.favicons.f1, largeDataIcon);
+  assert.equal(rows[2].favIconUrl, "ztt-favicon:f2");
+  assert.equal(win.favicons.f2, tooLargeDataIcon);
   assert.equal(rows[3].favIconUrl, "");
+});
+
+test("tab index deduplicates large data favicons in window payloads", () => {
+  const largeDataIcon = `data:image/png;base64,${"b".repeat(4096)}`;
+  const index = makeIndex([
+    fakeTab("tab-1", "https://a.test", "ws-1", { favIconUrl: largeDataIcon, lastAccessed: 100 }),
+    fakeTab("tab-2", "https://b.test", "ws-1", { favIconUrl: largeDataIcon, lastAccessed: 90 }),
+  ]);
+
+  const win = index.getWindow("last-visited", 0, 10, {});
+
+  assert.equal(win.rows[0].favIconUrl, "ztt-favicon:f1");
+  assert.equal(win.rows[1].favIconUrl, "ztt-favicon:f1");
+  assert.deepEqual(Object.keys(win.favicons), ["f1"]);
+  assert.equal(win.favicons.f1, largeDataIcon);
 });
 
 test("tab index returns only stale close targets for auto-close sweeps", () => {

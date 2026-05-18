@@ -5,8 +5,8 @@
 // WebExtension boundary. This file is loaded with Services.scriptloader.
 
 this.createZenTabIndex = function createZenTabIndex(deps) {
-  const MAX_FAVICON_URL_LENGTH = 8192;
   const MAX_DATA_FAVICON_URL_LENGTH = 1024;
+  const FAVICON_REF_PREFIX = "ztt-favicon:";
   let started = false;
   let dirty = true;
   let version = 0;
@@ -45,9 +45,18 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       }
     }
     if (!s || s.startsWith("chrome://")) return "";
-    if (s.startsWith("data:") && s.length > MAX_DATA_FAVICON_URL_LENGTH) return "";
-    if (s.length > MAX_FAVICON_URL_LENGTH) return "";
     return s;
+  }
+
+  function compactFaviconForWindow(url, faviconRefs) {
+    const s = compactFavicon(url);
+    if (!s || !s.startsWith("data:") || s.length <= MAX_DATA_FAVICON_URL_LENGTH) return s;
+    const existing = faviconRefs.byUrl.get(s);
+    if (existing) return FAVICON_REF_PREFIX + existing;
+    const key = "f" + faviconRefs.next++;
+    faviconRefs.byUrl.set(s, key);
+    faviconRefs.map[key] = s;
+    return FAVICON_REF_PREFIX + key;
   }
 
   function compactTabRow(row) {
@@ -63,6 +72,13 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       favIconUrl: compactFavicon(row.favIconUrl),
       pending: row.pending,
       focusCount: row.focusCount,
+    };
+  }
+
+  function compactTabRowForWindow(row, faviconRefs) {
+    return {
+      ...compactTabRow(row),
+      favIconUrl: compactFaviconForWindow(row.favIconUrl, faviconRefs),
     };
   }
 
@@ -373,13 +389,18 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       const viewRows = rowsForView(view || "all", params || {});
       const start = Math.max(0, Number(offset) || 0);
       const size = Math.max(0, Math.min(Number(limit) || 50, 200));
+      const faviconRefs = { next: 1, byUrl: new Map(), map: Object.create(null) };
+      const windowRows = viewRows
+        .slice(start, start + size)
+        .map((row) => row.kind === "domain" ? row : compactTabRowForWindow(row, faviconRefs));
       return {
         version,
         view: view || "all",
         offset: start,
         limit: size,
         total: viewRows.length,
-        rows: viewRows.slice(start, start + size).map((row) => row.kind === "domain" ? row : compactTabRow(row)),
+        rows: windowRows,
+        favicons: faviconRefs.map,
       };
     },
     getRowTarget(domId) {
