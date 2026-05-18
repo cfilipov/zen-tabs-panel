@@ -35,7 +35,7 @@
 <div
   role="button"
   tabindex="-1"
-  class="list-item"
+  class="list-item tab-list-row"
   class:selected
   data-session-id={row.sessionId}
   onclick={() => onactivate?.(row)}

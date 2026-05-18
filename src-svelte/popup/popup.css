@@ -462,6 +462,14 @@ html, body {
   align-items: center;
 }
 
+.tab-list-row .item-title {
+  width: 100%;
+  max-width: 100%;
+  text-overflow: clip;
+  mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+}
+
 .item-subtitle {
   font-size: 11px;
   color: var(--ztt-text-muted);

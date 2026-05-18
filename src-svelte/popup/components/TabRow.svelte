@@ -21,7 +21,7 @@
 
 <button
   type="button"
-  class="list-item"
+  class="list-item tab-list-row"
   class:tab-pending={row.pending}
   class:selected
   data-dom-id={row.domId}
