@@ -1850,7 +1850,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       //      this because Fission keeps content keystrokes in the
       //      content process — the parent only gets what we forward.
       const SCRIPT_BODY =
-        '(()=>{const send=()=>{' +
+        '(()=>{const installed="__zenTabsPanelHostedPopupSizing";const send=()=>{' +
         'const d=content.document;const b=d.body;const r=d.documentElement;' +
         'let w,h;if(b&&b.scrollWidth){w=b.scrollWidth;h=b.scrollHeight;}' +
         'else if(r){w=r.scrollWidth;h=r.scrollHeight;}' +
@@ -1858,7 +1858,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         'const observe=()=>{const b=content.document.body;if(!b)return false;' +
         'try{const ro=new content.ResizeObserver(send);ro.observe(b);' +
         'ro.observe(content.document.documentElement);}catch(e){}return true;};' +
-        'if(!observe())content.addEventListener("DOMContentLoaded",observe,{once:true});' +
+        'if(!content[installed]){content[installed]=true;' +
+        'if(!observe())content.addEventListener("DOMContentLoaded",observe,{once:true});}' +
         'send();' +
         'content.addEventListener("keydown",(e)=>{' +
         'if(e.key==="Escape")sendAsyncMessage("ztt:popup-escape",{});' +
@@ -1876,22 +1877,31 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const STATE_STOP_DOC =
         Ci.nsIWebProgressListener.STATE_STOP |
         Ci.nsIWebProgressListener.STATE_IS_WINDOW;
-      let armed = false;
+      let gotFirstSize = false;
+      const armedMessageManagers = new WeakSet();
       const arm = () => {
-        if (armed) return;
         if (gen !== morphGeneration) return;
-        const mm = br.frameLoader?.messageManager;
+        const mm = browserMessageManager(br);
         if (!mm) return;
-        armed = true;
-        mm.addMessageListener("ztt:popup-size", (m) => {
-          const d = m.data || {};
-          if (d.w && d.h) applySize(d.w, d.h);
-        });
-        mm.addMessageListener("ztt:popup-escape", () => {
-          if (gen !== morphGeneration) return;
-          destroyOverlay();
-        });
-        mm.loadFrameScript("data:," + encodeURIComponent(SCRIPT_BODY), false);
+        if (!armedMessageManagers.has(mm)) {
+          armedMessageManagers.add(mm);
+          mm.addMessageListener("ztt:popup-size", (m) => {
+            const d = m.data || {};
+            if (d.w && d.h) {
+              gotFirstSize = true;
+              applySize(d.w, d.h);
+            }
+          });
+          mm.addMessageListener("ztt:popup-escape", () => {
+            if (gen !== morphGeneration) return;
+            destroyOverlay();
+          });
+        }
+        // Remote extension browsers can swap message managers while their
+        // process remoteness settles. A one-shot loadFrameScript can land on
+        // the pre-switch manager and disappear; retry until the loaded page
+        // actually reports a size.
+        mm.loadFrameScript("data:application/javascript," + encodeURIComponent(SCRIPT_BODY), false);
       };
       const progressListener = {
         QueryInterface: ChromeUtils.generateQI([
@@ -1909,10 +1919,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       try {
         br.addProgressListener(progressListener, Ci.nsIWebProgress.NOTIFY_STATE_NETWORK);
       } catch (e) {}
-      // Belt-and-suspenders: if the progress listener never fires for
-      // some reason (unusual error path, popup that never finishes
-      // loading), arm anyway at 800ms so the panel still gets sized.
-      w.setTimeout(arm, 800);
+      // Belt-and-suspenders: if the progress listener fires against an early
+      // remote-type transition, or never fires, keep retrying briefly against
+      // the current message manager until the foreign popup reports its
+      // natural size. This also restores Esc forwarding, which lives in the
+      // same frame script.
+      for (const delay of [80, 200, 500, 800, 1200, 1800]) {
+        w.setTimeout(() => {
+          if (!gotFirstSize) arm();
+        }, delay);
+      }
     }
 
     // Many popups dismiss themselves via window.close(). Watch for that
