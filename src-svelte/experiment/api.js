@@ -2615,6 +2615,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const br = tab && tab.linkedBrowser;
       const mm = browserMessageManager(br);
       if (mm) {
+        try {
+          if (contentEngineFrameScriptUrl) {
+            mm.loadFrameScript(contentEngineFrameScriptUrl, false);
+          }
+        } catch (e) {}
         try { mm.sendAsyncMessage("ZenChord:Arm"); debugChordTrace("content-arm-sent", {}); } catch (e) {}
       }
     }
@@ -2737,8 +2742,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (e.metaKey || e.ctrlKey || e.altKey) return;
         const t = e && e.target;
         const name = (t && (t.tagName || t.nodeName) || "").toLowerCase();
-        if (name === "browser" && t && t.id === BROWSER_ID) {
-          debugChordTrace("fallback-skip-popup-browser", { key: e.key });
+        if (name === "browser") {
+          debugChordTrace(t && t.id === BROWSER_ID ? "fallback-skip-popup-browser" : "fallback-skip-content-browser", { key: e.key });
           return;
         }
         const chordKey = engineScope.chordKeyFor ? engineScope.chordKeyFor(e) : null;
@@ -2807,12 +2812,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const body =
         "(function(){\n" +
         "var __GEN = " + JSON.stringify(CHORD_GENERATION) + ";\n" +
+        "try {\n" +
+        "  if (content && content.__zenTabsPanelChordEngineGen === __GEN) return;\n" +
+        "} catch(e){}\n" +
         "var __scope = {};\n" +
         "try {\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(bindingsURL) + ", __scope);\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(constantsURL) + ", __scope);\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(engineURL) + ", __scope);\n" +
         "} catch (err) { return; }\n" +
+        "try { if (content) content.__zenTabsPanelChordEngineGen = __GEN; } catch(e){}\n" +
         "function isExtensionPage(){\n" +
         "  try { return String(content && content.location && content.location.href || '').startsWith('moz-extension://'); } catch (e) { return false; }\n" +
         "}\n" +
@@ -2949,6 +2958,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // the freshly-loaded frame script in the same content process.
         "addMessageListener('ZenChord:Shutdown', function(){\n" +
         "  __shutdown = true;\n" +
+        "  try { if (content && content.__zenTabsPanelChordEngineGen === __GEN) content.__zenTabsPanelChordEngineGen = null; } catch(e){}\n" +
         "  try { __engine.detach(); } catch(e){}\n" +
         "  try { content && content.removeEventListener('keydown', blockDefaultGroup, { capture: true }); } catch(e){}\n" +
         "});\n" +
