@@ -53,6 +53,16 @@ describe("bridge dispatch controller", () => {
     expect(controller.keydownInput(key("y"))).toEqual({ preventDefault: true, stopPropagation: false });
   });
 
+  it("processes visible popup keydown even if the bridge is not ready yet", async () => {
+    const { controller, events } = createHarness();
+
+    expect(controller.visibleKeydownInput(key(" "))).toEqual({ preventDefault: true, stopPropagation: true });
+    await flushDispatchQueue();
+
+    expect(controller.ready).toBe(true);
+    expect(events).toEqual(["clear", "key: ", "arm"]);
+  });
+
   it("stops stale warm-rearm drains before marking ready", async () => {
     const events: string[] = [];
     let release: () => void = () => {};

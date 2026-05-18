@@ -157,7 +157,7 @@ def start_smoke() -> str:
       const timeout = w.setTimeout(() => {
         try { mm.removeMessageListener(name, handler); } catch (e) {}
         reject(new Error("popup frame probe timed out"));
-      }, 5000);
+      }, 1500);
       function handler(msg) {
         w.clearTimeout(timeout);
         try { mm.removeMessageListener(name, handler); } catch (e) {}
@@ -197,17 +197,16 @@ def start_smoke() -> str:
 
   function keySource(key) {
     return `(content) => {
-      const payload = {
-        type: "deliver-key",
-        data: {
-          key: ${JSON.stringify(key)},
-          code: ${JSON.stringify(key === " " ? "Space" : "Key" + key.toUpperCase())}
-        }
-      };
-      const event = new content.CustomEvent("ztt:bridge-message", { detail: JSON.stringify(payload) });
-      content.document.dispatchEvent(event);
+      const event = new content.KeyboardEvent("keydown", {
+        key: ${JSON.stringify(key)},
+        code: ${JSON.stringify(key === " " ? "Space" : "Key" + key.toUpperCase())},
+        bubbles: true,
+        cancelable: true
+      });
+      content.window.dispatchEvent(event);
       return {
-        key: ${JSON.stringify(key)}
+        key: ${JSON.stringify(key)},
+        defaultPrevented: event.defaultPrevented
       };
     }`;
   }
@@ -246,6 +245,14 @@ def start_smoke() -> str:
     const text = snapshot.textHead.join("\n");
     if (!text.includes(expected)) {
       throw new Error(label + " missing text " + JSON.stringify(expected) + ": " + text);
+    }
+  }
+
+  async function trySnapshot() {
+    try {
+      return { ok: true, snap: await runInPopup(snapshotSource()) };
+    } catch (e) {
+      return { ok: false, error: String(e && e.message || e), state: overlayState() };
     }
   }
 
@@ -308,7 +315,9 @@ def start_smoke() -> str:
     }, opts.overlayTimeout || 5000, 100);
 
     const snap = await waitFor(view + " content", async () => {
-      const current = await runInPopup(snapshotSource());
+      const result = await trySnapshot();
+      if (!result.ok) return result;
+      const current = result.snap;
       const text = current.textHead.join("\n");
       if (text.includes(expectedText) && !text.includes("Loading...")) {
         return { ok: true, snap: current };
@@ -358,7 +367,9 @@ def start_smoke() -> str:
       record("overlay-loaded", loadedState);
 
       const main = await waitFor("main menu text", async () => {
-        const snap = await runInPopup(snapshotSource());
+        const result = await trySnapshot();
+        if (!result.ok) return result;
+        const snap = result.snap;
         const head = snap.textHead.join("\n");
         if (head.includes("Navigate") && head.includes("All tabs")) {
           return { ok: true, snap };
@@ -394,9 +405,15 @@ def start_smoke() -> str:
       await sleep(350);
 
       record("press-space");
-      await runInPopup(keySource(" "));
-      await sleep(80);
-      const pageTwo = await runInPopup(snapshotSource());
+      const spaceDispatch = await runInPopup(keySource(" "));
+      record("press-space-result", spaceDispatch);
+      const pageTwoResult = await waitFor("actions page 2 after Space", async () => {
+        const result = await trySnapshot();
+        if (!result.ok) return result;
+        const snap = result.snap;
+        return snap.activePage === "2" ? { ok: true, snap } : { ok: false, snap };
+      }, 1000, 50);
+      const pageTwo = pageTwoResult.snap;
       record("after-space", {
         activePage: pageTwo.activePage,
         pageDots: pageTwo.pageDots,
@@ -409,8 +426,13 @@ def start_smoke() -> str:
 
       record("press-space-back");
       await runInPopup(keySource(" "));
-      await sleep(80);
-      const pageOneAgain = await runInPopup(snapshotSource());
+      const pageOneAgainResult = await waitFor("actions page 1 after second Space", async () => {
+        const result = await trySnapshot();
+        if (!result.ok) return result;
+        const snap = result.snap;
+        return snap.activePage === "1" ? { ok: true, snap } : { ok: false, snap };
+      }, 1000, 50);
+      const pageOneAgain = pageOneAgainResult.snap;
       if (pageOneAgain.activePage !== "1") throw new Error("Second Space did not return to actions page 1");
 
       record("press-r-recent");
@@ -449,7 +471,9 @@ def start_smoke() -> str:
       }, 3000, 100);
 
       const domains = await waitFor("domains list content", async () => {
-        const snap = await runInPopup(snapshotSource());
+        const result = await trySnapshot();
+        if (!result.ok) return result;
+        const snap = result.snap;
         const text = snap.textHead.join("\n");
         if (text.includes("Domains") && !text.includes("Loading...") && snap.textLength > 20) {
           return { ok: true, snap };
@@ -469,7 +493,9 @@ def start_smoke() -> str:
       record("press-s-domain-sort");
       await runInPopup(keySource("S"));
       const sorted = await waitFor("domains after sort", async () => {
-        const snap = await runInPopup(snapshotSource());
+        const result = await trySnapshot();
+        if (!result.ok) return result;
+        const snap = result.snap;
         const text = snap.textHead.join("\n");
         if (text.includes("Domains") && !text.includes("Loading...") && snap.textLength > 20) {
           return { ok: true, snap };
@@ -493,7 +519,9 @@ def start_smoke() -> str:
         return true;
       }`);
       const drilledDomain = await waitFor("domain buffered drill", async () => {
-        const snap = await runInPopup(snapshotSource());
+        const result = await trySnapshot();
+        if (!result.ok) return result;
+        const snap = result.snap;
         const text = snap.textHead.join("\n");
         if (text.includes(firstDomain) && !text.includes("Domains") && !text.includes("Loading...")) {
           return { ok: true, snap };

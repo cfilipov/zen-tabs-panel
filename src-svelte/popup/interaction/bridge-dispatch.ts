@@ -11,6 +11,7 @@ export type BridgeDispatchController = {
   isCurrentWarmGeneration: (generation: number) => boolean;
   drainReply: (reply: BridgeReply | null, generation?: number) => Promise<void>;
   forceReady: (data: ForceReadyPayload) => void;
+  visibleKeydownInput: (input: BridgeKeyData) => { preventDefault: true; stopPropagation: true };
 };
 
 type BridgeDispatchOptions = {
@@ -88,6 +89,12 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
     keydownInput(input) {
       queueOrHold(input);
       return { preventDefault: true, stopPropagation: !ready };
+    },
+    visibleKeydownInput(input) {
+      ready = true;
+      options.clearRevealTimer();
+      enqueue(input);
+      return { preventDefault: true, stopPropagation: true };
     },
     resetForWarmRearm() {
       warmGeneration += 1;

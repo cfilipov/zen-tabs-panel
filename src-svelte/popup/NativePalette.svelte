@@ -1051,7 +1051,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    const result = bridgeDispatch.keydownInput(snapshotKeyEvent(event));
+    const result = bridgeDispatch.visibleKeydownInput(snapshotKeyEvent(event));
     if (result.preventDefault) event.preventDefault();
     if (result.stopPropagation) event.stopPropagation();
   }
