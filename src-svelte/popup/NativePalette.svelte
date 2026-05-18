@@ -114,6 +114,7 @@
     type ActionMenuItem,
   } from "./views/actions-model";
   import type { ViewId } from "../shared/types";
+  import { createNativePaletteState } from "./store/native-palette-state.svelte";
 
   type NativeRow = NativeListRow;
   type SidebarHint = {
@@ -134,41 +135,8 @@
   const workspaceClient = createWorkspaceClient();
   const actionSections = buildActionsMenuModel();
 
-  let currentView = $state<ViewId>("actions");
-  let rows = $state<NativeRow[]>([]);
-  let total = $state(0);
-  let offset = $state(0);
-  let loading = $state(false);
-  let error = $state<string | null>(null);
-  let currentPage = $state(1);
-  let selectedIndex = $state(-1);
-  let currentDomain = $state<string | null>(null);
-  let navigationHistory = $state<NavigationHistory | null>(null);
-  let recentlyClosedRows = $state<RecentlyClosedRow[]>([]);
-  let workspaceRows = $state<WorkspaceRow[]>([]);
-  let containerRows = $state<ContainerRow[]>([]);
-  let folderRows = $state<FolderRow[]>([]);
-  let folderWorkspaces = $state<WorkspaceRow[]>([]);
-  let profileRows = $state<ProfileRow[]>([]);
-  let duplicateGroups = $state<DuplicateGroupRow[]>([]);
-  let duplicateWorkspaces = $state<WorkspaceRow[]>([]);
-  let tabInfo = $state<TabInfo | null>(null);
-  let tabInfoVisits = $state<HistoryVisit[]>([]);
-  let tabInfoDuplicates = $state<TabIndexRow[]>([]);
-  let tabInfoWorkspaces = $state<WorkspaceRow[]>([]);
-  let duplicatePromptUrl = $state("");
-  let duplicatePromptDomId = $state<string | null>(null);
-  let domainsSortAlpha = $state(false);
-  let tabsByAgeNewestFirst = $state(false);
-  let sidebarWorkspaces = $state<WorkspaceRow[]>([]);
-  let workspaceFilter = $state("all");
-  let actionsWorkspaces = $state<WorkspaceRow[]>([]);
-  let actionWorkspaceTabCounts = $state<Record<string, number>>({});
-  let actionCounts = $state<Record<string, number>>({});
-  let actionPreviewsById = $state<Record<string, ActionPreview | null>>({});
-  let disabledActionIds = $state<Set<string>>(new Set());
-  let actionIconHtmlById = $state<Record<string, string | null>>({});
-  let actionExtensions = $state<ExtensionRow[]>([]);
+  const paletteStore = createNativePaletteState();
+  const palette = paletteStore.state;
   let pageAlive = true;
   const revealController = createPaletteRevealController({
     sendReveal: (inst) => fireMessage({ type: "reveal-palette", inst }),
@@ -179,53 +147,53 @@
     clearRevealTimer: revealController.clear,
   });
 
-  const headerHidden = $derived(currentView === "actions");
+  const headerHidden = $derived(palette.currentView === "actions");
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
   const viewLoad = createViewLoadController<ViewId>({
-    getCurrentView: () => currentView,
-    setCurrentView: (view) => { currentView = view; },
-    setLoading: (value) => { loading = value; },
-    setError: (value) => { error = value; },
+    getCurrentView: () => palette.currentView,
+    setCurrentView: (view) => { palette.currentView = view; },
+    setLoading: (value) => { palette.loading = value; },
+    setError: (value) => { palette.error = value; },
   });
   const renderedActionSections = $derived(
     applyActionMetadata(
-      appendWorkspaceSwitchItems(actionSections, actionsWorkspaces, actionWorkspaceTabCounts),
-      actionCounts,
-      disabledActionIds,
-      actionIconHtmlById,
-      actionPreviewsById,
+      appendWorkspaceSwitchItems(actionSections, palette.actionsWorkspaces, palette.actionWorkspaceTabCounts),
+      palette.actionCounts,
+      palette.disabledActionIds,
+      palette.actionIconHtmlById,
+      palette.actionPreviewsById,
     ),
   );
-  const visibleActionItems = $derived(actionItemsForPage(renderedActionSections, currentPage));
+  const visibleActionItems = $derived(actionItemsForPage(renderedActionSections, palette.currentPage));
   const allActionItems = $derived(renderedActionSections.flatMap((section) => section.items));
   const allActionNodes = $derived(actionNodesForSections(renderedActionSections));
-  const prefixItems = $derived(isNativePrefixView(currentView) ? prefixItemsForView(currentView) : []);
-  const prefixNodes = $derived(isNativePrefixView(currentView) ? prefixChildNodesForView(currentView) : []);
-  const title = $derived(resolveViewTitle(currentView, {
-    currentDomain,
-    actionLabel: allActionItems.find((item) => item.view === currentView)?.label ?? null,
+  const prefixItems = $derived(isNativePrefixView(palette.currentView) ? prefixItemsForView(palette.currentView) : []);
+  const prefixNodes = $derived(isNativePrefixView(palette.currentView) ? prefixChildNodesForView(palette.currentView) : []);
+  const title = $derived(resolveViewTitle(palette.currentView, {
+    currentDomain: palette.currentDomain,
+    actionLabel: allActionItems.find((item) => item.view === palette.currentView)?.label ?? null,
   }));
-  const selectedActionId = $derived(currentView === "actions" ? visibleActionItems[selectedIndex]?.id ?? null : null);
+  const selectedActionId = $derived(palette.currentView === "actions" ? visibleActionItems[palette.selectedIndex]?.id ?? null : null);
   const actionSectionsForRender = $derived(applyActionSelection(renderedActionSections, selectedActionId));
-  const selectedPrefixId = $derived(isNativePrefixView(currentView) ? prefixItems[selectedIndex]?.id ?? null : null);
+  const selectedPrefixId = $derived(isNativePrefixView(palette.currentView) ? prefixItems[palette.selectedIndex]?.id ?? null : null);
   const prefixItemsForRender = $derived(prefixItems.map((item) => ({
     ...item,
     selected: selectedPrefixId !== null && item.id === selectedPrefixId,
   })));
-  const selectedRow = $derived(isNativeListView(currentView) ? rowForIndex(selectedIndex) : null);
+  const selectedRow = $derived(isNativeListView(palette.currentView) ? rowForIndex(palette.selectedIndex) : null);
   const selectedTabRow = $derived(isTabRow(selectedRow) ? selectedRow : null);
   const selectedDomainRow = $derived(isDomainRow(selectedRow) ? selectedRow : null);
-  const tabRows = $derived(rows.filter(isTabRow));
-  const domainRows = $derived(rows.filter(isDomainRow));
+  const tabRows = $derived(palette.rows.filter(isTabRow));
+  const domainRows = $derived(palette.rows.filter(isDomainRow));
   const selectedRowDomId = $derived(selectedTabRow?.domId ?? null);
   const selectedDomain = $derived(selectedDomainRow?.domain ?? null);
-  const navigationEntries = $derived(navigationHistory?.entries ?? []);
-  const activeWorkspaceId = $derived(sidebarWorkspaces.find((workspace) => workspace.isActive)?.uuid ?? null);
+  const navigationEntries = $derived(palette.navigationHistory?.entries ?? []);
+  const activeWorkspaceId = $derived(palette.sidebarWorkspaces.find((workspace) => workspace.isActive)?.uuid ?? null);
   const sidebarModel = $derived(buildSidebarModel({
-    view: currentView,
-    selectedIndex,
-    domainsSortAlpha,
-    tabsByAgeNewestFirst,
+    view: palette.currentView,
+    selectedIndex: palette.selectedIndex,
+    domainsSortAlpha: palette.domainsSortAlpha,
+    tabsByAgeNewestFirst: palette.tabsByAgeNewestFirst,
   }));
   const sidebarHintsOnly = $derived(sidebarModel.hintsOnly);
   const sidebarSortLabel = $derived(sidebarModel.sortLabel);
@@ -242,7 +210,7 @@
     openView: (view) => openNativeView(view, undefined, true),
     runDuplicatePromptAction,
     navigateHistoryDelta: (delta) => {
-      const current = navigationHistory?.index ?? -1;
+      const current = palette.navigationHistory?.index ?? -1;
       const target = current + delta;
       if (target >= 0 && target < navigationEntries.length) {
         navigateToHistoryIndex(target);
@@ -267,13 +235,13 @@
   };
 
   function applyActionsMenuData(data: ActionsMenuData) {
-    actionsWorkspaces = data.workspaces;
-    actionWorkspaceTabCounts = data.workspaceTabCounts;
-    actionExtensions = data.extensions;
-    actionIconHtmlById = data.iconHtmlById;
-    actionPreviewsById = data.previewsById;
-    actionCounts = data.counts;
-    disabledActionIds = data.disabledIds;
+    palette.actionsWorkspaces = data.workspaces;
+    palette.actionWorkspaceTabCounts = data.workspaceTabCounts;
+    palette.actionExtensions = data.extensions;
+    palette.actionIconHtmlById = data.iconHtmlById;
+    palette.actionPreviewsById = data.previewsById;
+    palette.actionCounts = data.counts;
+    palette.disabledActionIds = data.disabledIds;
   }
 
   function sidebarHintAction(id: SidebarHintId) {
@@ -293,24 +261,24 @@
 
   function viewParams(view: NativeListView) {
     return listViewParams(view, {
-      workspaceFilter,
-      currentDomain,
-      domainsSortAlpha,
-      tabsByAgeNewestFirst,
+      workspaceFilter: palette.workspaceFilter,
+      currentDomain: palette.currentDomain,
+      domainsSortAlpha: palette.domainsSortAlpha,
+      tabsByAgeNewestFirst: palette.tabsByAgeNewestFirst,
     });
   }
 
   async function refreshSidebarWorkspaces(generation = viewLoad.generation) {
-    if (!isWorkspaceFilterView(currentView)) return;
+    if (!isWorkspaceFilterView(palette.currentView)) return;
     try {
       const workspaces = await workspaceClient.getWorkspacesWithIcons();
-      if (generation !== viewLoad.generation || !isWorkspaceFilterView(currentView)) return;
-      sidebarWorkspaces = workspaces;
-      if (workspaceFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === workspaceFilter)) {
-        workspaceFilter = "all";
+      if (generation !== viewLoad.generation || !isWorkspaceFilterView(palette.currentView)) return;
+      palette.sidebarWorkspaces = workspaces;
+      if (palette.workspaceFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === palette.workspaceFilter)) {
+        palette.workspaceFilter = "all";
       }
     } catch {
-      if (generation === viewLoad.generation) sidebarWorkspaces = [];
+      if (generation === viewLoad.generation) palette.sidebarWorkspaces = [];
     }
   }
 
@@ -335,7 +303,7 @@
       view,
       loading: resetSelection,
       afterBegin: (load) => {
-        offset = nextOffset;
+        palette.offset = nextOffset;
         void refreshSidebarWorkspaces(load.id);
       },
       load: async () => {
@@ -347,17 +315,17 @@
         });
       },
       commit: (win) => {
-        rows = win.rows;
-        total = win.total;
+        palette.rows = win.rows;
+        palette.total = win.total;
         if (resetSelection) {
-          selectedIndex = -1;
+          palette.selectedIndex = -1;
         }
       },
       fail: (message) => {
-        rows = [];
-        total = 0;
-        selectedIndex = -1;
-        error = message;
+        palette.rows = [];
+        palette.total = 0;
+        palette.selectedIndex = -1;
+        palette.error = message;
       },
     });
   }
@@ -368,13 +336,13 @@
       view: "navigation",
       load: () => loadNavigationView(historyClient),
       commit: (result) => {
-        navigationHistory = result.history;
-        selectedIndex = result.selectedIndex;
+        palette.navigationHistory = result.history;
+        palette.selectedIndex = result.selectedIndex;
       },
       fail: (message) => {
-        navigationHistory = null;
-        selectedIndex = -1;
-        error = message;
+        palette.navigationHistory = null;
+        palette.selectedIndex = -1;
+        palette.error = message;
       },
     });
   }
@@ -385,13 +353,13 @@
       view: "recently-closed",
       load: () => loadRecentlyClosedView(historyClient),
       commit: (result) => {
-        recentlyClosedRows = result.rows;
-        selectedIndex = result.selectedIndex;
+        palette.recentlyClosedRows = result.rows;
+        palette.selectedIndex = result.selectedIndex;
       },
       fail: (message) => {
-        recentlyClosedRows = [];
-        selectedIndex = -1;
-        error = message;
+        palette.recentlyClosedRows = [];
+        palette.selectedIndex = -1;
+        palette.error = message;
       },
     });
   }
@@ -402,13 +370,13 @@
       view: "move-to-workspace",
       load: () => loadMoveToWorkspaceView(workspaceClient),
       commit: (result) => {
-        workspaceRows = result.rows;
-        selectedIndex = result.selectedIndex;
+        palette.workspaceRows = result.rows;
+        palette.selectedIndex = result.selectedIndex;
       },
       fail: (message) => {
-        workspaceRows = [];
-        selectedIndex = -1;
-        error = message;
+        palette.workspaceRows = [];
+        palette.selectedIndex = -1;
+        palette.error = message;
       },
     });
   }
@@ -419,13 +387,13 @@
       view: "open-in-container",
       load: () => loadOpenInContainerView(containerClient),
       commit: (result) => {
-        containerRows = result.rows;
-        selectedIndex = result.selectedIndex;
+        palette.containerRows = result.rows;
+        palette.selectedIndex = result.selectedIndex;
       },
       fail: (message) => {
-        containerRows = [];
-        selectedIndex = -1;
-        error = message;
+        palette.containerRows = [];
+        palette.selectedIndex = -1;
+        palette.error = message;
       },
     });
   }
@@ -436,15 +404,15 @@
       view: "move-to-folder",
       load: () => loadMoveToFolderView(folderClient, workspaceClient),
       commit: (result) => {
-        folderRows = result.folders;
-        folderWorkspaces = result.workspaces;
-        selectedIndex = result.selectedIndex;
+        palette.folderRows = result.folders;
+        palette.folderWorkspaces = result.workspaces;
+        palette.selectedIndex = result.selectedIndex;
       },
       fail: (message) => {
-        folderRows = [];
-        folderWorkspaces = [];
-        selectedIndex = -1;
-        error = message;
+        palette.folderRows = [];
+        palette.folderWorkspaces = [];
+        palette.selectedIndex = -1;
+        palette.error = message;
       },
     });
   }
@@ -455,13 +423,13 @@
       view: "profiles",
       load: () => loadProfilesView(profileClient),
       commit: (result) => {
-        profileRows = result.rows;
-        selectedIndex = result.selectedIndex;
+        palette.profileRows = result.rows;
+        palette.selectedIndex = result.selectedIndex;
       },
       fail: (message) => {
-        profileRows = [];
-        selectedIndex = -1;
-        error = message;
+        palette.profileRows = [];
+        palette.selectedIndex = -1;
+        palette.error = message;
       },
     });
   }
@@ -470,19 +438,19 @@
     await runViewLoad({
       controller: viewLoad,
       view: "duplicates",
-      load: () => loadDuplicateGroupsView(client, workspaceClient, workspaceFilter),
+      load: () => loadDuplicateGroupsView(client, workspaceClient, palette.workspaceFilter),
       commit: (result) => {
-        sidebarWorkspaces = result.workspaces;
-        duplicateWorkspaces = result.workspaces;
-        workspaceFilter = result.workspaceFilter;
-        duplicateGroups = result.groups;
-        selectedIndex = result.selectedIndex;
+        palette.sidebarWorkspaces = result.workspaces;
+        palette.duplicateWorkspaces = result.workspaces;
+        palette.workspaceFilter = result.workspaceFilter;
+        palette.duplicateGroups = result.groups;
+        palette.selectedIndex = result.selectedIndex;
       },
       fail: (message) => {
-        duplicateGroups = [];
-        duplicateWorkspaces = [];
-        selectedIndex = -1;
-        error = message;
+        palette.duplicateGroups = [];
+        palette.duplicateWorkspaces = [];
+        palette.selectedIndex = -1;
+        palette.error = message;
       },
     });
   }
@@ -493,19 +461,19 @@
       view: "tab-info",
       load: () => loadTabInfoView(client, tabInfoClient, workspaceClient),
       commit: (result) => {
-        tabInfo = result.info;
-        tabInfoVisits = result.visits;
-        tabInfoDuplicates = result.duplicates;
-        tabInfoWorkspaces = result.workspaces;
-        selectedIndex = result.selectedIndex;
+        palette.tabInfo = result.info;
+        palette.tabInfoVisits = result.visits;
+        palette.tabInfoDuplicates = result.duplicates;
+        palette.tabInfoWorkspaces = result.workspaces;
+        palette.selectedIndex = result.selectedIndex;
       },
       fail: (message) => {
-        tabInfo = null;
-        tabInfoVisits = [];
-        tabInfoDuplicates = [];
-        tabInfoWorkspaces = [];
-        selectedIndex = -1;
-        error = message;
+        palette.tabInfo = null;
+        palette.tabInfoVisits = [];
+        palette.tabInfoDuplicates = [];
+        palette.tabInfoWorkspaces = [];
+        palette.selectedIndex = -1;
+        palette.error = message;
       },
     });
   }
@@ -517,15 +485,15 @@
       loading: false,
       load: async () => loadDuplicatePromptView(params),
       commit: (result) => {
-        duplicatePromptUrl = result.url;
-        duplicatePromptDomId = result.domId;
-        selectedIndex = result.selectedIndex;
+        palette.duplicatePromptUrl = result.url;
+        palette.duplicatePromptDomId = result.domId;
+        palette.selectedIndex = result.selectedIndex;
       },
       fail: (message) => {
-        duplicatePromptUrl = "";
-        duplicatePromptDomId = null;
-        selectedIndex = -1;
-        error = message;
+        palette.duplicatePromptUrl = "";
+        palette.duplicatePromptDomId = null;
+        palette.selectedIndex = -1;
+        palette.error = message;
       },
     });
   }
@@ -562,12 +530,12 @@
       await goBack();
       return true;
     } else if (plan.kind === "list") {
-      currentDomain = plan.domain;
+      palette.currentDomain = plan.domain;
       await loadListView(plan.view, 0, 80, true, { ...plan.params, ...viewParams(plan.view) });
     } else if (plan.kind === "prefix") {
-      currentView = plan.view;
-      selectedIndex = -1;
-      error = null;
+      palette.currentView = plan.view;
+      palette.selectedIndex = -1;
+      palette.error = null;
     } else if (plan.kind === "loader") {
       await registeredViewLoaders[plan.loader](params);
     } else {
@@ -605,10 +573,10 @@
       return;
     }
 
-    const actionNodes = isNativePrefixView(currentView) ? prefixNodes : allActionNodes;
+    const actionNodes = isNativePrefixView(palette.currentView) ? prefixNodes : allActionNodes;
     const command = interpretVisibleInput(
       { kind: "mouse", targetId: item.id },
-      { view: currentView },
+      { view: palette.currentView },
       actionNodes,
     );
     if (command.kind !== "none") {
@@ -631,12 +599,12 @@
   }
 
   function traceReplayForSelection() {
-    if (currentView === "actions" || isNativePrefixView(currentView)) return;
-    if (currentView === "navigation") {
-      traceReplayKey(replayKeyForNavigationIndex(navigationHistory, selectedIndex));
+    if (palette.currentView === "actions" || isNativePrefixView(palette.currentView)) return;
+    if (palette.currentView === "navigation") {
+      traceReplayKey(replayKeyForNavigationIndex(palette.navigationHistory, palette.selectedIndex));
       return;
     }
-    traceReplayForListIndex(selectedIndex);
+    traceReplayForListIndex(palette.selectedIndex);
   }
 
   function traceReplayForRowIndex<T>(rows: readonly T[], row: T) {
@@ -645,18 +613,18 @@
   }
 
   async function activateDomain(row: DomainIndexRow) {
-    currentDomain = row.domain;
+    palette.currentDomain = row.domain;
     await openNativeView("domain-tabs", { domain: row.domain }, true);
   }
 
   function navigateToHistoryIndex(index: number) {
-    const historyIndex = navigationHistory?.entries[index]?.historyIndex ?? index;
+    const historyIndex = palette.navigationHistory?.entries[index]?.historyIndex ?? index;
     revealController.clear();
     fireMessage({ type: "navigate-to-history-index", index: historyIndex });
   }
 
   function navigateToHistoryIndexWithTrace(index: number) {
-    traceReplayKey(replayKeyForNavigationIndex(navigationHistory, index));
+    traceReplayKey(replayKeyForNavigationIndex(palette.navigationHistory, index));
     navigateToHistoryIndex(index);
   }
 
@@ -669,7 +637,7 @@
   }
 
   function restoreClosedTabWithTrace(row: RecentlyClosedRow) {
-    traceReplayForRowIndex(recentlyClosedRows, row);
+    traceReplayForRowIndex(palette.recentlyClosedRows, row);
     restoreClosedTab(row);
   }
 
@@ -679,7 +647,7 @@
   }
 
   function moveToWorkspaceWithTrace(row: WorkspaceRow) {
-    traceReplayForRowIndex(workspaceRows, row);
+    traceReplayForRowIndex(palette.workspaceRows, row);
     moveToWorkspace(row);
   }
 
@@ -689,7 +657,7 @@
   }
 
   function reopenInContainerWithTrace(row: ContainerRow) {
-    traceReplayForRowIndex(containerRows, row);
+    traceReplayForRowIndex(palette.containerRows, row);
     reopenInContainer(row);
   }
 
@@ -699,7 +667,7 @@
   }
 
   function moveToFolderWithTrace(row: FolderRow) {
-    traceReplayForRowIndex(folderRows, row);
+    traceReplayForRowIndex(palette.folderRows, row);
     moveToFolder(row);
   }
 
@@ -710,7 +678,7 @@
   }
 
   function launchProfileWithTrace(row: ProfileRow) {
-    traceReplayForRowIndex(profileRows, row);
+    traceReplayForRowIndex(palette.profileRows, row);
     launchProfile(row);
   }
 
@@ -735,66 +703,66 @@
   }
 
   function switchWorkspaceByIndex(index: number) {
-    const workspace = actionsWorkspaces[index];
+    const workspace = palette.actionsWorkspaces[index];
     if (!workspace || workspace.isActive) return;
     switchWorkspace(workspace.uuid);
   }
 
   function openExtensionByIndex(index: number) {
-    const extension = actionExtensions[index];
+    const extension = palette.actionExtensions[index];
     if (!extension) return;
     openExtensionPopup(extension);
   }
 
   function closeDuplicateTab(row: TabIndexRow) {
     fireMessage({ type: "close-tab", domId: row.domId });
-    duplicateGroups = removeTabFromDuplicateGroups(duplicateGroups, row.domId);
+    palette.duplicateGroups = removeTabFromDuplicateGroups(palette.duplicateGroups, row.domId);
   }
 
   function closeSelectedTabRow() {
     const row = selectedTabRow;
     if (!row) return;
     fireMessage({ type: "close-tab", domId: row.domId });
-    const result = removeTabFromRows({ rows, total, selectedIndex, domId: row.domId });
-    rows = result.rows;
-    total = result.total;
-    selectedIndex = result.selectedIndex;
+    const result = removeTabFromRows({ rows: palette.rows, total: palette.total, selectedIndex: palette.selectedIndex, domId: row.domId });
+    palette.rows = result.rows;
+    palette.total = result.total;
+    palette.selectedIndex = result.selectedIndex;
   }
 
   async function closeAllRowsInView() {
-    if (!isNativeTabView(currentView)) return;
-    const domIds = rows.filter(isTabRow).map((row) => row.domId);
+    if (!isNativeTabView(palette.currentView)) return;
+    const domIds = palette.rows.filter(isTabRow).map((row) => row.domId);
     if (!domIds.length) return;
     await Promise.all(domIds.map((domId) => sendMessage({ type: "close-tab", domId }).catch(() => {})));
-    loadListView(currentView, 0, 80, true, viewParams(currentView));
+    loadListView(palette.currentView, 0, 80, true, viewParams(palette.currentView));
   }
 
   function restoreSelectedRecentlyClosed() {
-    if (currentView !== "recently-closed") return;
-    const row = recentlyClosedRows[selectedIndex];
+    if (palette.currentView !== "recently-closed") return;
+    const row = palette.recentlyClosedRows[palette.selectedIndex];
     if (!row) return;
     restoreClosedTab(row, true);
-    const result = removeRecentlyClosedRow({ rows: recentlyClosedRows, selectedIndex, sessionId: row.sessionId });
-    recentlyClosedRows = result.rows;
-    selectedIndex = result.selectedIndex;
+    const result = removeRecentlyClosedRow({ rows: palette.recentlyClosedRows, selectedIndex: palette.selectedIndex, sessionId: row.sessionId });
+    palette.recentlyClosedRows = result.rows;
+    palette.selectedIndex = result.selectedIndex;
   }
 
   async function drillSelectedParent() {
-    if (currentView !== "parent-tabs" || !selectedTabRow) return;
+    if (palette.currentView !== "parent-tabs" || !selectedTabRow) return;
     await openNativeView("child-tabs", { ...viewParams("child-tabs"), parentDomId: selectedTabRow.domId }, true);
   }
 
   async function toggleCurrentSort() {
-    const result = toggleSortForView(currentView, { domainsSortAlpha, tabsByAgeNewestFirst });
-    domainsSortAlpha = result.domainsSortAlpha;
-    tabsByAgeNewestFirst = result.tabsByAgeNewestFirst;
+    const result = toggleSortForView(palette.currentView, { domainsSortAlpha: palette.domainsSortAlpha, tabsByAgeNewestFirst: palette.tabsByAgeNewestFirst });
+    palette.domainsSortAlpha = result.domainsSortAlpha;
+    palette.tabsByAgeNewestFirst = result.tabsByAgeNewestFirst;
     if (result.reloadView) await loadListView(result.reloadView, 0, 80, true, viewParams(result.reloadView));
   }
 
   async function reloadWorkspaceFilteredView() {
-    const reloadKind = workspaceReloadKind(currentView);
-    if (reloadKind === "list" && isNativeListView(currentView)) {
-      await loadListView(currentView);
+    const reloadKind = workspaceReloadKind(palette.currentView);
+    if (reloadKind === "list" && isNativeListView(palette.currentView)) {
+      await loadListView(palette.currentView);
       return;
     }
     if (reloadKind === "duplicates") {
@@ -803,33 +771,33 @@
   }
 
   async function setWorkspaceFilter(nextFilter: string) {
-    workspaceFilter = normalizeWorkspaceFilter(nextFilter);
+    palette.workspaceFilter = normalizeWorkspaceFilter(nextFilter);
     await reloadWorkspaceFilteredView();
   }
 
   async function toggleWorkspaceFilter() {
-    await setWorkspaceFilter(toggleWorkspaceFilterValue(workspaceFilter, activeWorkspaceId));
+    await setWorkspaceFilter(toggleWorkspaceFilterValue(palette.workspaceFilter, activeWorkspaceId));
   }
 
   async function filterWorkspaceByIndex(index: number) {
-    const nextFilter = workspaceFilterByIndex(workspaceFilter, sidebarWorkspaces, index);
+    const nextFilter = workspaceFilterByIndex(palette.workspaceFilter, palette.sidebarWorkspaces, index);
     if (nextFilter) await setWorkspaceFilter(nextFilter);
   }
 
   function closeTabInfoDuplicate(row: TabIndexRow) {
     fireMessage({ type: "close-tab", domId: row.domId });
-    tabInfoDuplicates = removeTabInfoDuplicate(tabInfoDuplicates, row.domId);
+    palette.tabInfoDuplicates = removeTabInfoDuplicate(palette.tabInfoDuplicates, row.domId);
   }
 
   function closeOtherTabInfoDuplicates() {
-    if (!tabInfo) return;
-    const selfDomId = tabInfo.domId;
-    for (const duplicate of tabInfoDuplicates) {
+    if (!palette.tabInfo) return;
+    const selfDomId = palette.tabInfo.domId;
+    for (const duplicate of palette.tabInfoDuplicates) {
       if (duplicate.domId !== selfDomId) {
         fireMessage({ type: "close-tab", domId: duplicate.domId });
       }
     }
-    tabInfoDuplicates = keepOnlyTabInfoDuplicate(tabInfoDuplicates, selfDomId);
+    palette.tabInfoDuplicates = keepOnlyTabInfoDuplicate(palette.tabInfoDuplicates, selfDomId);
   }
 
   function runDuplicatePromptAction(action: DuplicatePromptAction) {
@@ -852,30 +820,9 @@
 
   function resetToActions() {
     clearPreview();
-    currentView = "actions";
-    rows = [];
-    total = 0;
-    offset = 0;
-    currentDomain = null;
-    navigationHistory = null;
-    recentlyClosedRows = [];
-    workspaceRows = [];
-    containerRows = [];
-    folderRows = [];
-    folderWorkspaces = [];
-    profileRows = [];
-    duplicateGroups = [];
-    duplicateWorkspaces = [];
-    tabInfo = null;
-    tabInfoVisits = [];
-    tabInfoDuplicates = [];
-    tabInfoWorkspaces = [];
-    duplicatePromptUrl = "";
-    duplicatePromptDomId = null;
-    sidebarWorkspaces = [];
-    currentPage = 1;
-    selectedIndex = -1;
-    error = null;
+    paletteStore.clearLoadedViewData();
+    palette.currentView = "actions";
+    palette.currentPage = 1;
   }
 
   async function goBack() {
@@ -885,67 +832,67 @@
   }
 
   function moveSelection(delta: 1 | -1) {
-    selectedIndex = nextSelectionIndex(selectionContext(), delta);
-    if (currentView !== "actions" && !isNativePrefixView(currentView)) {
-      ensureListIndexLoaded(selectedIndex);
-      scrollListIndexIntoView(selectedIndex);
+    palette.selectedIndex = nextSelectionIndex(selectionContext(), delta);
+    if (palette.currentView !== "actions" && !isNativePrefixView(palette.currentView)) {
+      ensureListIndexLoaded(palette.selectedIndex);
+      scrollListIndexIntoView(palette.selectedIndex);
     }
   }
 
   function selectionContext(): SelectionContext {
     return {
-      view: currentView,
-      selectedIndex,
+      view: palette.currentView,
+      selectedIndex: palette.selectedIndex,
       actionCount: visibleActionItems.length,
       prefixCount: prefixItems.length,
       navigationCount: navigationEntries.length,
-      recentlyClosedCount: recentlyClosedRows.length,
-      workspaceCount: workspaceRows.length,
-      containerCount: containerRows.length,
-      folderCount: folderRows.length,
-      profileRows,
+      recentlyClosedCount: palette.recentlyClosedRows.length,
+      workspaceCount: palette.workspaceRows.length,
+      containerCount: palette.containerRows.length,
+      folderCount: palette.folderRows.length,
+      profileRows: palette.profileRows,
       duplicatePromptCount: DUPLICATE_PROMPT_ACTIONS.length,
-      rowCount: rows.length,
-      isPrefixView: isNativePrefixView(currentView),
+      rowCount: palette.rows.length,
+      isPrefixView: isNativePrefixView(palette.currentView),
     };
   }
 
   function cyclePage(delta: 1 | -1) {
-    setActionsPage(currentPage + delta);
+    setActionsPage(palette.currentPage + delta);
   }
 
   function setActionsPage(targetPage: number) {
-    if (currentView !== "actions" || pageCount <= 1) return;
-    const nextPage = nextActionsPage(currentPage, targetPage, pageCount);
+    if (palette.currentView !== "actions" || pageCount <= 1) return;
+    const nextPage = nextActionsPage(palette.currentPage, targetPage, pageCount);
     if (nextPage === null) return;
-    currentPage = nextPage;
-    selectedIndex = -1;
+    palette.currentPage = nextPage;
+    palette.selectedIndex = -1;
     clearPreview();
   }
 
   function jumpSection(delta: 1 | -1) {
-    if (currentView !== "actions") return;
+    if (palette.currentView !== "actions") return;
     const nextIndex = nextActionSectionIndex({
       sections: actionSections,
-      currentPage,
+      currentPage: palette.currentPage,
       visibleItemCount: visibleActionItems.length,
-      selectedIndex,
+      selectedIndex: palette.selectedIndex,
       delta,
     });
-    if (nextIndex !== null) selectedIndex = nextIndex;
+    if (nextIndex !== null) palette.selectedIndex = nextIndex;
   }
 
   async function activateSelected() {
     traceReplayForSelection();
 
-    if (currentView === "actions") {
-      const item = visibleActionItems[selectedIndex];
+    if (palette.currentView === "actions") {
+      const item = visibleActionItems[palette.selectedIndex];
       if (item) await activateAction(item);
       return;
     }
 
-    if (isNativePrefixView(currentView)) {
-      const item = prefixItems[selectedIndex];
+    if (isNativePrefixView(palette.currentView)) {
+      const item = prefixItems[palette.selectedIndex];
       if (item) await activateAction(item);
       return;
     }
@@ -960,16 +907,16 @@
 
   function viewActivationContext(): ViewActivationContext {
     return {
-      view: currentView,
-      selectedIndex,
-      offset,
-      rows,
-      navigationHistory,
-      recentlyClosedRows,
-      workspaceRows,
-      containerRows,
-      folderRows,
-      profileRows,
+      view: palette.currentView,
+      selectedIndex: palette.selectedIndex,
+      offset: palette.offset,
+      rows: palette.rows,
+      navigationHistory: palette.navigationHistory,
+      recentlyClosedRows: palette.recentlyClosedRows,
+      workspaceRows: palette.workspaceRows,
+      containerRows: palette.containerRows,
+      folderRows: palette.folderRows,
+      profileRows: palette.profileRows,
     };
   }
 
@@ -989,13 +936,13 @@
   }
 
   function rowForIndex(index: number) {
-    return rowInWindow(rows, offset, index);
+    return rowInWindow(palette.rows, palette.offset, index);
   }
 
   function ensureListIndexLoaded(index: number) {
-    if (!isNativeListView(currentView)) return;
-    const request = loadWindowForIndex({ index, offset, rowCount: rows.length });
-    if (request) loadListView(currentView, request.offset, request.limit, false);
+    if (!isNativeListView(palette.currentView)) return;
+    const request = loadWindowForIndex({ index, offset: palette.offset, rowCount: palette.rows.length });
+    if (request) loadListView(palette.currentView, request.offset, request.limit, false);
   }
 
   function scrollListIndexIntoView(index: number) {
@@ -1003,13 +950,13 @@
   }
 
   function loadVisibleRange(nextOffset: number, limit: number) {
-    if (!isNativeListView(currentView)) return;
+    if (!isNativeListView(palette.currentView)) return;
     const request = visibleRangeRequest(nextOffset, limit);
-    loadListView(currentView, request.offset, request.limit, false, viewParams(currentView));
+    loadListView(palette.currentView, request.offset, request.limit, false, viewParams(palette.currentView));
   }
 
   function tabSubtitle(row: TabIndexRow) {
-    return currentView === "most-visited" ? `${row.focusCount ?? 0} focuses` : null;
+    return palette.currentView === "most-visited" ? `${row.focusCount ?? 0} focuses` : null;
   }
 
   async function runCommand(command: InteractionCommand) {
@@ -1017,8 +964,8 @@
   }
 
   async function handleKeyInput(input: BridgeKeyData) {
-    const actionNodes = currentView === "actions" ? allActionNodes : isNativePrefixView(currentView) ? prefixNodes : [];
-    const command = interpretVisibleInput({ kind: "key", ...input }, { view: currentView }, actionNodes);
+    const actionNodes = palette.currentView === "actions" ? allActionNodes : isNativePrefixView(palette.currentView) ? prefixNodes : [];
+    const command = interpretVisibleInput({ kind: "key", ...input }, { view: palette.currentView }, actionNodes);
     if (command.kind === "none") {
       return false;
     }
@@ -1037,7 +984,7 @@
     if (result.stopPropagation) event.stopPropagation();
   }
 
-  async function requestPanelResize(view: ViewId = currentView) {
+  async function requestPanelResize(view: ViewId = palette.currentView) {
     await tick();
     await new Promise((resolve) => requestAnimationFrame(resolve));
     if (!pageAlive) return;
@@ -1055,7 +1002,7 @@
 
   async function drainBridge(reply: BridgeReply | null, generation?: number) {
     if (reply?.stale) return;
-    if (reply?.view && reply.view !== currentView) {
+    if (reply?.view && reply.view !== palette.currentView) {
       await openNativeView(reply.view as ViewId);
       await requestPanelResize(reply.view as ViewId);
     }
@@ -1070,7 +1017,7 @@
     revealController.configureFromSearch(location.search);
 
     await initialViewReady.catch(() => {});
-    await requestPanelResize(currentView);
+    await requestPanelResize(palette.currentView);
     const reply = await signalPopupReady();
     await drainBridge(reply);
   }
@@ -1124,7 +1071,7 @@
   }
 
   function goToActions() {
-    if (currentView !== "actions") {
+    if (palette.currentView !== "actions") {
       void openNativeView("actions").then(() => requestPanelResize("actions"));
     }
   }
@@ -1132,7 +1079,7 @@
   $effect(() => {
     if (selectedTabRow) {
       previewTab(selectedTabRow);
-    } else if (currentView === "actions") {
+    } else if (palette.currentView === "actions") {
       clearPreview();
     }
   });
@@ -1141,111 +1088,111 @@
 <PaletteShell
   {headerHidden}
   {title}
-  onback={currentView === "actions" ? undefined : goBack}
+  onback={palette.currentView === "actions" ? undefined : goBack}
   {sidebarHidden}
   {sidebarHints}
   {sidebarHintsOnly}
   {sidebarSortLabel}
-  {sidebarWorkspaces}
-  {workspaceFilter}
+  sidebarWorkspaces={palette.sidebarWorkspaces}
+  workspaceFilter={palette.workspaceFilter}
   {activeWorkspaceId}
-  pageIndicatorHidden={currentView !== "actions" || pageCount <= 1}
+  pageIndicatorHidden={palette.currentView !== "actions" || pageCount <= 1}
   {pageCount}
-  {currentPage}
+  currentPage={palette.currentPage}
   onSidebarSort={toggleCurrentSort}
   onWorkspaceFilter={setWorkspaceFilter}
   onPage={setActionsPage}
 >
-  {#if error}
-    <div class="empty-state">{error}</div>
-  {:else if currentView === "actions"}
+  {#if palette.error}
+    <div class="empty-state">{palette.error}</div>
+  {:else if palette.currentView === "actions"}
     <ActionsMenu
       sections={actionSectionsForRender}
-      {currentPage}
-      extensions={actionExtensions}
-      workspaces={actionsWorkspaces}
+      currentPage={palette.currentPage}
+      extensions={palette.actionExtensions}
+      workspaces={palette.actionsWorkspaces}
       onactivate={activateAction}
       onextension={openExtensionPopup}
       onpreview={(domId) => previewTabLike({ domId })}
       onclearpreview={clearPreview}
     />
-  {:else if isNativePrefixView(currentView)}
-    <PrefixMenu view={currentView} items={prefixItemsForRender} onactivate={activateAction} />
-  {:else if loading}
+  {:else if isNativePrefixView(palette.currentView)}
+    <PrefixMenu view={palette.currentView} items={prefixItemsForRender} onactivate={activateAction} />
+  {:else if palette.loading}
     <div class="empty-state">Loading...</div>
-  {:else if currentView === "navigation"}
+  {:else if palette.currentView === "navigation"}
     <NavigationList
-      history={navigationHistory}
-      {selectedIndex}
+      history={palette.navigationHistory}
+      selectedIndex={palette.selectedIndex}
       onactivate={navigateToHistoryIndexWithTrace}
     />
-  {:else if currentView === "recently-closed"}
+  {:else if palette.currentView === "recently-closed"}
     <RecentlyClosedList
-      rows={recentlyClosedRows}
-      {selectedIndex}
+      rows={palette.recentlyClosedRows}
+      selectedIndex={palette.selectedIndex}
       onactivate={restoreClosedTabWithTrace}
       onrestore={(row) => restoreClosedTab(row, true)}
     />
-  {:else if currentView === "move-to-workspace"}
+  {:else if palette.currentView === "move-to-workspace"}
     <WorkspaceList
-      rows={workspaceRows}
-      {selectedIndex}
+      rows={palette.workspaceRows}
+      selectedIndex={palette.selectedIndex}
       onactivate={moveToWorkspaceWithTrace}
     />
-  {:else if currentView === "open-in-container"}
+  {:else if palette.currentView === "open-in-container"}
     <ContainerList
-      rows={containerRows}
-      {selectedIndex}
+      rows={palette.containerRows}
+      selectedIndex={palette.selectedIndex}
       onactivate={reopenInContainerWithTrace}
     />
-  {:else if currentView === "move-to-folder"}
+  {:else if palette.currentView === "move-to-folder"}
     <FolderList
-      rows={folderRows}
-      workspaces={folderWorkspaces}
-      {selectedIndex}
+      rows={palette.folderRows}
+      workspaces={palette.folderWorkspaces}
+      selectedIndex={palette.selectedIndex}
       onactivate={moveToFolderWithTrace}
     />
-  {:else if currentView === "profiles"}
+  {:else if palette.currentView === "profiles"}
     <ProfileList
-      rows={profileRows}
-      {selectedIndex}
+      rows={palette.profileRows}
+      selectedIndex={palette.selectedIndex}
       onactivate={launchProfileWithTrace}
     />
-  {:else if currentView === "duplicates"}
+  {:else if palette.currentView === "duplicates"}
     <DuplicateGroups
-      groups={duplicateGroups}
-      workspaces={duplicateWorkspaces}
+      groups={palette.duplicateGroups}
+      workspaces={palette.duplicateWorkspaces}
       onactivate={activateTab}
       onclose={closeDuplicateTab}
       onpreview={previewTab}
       onclearpreview={clearPreview}
     />
-  {:else if currentView === "tab-info"}
+  {:else if palette.currentView === "tab-info"}
     <TabInfoView
-      info={tabInfo}
-      visits={tabInfoVisits}
-      duplicates={tabInfoDuplicates}
-      workspaces={tabInfoWorkspaces}
+      info={palette.tabInfo}
+      visits={palette.tabInfoVisits}
+      duplicates={palette.tabInfoDuplicates}
+      workspaces={palette.tabInfoWorkspaces}
       onactivate={activateTab}
       onclose={closeTabInfoDuplicate}
       oncloseothers={closeOtherTabInfoDuplicates}
       onpreview={previewTabLike}
       onclearpreview={clearPreview}
     />
-  {:else if currentView === "duplicate-prompt"}
+  {:else if palette.currentView === "duplicate-prompt"}
     <DuplicatePrompt
-      url={duplicatePromptUrl}
-      existingDomId={duplicatePromptDomId}
-      {selectedIndex}
+      url={palette.duplicatePromptUrl}
+      existingDomId={palette.duplicatePromptDomId}
+      selectedIndex={palette.selectedIndex}
       onactivate={runDuplicatePromptAction}
       onpreview={(domId) => previewTabLike({ domId })}
       onclearpreview={clearPreview}
     />
-  {:else if isNativeTabView(currentView)}
+  {:else if isNativeTabView(palette.currentView)}
     <TabList
       rows={tabRows}
-      {total}
-      {offset}
+      total={palette.total}
+      offset={palette.offset}
       selectedDomId={selectedRowDomId}
       onactivate={activateTabRowWithTrace}
       onpreview={previewTab}
@@ -1253,11 +1200,11 @@
       onrange={loadVisibleRange}
       subtitle={tabSubtitle}
     />
-  {:else if currentView === "domains"}
+  {:else if palette.currentView === "domains"}
     <DomainList
       rows={domainRows}
-      {total}
-      {offset}
+      total={palette.total}
+      offset={palette.offset}
       {selectedDomain}
       onactivate={activateDomainWithTrace}
       onrange={loadVisibleRange}
