@@ -1745,6 +1745,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         w.setTimeout(() => {
           if (gen !== morphGeneration) return;
           newBr.style.transition = "opacity 0.08s ease-out";
+          if (view === "extension-popup" && !isOverlayVisible()) {
+            forceRevealOverlay();
+          }
           newBr.style.opacity = "1";
           w.setTimeout(() => {
             if (gen !== morphGeneration) return;
