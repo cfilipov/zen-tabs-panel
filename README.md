@@ -250,11 +250,11 @@ npm run build
 make package
 ```
 
-`npm run build:vanilla` and `npm run build:svelte` both write the chosen variant to
-`dist/`. `npm run build` and `make package` build the Svelte variant by default,
-then zip `dist/` into `zen-tabs-panel.xpi`; use `make package VARIANT=vanilla`
-to package the known-good vanilla baseline. Install the `.xpi` from
-`about:addons` as described above.
+`npm run build:vanilla`, `npm run build:svelte`, and `make build-svelte` write
+the chosen variant to `dist/` only. `make package` builds the Svelte variant by
+default and zips `dist/` into `zen-tabs-panel.xpi`. You can also use
+`make package-svelte` explicitly, or `make package-vanilla` for the known-good
+vanilla baseline. Install the `.xpi` from `about:addons` as described above.
 
 ### Architecture notes
 

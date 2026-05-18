@@ -49,7 +49,13 @@ async function copyEntry(entry) {
   if (!(await exists(from))) return;
   await cp(from, path.join(distRoot, entry), {
     recursive: true,
-    filter: (src) => path.basename(src) !== ".DS_Store",
+    filter: (src) => {
+      const base = path.basename(src);
+      if (base === ".DS_Store") return false;
+      if (base.endsWith(".test.ts") || base.endsWith(".test.js")) return false;
+      if (base.endsWith(".ts")) return false;
+      return true;
+    },
   });
 }
 
