@@ -32,10 +32,8 @@
   import {
     loadWindowForIndex,
     rowInWindow,
-    scrollTopForIndex,
     visibleRangeRequest,
   } from "./interaction/list-window";
-  import { naturalPanelHeight } from "./interaction/panel-measure";
   import { replayKeyForBadgeIndex, replayKeyForNavigationIndex } from "./interaction/replay-trace";
   import { nextSelectionIndex, type SelectionContext } from "./interaction/selection";
   import {
@@ -68,6 +66,8 @@
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
   import { createHistoryClient, type NavigationHistory, type RecentlyClosedRow } from "./runtime/history-client";
   import { fireMessage, sendMessage } from "./runtime/ipc";
+  import { measurePaletteNaturalHeight, scrollPaletteListIndexIntoView, snapshotKeyEvent } from "./runtime/palette-dom";
+  import { createPaletteRevealController } from "./runtime/palette-reveal";
   import { createProfileClient, type ProfileRow } from "./runtime/profile-client";
   import { createTabInfoClient, type HistoryVisit, type TabInfo } from "./runtime/tab-info-client";
   import { createViewLoadController } from "./runtime/view-load-controller";
@@ -169,14 +169,14 @@
   let disabledActionIds = $state<Set<string>>(new Set());
   let actionIconHtmlById = $state<Record<string, string | null>>({});
   let actionExtensions = $state<ExtensionRow[]>([]);
-  let popupInst: number | null = null;
-  let popupChordDelay = 350;
-  let popupRevealTimer: ReturnType<typeof setTimeout> | null = null;
   let pageAlive = true;
+  const revealController = createPaletteRevealController({
+    sendReveal: (inst) => fireMessage({ type: "reveal-palette", inst }),
+  });
   const bridgeDispatch = createBridgeDispatchController({
     dispatchKey: handleKeyInput,
-    armRevealTimer: armPopupRevealTimer,
-    clearRevealTimer: clearPopupRevealTimer,
+    armRevealTimer: revealController.arm,
+    clearRevealTimer: revealController.clear,
   });
 
   const headerHidden = $derived(currentView === "actions");
@@ -579,7 +579,7 @@
 
   async function performActionItemActivation(activation: ActionItemActivation) {
     if (activation.kind === "fire-action") {
-      clearPopupRevealTimer();
+      revealController.clear();
       fireMessage({ type: activation.actionId });
       return;
     }
@@ -617,7 +617,7 @@
   }
 
   function activateTab(row: { domId: string }) {
-    clearPopupRevealTimer();
+    revealController.clear();
     fireMessage({ type: "activate-tab", domId: row.domId });
   }
 
@@ -651,7 +651,7 @@
 
   function navigateToHistoryIndex(index: number) {
     const historyIndex = navigationHistory?.entries[index]?.historyIndex ?? index;
-    clearPopupRevealTimer();
+    revealController.clear();
     fireMessage({ type: "navigate-to-history-index", index: historyIndex });
   }
 
@@ -661,7 +661,7 @@
   }
 
   function restoreClosedTab(row: RecentlyClosedRow, keepOpen = false) {
-    if (!keepOpen) clearPopupRevealTimer();
+    if (!keepOpen) revealController.clear();
     fireMessage({
       type: keepOpen ? "restore-closed-tab-keep-open" : "restore-closed-tab",
       sessionId: row.sessionId,
@@ -674,7 +674,7 @@
   }
 
   function moveToWorkspace(row: WorkspaceRow) {
-    clearPopupRevealTimer();
+    revealController.clear();
     fireMessage({ type: "move-selected-tabs-to-workspace", workspaceId: row.uuid });
   }
 
@@ -684,7 +684,7 @@
   }
 
   function reopenInContainer(row: ContainerRow) {
-    clearPopupRevealTimer();
+    revealController.clear();
     fireMessage({ type: "reopen-in-container", userContextId: row.userContextId });
   }
 
@@ -694,7 +694,7 @@
   }
 
   function moveToFolder(row: FolderRow) {
-    clearPopupRevealTimer();
+    revealController.clear();
     fireMessage({ type: "move-tab-to-folder", folderId: row.id });
   }
 
@@ -705,7 +705,7 @@
 
   function launchProfile(row: ProfileRow) {
     if (row.isCurrent) return;
-    clearPopupRevealTimer();
+    revealController.clear();
     fireMessage({ type: "launch-profile", name: row.name });
   }
 
@@ -715,12 +715,12 @@
   }
 
   function switchWorkspace(workspaceId: string) {
-    clearPopupRevealTimer();
+    revealController.clear();
     fireMessage({ type: "switch-workspace", workspaceId });
   }
 
   function openExtensionPopup(extension: ExtensionRow) {
-    clearPopupRevealTimer();
+    revealController.clear();
     fireMessage({ type: "open-extension-popup", extensionId: extension.id });
   }
 
@@ -833,7 +833,7 @@
   }
 
   function runDuplicatePromptAction(action: DuplicatePromptAction) {
-    clearPopupRevealTimer();
+    revealController.clear();
     fireMessage({ type: action });
   }
 
@@ -979,7 +979,7 @@
 
   async function applyViewCommand(command: ViewCommand) {
     if (command.kind === "message") {
-      if (command.clearReveal) clearPopupRevealTimer();
+      if (command.clearReveal) revealController.clear();
       fireMessage(command.message);
     } else if (command.kind === "open-domain") {
       await activateDomain({ kind: "domain", domain: command.domain, count: 0 });
@@ -999,15 +999,7 @@
   }
 
   function scrollListIndexIntoView(index: number) {
-    requestAnimationFrame(() => {
-      const list = document.getElementById("list");
-      if (!list) return;
-      list.scrollTop = scrollTopForIndex({
-        index,
-        scrollTop: list.scrollTop,
-        clientHeight: list.clientHeight,
-      });
-    });
+    scrollPaletteListIndexIntoView(index);
   }
 
   function loadVisibleRange(nextOffset: number, limit: number) {
@@ -1022,17 +1014,6 @@
 
   async function runCommand(command: InteractionCommand) {
     await applyInteractionCommand(command, interactionRuntime);
-  }
-
-  function snapshotKeyEvent(event: KeyboardEvent): BridgeKeyData {
-    return {
-      key: event.key,
-      code: event.code,
-      shiftKey: event.shiftKey,
-      altKey: event.altKey,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-    };
   }
 
   async function handleKeyInput(input: BridgeKeyData) {
@@ -1056,58 +1037,17 @@
     if (result.stopPropagation) event.stopPropagation();
   }
 
-  function clearPopupRevealTimer() {
-    if (popupRevealTimer !== null) {
-      clearTimeout(popupRevealTimer);
-      popupRevealTimer = null;
-    }
-  }
-
-  function armPopupRevealTimer() {
-    clearPopupRevealTimer();
-    popupRevealTimer = setTimeout(() => {
-      popupRevealTimer = null;
-      if (!pageAlive) return;
-      fireMessage({ type: "reveal-palette", inst: popupInst });
-    }, popupChordDelay);
-  }
-
-  function measureNaturalHeight() {
-    const header = document.getElementById("header");
-    const list = document.getElementById("list");
-    const indicator = document.getElementById("page-indicator");
-    const children = list?.children ?? [];
-    let listFirstTop: number | null = null;
-    let listLastBottom: number | null = null;
-    if (children.length > 0) {
-      const first = children[0].getBoundingClientRect();
-      const last = children[children.length - 1].getBoundingClientRect();
-      listFirstTop = first.top;
-      listLastBottom = last.bottom;
-    }
-    const headerVisible = !!header && !header.classList.contains("hidden") && header.children.length > 0;
-    const indicatorVisible = !!indicator && !indicator.classList.contains("hidden");
-    return naturalPanelHeight({
-      listFirstTop,
-      listLastBottom,
-      headerVisible,
-      headerHeight: headerVisible ? header.getBoundingClientRect().height : 0,
-      indicatorVisible,
-      indicatorHeight: indicatorVisible ? indicator.getBoundingClientRect().height : 0,
-    });
-  }
-
   async function requestPanelResize(view: ViewId = currentView) {
     await tick();
     await new Promise((resolve) => requestAnimationFrame(resolve));
     if (!pageAlive) return;
-    await sendMessage({ type: "resize-panel", view, height: measureNaturalHeight() }).catch(() => {});
+    await sendMessage({ type: "resize-panel", view, height: measurePaletteNaturalHeight() }).catch(() => {});
   }
 
   async function signalPopupReady() {
     if (!pageAlive) return null;
     try {
-      return await sendMessage<BridgeReply>({ type: "popup-ready", inst: popupInst });
+      return await sendMessage<BridgeReply>(revealController.popupReadyMessage());
     } catch {
       return null;
     }
@@ -1127,11 +1067,7 @@
   }
 
   async function initializeBridge(initialViewReady: Promise<unknown>) {
-    const params = new URLSearchParams(location.search);
-    const inst = Number.parseInt(params.get("inst") || "", 10);
-    popupInst = Number.isFinite(inst) ? inst : null;
-    const delay = Number.parseInt(params.get("delay") || "", 10);
-    if (Number.isFinite(delay) && delay >= 0) popupChordDelay = delay;
+    revealController.configureFromSearch(location.search);
 
     await initialViewReady.catch(() => {});
     await requestPanelResize(currentView);
@@ -1141,7 +1077,7 @@
 
   async function handleWarmRearm(data: { inst?: number; view?: ViewId; params?: Record<string, unknown> }) {
     const generation = bridgeDispatch.resetForWarmRearm();
-    if (typeof data.inst === "number") popupInst = data.inst;
+    revealController.updateInst(data.inst);
     clearPreview();
 
     const view = data.view || "actions";
@@ -1164,17 +1100,18 @@
 
     window.addEventListener("keydown", handleKeydown);
     pageAlive = true;
+    revealController.markAlive();
     window.addEventListener("pagehide", handlePageHide);
     const uninstallBridge = installChordBridgeHandlers({
       onDeliverKey: handleBridgeKey,
       onWarmRearm: (data) => void handleWarmRearm(data),
       onForceReady: handleForceReady,
-      onCancelReveal: clearPopupRevealTimer,
+      onCancelReveal: revealController.clear,
       onGoToActions: goToActions,
     });
     void initializeBridge(initialViewReady);
     return () => {
-      clearPopupRevealTimer();
+      revealController.clear();
       window.removeEventListener("keydown", handleKeydown);
       window.removeEventListener("pagehide", handlePageHide);
       uninstallBridge();
@@ -1183,7 +1120,7 @@
 
   function handlePageHide() {
     pageAlive = false;
-    clearPopupRevealTimer();
+    revealController.markDead();
   }
 
   function goToActions() {
