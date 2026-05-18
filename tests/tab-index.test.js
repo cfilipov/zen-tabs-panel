@@ -226,6 +226,37 @@ test("tab index hides new-tab pages from recents and action previews", () => {
   assert.equal(snapshot.domainCount, 3);
 });
 
+test("tab index unwraps proxied data favicons and drops chrome favicons", () => {
+  const wrapped = "moz-remote-image://?url=" + encodeURIComponent("data:image/svg+xml;base64,PHN2Zy8+");
+  const largeDataIcon = `data:image/svg+xml;base64,${"a".repeat(4096)}`;
+  const tooLargeDataIcon = `data:image/svg+xml;base64,${"a".repeat(70000)}`;
+  const index = makeIndex([
+    fakeTab("tab-1", "https://wrapped.test/a", "ws-1", {
+      favIconUrl: wrapped,
+      lastAccessed: 100,
+    }),
+    fakeTab("tab-2", "https://large.test/b", "ws-1", {
+      favIconUrl: largeDataIcon,
+      lastAccessed: 90,
+    }),
+    fakeTab("tab-3", "https://huge.test/c", "ws-1", {
+      favIconUrl: tooLargeDataIcon,
+      lastAccessed: 80,
+    }),
+    fakeTab("tab-4", "https://chrome.test/d", "ws-1", {
+      favIconUrl: "chrome://mozapps/skin/extensions/extension.svg",
+      lastAccessed: 70,
+    }),
+  ]);
+
+  const rows = index.getWindow("last-visited", 0, 10, {}).rows;
+
+  assert.equal(rows[0].favIconUrl, "data:image/svg+xml;base64,PHN2Zy8+");
+  assert.equal(rows[1].favIconUrl, largeDataIcon);
+  assert.equal(rows[2].favIconUrl, "");
+  assert.equal(rows[3].favIconUrl, "");
+});
+
 test("tab index returns only stale close targets for auto-close sweeps", () => {
   const index = makeIndex([
     fakeTab("tab-1", "https://example.test/a", "ws-1", { lastAccessed: 100 }),

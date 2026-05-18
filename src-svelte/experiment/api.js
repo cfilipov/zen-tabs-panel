@@ -120,13 +120,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function unwrapFavicon(url) {
       if (!url) return "";
-      if (url.startsWith("moz-remote-image://")) {
+      let s = String(url);
+      if (s.startsWith("moz-remote-image://")) {
+        const match = s.match(/[?&]url=([^&#]+)/);
+        if (!match) return "";
         try {
-          const parsed = new URL(url);
-          return parsed.searchParams.get("url") || url;
-        } catch (e) {}
+          s = decodeURIComponent(match[1]);
+        } catch (e) {
+          return "";
+        }
       }
-      return url;
+      if (!s || s.startsWith("chrome://")) return "";
+      return s;
     }
 
     // Get all tab elements across all workspaces from the DOM

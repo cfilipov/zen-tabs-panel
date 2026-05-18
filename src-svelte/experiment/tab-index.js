@@ -5,6 +5,7 @@
 // WebExtension boundary. This file is loaded with Services.scriptloader.
 
 this.createZenTabIndex = function createZenTabIndex(deps) {
+  const MAX_FAVICON_URL_LENGTH = 65536;
   let started = false;
   let dirty = true;
   let version = 0;
@@ -32,8 +33,18 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
 
   function compactFavicon(url) {
     if (!url) return "";
-    const s = String(url);
-    if (s.length > 2048) return "";
+    let s = String(url);
+    if (s.startsWith("moz-remote-image://")) {
+      const match = s.match(/[?&]url=([^&#]+)/);
+      if (!match) return "";
+      try {
+        s = decodeURIComponent(match[1]);
+      } catch (e) {
+        return "";
+      }
+    }
+    if (!s || s.startsWith("chrome://")) return "";
+    if (s.length > MAX_FAVICON_URL_LENGTH) return "";
     return s;
   }
 
@@ -67,7 +78,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       essential: tab.hasAttribute("zen-essential"),
       active: tab.selected || false,
       lastAccessed: tab.lastAccessed || 0,
-      favIconUrl: deps.unwrapFavicon(tab.image),
+      favIconUrl: compactFavicon(deps.unwrapFavicon(tab.image)),
       unread: tab.hasAttribute("unread"),
       openerTabDomId: null,
       splitView: tab.hasAttribute("split-view"),
@@ -121,7 +132,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       essential: tab.hasAttribute("zen-essential"),
       active: tab.selected || false,
       lastAccessed: tab.lastAccessed || 0,
-      favIconUrl: deps.unwrapFavicon(tab.image),
+      favIconUrl: compactFavicon(deps.unwrapFavicon(tab.image)),
       unread: tab.hasAttribute("unread") || deps.readTabValue(tab, "panelUnread") === true,
       openerTabDomId: tab.openerTab?.id || null,
       splitView: tab.hasAttribute("split-view"),
