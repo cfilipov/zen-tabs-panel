@@ -1272,6 +1272,8 @@
       total={palette.total}
       offset={palette.offset}
       selectedDomId={selectedRowDomId}
+      workspaces={palette.sidebarWorkspaces}
+      {activeWorkspaceId}
       onactivate={activateTabRowWithTrace}
       onpreview={previewTab}
       onclearpreview={clearPreview}

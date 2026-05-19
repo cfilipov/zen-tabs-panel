@@ -2,21 +2,36 @@
   import Badge from "./Badge.svelte";
   import { iconHtml } from "./icons";
   import type { TabIndexRow } from "../runtime/tab-index-client";
+  import type { WorkspaceRow } from "../runtime/workspace-client";
 
   type Props = {
     row: TabIndexRow;
     badge?: string | null;
     subtitle?: string | null;
     selectedDomId?: string | null;
+    workspaces?: WorkspaceRow[];
+    activeWorkspaceId?: string | null;
     onactivate?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
   };
 
-  let { row, badge = null, subtitle = null, selectedDomId = null, onactivate, onpreview, onclearpreview }: Props = $props();
+  let {
+    row,
+    badge = null,
+    subtitle = null,
+    selectedDomId = null,
+    workspaces = [],
+    activeWorkspaceId = null,
+    onactivate,
+    onpreview,
+    onclearpreview,
+  }: Props = $props();
   const title = $derived(row.title || "Untitled");
   const hasSubtitle = $derived(Boolean(row.domain || subtitle));
   const selected = $derived(row.domId === selectedDomId);
+  const workspace = $derived(row.workspaceId ? workspaces.find((item) => item.uuid === row.workspaceId) : null);
+  const showWorkspace = $derived(Boolean(workspace && row.workspaceId && row.workspaceId !== activeWorkspaceId));
 </script>
 
 <button
@@ -55,6 +70,14 @@
     {/if}
   </span>
   <span class="item-right">
+    {#if showWorkspace && workspace}
+      <span class="row-workspace">
+        {#if workspace.svgContent}
+          <span class="row-ws-icon">{@html workspace.svgContent}</span>
+        {/if}
+        {workspace.name}
+      </span>
+    {/if}
     <span class="item-badge-stack">
       <Badge value={badge} />
       <span class="item-close" title="Close tab">✕</span>
