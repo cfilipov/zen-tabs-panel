@@ -288,6 +288,16 @@ def start_smoke() -> str:
     await sleep(250);
   }
 
+  async function forcePopupReady(label) {
+    record(label);
+    await runInPopup(`(content) => {
+      const payload = { type: "force-ready", data: { buffered: [] } };
+      content.document.dispatchEvent(new content.CustomEvent("ztt:bridge-message", { detail: JSON.stringify(payload) }));
+      return true;
+    }`);
+    await sleep(80);
+  }
+
   async function openDirectView(view, expectedText, opts = {}) {
     await hidePaletteForNextOpen("hide-before-" + view);
     record("show-" + view);
@@ -396,13 +406,8 @@ def start_smoke() -> str:
         return { ok: false, state };
       }, 2500, 100);
       record("main-menu-size", mainSize.state);
-      record("force-ready");
-      await runInPopup(`(content) => {
-        const payload = { type: "force-ready", data: { buffered: [] } };
-        content.document.dispatchEvent(new content.CustomEvent("ztt:bridge-message", { detail: JSON.stringify(payload) }));
-        return true;
-      }`);
-      await sleep(350);
+      await forcePopupReady("force-ready");
+      await sleep(270);
 
       record("press-space");
       const spaceDispatch = await runInPopup(keySource(" "));
@@ -435,6 +440,49 @@ def start_smoke() -> str:
       const pageOneAgain = pageOneAgainResult.snap;
       if (pageOneAgain.activePage !== "1") throw new Error("Second Space did not return to actions page 1");
 
+      record("replay-leaf-setup");
+      await runInPopup(keySource("L"));
+      await sleep(450);
+
+      await openDirectView("actions", "Navigate", { minWidth: 900, maxWidth: 1000 });
+      await forcePopupReady("force-ready-before-menu-only");
+      record("press-w-menu-only");
+      await runInPopup(keySource("W"));
+      const closeMenu = await waitFor("close-and-select menu-only open", async () => {
+        const result = await trySnapshot();
+        if (!result.ok) return result;
+        const text = result.snap.textHead.join("\n");
+        if (text.includes("Close & select") && text.includes("Next in sidebar")) {
+          return { ok: true, snap: result.snap };
+        }
+        return { ok: false, snap: result.snap };
+      }, 3000, 100);
+      record("after-w-menu-only", { textHead: closeMenu.snap.textHead.slice(0, 10), href: closeMenu.snap.href });
+      await runInPopup(keySource("Escape"));
+      await sleep(350);
+
+      await openDirectView("actions", "Navigate", { minWidth: 900, maxWidth: 1000 });
+      await forcePopupReady("force-ready-before-replay");
+      record("press-dot-replay");
+      await runInPopup(keySource("."));
+      const replayState = await waitFor("replay preserved prior leaf action", async () => {
+        const state = overlayState();
+        if (!state.overlay || state.visibility === "hidden") {
+          return { ok: true, state };
+        }
+        const result = await trySnapshot();
+        if (result.ok) {
+          const text = result.snap.textHead.join("\n");
+          if (text.includes("Close & select") || text.includes("Next in sidebar")) {
+            return { ok: false, state, snap: result.snap, menuOnlyReplayVisible: true };
+          }
+        }
+        return { ok: false, state, snap: result.ok ? result.snap : result };
+      }, 3000, 100);
+      record("after-dot-replay", replayState.state);
+
+      await openDirectView("actions", "Navigate", { minWidth: 900, maxWidth: 1000 });
+      await forcePopupReady("force-ready-before-r");
       record("press-r-recent");
       await runInPopup(keySource("R"));
       await sleep(180);
@@ -483,12 +531,7 @@ def start_smoke() -> str:
       record("domains-direct", { textHead: domains.snap.textHead.slice(0, 12), href: domains.snap.href });
 
       record("force-ready-domains");
-      await runInPopup(`(content) => {
-        const payload = { type: "force-ready", data: { buffered: [] } };
-        content.document.dispatchEvent(new content.CustomEvent("ztt:bridge-message", { detail: JSON.stringify(payload) }));
-        return true;
-      }`);
-      await sleep(80);
+      await forcePopupReady("force-ready-domains-drain");
 
       record("press-s-domain-sort");
       await runInPopup(keySource("S"));

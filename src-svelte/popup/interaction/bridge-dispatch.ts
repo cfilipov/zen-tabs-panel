@@ -113,7 +113,7 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       if (!(await dispatchDrained(drained, generation))) return;
       if (generation !== undefined && !isCurrentWarmGeneration(generation)) return;
       ready = true;
-      if (drained.length === 0) {
+      if (drained.length === 0 && reply?.armRevealTimer !== false) {
         options.armRevealTimer();
       }
     },

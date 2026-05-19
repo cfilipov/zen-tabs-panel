@@ -27,6 +27,7 @@
     interpretVisibleInput,
     type InteractionCommand,
   } from "./interaction/interpreter";
+  import { chordFromKey } from "./interaction/inputs";
   import { DUPLICATE_PROMPT_ACTIONS, type DuplicatePromptAction } from "./interaction/duplicate-prompt-options";
   import { applyInteractionCommand, type InteractionRuntimeHandlers } from "./interaction/runtime";
   import {
@@ -144,6 +145,7 @@
   const paletteStore = createNativePaletteState();
   const palette = paletteStore.state;
   let pageAlive = true;
+  let terminalCommandDispatched = false;
   const revealController = createPaletteRevealController({
     sendReveal: (inst) => fireMessage({ type: "reveal-palette", inst }),
   });
@@ -530,6 +532,7 @@
   }
 
   async function openNativeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>, notifyChrome = false) {
+    terminalCommandDispatched = false;
     if (notifyChrome) notifyChromeView(view, params);
     const plan = resolveViewOpenPlan(view, params);
 
@@ -554,11 +557,13 @@
 
   async function performActionItemActivation(activation: ActionItemActivation) {
     if (activation.kind === "fire-action") {
+      terminalCommandDispatched = true;
       revealController.clear();
       fireMessage({ type: activation.actionId });
       return;
     }
     if (activation.kind === "switch-workspace") {
+      terminalCommandDispatched = true;
       switchWorkspace(activation.workspaceId);
       return;
     }
@@ -592,13 +597,18 @@
   }
 
   function activateTab(row: { domId: string }) {
+    terminalCommandDispatched = true;
     revealController.clear();
     fireMessage({ type: "activate-tab", domId: row.domId });
   }
 
   function traceReplayKey(key: string | null | undefined) {
-    if (!key || key.length !== 1) return;
+    if (!key) return;
     fireMessage({ type: "trace-replay-key", key });
+  }
+
+  function traceReplayInput(input: BridgeKeyData) {
+    traceReplayKey(chordFromKey({ kind: "key", ...input }));
   }
 
   function traceReplayForListIndex(index: number) {
@@ -626,6 +636,7 @@
 
   function navigateToHistoryIndex(index: number) {
     const historyIndex = palette.navigationHistory?.entries[index]?.historyIndex ?? index;
+    terminalCommandDispatched = true;
     revealController.clear();
     fireMessage({ type: "navigate-to-history-index", index: historyIndex });
   }
@@ -636,6 +647,7 @@
   }
 
   function restoreClosedTab(row: RecentlyClosedRow, keepOpen = false) {
+    if (!keepOpen) terminalCommandDispatched = true;
     if (!keepOpen) revealController.clear();
     fireMessage({
       type: keepOpen ? "restore-closed-tab-keep-open" : "restore-closed-tab",
@@ -649,6 +661,7 @@
   }
 
   function moveToWorkspace(row: WorkspaceRow) {
+    terminalCommandDispatched = true;
     revealController.clear();
     fireMessage({ type: "move-selected-tabs-to-workspace", workspaceId: row.uuid });
   }
@@ -659,6 +672,7 @@
   }
 
   function reopenInContainer(row: ContainerRow) {
+    terminalCommandDispatched = true;
     revealController.clear();
     fireMessage({ type: "reopen-in-container", userContextId: row.userContextId });
   }
@@ -669,6 +683,7 @@
   }
 
   function moveToFolder(row: FolderRow) {
+    terminalCommandDispatched = true;
     revealController.clear();
     fireMessage({ type: "move-tab-to-folder", folderId: row.id });
   }
@@ -680,6 +695,7 @@
 
   function launchProfile(row: ProfileRow) {
     if (row.isCurrent) return;
+    terminalCommandDispatched = true;
     revealController.clear();
     fireMessage({ type: "launch-profile", name: row.name });
   }
@@ -690,11 +706,13 @@
   }
 
   function switchWorkspace(workspaceId: string) {
+    terminalCommandDispatched = true;
     revealController.clear();
     fireMessage({ type: "switch-workspace", workspaceId });
   }
 
   function openExtensionPopup(extension: ExtensionRow) {
+    terminalCommandDispatched = true;
     revealController.clear();
     fireMessage({ type: "open-extension-popup", extensionId: extension.id });
   }
@@ -808,6 +826,7 @@
   }
 
   function runDuplicatePromptAction(action: DuplicatePromptAction) {
+    terminalCommandDispatched = true;
     revealController.clear();
     fireMessage({ type: action });
   }
@@ -954,7 +973,10 @@
 
   async function applyViewCommand(command: ViewCommand) {
     if (command.kind === "message") {
-      if (command.clearReveal) revealController.clear();
+      if (command.clearReveal) {
+        terminalCommandDispatched = true;
+        revealController.clear();
+      }
       fireMessage(command.message);
     } else if (command.kind === "open-domain") {
       await activateDomain({ kind: "domain", domain: command.domain, count: 0 });
@@ -1013,12 +1035,18 @@
   }
 
   async function handleKeyInput(input: BridgeKeyData) {
+    if (terminalCommandDispatched) {
+      return false;
+    }
     const actionNodes = palette.currentView === "actions" ? allActionNodes : isNativePrefixView(palette.currentView) ? prefixNodes : [];
     const command = interpretVisibleInput({ kind: "key", ...input }, { view: palette.currentView }, actionNodes);
     if (command.kind === "none") {
       return false;
     }
 
+    if (command.kind === "action" || command.kind === "open-view" || command.kind === "enter-prefix") {
+      traceReplayInput(input);
+    }
     await runCommand(command);
     return true;
   }
@@ -1028,7 +1056,8 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    const result = bridgeDispatch.visibleKeydownInput(snapshotKeyEvent(event));
+    const input = snapshotKeyEvent(event);
+    const result = bridgeDispatch.visibleKeydownInput(input);
     if (result.preventDefault) event.preventDefault();
     if (result.stopPropagation) event.stopPropagation();
   }

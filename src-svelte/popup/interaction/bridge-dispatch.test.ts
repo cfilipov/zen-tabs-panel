@@ -45,6 +45,15 @@ describe("bridge dispatch controller", () => {
     expect(events).toEqual(["arm", "clear", "key:a", "clear", "key:b", "arm"]);
   });
 
+  it("does not arm the reveal timer for an idle warm-prerender ready reply", async () => {
+    const { controller, events } = createHarness();
+
+    await controller.drainReply({ buffered: [], armRevealTimer: false });
+
+    expect(controller.ready).toBe(true);
+    expect(events).toEqual([]);
+  });
+
   it("reports keydown capture requirements while not ready", async () => {
     const { controller } = createHarness();
 

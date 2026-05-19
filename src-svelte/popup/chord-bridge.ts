@@ -13,6 +13,7 @@ export type BridgeReply = {
   buffered?: BridgeKeyData[];
   stale?: boolean;
   view?: string | null;
+  armRevealTimer?: boolean;
 };
 
 export type WarmRearmPayload = {

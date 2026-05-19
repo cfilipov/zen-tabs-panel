@@ -20,6 +20,9 @@ export function chordFromKey(input: InteractionInput): Chord | null {
   if (input.key.length === 1 && /[a-z]/i.test(input.key)) {
     return `${input.shiftKey ? "Shift+" : ""}${input.key.toUpperCase()}`;
   }
+  if (input.shiftKey && input.code && /^Digit[1-9]$/.test(input.code)) {
+    return `Shift+${input.code.slice("Digit".length)}`;
+  }
   return input.key;
 }
 

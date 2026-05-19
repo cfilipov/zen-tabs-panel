@@ -680,7 +680,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const activeWorkspace = w.gZenWorkspaces.activeWorkspace;
 
       if (tabWorkspace && tabWorkspace !== activeWorkspace) {
-        await w.gZenWorkspaces.changeWorkspaceWithID(tabWorkspace);
+        const lastSelectedTabs = w.gZenWorkspaces.lastSelectedWorkspaceTabs;
+        const previousLastSelected = lastSelectedTabs && lastSelectedTabs[tabWorkspace];
+        if (lastSelectedTabs) {
+          lastSelectedTabs[tabWorkspace] = tab;
+        }
+        try {
+          await w.gZenWorkspaces.changeWorkspaceWithID(tabWorkspace);
+        } catch (error) {
+          if (lastSelectedTabs) {
+            lastSelectedTabs[tabWorkspace] = previousLastSelected;
+          }
+          throw error;
+        }
       }
 
       w.gBrowser.selectedTab = tab;
@@ -2274,12 +2286,30 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function trackChordOpenView(view) {
       // In-flight only — the chain has merely descended into a view. It's
       // not committed as replayable until an action actually fires.
+      //
+      // Preserve an existing open-view trace during drill navigation. For
+      // example, cmd+., q, 1, 2 should replay by opening Domains and then
+      // replaying "1, 2"; the intermediate domain-tabs navigate must not
+      // replace the root trace with a menu-opening-only trace.
+      if (currentChordReplay && currentChordReplay.kind === "open-view") return;
       currentChordReplay = { kind: "open-view", view: view || null, bridgeKeys: [] };
     }
 
+    function replayKeyFromBridgeKey(keyData) {
+      if (!keyData || typeof keyData.key !== "string" || !keyData.key) return null;
+      if (keyData.key.length === 1 && /[a-z]/i.test(keyData.key)) {
+        return (keyData.shiftKey ? "Shift+" : "") + keyData.key.toUpperCase();
+      }
+      if (keyData.shiftKey && keyData.code && /^Digit[1-9]$/.test(keyData.code)) {
+        return "Shift+" + keyData.code.slice("Digit".length);
+      }
+      return keyData.key;
+    }
+
     function trackChordBridgeKey(keyData) {
-      if (currentChordReplay && currentChordReplay.kind === "open-view" && keyData && keyData.key) {
-        currentChordReplay.bridgeKeys.push(keyData.key);
+      const key = replayKeyFromBridgeKey(keyData);
+      if (currentChordReplay && currentChordReplay.kind === "open-view" && key) {
+        currentChordReplay.bridgeKeys.push(key);
       }
     }
 
@@ -2311,7 +2341,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         currentChordReplay = null;
         return;
       }
-      if (currentChordReplay && currentChordReplay.kind === "open-view") {
+      if (
+        currentChordReplay &&
+        currentChordReplay.kind === "open-view" &&
+        Array.isArray(currentChordReplay.bridgeKeys) &&
+        currentChordReplay.bridgeKeys.length > 0
+      ) {
         lastChordReplay = currentChordReplay;
       } else {
         lastChordReplay = Object.assign({ kind: "action-msg" }, message);
@@ -2629,7 +2664,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         overlayVisible: isOverlayVisible(),
         chromeArmed: !!(chromeEngine && chromeEngine.isArmed && chromeEngine.isArmed()),
       });
-
       // Leader-shortcut routing while the menu is visible:
       //   - on actions   -> dismiss (toggle off).
       //   - on submenu   -> navigate back to actions (regardless of depth).
@@ -2873,15 +2907,25 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "(function(){\n" +
         "var __GEN = " + JSON.stringify(CHORD_GENERATION) + ";\n" +
         "try {\n" +
+        // Set the same-generation guard before loading any dependencies.
+        // The delayed global frame script and the explicit focused-tab
+        // load in armChordFromLeader can race in a fresh content process;
+        // if the marker is only written after loadSubScript, both copies
+        // can pass the guard and install duplicate key/action listeners.
+        // Duplicate content engines make terminal actions fire twice
+        // (cmd+.,p goes previous, then immediately back).
         "  if (content && content.__zenTabsPanelChordEngineGen === __GEN) return;\n" +
+        "  if (content) content.__zenTabsPanelChordEngineGen = __GEN;\n" +
         "} catch(e){}\n" +
         "var __scope = {};\n" +
         "try {\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(bindingsURL) + ", __scope);\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(constantsURL) + ", __scope);\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(engineURL) + ", __scope);\n" +
-        "} catch (err) { return; }\n" +
-        "try { if (content) content.__zenTabsPanelChordEngineGen = __GEN; } catch(e){}\n" +
+        "} catch (err) {\n" +
+        "  try { if (content && content.__zenTabsPanelChordEngineGen === __GEN) content.__zenTabsPanelChordEngineGen = null; } catch(e){}\n" +
+        "  return;\n" +
+        "}\n" +
         "function isExtensionPage(){\n" +
         "  try { return String(content && content.location && content.location.href || '').startsWith('moz-extension://'); } catch (e) { return false; }\n" +
         "}\n" +
@@ -4519,6 +4563,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // "popup is ready; buffer empty" — popupReady still flips true so
           // any subsequent bridge keys go live via DeliverKey rather than
           // queueing to a null buffer.
+          const wasBridging = bridgingEngineKind != null;
           const drained = bridgeBuffer || [];
           const snapshot = pendingStateSnapshot || [];
           // Reset the bridge buffer to an empty array so future bridge
@@ -4561,7 +4606,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // `view` in the reply and navigate before replaying buffered
           // keys, so chord-chain digits land at the right view.
           const replyView = (currentViewName && currentViewName !== "actions") ? currentViewName : null;
-          return { buffered: drained, stateSnapshot: snapshot, view: replyView };
+          return {
+            buffered: drained,
+            stateSnapshot: snapshot,
+            view: replyView,
+            armRevealTimer: wasBridging || drained.length > 0,
+          };
         },
 
         // Palette management.
@@ -4746,10 +4796,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const prevView = currentViewName;
           currentViewName = view;
           // Record the nav as the in-flight chord's open-view target so
-          // cmd+.,. replay rebuilds the same sequence — covers the
-          // slow-typed case where the engine never sees the chord-key
-          // (popup is visible, handles the key itself).
-          trackChordOpenView(view);
+          // cmd+.,. replay rebuilds the same sequence. This is only for
+          // chord-opened popups (root timeout / bridge); toolbar-clicked
+          // visible navigation is not itself replayable and must not
+          // poison the previous leaf action.
+          if (bridgingEngineKind != null || currentChordReplay) {
+            trackChordOpenView(view);
+          }
           // Only swap browsers when crossing between our popup and a
           // foreign extension's popup. For our-view → our-view, we
           // just update the nav stack here — the popup runs its
