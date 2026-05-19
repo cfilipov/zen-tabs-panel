@@ -5,9 +5,11 @@ import type { FolderRow } from "../runtime/folder-client";
 import type { NavigationHistory, RecentlyClosedRow } from "../runtime/history-client";
 import type { ProfileRow } from "../runtime/profile-client";
 import type { HistoryVisit, TabInfo } from "../runtime/tab-info-client";
-import type { ActionPreview, DuplicateGroupRow, TabIndexRow } from "../runtime/tab-index-client";
+import type { ActionPreview, DuplicateGroupRow, TabIndexRow, ViewWindow } from "../runtime/tab-index-client";
 import type { WorkspaceRow } from "../runtime/workspace-client";
 import type { NativeListRow } from "../view-loaders/list-loader";
+import type { ActionsMenuData } from "../view-loaders/actions-loader";
+import type { DuplicatePromptData } from "../view-loaders/duplicate-prompt-loader";
 
 export type NativePaletteState = {
   currentView: ViewId;
@@ -90,6 +92,40 @@ function defaultNativePaletteState(): NativePaletteState {
 export function createNativePaletteState() {
   const state = $state<NativePaletteState>(defaultNativePaletteState());
 
+  function setCurrentView(view: ViewId) {
+    state.currentView = view;
+  }
+
+  function setLoading(value: boolean) {
+    state.loading = value;
+  }
+
+  function setError(message: string | null) {
+    state.error = message;
+  }
+
+  function selectIndex(index: number) {
+    state.selectedIndex = index;
+  }
+
+  function selectActionsPage(page: number) {
+    state.currentPage = page;
+    state.selectedIndex = -1;
+  }
+
+  function setWorkspaceFilter(filter: string) {
+    state.workspaceFilter = filter;
+  }
+
+  function setCurrentDomain(domain: string | null) {
+    state.currentDomain = domain;
+  }
+
+  function setSortState(next: { domainsSortAlpha: boolean; tabsByAgeNewestFirst: boolean }) {
+    state.domainsSortAlpha = next.domainsSortAlpha;
+    state.tabsByAgeNewestFirst = next.tabsByAgeNewestFirst;
+  }
+
   function resetToActions() {
     const next = defaultNativePaletteState();
     Object.assign(state, next);
@@ -120,9 +156,239 @@ export function createNativePaletteState() {
     state.error = null;
   }
 
+  function enterActionsView() {
+    clearLoadedViewData();
+    state.currentView = "actions";
+    state.currentPage = 1;
+  }
+
+  function enterPrefixView(view: ViewId) {
+    state.currentView = view;
+    state.selectedIndex = -1;
+    state.error = null;
+  }
+
+  function enterDomainList(domain: string | null) {
+    state.currentDomain = domain;
+  }
+
+  function applyActionsMenuData(data: ActionsMenuData) {
+    state.actionsWorkspaces = data.workspaces;
+    state.actionWorkspaceTabCounts = data.workspaceTabCounts;
+    state.actionExtensions = data.extensions;
+    state.actionIconHtmlById = data.iconHtmlById;
+    state.actionPreviewsById = data.previewsById;
+    state.actionCounts = data.counts;
+    state.disabledActionIds = data.disabledIds;
+  }
+
+  function commitSidebarWorkspaces(workspaces: WorkspaceRow[]) {
+    state.sidebarWorkspaces = workspaces;
+    if (state.workspaceFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === state.workspaceFilter)) {
+      state.workspaceFilter = "all";
+    }
+  }
+
+  function clearSidebarWorkspaces() {
+    state.sidebarWorkspaces = [];
+  }
+
+  function beginListWindowLoad(offset: number) {
+    state.offset = offset;
+  }
+
+  function commitListWindow(win: ViewWindow<NativeListRow>, resetSelection: boolean) {
+    state.rows = win.rows;
+    state.total = win.total;
+    if (resetSelection) state.selectedIndex = -1;
+  }
+
+  function failListWindow(message: string) {
+    state.rows = [];
+    state.total = 0;
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
+  function replaceListWindow(rows: NativeListRow[], total: number, selectedIndex: number) {
+    state.rows = rows;
+    state.total = total;
+    state.selectedIndex = selectedIndex;
+  }
+
+  function commitNavigation(result: { history: NavigationHistory | null; selectedIndex: number }) {
+    state.navigationHistory = result.history;
+    state.selectedIndex = result.selectedIndex;
+  }
+
+  function failNavigation(message: string) {
+    state.navigationHistory = null;
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
+  function commitRecentlyClosed(result: { rows: RecentlyClosedRow[]; selectedIndex: number }) {
+    state.recentlyClosedRows = result.rows;
+    state.selectedIndex = result.selectedIndex;
+  }
+
+  function failRecentlyClosed(message: string) {
+    state.recentlyClosedRows = [];
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
+  function commitMoveToWorkspace(result: { rows: WorkspaceRow[]; selectedIndex: number }) {
+    state.workspaceRows = result.rows;
+    state.selectedIndex = result.selectedIndex;
+  }
+
+  function failMoveToWorkspace(message: string) {
+    state.workspaceRows = [];
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
+  function commitOpenInContainer(result: { rows: ContainerRow[]; selectedIndex: number }) {
+    state.containerRows = result.rows;
+    state.selectedIndex = result.selectedIndex;
+  }
+
+  function failOpenInContainer(message: string) {
+    state.containerRows = [];
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
+  function commitMoveToFolder(result: { folders: FolderRow[]; workspaces: WorkspaceRow[]; selectedIndex: number }) {
+    state.folderRows = result.folders;
+    state.folderWorkspaces = result.workspaces;
+    state.selectedIndex = result.selectedIndex;
+  }
+
+  function failMoveToFolder(message: string) {
+    state.folderRows = [];
+    state.folderWorkspaces = [];
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
+  function commitProfiles(result: { rows: ProfileRow[]; selectedIndex: number }) {
+    state.profileRows = result.rows;
+    state.selectedIndex = result.selectedIndex;
+  }
+
+  function failProfiles(message: string) {
+    state.profileRows = [];
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
+  function commitDuplicates(result: {
+    groups: DuplicateGroupRow[];
+    workspaces: WorkspaceRow[];
+    workspaceFilter: string;
+    selectedIndex: number;
+  }) {
+    state.sidebarWorkspaces = result.workspaces;
+    state.duplicateWorkspaces = result.workspaces;
+    state.workspaceFilter = result.workspaceFilter;
+    state.duplicateGroups = result.groups;
+    state.selectedIndex = result.selectedIndex;
+  }
+
+  function failDuplicates(message: string) {
+    state.duplicateGroups = [];
+    state.duplicateWorkspaces = [];
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
+  function replaceDuplicateGroups(groups: DuplicateGroupRow[]) {
+    state.duplicateGroups = groups;
+  }
+
+  function commitTabInfo(result: {
+    info: TabInfo | null;
+    visits: HistoryVisit[];
+    duplicates: TabIndexRow[];
+    workspaces: WorkspaceRow[];
+    selectedIndex: number;
+  }) {
+    state.tabInfo = result.info;
+    state.tabInfoVisits = result.visits;
+    state.tabInfoDuplicates = result.duplicates;
+    state.tabInfoWorkspaces = result.workspaces;
+    state.selectedIndex = result.selectedIndex;
+  }
+
+  function failTabInfo(message: string) {
+    state.tabInfo = null;
+    state.tabInfoVisits = [];
+    state.tabInfoDuplicates = [];
+    state.tabInfoWorkspaces = [];
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
+  function replaceTabInfoDuplicates(rows: TabIndexRow[]) {
+    state.tabInfoDuplicates = rows;
+  }
+
+  function commitDuplicatePrompt(result: DuplicatePromptData) {
+    state.duplicatePromptUrl = result.url;
+    state.duplicatePromptDomId = result.domId;
+    state.selectedIndex = result.selectedIndex;
+  }
+
+  function failDuplicatePrompt(message: string) {
+    state.duplicatePromptUrl = "";
+    state.duplicatePromptDomId = null;
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
   return {
     state,
+    setCurrentView,
+    setLoading,
+    setError,
+    selectIndex,
+    selectActionsPage,
+    setWorkspaceFilter,
+    setCurrentDomain,
+    setSortState,
     resetToActions,
     clearLoadedViewData,
+    enterActionsView,
+    enterPrefixView,
+    enterDomainList,
+    applyActionsMenuData,
+    commitSidebarWorkspaces,
+    clearSidebarWorkspaces,
+    beginListWindowLoad,
+    commitListWindow,
+    failListWindow,
+    replaceListWindow,
+    commitNavigation,
+    failNavigation,
+    commitRecentlyClosed,
+    failRecentlyClosed,
+    commitMoveToWorkspace,
+    failMoveToWorkspace,
+    commitOpenInContainer,
+    failOpenInContainer,
+    commitMoveToFolder,
+    failMoveToFolder,
+    commitProfiles,
+    failProfiles,
+    commitDuplicates,
+    failDuplicates,
+    replaceDuplicateGroups,
+    commitTabInfo,
+    failTabInfo,
+    replaceTabInfoDuplicates,
+    commitDuplicatePrompt,
+    failDuplicatePrompt,
   };
 }

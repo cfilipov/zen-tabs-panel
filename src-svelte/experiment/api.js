@@ -990,6 +990,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // poll, neither of which is right.
     let revealDeferred = false;
     let lastLeaderArmAt = 0;
+    let chordArmSequence = 0;
+    let terminalDispatchArmSequence = -1;
 
     // Mirror whatever theme Zen's URL-bar dropdown (Cmd+T) uses. The
     // chrome root's resolved `color-scheme` is the same signal that dialog
@@ -2487,6 +2489,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function dispatchChordAction(payload) {
       if (!payload || !payload.type) return;
+      if (
+        (payload.type === "action" || payload.type === "switch-workspace" || payload.type === "open-extension-popup") &&
+        terminalDispatchArmSequence === chordArmSequence
+      ) {
+        debugChordTrace("terminal-duplicate-ignored", payload);
+        return;
+      }
+      if (payload.type === "action" || payload.type === "switch-workspace" || payload.type === "open-extension-popup") {
+        terminalDispatchArmSequence = chordArmSequence;
+      }
       trackChordTerminalAction(payload);
       if (pendingReveal) destroyOverlay();
       if (payload.type === "action") {
@@ -2784,6 +2796,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
 
       try { if (chromeEngine) chromeEngine.arm(); } catch (e) {}
+      chordArmSequence++;
+      terminalDispatchArmSequence = -1;
       debugChordTrace("chrome-arm-called", {});
       const w = getWin();
       const tab = w && w.gBrowser && w.gBrowser.selectedTab;
@@ -2915,6 +2929,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       w.addEventListener("keydown", hostedPopupEscapeKeydown, true);
 
       const fallbackChordKeydown = (e) => {
+        if (e.__zenTabsPanelChordHandled) {
+          debugChordTrace("fallback-skip-chord-handled", { key: e.key });
+          return;
+        }
         if (!chromeEngine.isArmed()) {
           debugChordTrace("fallback-skip-not-armed", { key: e.key, target: e.target && e.target.localName });
           return;

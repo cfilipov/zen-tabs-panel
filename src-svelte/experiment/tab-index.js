@@ -19,6 +19,10 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     version++;
   }
 
+  function bumpVersion() {
+    version++;
+  }
+
   function domainOf(url) {
     const match = String(url || "").match(/^[a-z][a-z0-9+.-]*:\/\/([^/:?#]+)/i);
     return match ? match[1].replace(/^www\./, "") : "";
@@ -172,6 +176,144 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     rows = deps.getAllTabElements().map((tab, index) => readRow(tab, index, tabToGroupId));
     byDomId = new Map(rows.map((row) => [row.domId, row]));
     dirty = false;
+  }
+
+  function currentTabElements() {
+    return deps.getAllTabElements();
+  }
+
+  function isIndexed() {
+    return !dirty && rows.length === byDomId.size;
+  }
+
+  function readRowWithCurrentSplitMap(tab, index) {
+    return readRow(tab, index, splitGroupMap(deps.getWin()));
+  }
+
+  function replaceIndexedRow(tab, index) {
+    const previous = byDomId.get(tab.id) || null;
+    const next = readRowWithCurrentSplitMap(tab, index);
+    if (previous && previous.domId !== next.domId) byDomId.delete(previous.domId);
+    rows[index] = next;
+    byDomId.set(next.domId, next);
+  }
+
+  function reindexKnownRows(forceReadDomIds) {
+    if (!isIndexed()) return false;
+    const tabs = currentTabElements();
+    const tabToGroupId = splitGroupMap(deps.getWin());
+    const nextRows = [];
+    const nextByDomId = new Map();
+
+    for (let index = 0; index < tabs.length; index++) {
+      const tab = tabs[index];
+      const existing = byDomId.get(tab.id);
+      const row = !existing || forceReadDomIds?.has(tab.id)
+        ? readRow(tab, index, tabToGroupId)
+        : { ...existing, index };
+      nextRows.push(row);
+      nextByDomId.set(row.domId, row);
+    }
+
+    rows = nextRows;
+    byDomId = nextByDomId;
+    return true;
+  }
+
+  function tabFromEvent(event) {
+    return event?.target || null;
+  }
+
+  function tabFromMutationTarget(target) {
+    let node = target;
+    while (node) {
+      if (node.id && node.linkedBrowser) return node;
+      if (node.classList?.contains?.("tabbrowser-tab")) return node;
+      node = node.parentNode;
+    }
+    return null;
+  }
+
+  function updateTabRow(tab) {
+    if (!tab || !isIndexed()) return false;
+    const tabs = currentTabElements();
+    const index = tabs.indexOf(tab);
+    if (index < 0) {
+      if (!byDomId.has(tab.id)) return false;
+      return reindexKnownRows(null);
+    }
+
+    if (!byDomId.has(tab.id) || rows[index]?.domId !== tab.id) {
+      return reindexKnownRows(new Set([tab.id]));
+    }
+
+    replaceIndexedRow(tab, index);
+    return true;
+  }
+
+  function handleTabChanged(event) {
+    if (updateTabRow(tabFromEvent(event))) bumpVersion();
+    else markDirty();
+  }
+
+  function handleTabOpened(event) {
+    const tab = tabFromEvent(event);
+    if (isIndexed() && reindexKnownRows(tab?.id ? new Set([tab.id]) : null)) bumpVersion();
+    else markDirty();
+  }
+
+  function handleTabClosed(event) {
+    const tab = tabFromEvent(event);
+    if (updateTabRow(tab)) bumpVersion();
+    else markDirty();
+  }
+
+  function handleTabMoved(event) {
+    const tab = tabFromEvent(event);
+    if (isIndexed() && reindexKnownRows(tab?.id ? new Set([tab.id]) : null)) bumpVersion();
+    else markDirty();
+  }
+
+  function handleTabSelected(event) {
+    const tab = tabFromEvent(event);
+    if (!tab || !isIndexed()) {
+      markDirty();
+      return;
+    }
+    let changed = false;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].active) {
+        rows[i] = { ...rows[i], active: false };
+        byDomId.set(rows[i].domId, rows[i]);
+        changed = true;
+      }
+    }
+    if (updateTabRow(tab) || changed) bumpVersion();
+    else markDirty();
+  }
+
+  function handleMutations(records) {
+    if (!isIndexed()) {
+      markDirty();
+      return;
+    }
+    const tabs = new Set();
+    for (const record of records || []) {
+      const tab = tabFromMutationTarget(record.target);
+      if (tab) tabs.add(tab);
+    }
+    if (!tabs.size) {
+      markDirty();
+      return;
+    }
+    let changed = false;
+    let failed = false;
+    for (const tab of tabs) {
+      if (updateTabRow(tab)) changed = true;
+      else failed = true;
+    }
+    if (failed) markDirty();
+    else if (changed) bumpVersion();
   }
 
   function filteredRows(view, params) {
@@ -339,10 +481,12 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     const win = deps.getWin();
     const container = win?.gBrowser?.tabContainer;
     if (container) {
-      for (const name of ["TabOpen", "TabClose", "TabMove", "TabSelect", "TabAttrModified"]) {
-        container.addEventListener(name, markDirty, true);
-      }
-      mutationObserver = new win.MutationObserver(markDirty);
+      container.addEventListener("TabOpen", handleTabOpened, true);
+      container.addEventListener("TabClose", handleTabClosed, true);
+      container.addEventListener("TabMove", handleTabMoved, true);
+      container.addEventListener("TabSelect", handleTabSelected, true);
+      container.addEventListener("TabAttrModified", handleTabChanged, true);
+      mutationObserver = new win.MutationObserver(handleMutations);
       mutationObserver.observe(container, {
         subtree: true,
         attributes: true,
@@ -359,9 +503,11 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     const win = deps.getWin();
     const container = win?.gBrowser?.tabContainer;
     if (container) {
-      for (const name of ["TabOpen", "TabClose", "TabMove", "TabSelect", "TabAttrModified"]) {
-        container.removeEventListener(name, markDirty, true);
-      }
+      container.removeEventListener("TabOpen", handleTabOpened, true);
+      container.removeEventListener("TabClose", handleTabClosed, true);
+      container.removeEventListener("TabMove", handleTabMoved, true);
+      container.removeEventListener("TabSelect", handleTabSelected, true);
+      container.removeEventListener("TabAttrModified", handleTabChanged, true);
     }
     try { mutationObserver?.disconnect(); } catch (e) {}
     mutationObserver = null;

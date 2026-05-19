@@ -96,6 +96,14 @@ describe("popup architecture boundary", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("keeps palette state writes behind named store mutators", () => {
+    const source = readFileSync(join(popupRoot, "NativePalette.svelte"), "utf8");
+    const offenders = [...source.matchAll(/\bpalette\.[A-Za-z0-9_]+\s*=(?!=)/g)]
+      .map((match) => match[0]);
+
+    expect(offenders).toEqual([]);
+  });
+
   it("keeps typed navigation registries present", () => {
     const navigationTree = readFileSync(join(popupRoot, "..", "shared", "navigation-tree.ts"), "utf8");
     const actionRegistry = readFileSync(join(popupRoot, "interaction", "action-registry.ts"), "utf8");
@@ -107,6 +115,13 @@ describe("popup architecture boundary", () => {
     expect(availability).toMatch(/Record<AvailabilityPredicateId,/);
     expect(viewRegistry).toMatch(/\bViewLoaderId\b/);
     expect(viewRegistry).toMatch(/Exclude<NavigationViewId, PlannedNavigationView>/);
+  });
+
+  it("keeps structural key handling declarative", () => {
+    const source = readFileSync(join(popupRoot, "interaction", "interpreter.ts"), "utf8");
+
+    expect(source).toMatch(/\bstructuralKeyResolvers\b/);
+    expect(source).not.toMatch(/switch\s*\(\s*input\.key\s*\)/);
   });
 
   it("keeps DOM access out of pure state and interaction modules", () => {

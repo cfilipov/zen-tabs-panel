@@ -257,6 +257,7 @@
       //    live. Capture all non-modifier keys; forward to the owner's
       //    bridge buffer for replay into the popup.
       if (state === "bridging") {
+        try { Object.defineProperty(e, "__zenTabsPanelChordHandled", { value: true }); } catch (_) {}
         try { e.preventDefault(); } catch (_) {}
         try { e.stopPropagation(); } catch (_) {}
         safeCall(onBridgeKey, {
@@ -276,6 +277,7 @@
       const k = chordKeyFor(e);
       if (k === null) return; // pure modifier — already filtered above
 
+      try { Object.defineProperty(e, "__zenTabsPanelChordHandled", { value: true }); } catch (_) {}
       try { e.preventDefault(); } catch (_) {}
       try { e.stopPropagation(); } catch (_) {}
 

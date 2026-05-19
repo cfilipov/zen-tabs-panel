@@ -17,8 +17,8 @@
   } from "./interaction/interpreter";
   import { chordFromKey } from "./interaction/inputs";
   import { DUPLICATE_PROMPT_ACTIONS, type DuplicatePromptAction } from "./interaction/duplicate-prompt-options";
-  import { applyInteractionCommand, type InteractionRuntimeHandlers } from "./interaction/runtime";
-  import { isActionEffectId } from "./interaction/action-registry";
+  import { createNativePaletteInteractionRuntime } from "./interaction/native-palette-runtime";
+  import { applyInteractionCommand } from "./interaction/runtime";
   import {
     loadWindowForIndex,
     rowInWindow,
@@ -34,7 +34,6 @@
     removeTabInfoDuplicate,
   } from "./interaction/row-state";
   import {
-    listViewParams,
     normalizeWorkspaceFilter,
     toggleSortForView,
     toggleWorkspaceFilterValue,
@@ -48,12 +47,12 @@
     type ViewActivationContext,
   } from "./interaction/view-activation";
   import { commandForViewActivation, type ViewCommand } from "./interaction/view-command";
-  import { isWorkspaceFilterView } from "./interaction/view-capabilities";
   import { buildSidebarModel, type SidebarHintId } from "./interaction/sidebar-model";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
-  import { createHistoryClient, type NavigationHistory, type RecentlyClosedRow } from "./runtime/history-client";
+  import { createHistoryClient, type RecentlyClosedRow } from "./runtime/history-client";
+  import { createNativePaletteLoaders } from "./runtime/native-palette-loaders";
   import { createPaletteEffects } from "./runtime/palette-effects";
   import {
     directionalListItemId,
@@ -63,30 +62,15 @@
   } from "./runtime/palette-dom";
   import { createPaletteRevealController } from "./runtime/palette-reveal";
   import { createProfileClient, type ProfileRow } from "./runtime/profile-client";
-  import { createTabInfoClient, type HistoryVisit, type TabInfo } from "./runtime/tab-info-client";
+  import { createTabInfoClient } from "./runtime/tab-info-client";
   import { createViewLoadController } from "./runtime/view-load-controller";
   import {
     createTabIndexClient,
-    type ActionPreview,
     type DomainIndexRow,
-    type DuplicateGroupRow,
     type TabIndexRow,
   } from "./runtime/tab-index-client";
   import { createWorkspaceClient, type WorkspaceRow } from "./runtime/workspace-client";
-  import { emptyActionsMenuData, loadActionsMenuData, type ActionsMenuData } from "./view-loaders/actions-loader";
-  import {
-    loadMoveToFolderView,
-    loadMoveToWorkspaceView,
-    loadNavigationView,
-    loadOpenInContainerView,
-    loadProfilesView,
-    loadRecentlyClosedView,
-  } from "./view-loaders/basic-loaders";
-  import { loadDuplicateGroupsView } from "./view-loaders/duplicates-loader";
-  import { loadDuplicatePromptView } from "./view-loaders/duplicate-prompt-loader";
-  import { loadNativeListWindow, type NativeListRow } from "./view-loaders/list-loader";
-  import { loadTabInfoView } from "./view-loaders/tab-info-loader";
-  import { runViewLoad } from "./view-loaders/view-load-runner";
+  import type { NativeListRow } from "./view-loaders/list-loader";
   import {
     isNativeListView,
     isNativePrefixView,
@@ -94,7 +78,6 @@
     resolveViewTitle,
     resolveViewOpenPlan,
     type NativeListView,
-    type ViewLoaderId,
   } from "./view-loaders/view-registry";
   import {
     actionItemsForPage,
@@ -110,7 +93,6 @@
   import type { ViewId } from "../shared/types";
   import { createNativePaletteState } from "./store/native-palette-state.svelte";
 
-  type NativeRow = NativeListRow;
   type SidebarHint = {
     id: string;
     label: string;
@@ -178,9 +160,23 @@
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
   const viewLoad = createViewLoadController<ViewId>({
     getCurrentView: () => palette.currentView,
-    setCurrentView: (view) => { palette.currentView = view; },
-    setLoading: (value) => { palette.loading = value; },
-    setError: (value) => { palette.error = value; },
+    setCurrentView: paletteStore.setCurrentView,
+    setLoading: paletteStore.setLoading,
+    setError: paletteStore.setError,
+  });
+  const paletteLoaders = createNativePaletteLoaders({
+    palette,
+    paletteStore,
+    viewLoad,
+    tabIndexClient: client,
+    workspaceClient,
+    extensionClient,
+    historyClient,
+    containerClient,
+    folderClient,
+    profileClient,
+    tabInfoClient,
+    getSelectedTabDomIds: effects.getSelectedTabDomIds,
   });
   const renderedActionSections = $derived(
     applyActionMetadata(
@@ -229,24 +225,16 @@
     onclick: sidebarHintAction(hint.id),
   })));
   const sidebarHidden = $derived(sidebarModel.hidden);
-  const interactionRuntime: InteractionRuntimeHandlers = {
-    runAction: async (actionId) => {
-      if (isActionEffectId(actionId)) {
-        await performActionItemActivation({ kind: "fire-action", actionId });
-        return;
-      }
+  const interactionRuntime = createNativePaletteInteractionRuntime({
+    fireActionEffect: (actionId) => performActionItemActivation({ kind: "fire-action", actionId }),
+    activateVisibleAction: async (actionId) => {
       const item = [...allActionItems, ...prefixItems].find((candidate) => candidate.id === actionId);
       if (item) await performActionItem(item);
     },
     openView: (view) => openNativeView(view, undefined, true),
     runDuplicatePromptAction,
-    navigateHistoryDelta: (delta) => {
-      const current = palette.navigationHistory?.index ?? -1;
-      const target = current + delta;
-      if (target >= 0 && target < navigationEntries.length) {
-        navigateToHistoryIndex(target);
-      }
-    },
+    getNavigationHistory: () => palette.navigationHistory,
+    navigateToHistoryIndex,
     cancel: effects.hidePalette,
     back: goBack,
     moveSelection,
@@ -264,17 +252,7 @@
     filterWorkspaceIndex: filterWorkspaceByIndex,
     switchWorkspaceIndex: switchWorkspaceByIndex,
     openExtensionIndex: openExtensionByIndex,
-  };
-
-  function applyActionsMenuData(data: ActionsMenuData) {
-    palette.actionsWorkspaces = data.workspaces;
-    palette.actionWorkspaceTabCounts = data.workspaceTabCounts;
-    palette.actionExtensions = data.extensions;
-    palette.actionIconHtmlById = data.iconHtmlById;
-    palette.actionPreviewsById = data.previewsById;
-    palette.actionCounts = data.counts;
-    palette.disabledActionIds = data.disabledIds;
-  }
+  });
 
   function sidebarHintAction(id: SidebarHintId) {
     if (id === "close") return closeSelectedTabRow;
@@ -283,267 +261,17 @@
     return drillSelectedParent;
   }
 
-  function isDomainRow(row: NativeRow | null): row is DomainIndexRow {
+  function isDomainRow(row: NativeListRow | null): row is DomainIndexRow {
     return row?.kind === "domain";
   }
 
-  function isTabRow(row: NativeRow | null): row is TabIndexRow {
+  function isTabRow(row: NativeListRow | null): row is TabIndexRow {
     return !!row && row.kind !== "domain";
   }
 
   function viewParams(view: NativeListView) {
-    return listViewParams(view, {
-      workspaceFilter: palette.workspaceFilter,
-      currentDomain: palette.currentDomain,
-      domainsSortAlpha: palette.domainsSortAlpha,
-      tabsByAgeNewestFirst: palette.tabsByAgeNewestFirst,
-    });
+    return paletteLoaders.viewParams(view);
   }
-
-  async function refreshSidebarWorkspaces(generation = viewLoad.generation) {
-    if (!isWorkspaceFilterView(palette.currentView)) return;
-    try {
-      const workspaces = await workspaceClient.getWorkspacesWithIcons();
-      if (generation !== viewLoad.generation || !isWorkspaceFilterView(palette.currentView)) return;
-      palette.sidebarWorkspaces = workspaces;
-      if (palette.workspaceFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === palette.workspaceFilter)) {
-        palette.workspaceFilter = "all";
-      }
-    } catch {
-      if (generation === viewLoad.generation) palette.sidebarWorkspaces = [];
-    }
-  }
-
-  async function loadActionsData() {
-    try {
-      const data = await loadActionsMenuData({
-        tabIndexClient: client,
-        workspaceClient,
-        extensionClient,
-        historyClient,
-        getSelectedTabDomIds: effects.getSelectedTabDomIds,
-      });
-      applyActionsMenuData(data);
-    } catch {
-      applyActionsMenuData(emptyActionsMenuData());
-    }
-  }
-
-  async function loadListView(view: NativeListView, nextOffset = 0, limit = 80, resetSelection = true, params = viewParams(view)) {
-    await runViewLoad({
-      controller: viewLoad,
-      view,
-      loading: resetSelection,
-      afterBegin: (load) => {
-        palette.offset = nextOffset;
-        void refreshSidebarWorkspaces(load.id);
-      },
-      load: async () => {
-        return loadNativeListWindow<NativeRow>(client, {
-          view,
-          offset: nextOffset,
-          limit,
-          params,
-        });
-      },
-      commit: (win) => {
-        palette.rows = win.rows;
-        palette.total = win.total;
-        if (resetSelection) {
-          palette.selectedIndex = -1;
-        }
-      },
-      fail: (message) => {
-        palette.rows = [];
-        palette.total = 0;
-        palette.selectedIndex = -1;
-        palette.error = message;
-      },
-    });
-  }
-
-  async function loadNavigation() {
-    await runViewLoad({
-      controller: viewLoad,
-      view: "navigation",
-      load: () => loadNavigationView(historyClient),
-      commit: (result) => {
-        palette.navigationHistory = result.history;
-        palette.selectedIndex = result.selectedIndex;
-      },
-      fail: (message) => {
-        palette.navigationHistory = null;
-        palette.selectedIndex = -1;
-        palette.error = message;
-      },
-    });
-  }
-
-  async function loadRecentlyClosed() {
-    await runViewLoad({
-      controller: viewLoad,
-      view: "recently-closed",
-      load: () => loadRecentlyClosedView(historyClient),
-      commit: (result) => {
-        palette.recentlyClosedRows = result.rows;
-        palette.selectedIndex = result.selectedIndex;
-      },
-      fail: (message) => {
-        palette.recentlyClosedRows = [];
-        palette.selectedIndex = -1;
-        palette.error = message;
-      },
-    });
-  }
-
-  async function loadMoveToWorkspace() {
-    await runViewLoad({
-      controller: viewLoad,
-      view: "move-to-workspace",
-      load: () => loadMoveToWorkspaceView(workspaceClient),
-      commit: (result) => {
-        palette.workspaceRows = result.rows;
-        palette.selectedIndex = result.selectedIndex;
-      },
-      fail: (message) => {
-        palette.workspaceRows = [];
-        palette.selectedIndex = -1;
-        palette.error = message;
-      },
-    });
-  }
-
-  async function loadOpenInContainer() {
-    await runViewLoad({
-      controller: viewLoad,
-      view: "open-in-container",
-      load: () => loadOpenInContainerView(containerClient),
-      commit: (result) => {
-        palette.containerRows = result.rows;
-        palette.selectedIndex = result.selectedIndex;
-      },
-      fail: (message) => {
-        palette.containerRows = [];
-        palette.selectedIndex = -1;
-        palette.error = message;
-      },
-    });
-  }
-
-  async function loadMoveToFolder() {
-    await runViewLoad({
-      controller: viewLoad,
-      view: "move-to-folder",
-      load: () => loadMoveToFolderView(folderClient, workspaceClient),
-      commit: (result) => {
-        palette.folderRows = result.folders;
-        palette.folderWorkspaces = result.workspaces;
-        palette.selectedIndex = result.selectedIndex;
-      },
-      fail: (message) => {
-        palette.folderRows = [];
-        palette.folderWorkspaces = [];
-        palette.selectedIndex = -1;
-        palette.error = message;
-      },
-    });
-  }
-
-  async function loadProfiles() {
-    await runViewLoad({
-      controller: viewLoad,
-      view: "profiles",
-      load: () => loadProfilesView(profileClient),
-      commit: (result) => {
-        palette.profileRows = result.rows;
-        palette.selectedIndex = result.selectedIndex;
-      },
-      fail: (message) => {
-        palette.profileRows = [];
-        palette.selectedIndex = -1;
-        palette.error = message;
-      },
-    });
-  }
-
-  async function loadDuplicates() {
-    await runViewLoad({
-      controller: viewLoad,
-      view: "duplicates",
-      load: () => loadDuplicateGroupsView(client, workspaceClient, palette.workspaceFilter),
-      commit: (result) => {
-        palette.sidebarWorkspaces = result.workspaces;
-        palette.duplicateWorkspaces = result.workspaces;
-        palette.workspaceFilter = result.workspaceFilter;
-        palette.duplicateGroups = result.groups;
-        palette.selectedIndex = result.selectedIndex;
-      },
-      fail: (message) => {
-        palette.duplicateGroups = [];
-        palette.duplicateWorkspaces = [];
-        palette.selectedIndex = -1;
-        palette.error = message;
-      },
-    });
-  }
-
-  async function loadTabInfo() {
-    await runViewLoad({
-      controller: viewLoad,
-      view: "tab-info",
-      load: () => loadTabInfoView(client, tabInfoClient, workspaceClient),
-      commit: (result) => {
-        palette.tabInfo = result.info;
-        palette.tabInfoVisits = result.visits;
-        palette.tabInfoDuplicates = result.duplicates;
-        palette.tabInfoWorkspaces = result.workspaces;
-        palette.selectedIndex = result.selectedIndex;
-      },
-      fail: (message) => {
-        palette.tabInfo = null;
-        palette.tabInfoVisits = [];
-        palette.tabInfoDuplicates = [];
-        palette.tabInfoWorkspaces = [];
-        palette.selectedIndex = -1;
-        palette.error = message;
-      },
-    });
-  }
-
-  async function loadDuplicatePrompt(params = new URLSearchParams(location.search)) {
-    await runViewLoad({
-      controller: viewLoad,
-      view: "duplicate-prompt",
-      loading: false,
-      load: async () => loadDuplicatePromptView(params),
-      commit: (result) => {
-        palette.duplicatePromptUrl = result.url;
-        palette.duplicatePromptDomId = result.domId;
-        palette.selectedIndex = result.selectedIndex;
-      },
-      fail: (message) => {
-        palette.duplicatePromptUrl = "";
-        palette.duplicatePromptDomId = null;
-        palette.selectedIndex = -1;
-        palette.error = message;
-      },
-    });
-  }
-
-  const registeredViewLoaders: Record<
-    ViewLoaderId,
-    (params?: URLSearchParams | Record<string, unknown>) => Promise<void> | void
-  > = {
-    navigation: loadNavigation,
-    "recently-closed": loadRecentlyClosed,
-    "move-to-workspace": loadMoveToWorkspace,
-    "open-in-container": loadOpenInContainer,
-    "move-to-folder": loadMoveToFolder,
-    profiles: loadProfiles,
-    duplicates: loadDuplicates,
-    "tab-info": loadTabInfo,
-    "duplicate-prompt": (params) => loadDuplicatePrompt(params instanceof URLSearchParams ? params : undefined),
-  };
 
   function notifyChromeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>) {
     effects.notifyChromeView(view, params);
@@ -571,14 +299,12 @@
       await goBack();
       return true;
     } else if (plan.kind === "list") {
-      palette.currentDomain = plan.domain;
-      await loadListView(plan.view, 0, 80, true, { ...plan.params, ...viewParams(plan.view) });
+      paletteStore.enterDomainList(plan.domain);
+      await paletteLoaders.loadListView(plan.view, 0, 80, true, { ...plan.params, ...viewParams(plan.view) });
     } else if (plan.kind === "prefix") {
-      palette.currentView = plan.view;
-      palette.selectedIndex = -1;
-      palette.error = null;
+      paletteStore.enterPrefixView(plan.view);
     } else if (plan.kind === "loader") {
-      await registeredViewLoaders[plan.loader](params);
+      await paletteLoaders.loadRegisteredView(plan.loader, params);
     } else {
       return false;
     }
@@ -665,7 +391,7 @@
   }
 
   async function activateDomain(row: DomainIndexRow) {
-    palette.currentDomain = row.domain;
+    paletteStore.setCurrentDomain(row.domain);
     await openNativeView("domain-tabs", { domain: row.domain }, true);
   }
 
@@ -773,7 +499,7 @@
 
   function closeDuplicateTab(row: TabIndexRow) {
     effects.closeTab(row.domId);
-    palette.duplicateGroups = removeTabFromDuplicateGroups(palette.duplicateGroups, row.domId);
+    paletteStore.replaceDuplicateGroups(removeTabFromDuplicateGroups(palette.duplicateGroups, row.domId));
   }
 
   function closeSelectedTabRow() {
@@ -781,9 +507,7 @@
     if (!row) return;
     effects.closeTab(row.domId);
     const result = removeTabFromRows({ rows: palette.rows, total: palette.total, selectedIndex: palette.selectedIndex, domId: row.domId });
-    palette.rows = result.rows;
-    palette.total = result.total;
-    palette.selectedIndex = result.selectedIndex;
+    paletteStore.replaceListWindow(result.rows, result.total, result.selectedIndex);
   }
 
   async function closeAllRowsInView() {
@@ -791,7 +515,7 @@
     const domIds = palette.rows.filter(isTabRow).map((row) => row.domId);
     if (!domIds.length) return;
     await Promise.all(domIds.map((domId) => effects.closeTabAndWait(domId).catch(() => {})));
-    loadListView(palette.currentView, 0, 80, true, viewParams(palette.currentView));
+    paletteLoaders.loadListView(palette.currentView, 0, 80, true, viewParams(palette.currentView));
   }
 
   function restoreSelectedRecentlyClosed() {
@@ -800,8 +524,7 @@
     if (!row) return;
     restoreClosedTab(row, true);
     const result = removeRecentlyClosedRow({ rows: palette.recentlyClosedRows, selectedIndex: palette.selectedIndex, sessionId: row.sessionId });
-    palette.recentlyClosedRows = result.rows;
-    palette.selectedIndex = result.selectedIndex;
+    paletteStore.commitRecentlyClosed(result);
   }
 
   async function drillSelectedParent() {
@@ -811,24 +534,23 @@
 
   async function toggleCurrentSort() {
     const result = toggleSortForView(palette.currentView, { domainsSortAlpha: palette.domainsSortAlpha, tabsByAgeNewestFirst: palette.tabsByAgeNewestFirst });
-    palette.domainsSortAlpha = result.domainsSortAlpha;
-    palette.tabsByAgeNewestFirst = result.tabsByAgeNewestFirst;
-    if (result.reloadView) await loadListView(result.reloadView, 0, 80, true, viewParams(result.reloadView));
+    paletteStore.setSortState(result);
+    if (result.reloadView) await paletteLoaders.loadListView(result.reloadView, 0, 80, true, viewParams(result.reloadView));
   }
 
   async function reloadWorkspaceFilteredView() {
     const reloadKind = workspaceReloadKind(palette.currentView);
     if (reloadKind === "list" && isNativeListView(palette.currentView)) {
-      await loadListView(palette.currentView);
+      await paletteLoaders.loadListView(palette.currentView);
       return;
     }
     if (reloadKind === "duplicates") {
-      await loadDuplicates();
+      await paletteLoaders.loadDuplicates();
     }
   }
 
   async function setWorkspaceFilter(nextFilter: string) {
-    palette.workspaceFilter = normalizeWorkspaceFilter(nextFilter);
+    paletteStore.setWorkspaceFilter(normalizeWorkspaceFilter(nextFilter));
     await reloadWorkspaceFilteredView();
   }
 
@@ -843,7 +565,7 @@
 
   function closeTabInfoDuplicate(row: TabIndexRow) {
     effects.closeTab(row.domId);
-    palette.tabInfoDuplicates = removeTabInfoDuplicate(palette.tabInfoDuplicates, row.domId);
+    paletteStore.replaceTabInfoDuplicates(removeTabInfoDuplicate(palette.tabInfoDuplicates, row.domId));
   }
 
   function closeOtherTabInfoDuplicates() {
@@ -854,7 +576,7 @@
         effects.closeTab(duplicate.domId);
       }
     }
-    palette.tabInfoDuplicates = keepOnlyTabInfoDuplicate(palette.tabInfoDuplicates, selfDomId);
+    paletteStore.replaceTabInfoDuplicates(keepOnlyTabInfoDuplicate(palette.tabInfoDuplicates, selfDomId));
   }
 
   function runDuplicatePromptAction(action: DuplicatePromptAction) {
@@ -878,19 +600,17 @@
 
   function resetToActions() {
     clearPreview();
-    paletteStore.clearLoadedViewData();
-    palette.currentView = "actions";
-    palette.currentPage = 1;
+    paletteStore.enterActionsView();
   }
 
   async function goBack() {
     resetToActions();
-    await loadActionsData();
+    await paletteLoaders.loadActionsData();
     await requestPanelResize("actions");
   }
 
   function moveSelection(delta: 1 | -1) {
-    palette.selectedIndex = nextSelectionIndex(selectionContext(), delta);
+    paletteStore.selectIndex(nextSelectionIndex(selectionContext(), delta));
     if (palette.currentView !== "actions" && !isNativePrefixView(palette.currentView)) {
       ensureListIndexLoaded(palette.selectedIndex);
     }
@@ -911,7 +631,7 @@
     const index = items.findIndex((item) => item.id === targetId);
     if (index < 0) return;
 
-    palette.selectedIndex = index;
+    paletteStore.selectIndex(index);
     scrollCurrentSelectionIntoView();
   }
 
@@ -941,8 +661,7 @@
     if (palette.currentView !== "actions" || pageCount <= 1) return;
     const nextPage = nextActionsPage(palette.currentPage, targetPage, pageCount);
     if (nextPage === null) return;
-    palette.currentPage = nextPage;
-    palette.selectedIndex = -1;
+    paletteStore.selectActionsPage(nextPage);
     clearPreview();
   }
 
@@ -956,7 +675,7 @@
       delta,
     });
     if (nextIndex !== null) {
-      palette.selectedIndex = nextIndex;
+      paletteStore.selectIndex(nextIndex);
       scrollCurrentSelectionIntoView();
     }
   }
@@ -1025,7 +744,7 @@
     if (!isNativeListView(palette.currentView)) return;
     const request = loadWindowForIndex({ index, offset: palette.offset, rowCount: palette.rows.length });
     if (request) {
-      void loadListView(palette.currentView, request.offset, request.limit, false)
+      void paletteLoaders.loadListView(palette.currentView, request.offset, request.limit, false)
         .then(scrollCurrentSelectionIntoView);
     }
   }
@@ -1055,7 +774,7 @@
   function loadVisibleRange(nextOffset: number, limit: number) {
     if (!isNativeListView(palette.currentView)) return;
     const request = visibleRangeRequest(nextOffset, limit);
-    loadListView(palette.currentView, request.offset, request.limit, false, viewParams(palette.currentView));
+    paletteLoaders.loadListView(palette.currentView, request.offset, request.limit, false, viewParams(palette.currentView));
   }
 
   function tabSubtitle(row: TabIndexRow) {
@@ -1180,7 +899,7 @@
   onMount(() => {
     const params = new URLSearchParams(location.search);
     const initialView = params.get("view") as ViewId | null;
-    const initialViewReady = initialView ? openNativeView(initialView, params) : loadActionsData();
+    const initialViewReady = initialView ? openNativeView(initialView, params) : paletteLoaders.loadActionsData();
 
     window.addEventListener("keydown", handleKeydown);
     pageAlive = true;

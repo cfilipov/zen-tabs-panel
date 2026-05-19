@@ -4,12 +4,23 @@ const assert = require("node:assert/strict");
 const { createZenTabIndex } = require("../src-svelte/experiment/tab-index.js");
 
 function fakeWindow() {
+  const listeners = new Map();
+  const tabContainer = {
+    addEventListener(name, handler) {
+      const handlers = listeners.get(name) || new Set();
+      handlers.add(handler);
+      listeners.set(name, handlers);
+    },
+    removeEventListener(name, handler) {
+      listeners.get(name)?.delete(handler);
+    },
+    dispatch(name, event) {
+      for (const handler of listeners.get(name) || []) handler(event);
+    },
+  };
   return {
     gBrowser: {
-      tabContainer: {
-        addEventListener() {},
-        removeEventListener() {},
-      },
+      tabContainer,
     },
     MutationObserver: class {
       observe() {}
@@ -47,13 +58,14 @@ function makeIndex(tabs) {
 }
 
 function makeIndexWithDeps(tabs) {
+  const win = fakeWindow();
   const calls = {
     readTabStats: 0,
     readTabValue: 0,
     ensureTabUuid: 0,
   };
   const index = createZenTabIndex({
-    getWin: fakeWindow,
+    getWin: () => win,
     getAllTabElements: () => tabs,
     readTabStats: () => {
       calls.readTabStats++;
@@ -71,7 +83,7 @@ function makeIndexWithDeps(tabs) {
     },
     recordInterval() {},
   });
-  return { index, calls };
+  return { index, calls, win };
 }
 
 function makeRichIndex(tabs) {
@@ -221,6 +233,53 @@ test("domain windows use lightweight tab reads for large tab sets", () => {
   assert.equal(calls.ensureTabUuid, 0);
   assert.equal(calls.readTabStats, 0);
   assert.equal(calls.readTabValue, 0);
+});
+
+test("tab index updates changed tab rows incrementally after the first build", () => {
+  const tabs = [
+    fakeTab("tab-1", "https://one.test", "ws-1", { title: "One", lastAccessed: 10 }),
+    fakeTab("tab-2", "https://two.test", "ws-1", { title: "Two", lastAccessed: 20 }),
+    fakeTab("tab-3", "https://three.test", "ws-1", { title: "Three", lastAccessed: 30 }),
+  ];
+  const { index, calls, win } = makeIndexWithDeps(tabs);
+
+  index.getWindow("last-visited", 0, 10, {});
+  assert.equal(calls.ensureTabUuid, 3);
+
+  tabs[1].label = "Two updated";
+  win.gBrowser.tabContainer.dispatch("TabAttrModified", { target: tabs[1] });
+
+  assert.equal(index.getRowTarget("tab-2").title, "Two updated");
+  assert.equal(calls.ensureTabUuid, 4);
+  assert.equal(calls.readTabStats, 4);
+});
+
+test("tab index reindexes cached rows incrementally after close and move", () => {
+  const tabs = [
+    fakeTab("tab-1", "https://one.test", "ws-1", { title: "One", lastAccessed: 10 }),
+    fakeTab("tab-2", "https://two.test", "ws-1", { title: "Two", lastAccessed: 20 }),
+    fakeTab("tab-3", "https://three.test", "ws-1", { title: "Three", lastAccessed: 30 }),
+  ];
+  const { index, calls, win } = makeIndexWithDeps(tabs);
+
+  index.getWindow("last-visited", 0, 10, {});
+  assert.equal(calls.ensureTabUuid, 3);
+
+  const closed = tabs.shift();
+  win.gBrowser.tabContainer.dispatch("TabClose", { target: closed });
+  assert.deepEqual(index.getRowsByDomIds(["tab-2", "tab-3"]).map((row) => [row.domId, row.index]), [
+    ["tab-2", 0],
+    ["tab-3", 1],
+  ]);
+  assert.equal(calls.ensureTabUuid, 3);
+
+  tabs.reverse();
+  win.gBrowser.tabContainer.dispatch("TabMove", { target: tabs[0] });
+  assert.deepEqual(index.getRowsByDomIds(["tab-3", "tab-2"]).map((row) => [row.domId, row.index]), [
+    ["tab-3", 0],
+    ["tab-2", 1],
+  ]);
+  assert.equal(calls.ensureTabUuid, 4);
 });
 
 test("tab index hides new-tab pages from recents and action previews", () => {

@@ -90,75 +90,176 @@ export function interpretVisibleInput(
   return node ? commandForNode(node, "view") : interpretStructuralKey(input, context);
 }
 
+type StructuralKeyResolver = {
+  id: string;
+  resolve: (input: Extract<InteractionInput, { kind: "key" }>, context: InteractionContext) => InteractionCommand;
+};
+
+const noCommand: InteractionCommand = { kind: "none" };
+
+function commandWhen(condition: boolean, command: InteractionCommand): InteractionCommand {
+  return condition ? command : noCommand;
+}
+
+function plainKey(input: Extract<InteractionInput, { kind: "key" }>) {
+  return !input.metaKey && !input.ctrlKey && !input.altKey;
+}
+
+function upperKey(input: Extract<InteractionInput, { kind: "key" }>) {
+  return input.key.toUpperCase();
+}
+
+function digitKeyIndex(input: Extract<InteractionInput, { kind: "key" }>) {
+  return /^[1-9]$/.test(input.key) ? Number(input.key) - 1 : null;
+}
+
+function shiftedDigitCodeIndex(input: Extract<InteractionInput, { kind: "key" }>) {
+  if (!input.shiftKey || !input.code?.startsWith("Digit")) return null;
+  const index = Number.parseInt(input.code.slice("Digit".length), 10) - 1;
+  return index >= 0 && index < 9 ? index : null;
+}
+
+const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
+  {
+    id: "cancel",
+    resolve: (input) => commandWhen(input.key === "Escape", { kind: "cancel" }),
+  },
+  {
+    id: "back",
+    resolve: (input, context) => commandWhen(input.key === "Backspace" && context.view !== "actions", { kind: "back" }),
+  },
+  {
+    id: "jump-section",
+    resolve: (input) => commandWhen(input.key === "Tab", { kind: "jump-section", delta: input.shiftKey ? -1 : 1 }),
+  },
+  {
+    id: "move-left-or-back",
+    resolve: (input, context) => {
+      if (input.key !== "ArrowLeft") return noCommand;
+      if (context.view === "actions" || context.view === "reorder-tabs" || context.view === "close-and-select") {
+        return { kind: "move-selection-directional", delta: -1 };
+      }
+      return { kind: "back" };
+    },
+  },
+  {
+    id: "move-right-or-drill",
+    resolve: (input, context) => {
+      if (input.key !== "ArrowRight") return noCommand;
+      if (context.view === "actions" || context.view === "reorder-tabs" || context.view === "close-and-select") {
+        return { kind: "move-selection-directional", delta: 1 };
+      }
+      return canDrillSelectionInView(context.view) ? { kind: "drill-selection" } : noCommand;
+    },
+  },
+  {
+    id: "cycle-page",
+    resolve: (input, context) => commandWhen(
+      input.key === " " && context.view === "actions",
+      { kind: "cycle-page", delta: input.shiftKey ? -1 : 1 },
+    ),
+  },
+  {
+    id: "move-down",
+    resolve: (input) => commandWhen(input.key === "ArrowDown", { kind: "move-selection", delta: 1 }),
+  },
+  {
+    id: "move-up",
+    resolve: (input) => commandWhen(input.key === "ArrowUp", { kind: "move-selection", delta: -1 }),
+  },
+  {
+    id: "activate-selection",
+    resolve: (input) => commandWhen(input.key === "Enter", { kind: "activate-selection" }),
+  },
+  {
+    id: "duplicate-prompt-action",
+    resolve: (input, context) => {
+      if (!plainKey(input) || input.shiftKey || context.view !== "duplicate-prompt") return noCommand;
+      const action = duplicatePromptActionForHotkey(upperKey(input));
+      return action ? { kind: "duplicate-prompt-action", action } : noCommand;
+    },
+  },
+  {
+    id: "navigation-history-delta",
+    resolve: (input, context) => {
+      if (!plainKey(input) || input.shiftKey || context.view !== "navigation") return noCommand;
+      if (upperKey(input) === "B") return { kind: "navigate-history-delta", delta: -1 };
+      if (upperKey(input) === "F") return { kind: "navigate-history-delta", delta: 1 };
+      return noCommand;
+    },
+  },
+  {
+    id: "close",
+    resolve: (input, context) => {
+      if (!plainKey(input) || upperKey(input) !== "W") return noCommand;
+      if (input.shiftKey && canCloseAllInView(context.view)) return { kind: "close-all" };
+      if (!input.shiftKey && isCloseableView(context.view)) return { kind: "close-selection" };
+      return noCommand;
+    },
+  },
+  {
+    id: "restore",
+    resolve: (input, context) => commandWhen(
+      plainKey(input) && !input.shiftKey && upperKey(input) === "O" && canRestoreInView(context.view),
+      { kind: "restore-selection-keep-open" },
+    ),
+  },
+  {
+    id: "sort",
+    resolve: (input, context) => commandWhen(
+      plainKey(input) && !input.shiftKey && upperKey(input) === "S" && isSortableView(context.view),
+      { kind: "toggle-sort" },
+    ),
+  },
+  {
+    id: "toggle-workspace-filter",
+    resolve: (input, context) => commandWhen(
+      plainKey(input) && !input.shiftKey && input.key === "0" && isWorkspaceFilterView(context.view),
+      { kind: "toggle-workspace-filter" },
+    ),
+  },
+  {
+    id: "filter-workspace-index",
+    resolve: (input, context) => {
+      if (!plainKey(input) || !isWorkspaceFilterView(context.view)) return noCommand;
+      const index = shiftedDigitCodeIndex(input);
+      return index === null ? noCommand : { kind: "filter-workspace-index", index };
+    },
+  },
+  {
+    id: "activate-row-index",
+    resolve: (input, context) => {
+      if (context.view === "actions" || input.shiftKey) return noCommand;
+      const index = digitKeyIndex(input);
+      return index === null ? noCommand : { kind: "activate-row", index };
+    },
+  },
+  {
+    id: "switch-workspace-index",
+    resolve: (input, context) => {
+      if (context.view !== "actions" || input.shiftKey) return noCommand;
+      const index = digitKeyIndex(input);
+      return index === null ? noCommand : { kind: "switch-workspace-index", index };
+    },
+  },
+  {
+    id: "open-extension-index",
+    resolve: (input, context) => {
+      if (context.view !== "actions") return noCommand;
+      const index = shiftedDigitCodeIndex(input);
+      return index === null ? noCommand : { kind: "open-extension-index", index };
+    },
+  },
+];
+
 export function interpretStructuralKey(
   input: InteractionInput,
   context: InteractionContext,
 ): InteractionCommand {
   if (input.kind !== "key") return { kind: "none" };
-  switch (input.key) {
-    case "Escape":
-      return { kind: "cancel" };
-    case "Backspace":
-      return context.view === "actions" ? { kind: "none" } : { kind: "back" };
-    case "Tab":
-      return { kind: "jump-section", delta: input.shiftKey ? -1 : 1 };
-    case "ArrowLeft":
-      if (context.view === "actions" || context.view === "reorder-tabs" || context.view === "close-and-select") {
-        return { kind: "move-selection-directional", delta: -1 };
-      }
-      return { kind: "back" };
-    case "ArrowRight":
-      if (context.view === "actions" || context.view === "reorder-tabs" || context.view === "close-and-select") {
-        return { kind: "move-selection-directional", delta: 1 };
-      }
-      return canDrillSelectionInView(context.view) ? { kind: "drill-selection" } : { kind: "none" };
-    case " ":
-      return context.view === "actions" ? { kind: "cycle-page", delta: input.shiftKey ? -1 : 1 } : { kind: "none" };
-    case "ArrowDown":
-      return { kind: "move-selection", delta: 1 };
-    case "ArrowUp":
-      return { kind: "move-selection", delta: -1 };
-    case "Enter":
-      return { kind: "activate-selection" };
-    default:
-      if (!input.metaKey && !input.ctrlKey && !input.altKey) {
-        const upper = input.key.toUpperCase();
-        if (context.view === "duplicate-prompt" && !input.shiftKey) {
-          const action = duplicatePromptActionForHotkey(upper);
-          if (action) return { kind: "duplicate-prompt-action", action };
-        }
-        if (context.view === "navigation" && !input.shiftKey) {
-          if (upper === "B") return { kind: "navigate-history-delta", delta: -1 };
-          if (upper === "F") return { kind: "navigate-history-delta", delta: 1 };
-        }
-        if (upper === "W") {
-          if (input.shiftKey && canCloseAllInView(context.view)) return { kind: "close-all" };
-          if (!input.shiftKey && isCloseableView(context.view)) return { kind: "close-selection" };
-        }
-        if (upper === "O" && !input.shiftKey && canRestoreInView(context.view)) {
-          return { kind: "restore-selection-keep-open" };
-        }
-        if (upper === "S" && !input.shiftKey && isSortableView(context.view)) {
-          return { kind: "toggle-sort" };
-        }
-        if (input.key === "0" && !input.shiftKey && isWorkspaceFilterView(context.view)) {
-          return { kind: "toggle-workspace-filter" };
-        }
-        if (input.shiftKey && input.code?.startsWith("Digit") && isWorkspaceFilterView(context.view)) {
-          const index = Number.parseInt(input.code.slice("Digit".length), 10) - 1;
-          if (index >= 0 && index < 9) return { kind: "filter-workspace-index", index };
-        }
-      }
-      if (context.view !== "actions" && /^[1-9]$/.test(input.key) && !input.shiftKey) {
-        return { kind: "activate-row", index: Number(input.key) - 1 };
-      }
-      if (context.view === "actions" && /^[1-9]$/.test(input.key) && !input.shiftKey) {
-        return { kind: "switch-workspace-index", index: Number(input.key) - 1 };
-      }
-      if (context.view === "actions" && input.shiftKey && input.code?.startsWith("Digit")) {
-        const index = Number.parseInt(input.code.slice("Digit".length), 10) - 1;
-        if (index >= 0 && index < 9) return { kind: "open-extension-index", index };
-      }
-      return { kind: "none" };
+  for (const resolver of structuralKeyResolvers) {
+    const command = resolver.resolve(input, context);
+    if (command.kind !== "none") return command;
   }
+  return noCommand;
 }
