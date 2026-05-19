@@ -522,7 +522,18 @@
         "async": true,
         "description": "Open the duplicate-prompt overlay for a URL detected by an external path (bg's webRequest blocker). Returns the existing tab's DOM id.",
         "parameters": [
-          { "name": "url", "type": "string" }
+          { "name": "url", "type": "string" },
+          { "name": "excludeTabId", "type": "integer", "optional": true }
+        ]
+      },
+      {
+        "name": "approveDuplicateNavigation",
+        "type": "function",
+        "async": true,
+        "description": "Approve the next duplicate navigation for a source tab so external duplicate detectors do not reopen the prompt.",
+        "parameters": [
+          { "name": "url", "type": "string" },
+          { "name": "sourceTabId", "type": "integer", "optional": true }
         ]
       },
       {

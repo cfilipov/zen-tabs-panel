@@ -124,6 +124,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
     }
 
+    function getNativeTabByExtId(tabId) {
+      try {
+        return context.extension.tabManager.get(tabId)?.nativeTab ?? null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function getNativeTabForBrowser(browser) {
+      if (!browser) return null;
+      const w = getWin();
+      if (!w?.gBrowser) return null;
+      for (const tab of w.gBrowser.tabs) {
+        if (tab.linkedBrowser === browser) return tab;
+      }
+      return null;
+    }
+
     function unwrapFavicon(url) {
       if (!url) return "";
       let s = String(url);
@@ -3337,6 +3355,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  if (content) content.__zenTabsPanelChordEngineGen = __GEN;\n" +
         "} catch(e){}\n" +
         "var __scope = {};\n" +
+        "var __duplicateInterceptEnabled = true;\n" +
+        "var __duplicateUrlCache = Object.create(null);\n" +
         "try {\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(bindingsURL) + ", __scope);\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(constantsURL) + ", __scope);\n" +
@@ -3418,6 +3438,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    __constants.CHORD_PREFIX_TIMEOUT_MS = ms;\n" +
         "  }\n" +
         "});\n" +
+        "addMessageListener('ZenDuplicate:SetIntercept', function(m){\n" +
+        "  if (__shutdown) return;\n" +
+        "  __duplicateInterceptEnabled = !!(m && m.data && m.data.enabled);\n" +
+        "  if (!__duplicateInterceptEnabled) __duplicateUrlCache = Object.create(null);\n" +
+        "});\n" +
+        "addMessageListener('ZenDuplicate:UrlStatus:' + __GEN, function(m){\n" +
+        "  if (__shutdown) return;\n" +
+        "  var d = (m && m.data) || {};\n" +
+        "  if (!d.url) return;\n" +
+        "  __duplicateUrlCache[d.url] = !!d.duplicate;\n" +
+        "});\n" +
         "var __tree = __scope.buildChordTree(__scope.ZEN_KEYBINDINGS, __scope.ZEN_WORKSPACE_DIGIT_CHORDS, __constants);\n" +
         "var __engine = __scope.createChordEngine({\n" +
         "  chordTree: __tree,\n" +
@@ -3452,11 +3483,60 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  try { e.preventDefault(); } catch(_) {}\n" +
         "  try { e.stopPropagation(); } catch(_) {}\n" +
         "}\n" +
+        "function linkHrefFromEvent(e){\n" +
+        "  try {\n" +
+        "    var n = e && e.target;\n" +
+        "    while (n) {\n" +
+        "      if (n.nodeType === 1 && typeof n.getAttribute === 'function' && n.getAttribute('href')) {\n" +
+        "        if (typeof n.href === 'string' && n.href) return { url: String(n.href), node: n };\n" +
+        "        return { url: String(new content.URL(n.getAttribute('href'), content.location.href).href), node: n };\n" +
+        "      }\n" +
+        "      n = n.parentNode;\n" +
+        "    }\n" +
+        "  } catch(_) {}\n" +
+        "  return null;\n" +
+        "}\n" +
+        "function isPlainSameTabLinkClick(e, link){\n" +
+        "  if (!e || !link || !link.node) return false;\n" +
+        "  if (e.defaultPrevented) return false;\n" +
+        "  if (e.button !== 0) return false;\n" +
+        "  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return false;\n" +
+        "  var target = '';\n" +
+        "  try { target = String(link.node.getAttribute('target') || '').toLowerCase(); } catch(_) {}\n" +
+        "  if (target && target !== '_self') return false;\n" +
+        "  try { if (link.node.hasAttribute && link.node.hasAttribute('download')) return false; } catch(_) {}\n" +
+        "  if (!/^https?:/.test(link.url)) return false;\n" +
+        "  try {\n" +
+        "    var dest = new content.URL(link.url);\n" +
+        "    var here = new content.URL(content.location.href);\n" +
+        "    if (dest.href === here.href) return false;\n" +
+        "    if (dest.origin === here.origin && dest.pathname === here.pathname && dest.search === here.search && dest.hash) return false;\n" +
+        "  } catch(_) {}\n" +
+        "  return true;\n" +
+        "}\n" +
+        "function onDuplicateLinkMouseover(e){\n" +
+        "  if (__shutdown || !__duplicateInterceptEnabled || isExtensionPage()) return;\n" +
+        "  var link = linkHrefFromEvent(e);\n" +
+        "  if (!link || !/^https?:/.test(link.url)) return;\n" +
+        "  try { sendAsyncMessage('ZenDuplicate:CheckUrl', tag({ url: link.url })); } catch(_) {}\n" +
+        "}\n" +
+        "function onDuplicateLinkClick(e){\n" +
+        "  if (__shutdown || !__duplicateInterceptEnabled || isExtensionPage()) return;\n" +
+        "  var link = linkHrefFromEvent(e);\n" +
+        "  if (!isPlainSameTabLinkClick(e, link)) return;\n" +
+        "  if (!__duplicateUrlCache[link.url]) return;\n" +
+        "  try { e.preventDefault(); } catch(_) {}\n" +
+        "  try { e.stopImmediatePropagation(); } catch(_) {}\n" +
+        "  try { e.stopPropagation(); } catch(_) {}\n" +
+        "  try { sendAsyncMessage('ZenDuplicate:ContentLinkClick', tag({ url: link.url })); } catch(_) {}\n" +
+        "}\n" +
         "function attach(){\n" +
         "  try {\n" +
         "    if (__shutdown) return;\n" +
         "    if (!content) return;\n" +
         "    try { content.removeEventListener('keydown', blockDefaultGroup, { capture: true }); } catch(_) {}\n" +
+        "    try { content.removeEventListener('mouseover', onDuplicateLinkMouseover, { capture: true }); } catch(_) {}\n" +
+        "    try { content.removeEventListener('click', onDuplicateLinkClick, { capture: true }); } catch(_) {}\n" +
         "    // Extension pages skip engine attachment — they have their own keybindings.\n" +
         "    // The same remote browser can be reused after a regular page, so also\n" +
         "    // detach any blocker/engine left from the prior document.\n" +
@@ -3465,6 +3545,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    // Detach-then-attach the default-group blocker so duplicate\n" +
         "    // DOMWindowCreated firings don't stack listeners.\n" +
         "    content.addEventListener('keydown', blockDefaultGroup, { capture: true });\n" +
+        "    content.addEventListener('mouseover', onDuplicateLinkMouseover, { capture: true });\n" +
+        "    content.addEventListener('click', onDuplicateLinkClick, { capture: true });\n" +
         "  } catch (err) { /* ignore */ }\n" +
         "}\n" +
         "attach();\n" +
@@ -3486,6 +3568,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  try { if (content && content.__zenTabsPanelChordEngineGen === __GEN) content.__zenTabsPanelChordEngineGen = null; } catch(e){}\n" +
         "  try { __engine.detach(); } catch(e){}\n" +
         "  try { content && content.removeEventListener('keydown', blockDefaultGroup, { capture: true }); } catch(e){}\n" +
+        "  try { content && content.removeEventListener('mouseover', onDuplicateLinkMouseover, { capture: true }); } catch(e){}\n" +
+        "  try { content && content.removeEventListener('click', onDuplicateLinkClick, { capture: true }); } catch(e){}\n" +
         "});\n" +
         "addMessageListener('ZenChord:AddChord', function(m){\n" +
         "  try {\n" +
@@ -3587,6 +3671,44 @@ this.zenWorkspaces = class extends ExtensionAPI {
         } catch (e) {}
       }
     }
+    function onDuplicateCheckUrl(m) {
+      if (!isCurrentGen(m)) return;
+      const url = m?.data?.url;
+      if (!url || !m.target?.messageManager) return;
+      let duplicate = false;
+      try {
+        if (duplicateTabInterceptEnabled && /^https?:/.test(url)) {
+          const sourceTab = getNativeTabForBrowser(m.target);
+          duplicate = !!urlMatchesAnyOpenTab(url, sourceTab);
+        }
+      } catch (e) {}
+      try {
+        m.target.messageManager.sendAsyncMessage("ZenDuplicate:UrlStatus:" + CHORD_GENERATION, {
+          url,
+          duplicate,
+        });
+      } catch (e) {}
+    }
+    function onDuplicateContentLinkClick(m) {
+      if (!isCurrentGen(m)) return;
+      const url = m?.data?.url;
+      if (!duplicateTabInterceptEnabled || !url || !/^https?:/.test(url)) return;
+      const sourceTab = getNativeTabForBrowser(m.target);
+      const sourceExtId = getExtTabId(sourceTab);
+      const existing = urlMatchesAnyOpenTab(url, sourceTab);
+      if (!existing || typeof sourceExtId !== "number") return;
+      try {
+        pendingDuplicate = { url, where: "current", params: {}, domId: existing.id };
+        if (paletteRequestFire) {
+          paletteRequestFire.async({
+            kind: "duplicate-content-link",
+            tabId: sourceExtId,
+            url,
+            dupDomId: existing.id,
+          });
+        }
+      } catch (e) {}
+    }
     Services.mm.addMessageListener("ZenChord:Action",      onContentAction);
     Services.mm.addMessageListener("ZenChord:Armed",       onContentArmed);
     Services.mm.addMessageListener("ZenChord:OpenView",    onContentOpenView);
@@ -3594,6 +3716,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     Services.mm.addMessageListener("ZenChord:BridgeKey",   onContentBridgeKey);
     Services.mm.addMessageListener("ZenChord:StateChange", onContentStateChange);
     Services.mm.addMessageListener("ZenChord:Hello",       onContentHello);
+    Services.mm.addMessageListener("ZenDuplicate:CheckUrl", onDuplicateCheckUrl);
+    Services.mm.addMessageListener("ZenDuplicate:ContentLinkClick", onDuplicateContentLinkClick);
 
     // Teardown helpers used by callOnClose.
     //
@@ -3693,6 +3817,47 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let origOpenLinkIn = null;
     let pendingDuplicate = null; // { url, where, params }
     let duplicateTabInterceptEnabled = true;
+    const approvedDuplicateNavigations = [];
+    const DUPLICATE_APPROVAL_TTL_MS = 5000;
+
+    function openDuplicatePromptOverlay(url, domId) {
+      revealDeferred = true;
+      createFreshOverlayForDirectOpen("duplicate-prompt", { url, domId });
+      scheduleExplicitViewReveal("duplicate-prompt");
+    }
+
+    function pruneDuplicateApprovals(now) {
+      for (let i = approvedDuplicateNavigations.length - 1; i >= 0; i--) {
+        if (approvedDuplicateNavigations[i].until <= now) {
+          approvedDuplicateNavigations.splice(i, 1);
+        }
+      }
+    }
+
+    function approveDuplicateNavigationInternal(url, sourceTab) {
+      if (!url) return;
+      const now = Date.now();
+      pruneDuplicateApprovals(now);
+      approvedDuplicateNavigations.push({
+        url,
+        domId: sourceTab?.id || null,
+        until: now + DUPLICATE_APPROVAL_TTL_MS,
+      });
+    }
+
+    function consumeDuplicateApproval(url, sourceTab) {
+      if (!url) return false;
+      const now = Date.now();
+      pruneDuplicateApprovals(now);
+      const sourceDomId = sourceTab?.id || null;
+      const index = approvedDuplicateNavigations.findIndex((approval) =>
+        approval.url === url &&
+        (!approval.domId || !sourceDomId || approval.domId === sourceDomId)
+      );
+      if (index < 0) return false;
+      approvedDuplicateNavigations.splice(index, 1);
+      return true;
+    }
 
     function urlMatchesAnyOpenTab(url, excludeTab) {
       const w = getWin();
@@ -3740,13 +3905,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             if (existing) {
               pendingDuplicate = { url, where, params, domId: existing.id };
               try {
-                createOverlay("duplicate-prompt", { url, domId: existing.id });
-                // Defer reveal until the popup signals POPUP_READY so the
-                // panel doesn't appear at the previous view's size and
-                // then jump-shrink once the duplicate-prompt's measured
-                // height comes back. takeChordBridgeBuffer reveals when
-                // popupReady transitions true with revealDeferred set.
-                revealDeferred = true;
+                openDuplicatePromptOverlay(url, existing.id);
               } catch (e) {}
               return null;
             }
@@ -3796,6 +3955,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       try { Services.mm.removeMessageListener("ZenChord:BridgeKey",   onContentBridgeKey); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:StateChange", onContentStateChange); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:Hello",       onContentHello); } catch (e) {}
+      try { Services.mm.removeMessageListener("ZenDuplicate:CheckUrl", onDuplicateCheckUrl); } catch (e) {}
+      try { Services.mm.removeMessageListener("ZenDuplicate:ContentLinkClick", onDuplicateContentLinkClick); } catch (e) {}
     }
 
     installChromeEngine();
@@ -3836,7 +3997,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         async getTabWorkspaceId(tabId) {
           try {
-            const nativeTab = context.extension.tabManager.get(tabId)?.nativeTab;
+            const nativeTab = getNativeTabByExtId(tabId);
             if (!nativeTab) return null;
             return nativeTab.getAttribute("zen-workspace-id") || null;
           } catch (e) {
@@ -5136,26 +5297,34 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async duplicateOpenAnyway() {
           if (!pendingDuplicate || !origOpenLinkIn) { destroyOverlay(); return false; }
           const { url, where, params } = pendingDuplicate;
+          const w = getWin();
+          approveDuplicateNavigationInternal(url, where === "current" ? (w?.gBrowser?.selectedTab || null) : null);
           pendingDuplicate = null;
           destroyOverlay();
           try { origOpenLinkIn.call(null, url, where, params); return true; }
           catch (e) { return false; }
         },
 
-        // Pop the duplicate-prompt overlay for a URL detected by some
-        // path other than openLinkIn (e.g. bg's webRequest blocker for
-        // plain same-tab link clicks). Caller owns the "switch / open
-        // anyway / cancel" handling on their side — chrome only renders
-        // the prompt. Returns the existing-tab dom id so the caller can
-        // wire up the Switch action without re-doing the URL lookup.
-        async showDuplicatePrompt(url) {
-          const existing = urlMatchesAnyOpenTab(url, null);
+        // Pop the duplicate-prompt overlay for a URL detected by some path
+        // other than openLinkIn (e.g. bg's webRequest blocker for plain
+        // same-tab link clicks). Caller owns the "switch / open anyway /
+        // cancel" handling on their side — chrome only renders the prompt.
+        // Returns the existing-tab dom id so the caller can wire up the
+        // Switch action without re-doing the URL lookup.
+        async showDuplicatePrompt(url, excludeTabId) {
+          const excludeTab = typeof excludeTabId === "number" ? getNativeTabByExtId(excludeTabId) : null;
+          if (consumeDuplicateApproval(url, excludeTab)) return null;
+          const existing = urlMatchesAnyOpenTab(url, excludeTab);
           if (!existing) return null;
           try {
-            createOverlay("duplicate-prompt", { url, domId: existing.id });
-            revealDeferred = true;
+            openDuplicatePromptOverlay(url, existing.id);
           } catch (e) {}
           return existing.id;
+        },
+
+        async approveDuplicateNavigation(url, sourceTabId) {
+          const sourceTab = typeof sourceTabId === "number" ? getNativeTabByExtId(sourceTabId) : null;
+          approveDuplicateNavigationInternal(url, sourceTab);
         },
 
         // Replay the last engine-fired chord. Returns true if something
@@ -5366,6 +5535,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // prompt that catches the click/navigation.
         async setDuplicateTabIntercept(enabled) {
           duplicateTabInterceptEnabled = !!enabled;
+          try {
+            Services.mm.broadcastAsyncMessage("ZenDuplicate:SetIntercept", {
+              enabled: duplicateTabInterceptEnabled,
+            });
+          } catch (e) {}
         },
 
         // User-facing single delay for chord timeouts. Background

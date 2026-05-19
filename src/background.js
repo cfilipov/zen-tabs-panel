@@ -680,6 +680,25 @@ async function replayLastChord() {
 async function handleChordResult(result) {
   if (result && result.kind === "chord-action") {
     await runChordAction(result.actionId);
+  } else if (result && result.kind === "duplicate-content-link") {
+    if (typeof result.tabId !== "number" || typeof result.url !== "string" || typeof result.dupDomId !== "string") {
+      return;
+    }
+    webRequestPendingDuplicate = {
+      tabId: result.tabId,
+      url: result.url,
+      dupDomId: result.dupDomId,
+    };
+    try {
+      const confirmedDomId = await api.showDuplicatePrompt(result.url, result.tabId);
+      if (!confirmedDomId) {
+        webRequestPendingDuplicate = null;
+      } else {
+        webRequestPendingDuplicate.dupDomId = confirmedDomId;
+      }
+    } catch (e) {
+      webRequestPendingDuplicate = null;
+    }
   }
 }
 
@@ -719,7 +738,7 @@ api.onPaletteRequest.addListener(handleChordResult);
 // new tab opens then we cancel.
 // ---------------------------------------------------------------------------
 
-let webRequestPendingDuplicate = null; // { tabId, url, dupExtId }
+let webRequestPendingDuplicate = null; // { tabId, url, dupDomId }
 // One-shot pass for the next webRequest matching {tabId,url}. Set by
 // "Open anyway" so the resulting browser.tabs.update doesn't re-trip
 // the duplicate detector and re-pop the prompt forever.
@@ -731,9 +750,9 @@ let allowOnce = null; // { tabId, url }
 // dismiss the overlay.
 async function handleDuplicateSwitch() {
   if (webRequestPendingDuplicate) {
-    const { dupExtId } = webRequestPendingDuplicate;
+    const { dupDomId } = webRequestPendingDuplicate;
     webRequestPendingDuplicate = null;
-    try { await browser.tabs.update(dupExtId, { active: true }); } catch (e) {}
+    try { await api.activateTabByDomId(dupDomId); } catch (e) {}
     await api.hidePalette();
     return;
   }
@@ -745,6 +764,7 @@ async function handleDuplicateOpenAnyway() {
     const { tabId, url } = webRequestPendingDuplicate;
     webRequestPendingDuplicate = null;
     allowOnce = { tabId, url };
+    try { await api.approveDuplicateNavigation(url, tabId); } catch (e) {}
     try { await browser.tabs.update(tabId, { url }); } catch (e) { allowOnce = null; }
     await api.hidePalette();
     return;
@@ -776,15 +796,14 @@ browser.webRequest.onBeforeRequest.addListener(
           return {};
         }
         if (navigatingTab.url === details.url) return {};
-        const allTabs = await browser.tabs.query({});
-        const dup = allTabs.find((t) => t.id !== details.tabId && t.url === details.url);
-        if (!dup) return {};
+
+        const dupDomId = await api.showDuplicatePrompt(details.url, details.tabId);
+        if (!dupDomId) return {};
         webRequestPendingDuplicate = {
           tabId: details.tabId,
           url: details.url,
-          dupExtId: dup.id,
+          dupDomId,
         };
-        try { api.showDuplicatePrompt(details.url).catch(() => {}); } catch (e) {}
         return { cancel: true };
       } catch (e) {
         return {};
