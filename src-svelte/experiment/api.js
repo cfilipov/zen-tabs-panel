@@ -424,6 +424,27 @@ this.zenWorkspaces = class extends ExtensionAPI {
       } catch (e) {}
     }
 
+    function markTabNew(tab) {
+      if (!tab) return false;
+      try {
+        const apply = () => {
+          if (tab.isConnected === false) return;
+          ensureTabUuid(tab);
+          writeTabValue(tab, "panelUnread", true);
+          tab.setAttribute("unread", "true");
+        };
+        apply();
+        // sessions.restore can fire activation bookkeeping immediately after
+        // returning. Re-apply once on the next tick so restored tabs remain
+        // marked as new even though they briefly become the active tab.
+        const w = getWin();
+        if (w) w.setTimeout(apply, 100);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
     function onTabSelect(tab) {
       try { beginFocus(tab); } catch (e) {}
     }
@@ -873,9 +894,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // applyChordDelay below mutates the same object and broadcasts the
     // new value to content frame scripts.
     const CHORD_CONSTANTS = {
-      CHORD_ROOT_TIMEOUT_MS:   engineScope.CHORD_ROOT_TIMEOUT_MS   || 350,
-      CHORD_PREFIX_TIMEOUT_MS: engineScope.CHORD_PREFIX_TIMEOUT_MS || 350,
-      CHORD_REVEAL_TIMEOUT_MS: engineScope.CHORD_REVEAL_TIMEOUT_MS || 350,
+      CHORD_ROOT_TIMEOUT_MS:   engineScope.CHORD_ROOT_TIMEOUT_MS   || 500,
+      CHORD_PREFIX_TIMEOUT_MS: engineScope.CHORD_PREFIX_TIMEOUT_MS || 500,
+      CHORD_REVEAL_TIMEOUT_MS: engineScope.CHORD_REVEAL_TIMEOUT_MS || 500,
     };
     // Current chord delay (for getPaletteURL's ?delay=N param, etc.).
     let chordDelayMs = CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS;
@@ -2409,8 +2430,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // The popup arms its own reveal-on-pause timer on every keydown
       // (see armPopupRevealTimer in keyboard.js). With the warm popup
       // there's no pagehide to auto-clear that timer when we soft-hide,
-      // so a stale timer from the now-dismissed menu would fire ~350ms
-      // later, race past revealBlocked once the next chord arm clears
+      // so a stale timer from the now-dismissed menu would fire after the
+      // chord delay, race past revealBlocked once the next chord arm clears
       // it, and re-reveal the just-armed popup at the wrong moment.
       // Tell the popup to clear its timer right now.
       const _br = w.document.getElementById(BROWSER_ID);
@@ -2829,8 +2850,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Dual-engine race: chrome + content engines arm in parallel for
       // each chord arm and both run independent timers. When both fire
       // for the same open-view (typically cmd+. + pause: each engine's
-      // root timer pops at ~350ms), the first one through this function
-      // wins. The second's IPC arrives slightly later — silently drop it
+      // root timer pops at the configured chord delay), the first one through
+      // this function wins. The second's IPC arrives slightly later — silently drop it
       // so we don't destroy-and-recreate the just-revealed popup or
       // double-fire the reveal animation.
       if (bridgingEngineKind != null) return;
@@ -3156,7 +3177,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         debugChordTrace("chrome-on-state-change", { snapshot });
         // Chrome engine descended into a prefix. Reset content engines
         // (armed in parallel via armChord) so their stale root timers
-        // don't fire ~250ms later and overwrite the prefix prerender
+        // don't fire one chord-delay later and overwrite the prefix prerender
         // with the default actions view. Mirror of the
         // resetChromeEngineIfArmed call in onContentStateChange.
         try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
@@ -3386,8 +3407,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // Mutable constants object — chrome's setChordDelay broadcasts
         // ZenChord:SetDelay to mutate these at runtime.
         "var __constants = {\n" +
-        "  CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS || 350,\n" +
-        "  CHORD_PREFIX_TIMEOUT_MS: __scope.CHORD_PREFIX_TIMEOUT_MS || 350,\n" +
+        "  CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS || 500,\n" +
+        "  CHORD_PREFIX_TIMEOUT_MS: __scope.CHORD_PREFIX_TIMEOUT_MS || 500,\n" +
         "};\n" +
         "addMessageListener('ZenChord:SetDelay', function(m){\n" +
         "  if (__shutdown) return;\n" +
@@ -3548,7 +3569,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!isCurrentGen(m)) return;
       // Content engine descended into a prefix. The chrome engine
       // (armed in parallel via armChord) needs to be reset; otherwise
-      // its 250ms root timer fires before the content engine's 300ms
+      // its root timer fires before the content engine's arm arrives
       // prefix timer and pops the default actions view before the
       // intended prefix view can take over.
       resetChromeEngineIfArmed();
@@ -4057,8 +4078,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
             }
             // Each undoCloseTab(0) restores the head and shifts the list,
             // so we always pop index 0 `count` times.
+            const before = new Set(getAllTabElements());
             for (let i = 0; i < count; i++) {
-              SS.undoCloseTab(w, 0);
+              const restored = SS.undoCloseTab(w, 0);
+              if (restored) markTabNew(restored);
+            }
+            for (const tab of getAllTabElements()) {
+              if (!before.has(tab)) markTabNew(tab);
             }
             return true;
           } catch (e) {
@@ -4696,6 +4722,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
             try { tab.removeAttribute("unread"); } catch (e) {}
           }
           return true;
+        },
+
+        async markTabNewByExtId(extId) {
+          ensureTabTracking();
+          const w = getWin();
+          if (!w || !w.gBrowser) return false;
+          let tab = null;
+          try {
+            tab = context.extension.tabManager.get(extId)?.nativeTab || null;
+          } catch (e) {}
+          return markTabNew(tab);
         },
 
         async pauseFocusTracking() {

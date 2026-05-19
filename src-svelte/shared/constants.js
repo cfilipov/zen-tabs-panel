@@ -199,9 +199,9 @@ this.MSG = Object.freeze({
 // Initial defaults — overridden at runtime by the chordDelayMs setting
 // (see api.js applyChordDelay, the ZenChord:SetDelay IPC for frame
 // scripts, and the popup's reading of ?delay=N from its URL).
-this.CHORD_ROOT_TIMEOUT_MS = 350;
-this.CHORD_PREFIX_TIMEOUT_MS = 350;
-this.CHORD_REVEAL_TIMEOUT_MS = 350;
+this.CHORD_ROOT_TIMEOUT_MS = 500;
+this.CHORD_PREFIX_TIMEOUT_MS = 500;
+this.CHORD_REVEAL_TIMEOUT_MS = 500;
 
 // Default values for browser.storage.local. Pass to storage.get() to read
 // any subset; the keys used as `get`'s argument also act as the schema.
@@ -228,7 +228,7 @@ this.STORAGE_DEFAULTS = Object.freeze({
   // "show the menu immediately on arm" — the menu itself becomes the
   // chord HUD. Pushed to the chrome engine, content engines (via
   // ZenChord:SetDelay), and the popup (via ?delay=N URL param).
-  chordDelayMs: 350,
+  chordDelayMs: 500,
   // Intercept link clicks that would open / navigate to a URL already
   // open in another tab, and show a Switch / Open anyway / Cancel
   // prompt. The orange URL pill always shows on hover regardless;

@@ -458,6 +458,15 @@ function getRecentlyClosed() {
   );
 }
 
+async function restoreClosedSession(sessionId) {
+  const restored = await browser.sessions.restore(sessionId).catch(() => null);
+  const tabId = restored && restored.tab && restored.tab.id;
+  if (typeof tabId === "number") {
+    await api.markTabNewByExtId(tabId).catch(() => {});
+  }
+  return restored;
+}
+
 const ACTIONS = Object.freeze({
   [MSG.OPEN_OPTIONS]:                     ()  => openOptions(),
   [MSG.REPLAY_LAST_CHORD]:                ()  => replayLastChord(),
@@ -483,7 +492,7 @@ const ACTIONS = Object.freeze({
   [MSG.GO_FORWARD_IN_TAB]:                ()  => api.goForwardInTab(),
   [MSG.GO_TO_NEXT_VERTICAL_TAB]:          ()  => api.goToNextVerticalTab(),
   [MSG.GO_TO_PREV_VERTICAL_TAB]:          ()  => api.goToPrevVerticalTab(),
-  [MSG.RESTORE_CLOSED_TAB]:               (m) => browser.sessions.restore(m.sessionId).catch(() => {}),
+  [MSG.RESTORE_CLOSED_TAB]:               (m) => restoreClosedSession(m.sessionId),
   [MSG.NAVIGATE_TO_HISTORY_INDEX]:        (m) => api.navigateToHistoryIndex(m.index),
   [MSG.SWITCH_WORKSPACE]:                 (m) => api.switchTo(m.workspaceId),
   [MSG.MOVE_SELECTED_TABS_TO_WORKSPACE]:  (m) => api.moveSelectedTabsToWorkspace(m.workspaceId),
@@ -598,7 +607,7 @@ const SYNC_HANDLERS = Object.freeze({
   [MSG.CLEAR_PREVIEW]:   ()  => api.clearPreview(),
   [MSG.CLOSE_TAB]:       (m) => api.closeTabByDomId(m.domId),
   [MSG.RESTORE_CLOSED_TAB_KEEP_OPEN]: async (m) => {
-    await browser.sessions.restore(m.sessionId).catch(() => {});
+    await restoreClosedSession(m.sessionId);
     // sessions.restore activates the new tab and steals focus; bring
     // focus back to the popup <browser> so arrow keys keep navigating
     // the menu and the user can chain more restores.

@@ -19,7 +19,7 @@ export function createPaletteRevealController(options: PaletteRevealOptions): Pa
   const setTimer = options.setTimeout ?? ((callback: () => void, delay: number) => setTimeout(callback, delay));
   const clearTimer = options.clearTimeout ?? ((timer: unknown) => clearTimeout(timer as ReturnType<typeof setTimeout>));
   let popupInst: number | null = null;
-  let popupChordDelay = 350;
+  let popupChordDelay = 500;
   let pageAlive = true;
   let popupRevealTimer: unknown | null = null;
 
