@@ -20,6 +20,7 @@ export type WarmRearmPayload = {
   inst?: number;
   view?: ViewId;
   params?: Record<string, unknown>;
+  skipAnimations?: boolean;
 };
 
 export type ForceReadyPayload = {

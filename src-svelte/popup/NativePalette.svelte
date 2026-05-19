@@ -121,6 +121,7 @@
   const paletteStore = createNativePaletteState();
   const palette = paletteStore.state;
   let pageAlive = true;
+  let skipAnimations = $state(new URLSearchParams(location.search).get("skipAnimations") === "1");
   let terminalCommandDispatched = false;
   let terminalCommandDispatchedAt = 0;
   const revealController = createPaletteRevealController({
@@ -879,9 +880,10 @@
     await drainBridge(reply);
   }
 
-  async function handleWarmRearm(data: { inst?: number; view?: ViewId; params?: Record<string, unknown> }) {
+  async function handleWarmRearm(data: { inst?: number; view?: ViewId; params?: Record<string, unknown>; skipAnimations?: boolean }) {
     const generation = bridgeDispatch.resetForWarmRearm();
     revealController.updateInst(data.inst);
+    skipAnimations = !!data.skipAnimations;
     clearPreview();
 
     const view = data.view || "actions";
@@ -966,6 +968,7 @@
 >
   <ViewHost
     {palette}
+    {skipAnimations}
     actionSections={actionSectionsForRender}
     prefixItems={prefixItemsForRender}
     {tabRows}

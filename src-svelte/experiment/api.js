@@ -1038,6 +1038,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Current chord-delay setting — popup's keyboard.js reads it and
       // overrides its reveal-timer duration.
       url += "&delay=" + chordDelayMs;
+      url += "&skipAnimations=" + (skipOverlayAnimations ? "1" : "0");
       if (view) url += "&view=" + encodeURIComponent(view);
       if (params) {
         for (const [k, v] of Object.entries(params)) {
@@ -1057,6 +1058,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function getViewSize(view) {
       return VIEW_SIZES[view] || VIEW_SIZES["actions"];
+    }
+
+    function panelSizeTransition() {
+      return skipOverlayAnimations ? "none" : "width 0.15s ease-out, height 0.15s ease-out";
     }
 
     function browserMessageManager(br) {
@@ -1094,7 +1099,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // width/height changes animate in sync with the panel's transition
       // — without it, the browser snaps to the new size on the first
       // navigation and the panel arrives late.
-      br.style.cssText = "width:" + size.width + "px;height:" + size.height + "px;border:none;opacity:1;transition:width 0.15s ease-out, height 0.15s ease-out";
+      const transition = skipOverlayAnimations ? "none" : "width 0.15s ease-out, height 0.15s ease-out";
+      br.style.cssText = "width:" + size.width + "px;height:" + size.height + "px;border:none;opacity:1;transition:" + transition;
       return br;
     }
 
@@ -1581,8 +1587,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let interceptEnabled = true;
     // Default matches STORAGE_DEFAULTS.skipOverlayAnimations (false —
     // animations on). Background pushes the persisted value via
-    // setSkipOverlayAnimations after init. Used by createOverlay's
-    // reveal path and destroyOverlay's dismiss path.
+    // setSkipOverlayAnimations after init. Used by the overlay, panel
+    // resize, and popup view-transition paths.
     let skipOverlayAnimations = false;
     // Default matches STORAGE_DEFAULTS.dimBackdrop (true). When false,
     // the overlay backdrop is transparent — the underlying page stays
@@ -1788,10 +1794,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
         // Restore size transitions after the hidden first measurement has
         // snapped into place. Subsequent in-popup view changes should still
-        // animate smoothly.
+        // animate smoothly unless the user opted out of animations.
         w.requestAnimationFrame(() => {
-          panel.style.transition = "width 0.15s ease-out, height 0.15s ease-out";
-          br.style.transition = "width 0.15s ease-out, height 0.15s ease-out";
+          const transition = panelSizeTransition();
+          panel.style.transition = transition;
+          br.style.transition = transition;
         });
         br.focus();
       };
@@ -1881,14 +1888,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
           overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
           if (panel) panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
         }
-        // Restore the width/height transition that rearm suppressed —
-        // in-popup sub-menu navigation still wants the smooth resize.
+        // Restore the width/height transition that rearm suppressed,
+        // unless the user opted out of palette animations.
         // Defer one frame so any final size assignment from the rearm
         // window definitively snaps without interpolation.
         if (panel) {
           const w2 = getWin();
           if (w2) w2.requestAnimationFrame(() => {
-            panel.style.transition = "width 0.15s ease-out, height 0.15s ease-out";
+            panel.style.transition = panelSizeTransition();
+            if (br) br.style.transition = panelSizeTransition();
           });
         }
         if (br) br.focus();
@@ -1914,6 +1922,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             inst: popupInstance,
             view: view || null,
             params: params || null,
+            skipAnimations: skipOverlayAnimations,
           });
         } catch (e) {}
       }
@@ -1950,7 +1959,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
         if (panel) {
           w.requestAnimationFrame(() => {
-            panel.style.transition = "width 0.15s ease-out, height 0.15s ease-out";
+            const transition = panelSizeTransition();
+            panel.style.transition = transition;
+            if (br) br.style.transition = transition;
           });
         }
         if (br) br.focus();
@@ -2383,6 +2394,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           inst: popupInstance,
           view: null,
           params: null,
+          skipAnimations: skipOverlayAnimations,
         });
       } catch (e) {}
     }
@@ -5276,11 +5288,28 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         },
 
-        // Toggle overlay reveal/dismiss animations. Background pushes
-        // this from the skipOverlayAnimations setting. Sub-menu cross-
-        // fades inside an open palette are unaffected.
+        // Toggle palette reveal/dismiss, resize, and in-popup view-change
+        // animations. Background pushes this from the skipOverlayAnimations
+        // setting.
         async setSkipOverlayAnimations(skip) {
           skipOverlayAnimations = !!skip;
+          const w = getWin();
+          const panel = w && w.document.getElementById(PANEL_ID);
+          const br = w && w.document.getElementById(BROWSER_ID);
+          const transition = panelSizeTransition();
+          if (panel) panel.style.transition = transition;
+          if (br) br.style.transition = transition;
+          const mm = browserMessageManager(br);
+          if (mm) {
+            try {
+              mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
+                inst: popupInstance,
+                view: currentViewName || "actions",
+                params: currentViewParams || {},
+                skipAnimations: skipOverlayAnimations,
+              });
+            } catch (e) {}
+          }
         },
 
         // Toggle the backdrop dim behind the palette. Background pushes

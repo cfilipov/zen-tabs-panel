@@ -28,6 +28,7 @@
 
   type Props = {
     palette: Readonly<NativePaletteState>;
+    skipAnimations?: boolean;
     actionSections: ActionSection[];
     prefixItems: ActionMenuItem[];
     tabRows: TabIndexRow[];
@@ -61,6 +62,7 @@
 
   let {
     palette,
+    skipAnimations = false,
     actionSections,
     prefixItems,
     tabRows,
@@ -109,7 +111,7 @@
 </script>
 
 {#key palette.currentView}
-  <div class="view-frame" in:fade={{ duration: 120 }}>
+  <div class="view-frame" data-skip-animations={skipAnimations ? "true" : "false"} in:fade={{ duration: skipAnimations ? 0 : 120 }}>
     {#if palette.error}
       <div class="empty-state">{palette.error}</div>
     {:else if palette.currentView === "actions"}
@@ -200,6 +202,7 @@
         rows={tabRows}
         total={palette.total}
         offset={palette.offset}
+        {skipAnimations}
         selectedDomId={selectedRowDomId}
         workspaces={palette.sidebarWorkspaces}
         {activeWorkspaceId}
@@ -215,6 +218,7 @@
         rows={domainRows}
         total={palette.total}
         offset={palette.offset}
+        {skipAnimations}
         {selectedDomain}
         onactivate={activateDomainWithTrace}
         onrange={loadVisibleRange}

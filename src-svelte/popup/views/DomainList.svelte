@@ -7,18 +7,19 @@
     rows: DomainIndexRow[];
     total: number;
     offset?: number;
+    skipAnimations?: boolean;
     selectedDomain?: string | null;
     onactivate?: (row: DomainIndexRow) => void;
     onrange?: (offset: number, limit: number) => void;
   };
 
-  let { rows, total, offset = 0, selectedDomain = null, onactivate, onrange }: Props = $props();
+  let { rows, total, offset = 0, skipAnimations = false, selectedDomain = null, onactivate, onrange }: Props = $props();
 </script>
 
 {#if total === 0}
   <div class="empty-state">No domains</div>
 {:else}
-  <VirtualList {rows} {total} {offset} getKey={(row) => row.domain} onrange={onrange}>
+  <VirtualList {rows} {total} {offset} {skipAnimations} getKey={(row) => row.domain} onrange={onrange}>
     {#snippet children(row: DomainIndexRow, index: number)}
       <DomainRow
         {row}

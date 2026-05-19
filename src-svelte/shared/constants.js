@@ -213,9 +213,8 @@ this.STORAGE_DEFAULTS = Object.freeze({
   welcomed:           false,
   interceptExtensionPopups: true,
   captureExtensionActionPopups: true,
-  // When true, the overlay's reveal/dismiss animations are skipped —
-  // the panel just appears/disappears. In-popup sub-menu cross-fades
-  // (navigating between views inside an open palette) still animate.
+  // When true, palette reveal/dismiss, panel resize, and in-popup view
+  // change animations are skipped.
   skipOverlayAnimations: false,
   // When true, the overlay backdrop dims the content behind the palette
   // (the default rgba(0,0,0,0.25) wash). When false, the backdrop is

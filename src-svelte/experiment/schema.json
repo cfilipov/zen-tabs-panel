@@ -814,7 +814,7 @@
         "name": "setSkipOverlayAnimations",
         "type": "function",
         "async": true,
-        "description": "When true, the overlay's reveal/dismiss animations are skipped — the panel just appears/disappears. Sub-menu cross-fades inside the open palette are unaffected.",
+        "description": "When true, palette reveal/dismiss, panel resize, and in-popup view change animations are skipped.",
         "parameters": [
           { "name": "skip", "type": "boolean" }
         ]

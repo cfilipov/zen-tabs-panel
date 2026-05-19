@@ -9,6 +9,7 @@
     offset?: number;
     rowHeight?: number;
     overscan?: number;
+    skipAnimations?: boolean;
     getKey?: (row: T, absoluteIndex: number) => string | number;
     onrange?: (offset: number, limit: number) => void;
     children: Snippet<[T, number]>;
@@ -20,6 +21,7 @@
     offset = 0,
     rowHeight = 48,
     overscan = 8,
+    skipAnimations = false,
     getKey = (_row, absoluteIndex) => absoluteIndex,
     onrange,
     children,
@@ -88,7 +90,7 @@
 >
   <div class="virtual-list-window" style={`transform: translateY(${offset * rowHeight}px)`}>
     {#each rows as row, index (getKey(row, offset + index))}
-      <div class="virtual-list-row" animate:flip={{ duration: 120 }}>
+      <div class="virtual-list-row" animate:flip={{ duration: skipAnimations ? 0 : 120 }}>
         {@render children(row, index)}
       </div>
     {/each}

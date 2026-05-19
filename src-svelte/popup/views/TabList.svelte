@@ -8,6 +8,7 @@
     rows: TabIndexRow[];
     total: number;
     offset?: number;
+    skipAnimations?: boolean;
     selectedDomId?: string | null;
     workspaces?: WorkspaceRow[];
     activeWorkspaceId?: string | null;
@@ -23,6 +24,7 @@
     rows,
     total,
     offset = 0,
+    skipAnimations = false,
     selectedDomId = null,
     workspaces = [],
     activeWorkspaceId = null,
@@ -38,7 +40,7 @@
 {#if total === 0}
   <div class="empty-state">No tabs</div>
 {:else}
-  <VirtualList {rows} {total} {offset} getKey={(row) => row.domId} onrange={onrange}>
+  <VirtualList {rows} {total} {offset} {skipAnimations} getKey={(row) => row.domId} onrange={onrange}>
     {#snippet children(row: TabIndexRow, index: number)}
       <TabRow
         {row}
