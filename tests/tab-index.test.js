@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { createZenTabIndex } = require("../src-svelte/experiment/tab-index.js");
+const { createZenTabIndex } = require("../src/experiment/tab-index.js");
 
 function fakeWindow() {
   const listeners = new Map();

@@ -2,7 +2,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  root: "src-svelte",
+  root: "src",
   base: "./",
   plugins: [svelte({ compilerOptions: { runes: true } })],
   resolve: {
@@ -13,7 +13,7 @@ export default defineConfig({
     emptyOutDir: false,
     rollupOptions: {
       input: {
-        popup: "src-svelte/popup/popup.html",
+        popup: "src/popup/popup.html",
       },
       output: {
         entryFileNames: "popup/assets/[name].js",

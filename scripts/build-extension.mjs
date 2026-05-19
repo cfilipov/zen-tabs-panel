@@ -5,20 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const variants = new Map([
-  ["vanilla", "src-vanilla"],
-  ["svelte", "src-svelte"],
-]);
-
-const variantArg = process.argv.find((arg) => arg.startsWith("--variant="));
-const variant = variantArg ? variantArg.slice("--variant=".length) : "vanilla";
-const sourceDirName = variants.get(variant);
-
-if (!sourceDirName) {
-  console.error(`Unknown variant "${variant}". Expected one of: ${Array.from(variants.keys()).join(", ")}`);
-  process.exit(1);
-}
-
+const sourceDirName = "src";
 const sourceRoot = path.join(repoRoot, sourceDirName);
 const distRoot = path.join(repoRoot, "dist");
 
@@ -77,19 +64,15 @@ function run(command, args) {
 await rm(distRoot, { recursive: true, force: true });
 await mkdir(distRoot, { recursive: true });
 
-const entriesToCopy = variant === "svelte"
-  ? extensionEntries.filter((entry) => entry !== "popup")
-  : extensionEntries;
+const entriesToCopy = extensionEntries.filter((entry) => entry !== "popup");
 
 for (const entry of entriesToCopy) {
   await copyEntry(entry);
 }
 
-if (variant === "svelte") {
-  await run("node", ["scripts/generate-keybindings.mjs"]);
-  await run("npx", ["vite", "build"]);
-}
+await run("node", ["scripts/generate-keybindings.mjs"]);
+await run("npx", ["vite", "build"]);
 
 const copied = (await readdir(distRoot)).sort();
-console.log(`Built ${variant} extension from ${sourceDirName}/ into dist/`);
+console.log(`Built extension from ${sourceDirName}/ into dist/`);
 console.log(copied.join("\n"));

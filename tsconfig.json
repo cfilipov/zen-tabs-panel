@@ -10,5 +10,5 @@
     "lib": ["ES2022", "DOM"],
     "types": ["svelte", "vitest/globals"]
   },
-  "include": ["src-svelte/**/*.ts", "src-svelte/**/*.svelte", "vite.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
 }

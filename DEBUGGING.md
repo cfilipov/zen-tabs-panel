@@ -92,12 +92,11 @@ python3 tools/firefox-eval.py '(() => JSON.stringify(Services.wm.getMostRecentWi
 
 ## Installing the temporary add-on from the debug session
 
-If the extension is not installed, build the variant you want and install the
-generated `dist/` directory:
+If the extension is not installed, build it and install the generated `dist/`
+directory:
 
 ```bash
-npm run build:vanilla
-# or: npm run build:svelte
+npm run build
 ```
 
 Then the debug bridge can usually install it temporarily:
@@ -318,7 +317,7 @@ such as tab titles, counts, favicons, history, and workspace names.
 
 ## Popup live smoke test
 
-After building and reloading the Svelte variant, run:
+After building and reloading the extension, run:
 
 ```bash
 npm run smoke:popup

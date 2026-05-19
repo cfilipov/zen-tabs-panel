@@ -22,12 +22,12 @@ End-state goals:
 
 ## Current migration status (May 2026)
 
-This plan started as a forward-looking blueprint. The implementation is now functionally ported in `src-svelte/` and has been exercised in the live Zen debug profile. The current target before declaring the migration complete is release hardening: final verification, documentation, and any parity bug found during live use. There are no known intentionally skipped user-facing features.
+This plan started as a forward-looking blueprint. The implementation is now functionally ported in `src/` and has been exercised in the live Zen debug profile. The current target before declaring the migration complete is release hardening: final verification, documentation, and any parity bug found during live use. There are no known intentionally skipped user-facing features.
 
 Implemented architecture:
 
-- The Svelte and vanilla sources coexist (`src-svelte/` and `src-vanilla/`) and both build into `dist/`.
-- `src-svelte/shared/navigation-tree.ts` is the single source of truth for menu structure and chords, with typed `ActionEffectId`, `ViewLoaderId`, and `AvailabilityPredicateId` registries/exhaustiveness checks.
+- `src/` is now the sole source root. The old vanilla tree was removed after the Svelte version reached parity; git history remains the rollback/reference source.
+- `src/shared/navigation-tree.ts` is the single source of truth for menu structure and chords, with typed `ActionEffectId`, `ViewLoaderId`, and `AvailabilityPredicateId` registries/exhaustiveness checks.
 - Popup IPC effects are funneled through runtime/effects modules instead of leaf components.
 - Popup state mutation goes through named store mutators; `NativePalette.svelte` no longer assigns `palette.*` fields directly.
 - Runtime loaders, interaction handlers, panel sizing, tab-index client access, and leaf rendering have been extracted from the palette component.
@@ -43,7 +43,7 @@ Important tradeoffs in the current implementation:
 
 Release-close checklist:
 
-- Run `npm run typecheck`, `npm test`, `npm run build:svelte`, and `git diff --check`.
+- Run `npm run typecheck`, `npm test`, `npm run build`, and `git diff --check`.
 - Keep the production grep gates in the verification section green.
 - Do a final live Zen smoke pass over leader chords, fast multi-key drills, hosted extension popups, panel sizing, tab-list scrolling, workspaces, replay, and common tab actions.
 - Prefer fixture-based screenshot comparison or masked dynamic regions; live tab titles, counts, workspaces, history, and favicons are intentionally profile-dependent.
@@ -105,7 +105,7 @@ type NavNode =
     };
 ```
 
-`src-svelte/shared/navigation-tree.ts` is the single source of truth for chord keys and menu structure. It replaces the current split-brain pattern where feature authors must remember to update `shared/keybindings.js`, popup keyboard handling, menu rendering, badges, replay, and edge-case bridge paths separately.
+`src/shared/navigation-tree.ts` is the single source of truth for chord keys and menu structure. It replaces the current split-brain pattern where feature authors must remember to update `shared/keybindings.js`, popup keyboard handling, menu rendering, badges, replay, and edge-case bridge paths separately.
 
 There are separate registries for implementation:
 
@@ -117,7 +117,7 @@ The tree never imports Svelte, DOM, `browser.*`, or mutable app state. Registrie
 
 ### Interaction Interpreter
 
-All user input flows through one interpreter in `src-svelte/popup/interaction/`:
+All user input flows through one interpreter in `src/popup/interaction/`:
 
 ```ts
 interpretInput(input: InteractionInput, context: InteractionContext): InteractionResult
@@ -164,7 +164,7 @@ Required debug workflow:
 - **If initial temporary add-on installation cannot be automated from the debug connection:** ask the user to load `dist/manifest.json` once, then use debug-driven reloads afterward.
 - **Use live diagnostics as deliverables:** console errors, overlay state, popup URL/inst, index version/counts, active view/state, and chord/replay traces should be checked before declaring a slice complete.
 
-### Layer 1: State (`src-svelte/popup/store/`)
+### Layer 1: State (`src/popup/store/`)
 
 Single root state tree in `state.svelte.ts`:
 
@@ -214,7 +214,7 @@ export function recordFetch<V extends ViewId>(
 
 **Rule**: only files in `store/` mutate `state` fields directly. Enforced by code review + a TS-side `Readonly<AppState>` re-export for consumers outside `store/`.
 
-### Layer 2: Logic / transitions (`src-svelte/popup/interaction/`, `src-svelte/popup/transitions/`)
+### Layer 2: Logic / transitions (`src/popup/interaction/`, `src/popup/transitions/`)
 
 Pure TypeScript, no DOM, no Svelte imports. Two flavors:
 
@@ -240,12 +240,12 @@ export function interpretInput(
 
 The interpreter is pure and unit-tested with fixture trees and fixture view models. The runtime is thin and tested with mocked store mutators / mocked IPC. Neither layer touches DOM. No view-specific file is allowed to contain hard-coded chord strings or duplicate "digit N means row N" logic.
 
-### Layer 3: UI (`src-svelte/popup/views/*.svelte`, `src-svelte/popup/components/*.svelte`)
+### Layer 3: UI (`src/popup/views/*.svelte`, `src/popup/components/*.svelte`)
 
 Svelte components. Each view is a single `.svelte` file:
 
 ```svelte
-<!-- src-svelte/popup/views/Domains.svelte -->
+<!-- src/popup/views/Domains.svelte -->
 <script lang="ts">
   import { state } from "../store/state.svelte";
   import VirtualList from "../components/VirtualList.svelte";
@@ -287,7 +287,7 @@ Animations are declarative on the components:
 
 The current `runViewSwitchInvisibly` and `closeRowAndReindex` imperative dances are gone — replaced by Svelte transition directives.
 
-### Hybrid tab-index (`src-svelte/experiment/api.js` authoritative, `src-svelte/background/tab-index-cache.ts` facade)
+### Hybrid tab-index (`src/experiment/api.js` authoritative, `src/background/tab-index-cache.ts` facade)
 
 Zen's normal WebExtension tab APIs are workspace-scoped, so the authoritative cross-workspace index must live in the Experiment API where chrome DOM and Zen internals are visible. Background remains the typed WebExtension-facing facade and may cache query results by index version, but it must not try to independently mirror truth from `browser.tabs.query()`.
 
@@ -340,7 +340,7 @@ Drift mitigation: listeners and observers maintain incremental updates; the inde
 
 `experiment/api.js` does change for tab data: it becomes the owner of the chrome-authoritative tab index. This is a data-service refactor, not a chord-engine rewrite.
 
-The popup-side chord-bridge logic moves into `src-svelte/popup/chord-bridge.ts` — a small TypeScript module that listens for chord-bridge IPCs, normalizes them into `InteractionInput`, and feeds the same interpreter used by visible keyboard and mouse activation. No synthetic `KeyboardEvent` dispatch into DOM, and no separate bridge-only keybinding path.
+The popup-side chord-bridge logic moves into `src/popup/chord-bridge.ts` — a small TypeScript module that listens for chord-bridge IPCs, normalizes them into `InteractionInput`, and feeds the same interpreter used by visible keyboard and mouse activation. No synthetic `KeyboardEvent` dispatch into DOM, and no separate bridge-only keybinding path.
 
 ## Performance discipline
 
@@ -372,7 +372,7 @@ Chrome tab lifecycle listeners and tab DOM observers fire on their own schedule 
 `VirtualList.svelte` (~100 LOC, custom): fixed row height, single scrolling container, overscan buffer of 5 rows, backed by windowed index queries. The component/runtime asks for `{ offset, limit }` windows as the viewport changes; it does not require the entire view array in popup memory. Implementation sketch:
 
 ```svelte
-<!-- src-svelte/popup/components/VirtualList.svelte -->
+<!-- src/popup/components/VirtualList.svelte -->
 <script lang="ts" generics="T">
   type Props = {
     items: T[];
@@ -416,7 +416,7 @@ The popup lives inside a chrome-side `<browser>` element whose height must match
 **Svelte replacement: one binding + one effect at the App root.**
 
 ```svelte
-<!-- src-svelte/popup/App.svelte -->
+<!-- src/popup/App.svelte -->
 <script lang="ts">
   let contentHeight = $state(0);
   let resizeRafId: number | null = null;
@@ -456,7 +456,7 @@ Testing is the load-bearing argument for the architecture. Each layer is indepen
 ### Pure transitions (no DOM, no Svelte) — `vitest run --environment node`
 
 ```ts
-// src-svelte/popup/transitions/__tests__/selection.test.ts
+// src/popup/transitions/__tests__/selection.test.ts
 import { nextSelectionIndex } from "../selection";
 
 test("ArrowDown advances within bounds", () => {
@@ -474,7 +474,7 @@ test("ArrowDown at end wraps to 0", () => {
 
 ```ts
 // tests/tab-index-core.test.ts
-import { TabIndexCore } from "../src-svelte/shared/tab-index-core";
+import { TabIndexCore } from "../src/shared/tab-index-core";
 
 test("adds tab on tabs.onCreated", () => {
   const idx = new TabIndexCore();
@@ -491,7 +491,7 @@ test("buildPromise yields between chunks of 200", async () => { ... });
 ### Interaction interpreter (fixture tree + mocked runtime)
 
 ```ts
-// src-svelte/popup/interaction/__tests__/interpreter.test.ts
+// src/popup/interaction/__tests__/interpreter.test.ts
 import { interpretInput } from "../interpreter";
 
 const tree = [
@@ -564,19 +564,8 @@ CI not in scope yet (user hasn't asked); `npm test` runs locally.
 ## Project layout
 
 ```
-src-vanilla/                            # known-good current extension source
+src/                             # extension source root
   manifest.json
-  background.js
-  experiment/
-  popup/
-  shared/
-  lib/
-  options/
-  welcome/
-  icons/
-
-src-svelte/                             # Svelte migration source root
-  manifest.json                         # same extension layout as vanilla
   background/
     background.ts                       # later replaces background.js
     tab-index-cache.ts
@@ -614,7 +603,7 @@ src-svelte/                             # Svelte migration source root
     schema.d.ts
 
 scripts/
-  build-extension.mjs                   # chooses src-vanilla or src-svelte, writes dist/
+  build-extension.mjs                   # builds src into dist/
 dist/                                   # generated, ignored; Zen loads this root
 tests/
 vite.config.ts
@@ -623,20 +612,20 @@ tsconfig.json
 package.json
 ```
 
-`npm run build:vanilla` copies `src-vanilla/` into `dist/`. `npm run build:svelte` builds/copies `src-svelte/` into the same `dist/` layout. Firefox loads `dist/manifest.json` via `about:debugging`; switching variants is rebuild + reload, not a different installed add-on. `dist/` is disposable and must not be edited by hand.
+`npm run build` builds/copies `src/` into `dist/`. Firefox loads `dist/manifest.json` via `about:debugging`. `dist/` is disposable and must not be edited by hand.
 
 ## Migration phases (single PR target, but sequenced)
 
-Historical note: this section is the original implementation sequence. Use "Current migration status" above as the authoritative snapshot of what has landed and what remains.
+Historical note: this section is the original implementation sequence. Use "Current migration status" above as the authoritative snapshot of what has landed and what remains. References to vanilla below describe the pre-migration baseline that now lives in git history.
 
 The user chose single-PR delivery. Within the PR, sequencing keeps the working tree buildable at every step:
 
-0. **Behavior + docs audit** — generate a parity table from `src-vanilla/shared/keybindings.js`, `src-vanilla/shared/constants.js`, `src-vanilla/manifest.json`, current vanilla views, screenshots, and current CSS. Treat code as source of truth for behavior; update README mismatches (double-tap Cmd, Ctrl+Cmd, split key, vertical navigation keys, dev load path) after migration. This table is the parity contract: no user-visible behavior or visual detail may be dropped during the rewrite.
-1. **Dual-source build setup** — keep `src-vanilla/` as the known-good source root and `src-svelte/` as the migration source root. `npm run build:vanilla` and `npm run build:svelte` both write to `dist/`; verify they initially produce byte-for-byte equivalent extension files.
+0. **Behavior + docs audit** — generate a parity table from the vanilla baseline in git history, current vanilla views, screenshots, and current CSS. Treat code as source of truth for behavior; update README mismatches (double-tap Cmd, Ctrl+Cmd, split key, vertical navigation keys, dev load path) after migration. This table is the parity contract: no user-visible behavior or visual detail may be dropped during the rewrite.
+1. **Dual-source build setup** — completed during migration, then removed after Svelte parity was accepted.
 2. **Svelte tooling setup** — add `vite.config.ts`, `tsconfig.json`, `svelte.config.js`, and dev dependencies. Keep `dist/` generated and ignored.
 3. **Static passthrough** — copy `experiment/`, `icons/`, generate `schema.d.ts` from `schema.json`.
-4. **Shared types + navigation tree** — in `src-svelte/shared/`, port `constants.js` → `constants.ts` and `keybindings.js` → `navigation-tree.ts`. Define `ViewId`, `ViewParams`, `IpcMessage`, `ViewWindow`, `ActionSlot`, `RowTarget`, `NavNode`, `ActionEffectId`, `ViewLoaderId`, and `AvailabilityPredicateId` discriminated unions in `shared/types.ts`.
-5. **Experiment tab-index** — add chrome-authoritative `src-svelte/experiment/tab-index.js` and wire `api.js` methods (`ensureIndexStarted`, `getIndexVersion`, `getViewSummary`, `getViewWindow`, `getRowTarget`). Build is chunked, event/observer-maintained, and never awaited on chord arm.
+4. **Shared types + navigation tree** — in `src/shared/`, port `constants.js` → `constants.ts` and `keybindings.js` → `navigation-tree.ts`. Define `ViewId`, `ViewParams`, `IpcMessage`, `ViewWindow`, `ActionSlot`, `RowTarget`, `NavNode`, `ActionEffectId`, `ViewLoaderId`, and `AvailabilityPredicateId` discriminated unions in `shared/types.ts`.
+5. **Experiment tab-index** — add chrome-authoritative `src/experiment/tab-index.js` and wire `api.js` methods (`ensureIndexStarted`, `getIndexVersion`, `getViewSummary`, `getViewWindow`, `getRowTarget`). Build is chunked, event/observer-maintained, and never awaited on chord arm.
 6. **Background tab-index facade** — `background/tab-index-cache.ts` routes typed index queries to experiment and caches by index version. Unit tests pass.
 7. **Background runtime** — `background/background.ts` routes IPC messages (existing chord IPCs + new tab-index queries). Keep duplicate-intercept + webRequest paths.
 8. **Popup store** — `state.svelte.ts` with $state tree, mutators, loaded-window state, query status, and types. Unit tests pass.
@@ -649,22 +638,22 @@ The user chose single-PR delivery. Within the PR, sequencing keeps the working t
 15. **Reveal / animation** — App.svelte's `transition:fade` for view changes; verify smoothness in live extension.
 16. **Chord-replay through state** — wire `recordChordKey` / `replayLastChord` through the new chord-bridge + interpreter/runtime. No synthetic KeyboardEvent dispatch.
 17. **Settings page** — port `options/options.html` + `options.js` if time permits, OR keep vanilla and reference unchanged from manifest. Recommend keeping vanilla for now (low-touch, not race-prone).
-18. **Delete old copied vanilla popup files from `src-svelte/`** — only after Svelte parity is verified. Keep `src-vanilla/` as the long-lived baseline until the migration is accepted.
+18. **Delete old vanilla sources** — completed after Svelte parity was accepted; use git history for reference or rollback.
 19. **README + CLAUDE.md** — update README to match current code behavior and add "Popup architecture invariants" to CLAUDE.md.
 
 ## Critical files (new structure)
 
 (See "Project layout" above for full tree. Highest-leverage files for review:)
 
-- `src-svelte/popup/store/state.svelte.ts` — state shape + mutators (the source of truth).
-- `src-svelte/shared/navigation-tree.ts` — single source of truth for menu/chord structure.
-- `src-svelte/popup/interaction/interpreter.ts` — pure input interpreter shared by keyboard, chord bridge, replay, and mouse activation.
-- `src-svelte/popup/interaction/runtime.ts` — command application via store mutators + typed IPC.
-- `src-svelte/popup/transitions/*.ts` — all pure logic (most-tested).
-- `src-svelte/experiment/tab-index.js` — perf-critical chrome-authoritative tab index.
-- `src-svelte/background/tab-index-cache.ts` — typed cache/facade over experiment index queries.
-- `src-svelte/popup/components/VirtualList.svelte` — perf-critical.
-- `src-svelte/popup/App.svelte` — view routing + reveal animation.
+- `src/popup/store/state.svelte.ts` — state shape + mutators (the source of truth).
+- `src/shared/navigation-tree.ts` — single source of truth for menu/chord structure.
+- `src/popup/interaction/interpreter.ts` — pure input interpreter shared by keyboard, chord bridge, replay, and mouse activation.
+- `src/popup/interaction/runtime.ts` — command application via store mutators + typed IPC.
+- `src/popup/transitions/*.ts` — all pure logic (most-tested).
+- `src/experiment/tab-index.js` — perf-critical chrome-authoritative tab index.
+- `src/background/tab-index-cache.ts` — typed cache/facade over experiment index queries.
+- `src/popup/components/VirtualList.svelte` — perf-critical.
+- `src/popup/App.svelte` — view routing + reveal animation.
 - `vite.config.ts` — build orchestration.
 - `tsconfig.json` — strict mode on; checks the layer-separation enforcement at compile time.
 
@@ -705,24 +694,24 @@ Tooling utilities to reuse / port:
 
 **Architectural grep invariants:**
 
-17. `grep -rn "if (state.currentView !==" src-svelte/popup/` → zero hits.
-18. `grep -rnE "document\.|listEl|headerEl|sidebarEl" src-svelte/popup/interaction/ src-svelte/popup/transitions/ src-svelte/popup/store/` → zero hits.
-19. `grep -rnE "sendIpc|ext\.runtime\.sendMessage|browser\.runtime\.sendMessage" src-svelte/popup/views/ src-svelte/popup/components/ src-svelte/popup/interaction/interpreter.ts` → zero hits.
-20. `grep -rn "browser\.tabs\.query" src-svelte/popup/` → zero hits.
-21. `grep -rnE "not yet ported|TODO|for now|__index:|as never|unknown as BaseViewData|generic all-tabs" src-svelte/` → zero hits in production paths.
-22. `grep -rnE "chord:|hotkey:|key:\\s*[\"']|Shift\\+" src-svelte/popup/views/ src-svelte/popup/components/` → zero hard-coded keybinding literals in Svelte components, except test fixtures. View-model helpers may pass through `node.chord` / derived `hotkey` metadata from the navigation tree; they must not retype independent shortcut mappings.
-23. `grep -rnE "ActionEffectId|ViewLoaderId|AvailabilityPredicateId" src-svelte/shared/navigation-tree.ts src-svelte/shared/*registry* src-svelte/shared/availability.ts` plus `tsc --noEmit` proves every tree reference is implemented exactly once.
+17. `grep -rn "if (state.currentView !==" src/popup/` → zero hits.
+18. `grep -rnE "document\.|listEl|headerEl|sidebarEl" src/popup/interaction/ src/popup/transitions/ src/popup/store/` → zero hits.
+19. `grep -rnE "sendIpc|ext\.runtime\.sendMessage|browser\.runtime\.sendMessage" src/popup/views/ src/popup/components/ src/popup/interaction/interpreter.ts` → zero hits.
+20. `grep -rn "browser\.tabs\.query" src/popup/` → zero hits.
+21. `grep -rnE "not yet ported|TODO|for now|__index:|as never|unknown as BaseViewData|generic all-tabs" src/` → zero hits in production paths.
+22. `grep -rnE "chord:|hotkey:|key:\\s*[\"']|Shift\\+" src/popup/views/ src/popup/components/` → zero hard-coded keybinding literals in Svelte components, except test fixtures. View-model helpers may pass through `node.chord` / derived `hotkey` metadata from the navigation tree; they must not retype independent shortcut mappings.
+23. `grep -rnE "ActionEffectId|ViewLoaderId|AvailabilityPredicateId" src/shared/navigation-tree.ts src/shared/*registry* src/shared/availability.ts` plus `tsc --noEmit` proves every tree reference is implemented exactly once.
 
 **Live debugging:**
 
 24. `python3 tools/firefox-eval.py '<JS that inspects popup state>'` — state tree observable as a single object.
-25. README keybinding and development instructions match `src-svelte/shared/navigation-tree.ts`, `src-svelte/manifest.json`, and the new `dist/` load path.
+25. README keybinding and development instructions match `src/shared/navigation-tree.ts`, `src/manifest.json`, and the new `dist/` load path.
 
 ## Risk and rollback
 
 **Risk 1 — Svelte/Vite for WebExtensions.** Svelte 5 in a content-process popup (loaded via `createXULElement("browser")` + `moz-extension://` URL) — should work, it's just JS + DOM. No Firefox-specific incompatibility expected, but verify on first build by loading the empty Svelte shell into a `<browser>` element. Mitigation: smoke-test step 1 confirms before any porting.
 
-**Risk 2 — strict-mode TS friction.** Some experiment-API surfaces (`gZenWorkspaces`, `Services.*`) lack types. Mitigation: stub `.d.ts` files in `src-svelte/experiment/types.ts` declaring `any`-typed module shapes for chrome-scope APIs. The popup never imports these directly; bg/popup talk to chrome via typed IPC.
+**Risk 2 — strict-mode TS friction.** Some experiment-API surfaces (`gZenWorkspaces`, `Services.*`) lack types. Mitigation: stub `.d.ts` files in `src/experiment/types.ts` declaring `any`-typed module shapes for chrome-scope APIs. The popup never imports these directly; bg/popup talk to chrome via typed IPC.
 
 **Risk 3 — virtual list edge cases.** Selected-row-out-of-viewport when typing digit-1..9 in a scrolled list. Mitigation: `VirtualList` exposes `scrollToIndex(i)` method; selection mutator calls it when needed.
 

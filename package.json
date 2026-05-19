@@ -1,12 +1,10 @@
 {
   "name": "zen-tabs-panel",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Tab management command palette and utilities for Zen Browser",
   "scripts": {
-    "build": "npm run build:svelte",
-    "build:vanilla": "node scripts/build-extension.mjs --variant=vanilla",
-    "build:svelte": "node scripts/build-extension.mjs --variant=svelte",
+    "build": "node scripts/build-extension.mjs",
     "test": "npm run test:node && npm run test:svelte",
     "test:node": "node --test tests/*.test.js",
     "test:svelte": "vitest run",

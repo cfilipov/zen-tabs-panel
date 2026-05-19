@@ -4,7 +4,7 @@ import vm from "node:vm";
 import ts from "typescript";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const sourcePath = path.join(repoRoot, "src-svelte/shared/navigation-tree.ts");
+const sourcePath = path.join(repoRoot, "src/shared/navigation-tree.ts");
 const outputPath = path.join(repoRoot, "dist/shared/keybindings.js");
 
 const source = await readFile(sourcePath, "utf8");
@@ -37,7 +37,7 @@ if (!Array.isArray(NAVIGATION_TREE) || !Array.isArray(WORKSPACE_DIGIT_CHORDS)) {
 await mkdir(path.dirname(outputPath), { recursive: true });
 await writeFile(outputPath, `"use strict";
 
-// Generated from src-svelte/shared/navigation-tree.ts. Do not edit by hand.
+// Generated from src/shared/navigation-tree.ts. Do not edit by hand.
 
 this.ZEN_KEYBINDINGS = ${JSON.stringify(NAVIGATION_TREE, null, 2)};
 

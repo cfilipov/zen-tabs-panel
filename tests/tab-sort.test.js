@@ -14,7 +14,7 @@ const {
   makeCompareByVisits,
   groupDuplicatesFirst,
   buildDomainCounts,
-} = require("../src-vanilla/lib/tab-sort.js");
+} = require("../src/lib/tab-sort.js");
 
 const tab = (overrides = {}) => Object.assign({
   id: 1,

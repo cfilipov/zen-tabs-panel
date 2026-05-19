@@ -208,19 +208,18 @@ Set these flags in `about:config`:
 | `devtools.chrome.enabled` | `true` | Enable Browser Toolbox |
 | `devtools.debugger.remote-enabled` | `true` | Enable remote debugging |
 
-### Loading for development
+### Loading for Development
 
-Build the variant you want to test, then load the generated `dist/` extension:
+Build the extension, then load the generated `dist/` directory:
 
 ```bash
-npm run build:vanilla   # known-good vanilla source
-npm run build:svelte    # default Svelte source
+npm run build
 ```
 
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on...**
 3. Select `dist/manifest.json`
-4. Rebuild the desired variant and use the **Reload** button after making changes
+4. Rebuild and use the **Reload** button after making changes
 
 ### Remote debugging
 
@@ -250,21 +249,19 @@ npm run build
 make package
 ```
 
-`npm run build:vanilla`, `npm run build:svelte`, and `make build-svelte` write
-the chosen variant to `dist/` only. `make package` builds the Svelte variant by
-default and zips `dist/` into `zen-tabs-panel.xpi`. You can also use
-`make package-svelte` explicitly, or `make package-vanilla` for the known-good
-vanilla baseline. Install the `.xpi` from `about:addons` as described above.
+`npm run build` and `make build` write the Svelte source from `src/` to
+`dist/` only. `make package` builds the extension and zips `dist/` into
+`zen-tabs-panel.xpi`. Install the `.xpi` from `about:addons` as described above.
 
 ### Architecture notes
 
 The extension has three layers:
 
-1. **`src-vanilla/experiment/api.js` / `src-svelte/experiment/api.js`** - Runs in the chrome-privileged parent process. Has full access to `gBrowser`, `gZenWorkspaces`, `gZenViewSplitter`, `gZenMods`, and the chrome DOM. Exposes a `browser.zenWorkspaces.*` API to the extension. Also manages the command palette overlay (injected as a chrome DOM element with an embedded `<browser>` XUL element).
+1. **`src/experiment/api.js`** - Runs in the chrome-privileged parent process. Has full access to `gBrowser`, `gZenWorkspaces`, `gZenViewSplitter`, `gZenMods`, and the chrome DOM. Exposes a `browser.zenWorkspaces.*` API to the extension. Also manages the command palette overlay (injected as a chrome DOM element with an embedded `<browser>` XUL element).
 
-2. **`src-vanilla/background.js` / `src-svelte/background.js`** - Persistent background script. Routes messages between the popup and the experiment API. Handles auto-close timers, auto-move logic, and keyboard command dispatch.
+2. **`src/background.js`** - Persistent background script. Routes messages between the popup and the experiment API. Handles auto-close timers, auto-move logic, and keyboard command dispatch.
 
-3. **`src-vanilla/popup/` / `src-svelte/popup/`** - The command palette UI, loaded inside the chrome overlay's embedded browser element. Communicates with `background.js` via `browser.runtime.sendMessage`.
+3. **`src/popup/`** - The Svelte command palette UI, loaded inside the chrome overlay's embedded browser element. Communicates with `background.js` via `browser.runtime.sendMessage`.
 
 Key constraints discovered during development:
 

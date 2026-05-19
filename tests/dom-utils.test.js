@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { escapeAttr, extractFavicon, extractDomain } = require("../src-vanilla/shared/dom-utils.js");
+const { escapeAttr, extractFavicon, extractDomain } = require("../src/shared/dom-utils.js");
 
 test("escapeAttr escapes the five HTML-attribute hazards", () => {
   assert.equal(escapeAttr(`a&b"c'd<e>f`), "a&amp;b&quot;c&#39;d&lt;e&gt;f");
