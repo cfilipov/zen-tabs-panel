@@ -53,6 +53,7 @@
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
   import { createHistoryClient, type RecentlyClosedRow } from "./runtime/history-client";
   import { createNativePaletteLoaders } from "./runtime/native-palette-loaders";
+  import { createNativePalettePanelController, usesFitContentHeight } from "./runtime/native-palette-panel";
   import { createPaletteEffects } from "./runtime/palette-effects";
   import {
     directionalListItemId,
@@ -117,9 +118,6 @@
   let pageAlive = true;
   let terminalCommandDispatched = false;
   let terminalCommandDispatchedAt = 0;
-  let paletteHeight = 0;
-  let resizeRequestId = 0;
-  let lastResizeKey = "";
   const revealController = createPaletteRevealController({
     sendReveal: effects.revealPalette,
   });
@@ -146,15 +144,6 @@
     return false;
   }
 
-  function usesFitContentHeight(view: ViewId) {
-    return isNativePrefixView(view) ||
-      view === "move-to-workspace" ||
-      view === "move-to-folder" ||
-      view === "open-in-container" ||
-      view === "profiles" ||
-      view === "duplicate-prompt";
-  }
-
   const headerHidden = $derived(palette.currentView === "actions");
   const fitContentHeight = $derived(usesFitContentHeight(palette.currentView));
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
@@ -177,6 +166,14 @@
     profileClient,
     tabInfoClient,
     getSelectedTabDomIds: effects.getSelectedTabDomIds,
+  });
+  const panelController = createNativePalettePanelController({
+    tick,
+    getCurrentView: () => palette.currentView,
+    isAlive: () => pageAlive,
+    getElementById: (id) => document.getElementById(id),
+    setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+    resizePanel: (view, height) => effects.resizePanel(view, height).catch(() => {}),
   });
   const renderedActionSections = $derived(
     applyActionMetadata(
@@ -813,38 +810,8 @@
     if (result.stopPropagation) event.stopPropagation();
   }
 
-  async function requestPanelResize(view: ViewId = palette.currentView) {
-    const requestId = ++resizeRequestId;
-    const resizeView = view;
-    await tick();
-    if (!pageAlive || requestId !== resizeRequestId) return;
-    const waitMeasureTurn = () => new Promise<void>((resolve) => {
-      window.setTimeout(resolve, 0);
-    });
-    await waitMeasureTurn();
-    if (!pageAlive || requestId !== resizeRequestId) return;
-    if (usesFitContentHeight(resizeView)) {
-      await waitMeasureTurn();
-      if (!pageAlive || requestId !== resizeRequestId) return;
-    }
-    const measuredHeight = usesFitContentHeight(resizeView)
-      ? Math.max(
-        document.getElementById("palette")?.scrollHeight ?? 0,
-        document.getElementById("palette")?.getBoundingClientRect().height ?? 0,
-        paletteHeight,
-      )
-      : paletteHeight;
-    if (!pageAlive || measuredHeight <= 0) return;
-    const resizeKey = `${resizeView}:${measuredHeight}`;
-    if (resizeKey === lastResizeKey) return;
-    lastResizeKey = resizeKey;
-    await effects.resizePanel(resizeView, measuredHeight).catch(() => {});
-  }
-
-  function handlePaletteHeightChange(height: number) {
-    paletteHeight = height;
-    void requestPanelResize();
-  }
+  const requestPanelResize = panelController.requestPanelResize;
+  const handlePaletteHeightChange = panelController.handlePaletteHeightChange;
 
   async function signalPopupReady() {
     if (!pageAlive) return null;
@@ -915,7 +882,7 @@
     void initializeBridge(initialViewReady);
     return () => {
       revealController.clear();
-      resizeRequestId++;
+      panelController.invalidate();
       window.removeEventListener("keydown", handleKeydown);
       window.removeEventListener("pagehide", handlePageHide);
       uninstallBridge();
