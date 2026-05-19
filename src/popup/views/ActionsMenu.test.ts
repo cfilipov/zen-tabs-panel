@@ -32,6 +32,28 @@ describe("ActionsMenu", () => {
     expect(page2?.textContent).toContain("⇧L");
   });
 
+  it("only suppresses page-slide animation when skip animations is enabled", () => {
+    const animated = render(ActionsMenu, {
+      props: {
+        sections: buildActionsMenuModel(),
+        currentPage: 2,
+      },
+    });
+
+    expect(animated.container.querySelector(".actions-pager")?.classList.contains("no-anim")).toBe(false);
+    animated.unmount();
+
+    const skipped = render(ActionsMenu, {
+      props: {
+        sections: buildActionsMenuModel(),
+        currentPage: 2,
+        skipAnimations: true,
+      },
+    });
+
+    expect(skipped.container.querySelector(".actions-pager")?.classList.contains("no-anim")).toBe(true);
+  });
+
   it("groups consecutive column sections into the vanilla actions grid", () => {
     const { container } = render(ActionsMenu, {
       props: {

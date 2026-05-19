@@ -11,6 +11,7 @@
     currentPage?: number;
     extensions?: ExtensionRow[];
     workspaces?: WorkspaceRow[];
+    skipAnimations?: boolean;
     onactivate?: (item: ActionMenuItem) => void;
     onextension?: (extension: ExtensionRow) => void;
     onpreview?: (domId: string) => void;
@@ -89,6 +90,7 @@
     currentPage = 1,
     extensions = [],
     workspaces = [],
+    skipAnimations = false,
     onactivate,
     onextension,
     onpreview,
@@ -227,7 +229,7 @@
   </button>
 {/snippet}
 
-<div class="actions-pager no-anim" style={`transform: translateX(-${(currentPage - 1) * 100}%)`}>
+<div class="actions-pager" class:no-anim={skipAnimations} style={`transform: translateX(-${(currentPage - 1) * 100}%)`}>
   {#each pageModels as page (page.page)}
     <div class="actions-page" data-page={page.page}>
       {#each page.blocks as block (blockKey(block))}

@@ -120,6 +120,7 @@
         currentPage={palette.currentPage}
         extensions={palette.actionExtensions}
         workspaces={palette.actionsWorkspaces}
+        {skipAnimations}
         onactivate={activateAction}
         onextension={openExtensionPopup}
         onpreview={(domId) => previewTabLike({ domId })}

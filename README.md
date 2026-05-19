@@ -1,14 +1,23 @@
 # Zen Tabs Panel
 
-**Version 0.3.0** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
+**Version 0.4.0** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
 
 A keyboard-driven tab management extension for [Zen Browser](https://zen-browser.app/) with a command palette UI and optional companion Zen Mods.
 
 > [!CAUTION]
 > This extension uses internal Zen APIs which could change and break with any Zen update. Use at your own risk.
 
-![Screenshot](screenshot.png)
-![Tab Info](screenshot-tabinfo.png)
+Zen Tabs Panel gives you keyboard access to far more tab and workspace actions than Zen exposes by default. It is built around one leader shortcut: `⌘.` on macOS, or `⌃.` on Windows/Linux. After pressing it, you type a sequence of follow-up keys, one after another, instead of holding a complicated shortcut all at once. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. These sequences mirror the same keys you would press when navigating the menu visually. If you type quickly, the action runs immediately without showing the menu. If you pause, the menu appears and shows the available options, helping you find the right key when you forget. Over time, common actions become muscle memory while less-used tools remain easy to discover. The palette is designed for fast keyboard use, but it is also fully mouse-friendly and can be navigated with the arrow keys.
+
+![Main menu](screenshot.png)
+
+![Main menu page 2](screenshot-actions-page-2.png)
+
+![Reorder tabs menu](screenshot-reorder-tabs.png)
+
+![Close and select menu](screenshot-close-select.png)
+
+![Tab info view](screenshot-tabinfo.png)
 
 ## Features
 
