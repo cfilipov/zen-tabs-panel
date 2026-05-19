@@ -523,7 +523,8 @@
         "description": "Open the duplicate-prompt overlay for a URL detected by an external path (bg's webRequest blocker). Returns the existing tab's DOM id.",
         "parameters": [
           { "name": "url", "type": "string" },
-          { "name": "excludeTabId", "type": "integer", "optional": true }
+          { "name": "excludeTabId", "type": "integer", "optional": true },
+          { "name": "requireRecentContentClick", "type": "boolean", "optional": true }
         ]
       },
       {

@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { escapeAttr, extractFavicon, extractDomain } = require("../src/shared/dom-utils.js");
+const { isSameMainFrameNavigationUrl } = require("../src/shared/navigation-url.js");
 
 test("escapeAttr escapes the five HTML-attribute hazards", () => {
   assert.equal(escapeAttr(`a&b"c'd<e>f`), "a&amp;b&quot;c&#39;d&lt;e&gt;f");
@@ -45,4 +46,30 @@ test("extractDomain returns hostname for valid URLs", () => {
 test("extractDomain returns empty for malformed input", () => {
   assert.equal(extractDomain("not a url"), "");
   assert.equal(extractDomain(""), "");
+});
+
+test("main-frame navigation URL comparison treats reload fragments as same page", () => {
+  assert.equal(
+    isSameMainFrameNavigationUrl("https://example.com/path?q=1#section", "https://example.com/path?q=1"),
+    true
+  );
+  assert.equal(
+    isSameMainFrameNavigationUrl("https://example.com/", "https://example.com"),
+    true
+  );
+});
+
+test("main-frame navigation URL comparison still distinguishes real navigations", () => {
+  assert.equal(
+    isSameMainFrameNavigationUrl("https://example.com/path?q=1", "https://example.com/path?q=2"),
+    false
+  );
+  assert.equal(
+    isSameMainFrameNavigationUrl("https://example.com/path", "https://example.com/other"),
+    false
+  );
+  assert.equal(
+    isSameMainFrameNavigationUrl("about:newtab", "https://example.com/"),
+    false
+  );
 });

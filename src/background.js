@@ -795,9 +795,9 @@ browser.webRequest.onBeforeRequest.addListener(
             navigatingTab.url === "about:home") {
           return {};
         }
-        if (navigatingTab.url === details.url) return {};
+        if (isSameMainFrameNavigationUrl(navigatingTab.url, details.url)) return {};
 
-        const dupDomId = await api.showDuplicatePrompt(details.url, details.tabId);
+        const dupDomId = await api.showDuplicatePrompt(details.url, details.tabId, true);
         if (!dupDomId) return {};
         webRequestPendingDuplicate = {
           tabId: details.tabId,

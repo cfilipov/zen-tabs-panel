@@ -43,6 +43,7 @@
   "background": {
     "scripts": [
       "shared/constants.js",
+      "shared/navigation-url.js",
       "lib/tab-sort.js",
       "background.js"
     ],

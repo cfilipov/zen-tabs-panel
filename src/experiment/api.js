@@ -3524,11 +3524,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  if (__shutdown || !__duplicateInterceptEnabled || isExtensionPage()) return;\n" +
         "  var link = linkHrefFromEvent(e);\n" +
         "  if (!isPlainSameTabLinkClick(e, link)) return;\n" +
-        "  if (!__duplicateUrlCache[link.url]) return;\n" +
+        "  var cachedDuplicate = !!__duplicateUrlCache[link.url];\n" +
+        "  try { sendAsyncMessage('ZenDuplicate:ContentLinkClick', tag({ url: link.url, intercepted: cachedDuplicate })); } catch(_) {}\n" +
+        "  if (!cachedDuplicate) return;\n" +
         "  try { e.preventDefault(); } catch(_) {}\n" +
         "  try { e.stopImmediatePropagation(); } catch(_) {}\n" +
         "  try { e.stopPropagation(); } catch(_) {}\n" +
-        "  try { sendAsyncMessage('ZenDuplicate:ContentLinkClick', tag({ url: link.url })); } catch(_) {}\n" +
         "}\n" +
         "function attach(){\n" +
         "  try {\n" +
@@ -3695,6 +3696,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!duplicateTabInterceptEnabled || !url || !/^https?:/.test(url)) return;
       const sourceTab = getNativeTabForBrowser(m.target);
       const sourceExtId = getExtTabId(sourceTab);
+      if (!m?.data?.intercepted) {
+        noteRecentContentLinkNavigation(url, sourceTab);
+        return;
+      }
       const existing = urlMatchesAnyOpenTab(url, sourceTab);
       if (!existing || typeof sourceExtId !== "number") return;
       try {
@@ -3819,6 +3824,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let duplicateTabInterceptEnabled = true;
     const approvedDuplicateNavigations = [];
     const DUPLICATE_APPROVAL_TTL_MS = 5000;
+    const recentContentLinkNavigations = [];
+    const CONTENT_LINK_NAVIGATION_TTL_MS = 5000;
 
     function openDuplicatePromptOverlay(url, domId) {
       revealDeferred = true;
@@ -3856,6 +3863,38 @@ this.zenWorkspaces = class extends ExtensionAPI {
       );
       if (index < 0) return false;
       approvedDuplicateNavigations.splice(index, 1);
+      return true;
+    }
+
+    function pruneRecentContentLinkNavigations(now) {
+      for (let i = recentContentLinkNavigations.length - 1; i >= 0; i--) {
+        if (recentContentLinkNavigations[i].until <= now) {
+          recentContentLinkNavigations.splice(i, 1);
+        }
+      }
+    }
+
+    function noteRecentContentLinkNavigation(url, sourceTab) {
+      if (!url || !sourceTab) return;
+      const now = Date.now();
+      pruneRecentContentLinkNavigations(now);
+      recentContentLinkNavigations.push({
+        url,
+        domId: sourceTab.id || null,
+        until: now + CONTENT_LINK_NAVIGATION_TTL_MS,
+      });
+    }
+
+    function consumeRecentContentLinkNavigation(url, sourceTab) {
+      if (!url || !sourceTab) return false;
+      const now = Date.now();
+      pruneRecentContentLinkNavigations(now);
+      const sourceDomId = sourceTab.id || null;
+      const index = recentContentLinkNavigations.findIndex((entry) =>
+        entry.url === url && entry.domId === sourceDomId
+      );
+      if (index < 0) return false;
+      recentContentLinkNavigations.splice(index, 1);
       return true;
     }
 
@@ -5311,9 +5350,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // cancel" handling on their side — chrome only renders the prompt.
         // Returns the existing-tab dom id so the caller can wire up the
         // Switch action without re-doing the URL lookup.
-        async showDuplicatePrompt(url, excludeTabId) {
+        async showDuplicatePrompt(url, excludeTabId, requireRecentContentClick) {
           const excludeTab = typeof excludeTabId === "number" ? getNativeTabByExtId(excludeTabId) : null;
           if (consumeDuplicateApproval(url, excludeTab)) return null;
+          if (requireRecentContentClick && !consumeRecentContentLinkNavigation(url, excludeTab)) return null;
           const existing = urlMatchesAnyOpenTab(url, excludeTab);
           if (!existing) return null;
           try {
