@@ -756,9 +756,13 @@ function renderExtensionsStrip(parent) {
     btn.title = e.name;
     btn.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:8px;background:transparent;border:none;padding:0;cursor:pointer;color:inherit;opacity:0.85;";
 
-    const iconHtml = e.iconDataUrl
+    const iconInnerHtml = e.iconDataUrl
       ? `<img class="extension-icon" src="${escapeAttr(e.iconDataUrl)}" alt="" style="width:24px;height:24px;object-fit:contain;pointer-events:none;">`
       : `<span class="extension-icon-fallback" style="width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;">${escapeHtml(e.name.slice(0, 1).toUpperCase())}</span>`;
+    const actionBadgeHtml = e.actionBadge && e.actionBadge.text
+      ? `<span class="extension-action-badge" style="position:absolute;right:-5px;top:-5px;min-width:14px;height:12px;padding:1px 2px;box-sizing:border-box;display:block;border-radius:2px;font-size:9px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-weight:400;line-height:10px;text-align:center;font-variant-numeric:tabular-nums;pointer-events:none;background-color:${escapeAttr(e.actionBadge.backgroundColor || "rgba(217, 0, 0, 1)")};color:${escapeAttr(e.actionBadge.color || "rgba(255, 255, 255, 1)")};">${escapeHtml(e.actionBadge.text)}</span>`
+      : "";
+    const iconHtml = `<span class="extension-icon-wrap" style="position:relative;display:inline-grid;width:24px;height:24px;place-items:center;">${iconInnerHtml}${actionBadgeHtml}</span>`;
     const badgeHtml = i < 9 ? renderBadge(displayKey("Shift+" + (i + 1))) : "";
 
     btn.innerHTML = iconHtml + badgeHtml;

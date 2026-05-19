@@ -206,6 +206,14 @@ html, body {
   opacity: 1;
 }
 
+.extension-icon-wrap {
+  position: relative;
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+}
+
 .extension-icon-button .extension-icon {
   width: 24px;
   height: 24px;
@@ -222,6 +230,25 @@ html, body {
   font-size: 14px;
   font-weight: 600;
   color: var(--ztt-text-muted);
+}
+
+.extension-action-badge {
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  min-width: 14px;
+  height: 12px;
+  padding: 1px 2px;
+  box-sizing: border-box;
+  display: block;
+  border-radius: 2px;
+  font-size: 9px;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 400;
+  line-height: 10px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
 /* iOS-style page indicator dots, only shown on the actions menu */
@@ -1578,4 +1605,3 @@ html, body {
 .nav-direction {
   font-size: 14px;
 }
-

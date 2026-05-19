@@ -802,6 +802,15 @@
         ]
       },
       {
+        "name": "setExtensionActionPopupCapture",
+        "type": "function",
+        "async": true,
+        "description": "Toggle capture of browser-action popup launches from toolbar clicks, extension shortcuts, and action.openPopup() so they are hosted inside our overlay. Backed by the captureExtensionActionPopups setting.",
+        "parameters": [
+          { "name": "enabled", "type": "boolean" }
+        ]
+      },
+      {
         "name": "setSkipOverlayAnimations",
         "type": "function",
         "async": true,

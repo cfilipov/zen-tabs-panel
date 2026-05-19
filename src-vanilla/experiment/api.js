@@ -1058,12 +1058,234 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
     }
 
+    function getBrowserActionForExtension(id) {
+      try {
+        const { ExtensionParent } = ChromeUtils.importESModule(
+          "resource://gre/modules/ExtensionParent.sys.mjs"
+        );
+        const ext = ExtensionParent.GlobalManager.extensionMap.get(id);
+        return ext?.apiManager?.global?.browserActionFor?.(ext) || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function rgbaArrayToCss(color, fallback) {
+      if (!Array.isArray(color) || color.length < 3) return fallback;
+      const r = Math.max(0, Math.min(255, Number(color[0]) || 0));
+      const g = Math.max(0, Math.min(255, Number(color[1]) || 0));
+      const b = Math.max(0, Math.min(255, Number(color[2]) || 0));
+      const a = color.length > 3 ? Math.max(0, Math.min(255, Number(color[3]) || 0)) / 255 : 1;
+      return `rgba(${r}, ${g}, ${b}, ${a})`;
+    }
+
+    function getSelectedTabForWindow(w) {
+      try {
+        return w?.gBrowser?.selectedTab || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function getBrowserActionPopupUrl(id, w = getWin()) {
+      const browserAction = getBrowserActionForExtension(id);
+      const tab = getSelectedTabForWindow(w);
+      try {
+        return browserAction?.action?.getPopupUrl?.(tab) || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function getBrowserActionBadge(id, w = getWin()) {
+      const browserAction = getBrowserActionForExtension(id);
+      const tab = getSelectedTabForWindow(w);
+      if (!browserAction || !tab) return null;
+      let text = "";
+      let backgroundColor = null;
+      let textColor = null;
+      try {
+        text = String(browserAction.action.getProperty(tab, "badgeText") || "").trim();
+        backgroundColor = browserAction.action.getProperty(tab, "badgeBackgroundColor");
+        textColor = browserAction.action.getProperty(tab, "badgeTextColor");
+      } catch (e) {
+        return null;
+      }
+      if (!text) return null;
+      return {
+        text,
+        backgroundColor: rgbaArrayToCss(backgroundColor, "rgba(217, 0, 0, 1)"),
+        color: rgbaArrayToCss(textColor, "rgba(255, 255, 255, 1)"),
+      };
+    }
+
+    function withBrowserActionBadges(items) {
+      return (items || []).map((item) => ({
+        ...item,
+        popupUrl: getBrowserActionPopupUrl(item.id) || item.popupUrl,
+        actionBadge: getBrowserActionBadge(item.id),
+      }));
+    }
+
     let extensionListCache = null;
     // Per-extension natural-size cache, keyed by extension id. Once a
     // popup reports its body dimensions, subsequent opens skip the
     // 360×500 default and morph straight to the remembered size, so
     // the user sees one transition instead of two.
     const extensionPopupSizeCache = Object.create(null);
+    // Default-on: mirrors STORAGE_DEFAULTS.captureExtensionActionPopups.
+    // Background pushes the persisted value shortly after API init.
+    let captureExtensionActionPopups = true;
+    const BROWSER_ACTION_CAPTURE_PATCH = "__zenTabsPanelBrowserActionCapture";
+
+    function isForeignBrowserActionId(id) {
+      return !!id && id !== context.extension.id;
+    }
+
+    function clickInfoFromEvent(event) {
+      const modifiers = [];
+      if (event?.shiftKey) modifiers.push("Shift");
+      if (event?.altKey) modifiers.push("Alt");
+      if (event?.ctrlKey) modifiers.push("Ctrl");
+      if (event?.metaKey) modifiers.push("Command");
+      return {
+        button: event?.button || 0,
+        modifiers,
+      };
+    }
+
+    function openCapturedBrowserActionPopup(browserAction, w, clickInfo, options = {}) {
+      if (!captureExtensionActionPopups || !browserAction || !w) return false;
+      const extensionId = browserAction.extension?.id;
+      if (!isForeignBrowserActionId(extensionId)) return false;
+      const tab = getSelectedTabForWindow(w);
+      if (!tab) return false;
+
+      let popupUrl = null;
+      try {
+        popupUrl = browserAction.action?.getPopupUrl?.(tab) || null;
+      } catch (e) {
+        return false;
+      }
+      if (!popupUrl) return false;
+
+      if (options.triggerAction !== false) {
+        try {
+          popupUrl = browserAction.action.triggerClickOrPopup(tab, clickInfo || { button: 0, modifiers: [] }) || popupUrl;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      try { browserAction.clearPopup?.(); } catch (e) {}
+      if (!isOverlayOpen()) {
+        openOverlayWithView(null);
+      }
+      navStack.push({ view: currentViewName, params: {} });
+      currentViewName = "extension-popup";
+      morphToView("extension-popup", { popupUrl, extensionId, viewType: "popup" });
+      return true;
+    }
+
+    function patchBrowserActionCaptureForExtension(id) {
+      if (!isForeignBrowserActionId(id)) return;
+      const browserAction = getBrowserActionForExtension(id);
+      if (!browserAction) return;
+      const previous = browserAction[BROWSER_ACTION_CAPTURE_PATCH];
+      if (previous?.originalTriggerAction) return;
+
+      const originalTriggerAction = browserAction.triggerAction;
+      const originalOpenPopup = browserAction.openPopup;
+      browserAction[BROWSER_ACTION_CAPTURE_PATCH] = {
+        originalTriggerAction,
+        originalOpenPopup,
+      };
+
+      browserAction.triggerAction = function(window) {
+        if (openCapturedBrowserActionPopup(this, window, { button: 0, modifiers: [] })) {
+          return undefined;
+        }
+        return originalTriggerAction.apply(this, arguments);
+      };
+
+      browserAction.openPopup = function(window, openPopupWithoutUserInteraction = false) {
+        if (
+          openPopupWithoutUserInteraction &&
+          openCapturedBrowserActionPopup(this, window, { button: 0, modifiers: [] }, { triggerAction: false })
+        ) {
+          return undefined;
+        }
+        return originalOpenPopup.apply(this, arguments);
+      };
+    }
+
+    function patchBrowserActionCaptureHooks() {
+      try {
+        const { ExtensionParent } = ChromeUtils.importESModule(
+          "resource://gre/modules/ExtensionParent.sys.mjs"
+        );
+        for (const [id, ext] of ExtensionParent.GlobalManager.extensionMap) {
+          if (ext.manifest?.action || ext.manifest?.browser_action) {
+            patchBrowserActionCaptureForExtension(id);
+          }
+        }
+      } catch (e) {}
+    }
+
+    function restoreBrowserActionCaptureHooks() {
+      try {
+        const { ExtensionParent } = ChromeUtils.importESModule(
+          "resource://gre/modules/ExtensionParent.sys.mjs"
+        );
+        for (const [id, ext] of ExtensionParent.GlobalManager.extensionMap) {
+          const browserAction = ext?.apiManager?.global?.browserActionFor?.(ext);
+          const patch = browserAction?.[BROWSER_ACTION_CAPTURE_PATCH];
+          if (!patch) continue;
+          if (patch.originalTriggerAction) browserAction.triggerAction = patch.originalTriggerAction;
+          if (patch.originalOpenPopup) browserAction.openPopup = patch.originalOpenPopup;
+          try { delete browserAction[BROWSER_ACTION_CAPTURE_PATCH]; } catch (e) {}
+        }
+      } catch (e) {}
+    }
+
+    function browserActionButtonFromEvent(event) {
+      let node = event?.target;
+      while (node && node.nodeType === 1) {
+        if (
+          node.classList?.contains("webextension-browser-action") ||
+          node.classList?.contains("unified-extensions-item-action-button")
+        ) {
+          const id = node.getAttribute?.("data-extensionid");
+          if (isForeignBrowserActionId(id)) return { id, node };
+        }
+        node = node.parentNode;
+      }
+      return null;
+    }
+
+    function installBrowserActionCommandCapture() {
+      const w = getWin();
+      if (!w) return;
+      const onCommand = (event) => {
+        if (!captureExtensionActionPopups || event?.button && event.button !== 0) return;
+        const match = browserActionButtonFromEvent(event);
+        if (!match) return;
+        patchBrowserActionCaptureForExtension(match.id);
+        const browserAction = getBrowserActionForExtension(match.id);
+        if (!openCapturedBrowserActionPopup(browserAction, w, clickInfoFromEvent(event))) return;
+        try { event.preventDefault(); } catch (e) {}
+        try { event.stopImmediatePropagation(); } catch (e) {}
+        try { event.stopPropagation(); } catch (e) {}
+      };
+      w.document.addEventListener("command", onCommand, { capture: true });
+      context.callOnClose({
+        close() {
+          try { w.document.removeEventListener("command", onCommand, { capture: true }); } catch (e) {}
+          restoreBrowserActionCaptureHooks();
+        },
+      });
+    }
+
     async function buildExtensionList() {
       const { ExtensionParent } = ChromeUtils.importESModule(
         "resource://gre/modules/ExtensionParent.sys.mjs"
@@ -1124,6 +1346,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           Services.mm.broadcastAsyncMessage("ZenChord:AddChord", entry);
         } catch (e) {}
       }
+      patchBrowserActionCaptureHooks();
       return items;
     }
 
@@ -1135,6 +1358,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     buildExtensionList()
       .then((list) => { extensionListCache = list; })
       .catch(() => {});
+    installBrowserActionCommandCapture();
+    patchBrowserActionCaptureHooks();
 
     // Open a foreign extension's popup, creating the overlay first if
     // needed. Both the in-palette icon click (via openExtensionPopup
@@ -1145,12 +1370,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
       const found = extensionListCache.find((x) => x.id === extensionId);
       if (!found) return;
+      const popupUrl = getBrowserActionPopupUrl(extensionId) || found.popupUrl;
       if (!isOverlayOpen()) {
         openOverlayWithView(null);
       }
       navStack.push({ view: currentViewName, params: {} });
       currentViewName = "extension-popup";
-      morphToView("extension-popup", { popupUrl: found.popupUrl, extensionId });
+      morphToView("extension-popup", { popupUrl, extensionId });
     }
 
     // -----------------------------------------------------------------------
@@ -4330,7 +4556,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!extensionListCache) {
             extensionListCache = await buildExtensionList();
           }
-          return extensionListCache;
+          return withBrowserActionBadges(extensionListCache);
         },
 
         // Swap the palette into a foreign extension's popup. Opens
@@ -4344,6 +4570,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // pushes this from the interceptExtensionPopups setting.
         async setExtensionPopupIntercept(enabled) {
           interceptEnabled = !!enabled;
+        },
+
+        // Toggle capture of browser-action launches (toolbar icon clicks,
+        // _execute_browser_action shortcuts, and action.openPopup()) so
+        // foreign extension popups open inside our overlay.
+        async setExtensionActionPopupCapture(enabled) {
+          captureExtensionActionPopups = !!enabled;
+          if (captureExtensionActionPopups) {
+            patchBrowserActionCaptureHooks();
+          }
         },
 
         // Toggle overlay reveal/dismiss animations. Background pushes

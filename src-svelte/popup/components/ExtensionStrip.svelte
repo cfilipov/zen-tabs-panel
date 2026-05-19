@@ -20,11 +20,20 @@
         data-extension-id={extension.id}
         onclick={() => onactivate?.(extension)}
       >
-        {#if extension.iconDataUrl}
-          <img class="extension-icon" src={extension.iconDataUrl} alt="" />
-        {:else}
-          <span class="extension-icon-fallback">{extension.name.slice(0, 1).toUpperCase()}</span>
-        {/if}
+        <span class="extension-icon-wrap">
+          {#if extension.iconDataUrl}
+            <img class="extension-icon" src={extension.iconDataUrl} alt="" />
+          {:else}
+            <span class="extension-icon-fallback">{extension.name.slice(0, 1).toUpperCase()}</span>
+          {/if}
+          {#if extension.actionBadge?.text}
+            <span
+              class="extension-action-badge"
+              style:background-color={extension.actionBadge.backgroundColor}
+              style:color={extension.actionBadge.color}
+            >{extension.actionBadge.text}</span>
+          {/if}
+        </span>
         <Badge value={index < 9 ? `⇧${index + 1}` : null} />
       </button>
     {/each}

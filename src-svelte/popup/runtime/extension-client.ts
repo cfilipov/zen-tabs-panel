@@ -5,6 +5,11 @@ export type ExtensionRow = {
   name: string;
   popupUrl: string;
   iconDataUrl: string;
+  actionBadge?: {
+    text: string;
+    backgroundColor: string;
+    color: string;
+  } | null;
 };
 
 export type Send = <T = unknown>(message: unknown) => Promise<T>;

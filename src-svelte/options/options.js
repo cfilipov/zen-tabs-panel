@@ -6,6 +6,7 @@ const els = {
   autoMoveEnabled: document.getElementById("autoMoveEnabled"),
   autoMoveDelay: document.getElementById("autoMoveDelay"),
   interceptExtensionPopups: document.getElementById("interceptExtensionPopups"),
+  captureExtensionActionPopups: document.getElementById("captureExtensionActionPopups"),
   skipOverlayAnimations: document.getElementById("skipOverlayAnimations"),
   dimBackdrop: document.getElementById("dimBackdrop"),
   duplicateTabIntercept: document.getElementById("duplicateTabIntercept"),
@@ -21,6 +22,7 @@ async function loadSettings() {
   els.autoMoveEnabled.checked = settings.autoMoveEnabled;
   els.autoMoveDelay.value = String(settings.autoMoveDelay);
   els.interceptExtensionPopups.checked = settings.interceptExtensionPopups;
+  els.captureExtensionActionPopups.checked = settings.captureExtensionActionPopups;
   els.skipOverlayAnimations.checked = settings.skipOverlayAnimations;
   els.dimBackdrop.checked = settings.dimBackdrop;
   els.duplicateTabIntercept.checked = settings.duplicateTabIntercept;
@@ -71,6 +73,7 @@ async function saveSettings() {
     autoMoveEnabled: els.autoMoveEnabled.checked,
     autoMoveDelay: Number(els.autoMoveDelay.value),
     interceptExtensionPopups: els.interceptExtensionPopups.checked,
+    captureExtensionActionPopups: els.captureExtensionActionPopups.checked,
     skipOverlayAnimations: els.skipOverlayAnimations.checked,
     dimBackdrop: els.dimBackdrop.checked,
     duplicateTabIntercept: els.duplicateTabIntercept.checked,

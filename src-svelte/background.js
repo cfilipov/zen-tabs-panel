@@ -18,6 +18,7 @@ async function loadSettings() {
   Object.assign(settings, stored);
   syncAutoCloseAlarm();
   pushInterceptSetting();
+  pushActionPopupCaptureSetting();
   pushSkipAnimationsSetting();
   pushDimBackdropSetting();
   pushDuplicateInterceptSetting();
@@ -26,6 +27,10 @@ async function loadSettings() {
 
 function pushInterceptSetting() {
   api.setExtensionPopupIntercept(!!settings.interceptExtensionPopups).catch(() => {});
+}
+
+function pushActionPopupCaptureSetting() {
+  api.setExtensionActionPopupCapture(!!settings.captureExtensionActionPopups).catch(() => {});
 }
 
 function pushSkipAnimationsSetting() {
@@ -51,6 +56,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
   let autoCloseTouched = false;
   let interceptTouched = false;
+  let actionPopupCaptureTouched = false;
   let skipAnimationsTouched = false;
   let dimBackdropTouched = false;
   let dupInterceptTouched = false;
@@ -60,6 +66,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
       settings[key] = changes[key].newValue ?? STORAGE_DEFAULTS[key];
       if (key === "autoCloseEnabled") autoCloseTouched = true;
       if (key === "interceptExtensionPopups") interceptTouched = true;
+      if (key === "captureExtensionActionPopups") actionPopupCaptureTouched = true;
       if (key === "skipOverlayAnimations") skipAnimationsTouched = true;
       if (key === "dimBackdrop") dimBackdropTouched = true;
       if (key === "duplicateTabIntercept") dupInterceptTouched = true;
@@ -68,6 +75,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
   }
   if (autoCloseTouched) syncAutoCloseAlarm();
   if (interceptTouched) pushInterceptSetting();
+  if (actionPopupCaptureTouched) pushActionPopupCaptureSetting();
   if (skipAnimationsTouched) pushSkipAnimationsSetting();
   if (dimBackdropTouched) pushDimBackdropSetting();
   if (dupInterceptTouched) pushDuplicateInterceptSetting();
