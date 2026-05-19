@@ -193,6 +193,7 @@ Open `about:config` in Zen and set both of these:
 |---|---|---|
 | `xpinstall.signatures.required` | `false` | Allows installing extensions without a Mozilla signature |
 | `extensions.experiments.enabled` | `true` | Allows extensions to use Experiment APIs |
+| `extensions.autoDisableScopes` | `14` | Keeps profile-installed add-ons from being disabled as sideloaded extensions |
 
 #### 2. Install the extension
 
@@ -219,6 +220,7 @@ Set these flags in `about:config`:
 |---|---|---|
 | `xpinstall.signatures.required` | `false` | Allow unsigned extensions |
 | `extensions.experiments.enabled` | `true` | Allow Experiment APIs |
+| `extensions.autoDisableScopes` | `14` | Keep profile-installed add-ons enabled |
 | `devtools.chrome.enabled` | `true` | Enable Browser Toolbox |
 | `devtools.debugger.remote-enabled` | `true` | Enable remote debugging |
 

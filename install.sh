@@ -180,6 +180,7 @@ do_uninstall() {
   if [ -f "$USER_JS" ]; then
     sed -i '' '/xpinstall\.signatures\.required/d' "$USER_JS"
     sed -i '' '/extensions\.experiments\.enabled/d' "$USER_JS"
+    sed -i '' '/extensions\.autoDisableScopes/d' "$USER_JS"
     if [ ! -s "$USER_JS" ]; then
       rm -f "$USER_JS"
     fi
@@ -191,6 +192,7 @@ do_uninstall() {
   echo "you may need to re-enable these settings in about:config:"
   echo "  xpinstall.signatures.required = false"
   echo "  extensions.experiments.enabled = true"
+  echo "  extensions.autoDisableScopes = 14"
   exit 0
 }
 
@@ -235,6 +237,16 @@ fi
 
 if ! grep -q 'extensions.experiments.enabled' "$USER_JS" 2>/dev/null; then
   echo 'user_pref("extensions.experiments.enabled", true);' >> "$USER_JS"
+fi
+
+# Firefox treats an XPI copied into a profile as a sideloaded add-on. The
+# default autoDisableScopes value can leave it installed but disabled until the
+# user enables it in about:addons. Keep auto-disable active for other scopes,
+# but exclude profile-installed add-ons (profile scope bit = 1, 15 - 1 = 14).
+if grep -q 'extensions.autoDisableScopes' "$USER_JS" 2>/dev/null; then
+  sed -i '' 's/user_pref("extensions\.autoDisableScopes", [^)]*);/user_pref("extensions.autoDisableScopes", 14);/' "$USER_JS"
+else
+  echo 'user_pref("extensions.autoDisableScopes", 14);' >> "$USER_JS"
 fi
 
 # -- Download and install XPI -------------------------------------------------
