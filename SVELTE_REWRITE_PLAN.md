@@ -20,6 +20,34 @@ End-state goals:
 - **Bug classes eliminated by typing.** TypeScript catches the "undefined state field," "wrong message shape," "missing case" issues at compile time.
 - **Unit-testable.** Pure transition functions and the tab-index module run under Vitest without a browser. The decoupling makes this natural.
 
+## Current migration status (May 2026)
+
+This plan started as a forward-looking blueprint. The implementation is now functionally ported in `src-svelte/` and has been exercised in the live Zen debug profile. The current target before declaring the migration complete is release hardening: final verification, documentation, and any parity bug found during live use. There are no known intentionally skipped user-facing features.
+
+Implemented architecture:
+
+- The Svelte and vanilla sources coexist (`src-svelte/` and `src-vanilla/`) and both build into `dist/`.
+- `src-svelte/shared/navigation-tree.ts` is the single source of truth for menu structure and chords, with typed `ActionEffectId`, `ViewLoaderId`, and `AvailabilityPredicateId` registries/exhaustiveness checks.
+- Popup IPC effects are funneled through runtime/effects modules instead of leaf components.
+- Popup state mutation goes through named store mutators; `NativePalette.svelte` no longer assigns `palette.*` fields directly.
+- Runtime loaders, interaction handlers, panel sizing, tab-index client access, and leaf rendering have been extracted from the palette component.
+- View switching uses Svelte declarative transitions through `ViewHost.svelte`.
+- The experiment-side tab index exposes compact DTOs and windowed queries; common tab events update the index incrementally instead of invalidating every view on every event.
+
+Important tradeoffs in the current implementation:
+
+- `NativePalette.svelte` is still large (roughly 960 lines), but it is no longer the only runtime boundary. Further shrinking it is polish/refactor work unless it blocks a concrete invariant.
+- The background tab-index cache from the ideal design is lighter than originally described: background mostly acts as a typed facade over the Experiment API instead of owning a second authoritative cache. This keeps cross-workspace truth in chrome scope and avoids duplicate invalidation logic.
+- Derived list views still compute some sorted/grouped windows on demand inside the experiment tab-index. The popup does not receive full rich tab snapshots for ordinary reveal/scroll paths.
+- The fully declarative-animation goal is partially complete: view switches are declarative, while some vanilla-compatible row/close interactions remain imperative where parity required it.
+
+Release-close checklist:
+
+- Run `npm run typecheck`, `npm test`, `npm run build:svelte`, and `git diff --check`.
+- Keep the production grep gates in the verification section green.
+- Do a final live Zen smoke pass over leader chords, fast multi-key drills, hosted extension popups, panel sizing, tab-list scrolling, workspaces, replay, and common tab actions.
+- Prefer fixture-based screenshot comparison or masked dynamic regions; live tab titles, counts, workspaces, history, and favicons are intentionally profile-dependent.
+
 ## Stack and tooling
 
 - **Svelte 5** — runes-based reactivity (`$state`, `$derived`, `$effect`). One npm dep + plugin.
@@ -599,6 +627,8 @@ package.json
 
 ## Migration phases (single PR target, but sequenced)
 
+Historical note: this section is the original implementation sequence. Use "Current migration status" above as the authoritative snapshot of what has landed and what remains.
+
 The user chose single-PR delivery. Within the PR, sequencing keeps the working tree buildable at every step:
 
 0. **Behavior + docs audit** — generate a parity table from `src-vanilla/shared/keybindings.js`, `src-vanilla/shared/constants.js`, `src-vanilla/manifest.json`, current vanilla views, screenshots, and current CSS. Treat code as source of truth for behavior; update README mismatches (double-tap Cmd, Ctrl+Cmd, split key, vertical navigation keys, dev load path) after migration. This table is the parity contract: no user-visible behavior or visual detail may be dropped during the rewrite.
@@ -680,7 +710,7 @@ Tooling utilities to reuse / port:
 19. `grep -rnE "sendIpc|ext\.runtime\.sendMessage|browser\.runtime\.sendMessage" src-svelte/popup/views/ src-svelte/popup/components/ src-svelte/popup/interaction/interpreter.ts` → zero hits.
 20. `grep -rn "browser\.tabs\.query" src-svelte/popup/` → zero hits.
 21. `grep -rnE "not yet ported|TODO|for now|__index:|as never|unknown as BaseViewData|generic all-tabs" src-svelte/` → zero hits in production paths.
-22. `grep -rnE "chord:|hotkey:|key:\\s*[\"']|Shift\\+" src-svelte/popup/views/ src-svelte/popup/components/` → zero hits except test fixtures. View/components must render metadata from the tree/view model, not retype keybindings.
+22. `grep -rnE "chord:|hotkey:|key:\\s*[\"']|Shift\\+" src-svelte/popup/views/ src-svelte/popup/components/` → zero hard-coded keybinding literals in Svelte components, except test fixtures. View-model helpers may pass through `node.chord` / derived `hotkey` metadata from the navigation tree; they must not retype independent shortcut mappings.
 23. `grep -rnE "ActionEffectId|ViewLoaderId|AvailabilityPredicateId" src-svelte/shared/navigation-tree.ts src-svelte/shared/*registry* src-svelte/shared/availability.ts` plus `tsc --noEmit` proves every tree reference is implemented exactly once.
 
 **Live debugging:**
