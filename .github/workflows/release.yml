@@ -26,5 +26,5 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
-          files: zen-tabs-panel.xpi
+          files: ergozen.xpi
           generate_release_notes: false
