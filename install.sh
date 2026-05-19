@@ -242,7 +242,9 @@ fi
 mkdir -p "$PROFILE_DIR/extensions"
 
 echo "Downloading ErgoZen v$LATEST_VERSION..."
-curl -fsSL -o "$XPI_PATH" "$RELEASE_URL" || curl -fsSL -o "$XPI_PATH" "$LEGACY_RELEASE_URL"
+if ! curl -fsL -o "$XPI_PATH" "$RELEASE_URL"; then
+  curl -fsSL -o "$XPI_PATH" "$LEGACY_RELEASE_URL"
+fi
 
 echo ""
 if [ -n "$CURRENT_VERSION" ]; then
