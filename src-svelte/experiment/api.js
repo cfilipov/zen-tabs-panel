@@ -15,28 +15,34 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "zen-tabs-panel-unread-indicator": {
         name: "Unread Tab Indicator",
         description: "Blue dot on tabs opened in the background that you haven't visited yet.",
-        version: "1.0.0",
+        version: "1.0.1",
         css: `
 .tabbrowser-tab[unread="true"] .tab-content {
   position: relative !important;
 }
 .tabbrowser-tab[unread="true"] .tab-content::after {
-  content: "" !important;
+  content: "N" !important;
   position: absolute !important;
   top: 50% !important;
-  right: 8px !important;
+  right: 9px !important;
   transform: translateY(-50%) !important;
-  width: 8px !important;
-  height: 8px !important;
+  width: 18px !important;
+  height: 18px !important;
+  box-sizing: border-box !important;
+  display: grid !important;
+  place-items: center !important;
   border-radius: 50% !important;
   background: #3b82f6 !important;
-  border: 1.5px solid rgba(0, 0, 0, 0.3) !important;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+  border: 1.5px solid #1d4ed8 !important;
+  color: white !important;
+  font: 700 10px/1 system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+  text-align: center !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
   z-index: 9999 !important;
   pointer-events: none !important;
 }
 .tabbrowser-tab[unread="true"] .tab-label-container {
-  margin-right: 22px !important;
+  margin-right: 30px !important;
 }
 .tabbrowser-tab[unread="true"]:hover .tab-content::after {
   display: none !important;
@@ -568,36 +574,43 @@ this.zenWorkspaces = class extends ExtensionAPI {
           position: relative !important;
         }
         .tabbrowser-tab[zen-tabs-panel-duplicate] .tab-content::before {
-          content: "" !important;
+          content: "D" !important;
           position: absolute !important;
           top: 50% !important;
-          right: 5px !important;
-          transform: translateY(-50%) rotate(45deg) !important;
-          width: 7px !important;
-          height: 7px !important;
+          right: 9px !important;
+          transform: translateY(-50%) !important;
+          width: 18px !important;
+          height: 18px !important;
+          box-sizing: border-box !important;
+          display: grid !important;
+          place-items: center !important;
+          border-radius: 50% !important;
           background: #f59e0b !important;
-          border: 1.5px solid rgba(0, 0, 0, 0.3) !important;
-          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+          border: 1.5px solid #d97706 !important;
+          color: black !important;
+          font: 700 10px/1 system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+          text-align: center !important;
+          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
           z-index: 9999 !important;
           pointer-events: none !important;
         }
         .tabbrowser-tab[zen-tabs-panel-duplicate][unread="true"] .tab-content::before {
-          right: 22px !important;
+          right: 31px !important;
         }
         .tabbrowser-tab[unread="true"] .tab-content::after {
-          right: 8px !important;
+          right: 9px !important;
         }
         .tabbrowser-tab[unread="true"] .tab-label-container {
-          margin-right: 22px !important;
+          margin-right: 30px !important;
         }
         .tabbrowser-tab[zen-tabs-panel-duplicate]:hover .tab-content::before {
           display: none !important;
         }
         .tabbrowser-tab[zen-tabs-panel-duplicate] .tab-label-container {
-          margin-right: 22px !important;
+          margin-right: 30px !important;
         }
         .tabbrowser-tab[zen-tabs-panel-duplicate][unread="true"] .tab-label-container {
-          margin-right: 34px !important;
+          margin-right: 52px !important;
         }
     `;
 

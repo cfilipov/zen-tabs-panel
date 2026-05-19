@@ -22,7 +22,7 @@ A keyboard-driven tab management extension for [Zen Browser](https://zen-browser
 - Unvisited tabs - list tabs opened in the background you haven't looked at
 - Tabs by last visited - all tabs sorted by recency. Hovering or arrow-keying through any tab list highlights and scrolls to the tab in the sidebar.
 - Tab info - detailed view of the current tab: age, memory/CPU usage, visit history (grouped by date, collapsible), and duplicate tab detection with close buttons
-- Duplicates - view all duplicate tabs across all workspaces, grouped by URL, with workspace indicators, tab age, hover preview, and close buttons. Duplicate tabs are marked with an amber diamond indicator in the sidebar (aligned with the unread dot indicator).
+- Duplicates - view all duplicate tabs across all workspaces, grouped by URL, with workspace indicators, tab age, hover preview, and close buttons. Duplicate tabs are marked with an amber "D" badge in the sidebar; unvisited tabs use a matching blue "N" badge.
 - Domains - browse tabs grouped by domain with drill-down
 - Tabs by age - list all tabs oldest first, grouped by age (today, yesterday, this week, etc.) with close buttons for cleaning up old tabs
 - Most visited - list tabs sorted by browser history visit count, most visited first
