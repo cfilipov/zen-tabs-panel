@@ -51,3 +51,11 @@ export function nextSelectionIndex(context: SelectionContext, delta: 1 | -1) {
   }
   return context.selectedIndex;
 }
+
+export function duplicatePromptPreviewDomId(
+  view: ViewId,
+  selectedIndex: number,
+  existingDomId: string | null,
+) {
+  return view === "duplicate-prompt" && selectedIndex === 0 ? existingDomId : null;
+}

@@ -1,6 +1,6 @@
 # ErgoZen
 
-**Version 0.4.0** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
+**Version 0.4.1** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
 
 A keyboard-driven tab management extension for [Zen Browser](https://zen-browser.app/) with a command palette UI and optional companion Zen Mods.
 
@@ -26,31 +26,36 @@ ErgoZen gives you keyboard access to far more tab and workspace actions than Zen
 
 ## Features
 
-**Command palette** (`Cmd+.` / `Cmd+Option+.` or toolbar icon) - a Zen-styled floating panel with:
+**Command palette** (`⌘.` / `⌘⌥.` on macOS, `⌃.` on Windows/Linux, or toolbar icon) - a Zen-styled floating panel with:
 
-- Navigate panel — a 3×2 grid at the top of the menu showing what tab/page you'd land on for each direction, each with a live preview of the target. Three columns: jumps to known tabs (Previous lastAccessed, Parent opener), browser-style history (Back/Forward in the current tab), and vertical-bar neighbors (Above/Below in the sidebar). Hovering a cell highlights the target in the sidebar; the icon shown is the target tab's favicon when it's a tab.
+- Navigate section - directional actions for Previous, Parent, Above, and Below on the first page, with Back and Forward on the second page. Rows that target a tab show a live preview with the target favicon/title; hovering or arrow-keying highlights and scrolls to the target in the sidebar.
 - Child tabs - list all tabs spawned from the current tab
 - Sibling tabs - list all tabs that share the same parent as the current tab
-- Parent tabs - list all tabs that have spawned children
-- Navigation - back/forward history of the current tab with B/F shortcuts for immediate back/forward
-- Unvisited tabs - list tabs opened in the background you haven't looked at
+- Parent tabs - list tabs that have spawned children, with child counts and drill-down into each parent's children
+- Tab history - back/forward history of the current tab with B/F shortcuts for immediate back/forward
+- New tabs - list tabs opened in the background you haven't looked at
 - Tabs by last visited - all tabs sorted by recency. Hovering or arrow-keying through any tab list highlights and scrolls to the tab in the sidebar.
 - Tab info - detailed view of the current tab: age, memory/CPU usage, visit history (grouped by date, collapsible), and duplicate tab detection with close buttons
 - Duplicates - view all duplicate tabs across all workspaces, grouped by URL, with workspace indicators, tab age, hover preview, and close buttons. Duplicate tabs are marked with an amber "D" badge in the sidebar; unvisited tabs use a matching blue "N" badge.
+- Duplicate tab prompt - optionally intercepts attempts to open a URL that is already open elsewhere, with choices to switch to the existing tab, open anyway, or cancel. The switch option previews and scrolls to the existing tab.
 - Domains - browse tabs grouped by domain with drill-down
-- Tabs by age - list all tabs oldest first, grouped by age (today, yesterday, this week, etc.) with close buttons for cleaning up old tabs
+- Tabs by age - list all tabs by age with age badges and close buttons for cleaning up old tabs
 - Most visited - list tabs sorted by browser history visit count, most visited first
-- Move to workspace - move tabs to another workspace without switching away (placed at top of target workspace's tab list). Supports multiselected tabs (Cmd+click).
+- Move to workspace - move tabs to another workspace without switching away (placed at top of target workspace's tab list). Supports multiselected tabs (⌘-click).
+- Move to folder - move the current tab to a Zen folder
 - Move tab to start / end of tab bar
 - Reorder tabs - submenu with sort options: by recent, by domain (alphabetical or popularity), by age, most visited, inactive at bottom, group duplicates
 - Scroll to current tab - scroll the sidebar to center the active tab
 - Unload tab - discard from memory
-- Close & select - close the current tab and explicitly choose which tab to focus next: default (whatever Cmd+W would do, with the predicted successor previewed live), previous (last-active), parent, next/previous child (sibling sharing the same parent), or next/previous tab in the vertical bar. Each row shows the actual target tab's favicon and title; hover or arrow-key to highlight it in the sidebar; rows with no available target are disabled.
+- Close & select - close the current tab and explicitly choose which tab to focus next: default (whatever `⌘W` would do, with the predicted successor previewed live), previous (last-active), parent, next/previous child (sibling sharing the same parent), or next/previous tab in the vertical bar. Each row shows the actual target tab's favicon and title; hover or arrow-key to highlight it in the sidebar; rows with no available target are disabled.
 - Pin/unpin tab — toggle pinned state of the active tab (refuses to act on Essentials)
 - Copy URL as Markdown — copies the active tab as `[Title](URL)` to the clipboard
 - Restore closed tab — reopens the most recently closed tab in this window via SessionStore
 - Next/Previous workspace — cycle through workspaces with wraparound
 - Split — submenu for Zen's split view: New, Close, Horizontal (top/bottom panes), Vertical (side-by-side panes)
+- Extension popup hosting - extension toolbar popups can appear in ErgoZen's centered overlay, including badge indicators on the extension icons in the main menu
+- Page and browser tools - reload, hard reload, duplicate tab, reader mode, mute, fullscreen, picture-in-picture, page source/info, screenshots, downloads, add-ons, Firefox View, and developer tools on page 2 of the palette
+- Repeat last chord - replay the most recent leaf action with `⌘.` then `.`
 - Settings
 - "Copy selected tab URLs" right click menu item when multiple tabs are selected
 
@@ -58,11 +63,11 @@ ErgoZen gives you keyboard access to far more tab and workspace actions than Zen
 
 **Keyboard shortcuts** (configurable via `about:addons` › Manage Extension Shortcuts):
 
-Press `Cmd+.` to arm the palette/chord engine. `Cmd+Option+.` is registered as a backup leader, and two additional leader slots are available but unset by default. All four commands do the same thing and can be changed in `about:addons` > Manage Extension Shortcuts. From the palette, use single-key shortcuts to navigate:
+Press `⌘.` to arm the palette/chord engine on macOS, or `⌃.` on Windows/Linux. `⌘⌥.` is registered as a backup macOS leader, and two additional leader slots are available but unset by default. All four commands do the same thing and can be changed in `about:addons` > Manage Extension Shortcuts. From the palette, use single-key shortcuts to navigate:
 
 The main menu groups actions into columns:
 
-**Navigate** (3×2 grid with live previews of the target tab/page):
+**Navigate** (directional actions with live previews of the target tab/page):
 
 | Panel key | Action |
 |---|---|
@@ -99,7 +104,6 @@ The main menu groups actions into columns:
 
 | Panel key | Action |
 |---|---|
-| `Y` | Copy URL as Markdown |
 | `Z` | Restore last closed tab |
 | `U` | Unload tab |
 | `W` | Close & select (submenu) |
@@ -113,6 +117,7 @@ The main menu groups actions into columns:
 | `E` | Move to end |
 | `O` | Reorder tabs (submenu) |
 | `M` | Move to workspace |
+| `⇧O` | Move to folder |
 | `L` | Scroll to tab |
 | `\` | Split view (submenu) |
 
@@ -128,24 +133,63 @@ The main menu groups actions into columns:
 
 | Panel key | Action |
 |---|---|
+| `.` | Repeat last chord action |
 | `,` | Settings |
 
-**Chord shortcuts** - the same keys work as leader-key chords. Press a leader (`Cmd+.`, `Cmd+Option+.`, or any configured backup) followed by a panel key within the chord timeout to fire the action without the menu appearing:
+Page 2 contains browser and page utilities:
 
-- `Cmd+. P` / `T` - jump to previous tab / parent tab, no menu shown
-- `Cmd+. [` / `]` - back / forward in the current tab's history (like the browser back/forward buttons)
-- `Cmd+. J` / `K` - jump to the tab visually above / below the current tab in the vertical sidebar
-- `Cmd+. {` / `}` - previous / next workspace (with wraparound)
-- `Cmd+. D` - open the Duplicates submenu directly, skipping the main menu
-- `Cmd+. O R` - sort tabs by recent newest (any of the reorder mnemonics work after `O` — `R`/`⇧R`, `D`/`⇧D`, `A`/`⇧A`, `I`, `V`, `G`)
-- `Cmd+. W W` - close current tab, browser picks next (Cmd+W equivalent)
-- `Cmd+. W P` / `T` / `C` / `⇧C` / `N` / `⇧N` - close current tab and jump to previous / parent / next-or-previous sibling / next-or-previous in the sidebar. Pause after `W` to see a menu of all options with live previews of the target tab in each row.
-- `Cmd+. \ N` / `C` / `H` / `V` - split view: new, close, horizontal (top/bottom), vertical (side-by-side). Pause after `\` for the menu.
-- `Cmd+. F` - toggle pin on current tab
-- `Cmd+. Y` - copy current URL as Markdown link
-- `Cmd+. Z` - restore the most recently closed tab
-- `Cmd+. 1` … `9`, `0` - switch directly to workspace 1–10
-- `Cmd+. S` / `E` / `L` / `U` / `,` - move to start/end, scroll to current, unload, settings
+**This page**:
+
+| Panel key | Action |
+|---|---|
+| `⇧R` | Reload |
+| `⇧L` | Hard reload |
+| `⇧D` | Duplicate tab |
+| `⇧M` | Reader mode |
+| `⇧V` | Mute/unmute |
+| `⇧F` | Full screen |
+| `;` | Picture-in-picture |
+
+**Tab**:
+
+| Panel key | Action |
+|---|---|
+| `⇧P` | Reset pinned URL |
+| `⇧E` | Add to Essentials |
+| `⇧N` | New container tab |
+
+**Profiles, Developer, Browser, Page tools**:
+
+| Panel key | Action |
+|---|---|
+| `'` | Profiles |
+| `⇧J` | DevTools |
+| `⇧B` | Browser Toolbox |
+| `⇧W` | Downloads |
+| `⇧A` | Add-ons |
+| `⇧H` | Firefox View |
+| `⇧U` | View source |
+| `⇧I` | Page info |
+| `⇧S` | Screenshot |
+| `⇧Y` | Copy URL |
+| `Y` | Copy URL as Markdown |
+
+**Chord shortcuts** - the same keys work as leader-key chords. Press a leader (`⌘.`, `⌘⌥.`, `⌃.`, or any configured backup) followed by a panel key within the chord timeout to fire the action without the menu appearing:
+
+- `⌘. P` / `T` - jump to previous tab / parent tab, no menu shown
+- `⌘. [` / `]` - back / forward in the current tab's history (like the browser back/forward buttons)
+- `⌘. J` / `K` - jump to the tab visually above / below the current tab in the vertical sidebar
+- `⌘. {` / `}` - previous / next workspace (with wraparound)
+- `⌘. D` - open the Duplicates submenu directly, skipping the main menu
+- `⌘. O R` - sort tabs by recent newest (any of the reorder mnemonics work after `O`: `R`/`⇧R`, `D`/`⇧D`, `A`/`⇧A`, `I`, `V`, `G`)
+- `⌘. W W` - close current tab, browser picks next (`⌘W` equivalent)
+- `⌘. W P` / `T` / `C` / `⇧C` / `N` / `⇧N` - close current tab and jump to previous / parent / next-or-previous sibling / next-or-previous in the sidebar. Pause after `W` to see a menu of all options with live previews of the target tab in each row.
+- `⌘. \ N` / `C` / `H` / `V` - split view: new, close, horizontal (top/bottom), vertical (side-by-side). Pause after `\` for the menu.
+- `⌘. F` - toggle pin on current tab
+- `⌘. Y` - copy current URL as Markdown link
+- `⌘. Z` - restore the most recently closed tab
+- `⌘. 1` … `9`, `0` - switch directly to workspace 1–10
+- `⌘. S` / `E` / `L` / `U` / `,` - move to start/end, scroll to current, unload, settings
 
 If you don't press a follow-up key, the main menu opens after the timeout. Pressing any unrecognized key or Escape during the chord window cancels silently. Toolbar clicks bypass the chord and open the menu immediately.
 
@@ -155,6 +199,11 @@ If you don't press a follow-up key, the main menu opens after the timeout. Press
 
 - Auto-close unpinned tabs after a configurable period (24h / 48h / 1 week / 1 month)
 - Auto-move active tab to top with configurable delay
+- Host extension popup windows and toolbar/shortcut extension popups inside the palette
+- Skip palette animations
+- Dim the page behind the palette
+- Prompt before opening duplicate tabs
+- Chord delay
 
 **Companion Zen Mods** - optional browser chrome tweaks installable from the settings page:
 
@@ -206,7 +255,7 @@ The extension will persist across browser restarts.
 
 #### 3. Install companion mods (optional)
 
-1. Open the command palette (`Cmd+Option+.`) and press `,` to open settings
+1. Open the command palette (`⌘⌥.`) and press `,` to open settings
 2. Under **Companion Zen Mods**, click **Install** next to any mods you want
 3. The mods will appear in `about:preferences` › Zen Mods where you can toggle them
 

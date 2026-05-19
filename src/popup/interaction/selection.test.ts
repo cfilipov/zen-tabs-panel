@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { nextSelectionIndex, selectionLength, type SelectionContext } from "./selection";
+import {
+  duplicatePromptPreviewDomId,
+  nextSelectionIndex,
+  selectionLength,
+  type SelectionContext,
+} from "./selection";
 
 function context(overrides: Partial<SelectionContext> = {}): SelectionContext {
   return {
@@ -47,5 +52,12 @@ describe("selection transitions", () => {
       view: "profiles",
       profileRows: [{ name: "current", isCurrent: true, isDefault: true }],
     }), 1)).toBe(-1);
+  });
+
+  it("previews the existing tab only for the duplicate prompt switch option", () => {
+    expect(duplicatePromptPreviewDomId("duplicate-prompt", 0, "tab-123")).toBe("tab-123");
+    expect(duplicatePromptPreviewDomId("duplicate-prompt", 1, "tab-123")).toBeNull();
+    expect(duplicatePromptPreviewDomId("duplicate-prompt", 0, null)).toBeNull();
+    expect(duplicatePromptPreviewDomId("actions", 0, "tab-123")).toBeNull();
   });
 });

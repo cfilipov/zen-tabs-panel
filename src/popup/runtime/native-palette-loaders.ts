@@ -192,7 +192,7 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
     });
   }
 
-  async function loadDuplicatePrompt(params = new URLSearchParams(location.search)) {
+  async function loadDuplicatePrompt(params: URLSearchParams | Record<string, unknown> = new URLSearchParams(location.search)) {
     await runViewLoad({
       controller: viewLoad,
       view: "duplicate-prompt",
@@ -215,7 +215,7 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
     profiles: loadProfiles,
     duplicates: loadDuplicates,
     "tab-info": loadTabInfo,
-    "duplicate-prompt": (params) => loadDuplicatePrompt(params instanceof URLSearchParams ? params : undefined),
+    "duplicate-prompt": loadDuplicatePrompt,
   };
 
   return {

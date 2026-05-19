@@ -25,7 +25,7 @@
     visibleRangeRequest,
   } from "./interaction/list-window";
   import { replayKeyForBadgeIndex, replayKeyForNavigationIndex } from "./interaction/replay-trace";
-  import { nextSelectionIndex, type SelectionContext } from "./interaction/selection";
+  import { duplicatePromptPreviewDomId, nextSelectionIndex, type SelectionContext } from "./interaction/selection";
   import {
     keepOnlyTabInfoDuplicate,
     removeRecentlyClosedRow,
@@ -212,6 +212,11 @@
   const tabRows = $derived(palette.rows.filter(isTabRow));
   const domainRows = $derived(palette.rows.filter(isDomainRow));
   const selectedRowDomId = $derived(selectedTabRow?.domId ?? null);
+  const selectedDuplicatePromptDomId = $derived(duplicatePromptPreviewDomId(
+    palette.currentView,
+    palette.selectedIndex,
+    palette.duplicatePromptDomId,
+  ));
   const selectedDomain = $derived(selectedDomainRow?.domain ?? null);
   const navigationEntries = $derived(palette.navigationHistory?.entries ?? []);
   const activeWorkspaceId = $derived(palette.sidebarWorkspaces.find((workspace) => workspace.isActive)?.uuid ?? null);
@@ -940,6 +945,10 @@
   $effect(() => {
     if (selectedTabRow) {
       previewTab(selectedTabRow);
+    } else if (selectedDuplicatePromptDomId) {
+      previewTabLike({ domId: selectedDuplicatePromptDomId });
+    } else if (palette.currentView === "duplicate-prompt") {
+      clearPreview();
     } else if (palette.currentView === "actions") {
       clearPreview();
     }

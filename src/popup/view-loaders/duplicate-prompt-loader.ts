@@ -4,10 +4,18 @@ export type DuplicatePromptData = {
   selectedIndex: number;
 };
 
-export function loadDuplicatePromptView(params: URLSearchParams): DuplicatePromptData {
+export type DuplicatePromptParams = URLSearchParams | Record<string, unknown>;
+
+function paramValue(params: DuplicatePromptParams, key: "url" | "domId") {
+  if (params instanceof URLSearchParams) return params.get(key);
+  const value = params[key];
+  return typeof value === "string" ? value : null;
+}
+
+export function loadDuplicatePromptView(params: DuplicatePromptParams): DuplicatePromptData {
   return {
-    url: params.get("url") || "",
-    domId: params.get("domId"),
+    url: paramValue(params, "url") || "",
+    domId: paramValue(params, "domId"),
     selectedIndex: -1,
   };
 }
