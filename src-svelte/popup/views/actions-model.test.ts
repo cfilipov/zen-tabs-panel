@@ -11,7 +11,7 @@ import {
 
 describe("actions menu model", () => {
   it("renders only ids from the navigation tree", () => {
-    const ids = new Set(NAVIGATION_TREE.flatMap((node) => node.kind === "prefix" ? [node.id, ...node.children.map((child) => child.id)] : [node.id]));
+    const ids = new Set<string>(NAVIGATION_TREE.flatMap((node) => node.kind === "prefix" ? [node.id, ...node.children.map((child) => child.id)] : [node.id]));
     const model = buildActionsMenuModel();
     for (const item of model.flatMap((section) => section.items)) {
       expect(ids.has(item.id), item.id).toBe(true);

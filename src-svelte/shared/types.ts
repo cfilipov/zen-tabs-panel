@@ -36,6 +36,8 @@ export type NavFlag =
   | "needsHistory"
   | "needsPinnedTab";
 
+export type AvailabilityPredicateId = NavFlag;
+
 export type NavBase = {
   id: string;
   chord: Chord;
@@ -56,7 +58,7 @@ export type OpenViewNode = NavBase & {
 export type PrefixNode = NavBase & {
   kind: "prefix";
   view: ViewId;
-  children: ActionNode[];
+  children: readonly ActionNode[];
 };
 
 export type NavNode = ActionNode | OpenViewNode | PrefixNode;

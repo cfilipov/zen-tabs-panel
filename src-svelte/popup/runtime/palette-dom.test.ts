@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   directionalListItemId,
-  measurePaletteNaturalHeight,
   scrollPaletteListIndexIntoView,
   scrollSelectedItemIntoView,
   snapshotKeyEvent,
@@ -40,20 +39,6 @@ describe("palette DOM runtime helpers", () => {
       ctrlKey: true,
       metaKey: true,
     });
-  });
-
-  it("measures natural panel height from header, list, and page indicator geometry", () => {
-    document.body.innerHTML = `
-      <div id="header"><span>Title</span></div>
-      <div id="list"><div id="first"></div><div id="last"></div></div>
-      <div id="page-indicator"></div>
-    `;
-    setRect(document.getElementById("header")!, { top: 0, bottom: 30, height: 30 });
-    setRect(document.getElementById("first")!, { top: 40, bottom: 80 });
-    setRect(document.getElementById("last")!, { top: 80, bottom: 120 });
-    setRect(document.getElementById("page-indicator")!, { top: 120, bottom: 140, height: 20 });
-
-    expect(measurePaletteNaturalHeight(document)).toBe(138);
   });
 
   it("scrolls the palette list to keep an absolute index visible", () => {

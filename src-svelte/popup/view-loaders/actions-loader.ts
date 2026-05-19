@@ -2,6 +2,7 @@ import type { ExtensionRow } from "../runtime/extension-client";
 import type { NavigationHistory } from "../runtime/history-client";
 import type { ActionPreview, ActionsSnapshot } from "../runtime/tab-index-client";
 import type { WorkspaceRow } from "../runtime/workspace-client";
+import { unavailableNavigationIds } from "../interaction/availability";
 import { filterNavigationHistory } from "./navigation-history";
 
 export type ActionsTabIndexClient = {
@@ -110,25 +111,23 @@ export async function loadActionsMenuData(deps: LoadActionsDeps): Promise<Action
     "duplicates": snapshot?.duplicateGroupCount ?? 0,
     "move-to-workspace": selectedDomIds.length > 1 ? selectedDomIds.length : 0,
   };
-  const disabledIds = new Set([
+  const disabledIds = unavailableNavigationIds({
+    previewsById,
+    counts,
+    recentlyClosedCount: recentlyClosed.length,
+    navigationEntryCount: navHistory?.entries.length ?? 0,
+    currentTabIsPinned: !!snapshot?.currentTabIsPinned,
+  });
+  for (const id of [
     ...(!previewsById["go-to-previous-tab"] ? ["go-to-previous-tab"] : []),
-    ...(!previewsById["go-to-parent-tab"] ? ["go-to-parent-tab"] : []),
     ...(!previewsById["go-to-prev-vertical-tab"] ? ["go-to-prev-vertical-tab"] : []),
     ...(!previewsById["go-to-next-vertical-tab"] ? ["go-to-next-vertical-tab"] : []),
     ...(!previewsById["go-back-in-tab"] ? ["go-back-in-tab"] : []),
     ...(!previewsById["go-forward-in-tab"] ? ["go-forward-in-tab"] : []),
     ...(!previewsById["unvisited-newest"] ? ["unvisited-newest"] : []),
     ...(!previewsById["unvisited-oldest"] ? ["unvisited-oldest"] : []),
-    ...((snapshot?.childTabCount ?? 0) <= 0 ? ["child-tabs"] : []),
-    ...((snapshot?.siblingTabCount ?? 0) <= 0 ? ["sibling-tabs"] : []),
-    ...((snapshot?.parentTabCount ?? 0) <= 0 ? ["parent-tabs"] : []),
-    ...((snapshot?.unvisitedTabCount ?? 0) <= 0 ? ["unvisited-tabs"] : []),
     ...((snapshot?.domainCount ?? 0) <= 0 ? ["domains"] : []),
-    ...((snapshot?.duplicateGroupCount ?? 0) <= 0 ? ["duplicates"] : []),
-    ...(recentlyClosed.length <= 0 ? ["recently-closed"] : []),
-    ...((navHistory?.entries.length ?? 0) <= 1 ? ["navigation"] : []),
-    ...(!snapshot?.currentTabIsPinned ? ["reset-pinned-tab"] : []),
-  ]);
+  ]) disabledIds.add(id);
 
   return {
     workspaces,

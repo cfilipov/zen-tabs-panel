@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import PaletteShell from "./components/PaletteShell.svelte";
-  import ActionsMenu from "./views/ActionsMenu.svelte";
+  import ViewHost from "./views/ViewHost.svelte";
   import { resolveActionItemActivation, type ActionItemActivation } from "./interaction/action-activation";
   import { nextActionSectionIndex, nextActionsPage } from "./interaction/actions-navigation";
   import { createBridgeDispatchController } from "./interaction/bridge-dispatch";
@@ -11,18 +11,6 @@
     type BridgeReply,
     type ForceReadyPayload,
   } from "./chord-bridge";
-  import ContainerList from "./views/ContainerList.svelte";
-  import DomainList from "./views/DomainList.svelte";
-  import DuplicateGroups from "./views/DuplicateGroups.svelte";
-  import DuplicatePrompt from "./views/DuplicatePrompt.svelte";
-  import FolderList from "./views/FolderList.svelte";
-  import PrefixMenu from "./views/PrefixMenu.svelte";
-  import NavigationList from "./views/NavigationList.svelte";
-  import ProfileList from "./views/ProfileList.svelte";
-  import RecentlyClosedList from "./views/RecentlyClosedList.svelte";
-  import TabList from "./views/TabList.svelte";
-  import TabInfoView from "./views/TabInfoView.svelte";
-  import WorkspaceList from "./views/WorkspaceList.svelte";
   import {
     interpretVisibleInput,
     type InteractionCommand,
@@ -30,6 +18,7 @@
   import { chordFromKey } from "./interaction/inputs";
   import { DUPLICATE_PROMPT_ACTIONS, type DuplicatePromptAction } from "./interaction/duplicate-prompt-options";
   import { applyInteractionCommand, type InteractionRuntimeHandlers } from "./interaction/runtime";
+  import { isActionEffectId } from "./interaction/action-registry";
   import {
     loadWindowForIndex,
     rowInWindow,
@@ -61,15 +50,13 @@
   import { commandForViewActivation, type ViewCommand } from "./interaction/view-command";
   import { isWorkspaceFilterView } from "./interaction/view-capabilities";
   import { buildSidebarModel, type SidebarHintId } from "./interaction/sidebar-model";
-  import { chromeNavigationMessage } from "./interaction/view-navigation";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
   import { createHistoryClient, type NavigationHistory, type RecentlyClosedRow } from "./runtime/history-client";
-  import { fireMessage, sendMessage } from "./runtime/ipc";
+  import { createPaletteEffects } from "./runtime/palette-effects";
   import {
     directionalListItemId,
-    measurePaletteNaturalHeight,
     scrollPaletteListIndexIntoView,
     scrollSelectedItemIntoView,
     snapshotKeyEvent,
@@ -140,14 +127,19 @@
   const profileClient = createProfileClient();
   const tabInfoClient = createTabInfoClient();
   const workspaceClient = createWorkspaceClient();
+  const effects = createPaletteEffects();
   const actionSections = buildActionsMenuModel();
 
   const paletteStore = createNativePaletteState();
   const palette = paletteStore.state;
   let pageAlive = true;
   let terminalCommandDispatched = false;
+  let terminalCommandDispatchedAt = 0;
+  let paletteHeight = 0;
+  let resizeRequestId = 0;
+  let lastResizeKey = "";
   const revealController = createPaletteRevealController({
-    sendReveal: (inst) => fireMessage({ type: "reveal-palette", inst }),
+    sendReveal: effects.revealPalette,
   });
   const bridgeDispatch = createBridgeDispatchController({
     dispatchKey: handleKeyInput,
@@ -155,7 +147,34 @@
     clearRevealTimer: revealController.clear,
   });
 
+  function markTerminalCommandDispatched() {
+    terminalCommandDispatched = true;
+    terminalCommandDispatchedAt = Date.now();
+  }
+
+  function clearTerminalCommandDispatched() {
+    terminalCommandDispatched = false;
+    terminalCommandDispatchedAt = 0;
+  }
+
+  function terminalCommandStillBlocking() {
+    if (!terminalCommandDispatched) return false;
+    if (Date.now() - terminalCommandDispatchedAt < 500) return true;
+    clearTerminalCommandDispatched();
+    return false;
+  }
+
+  function usesFitContentHeight(view: ViewId) {
+    return isNativePrefixView(view) ||
+      view === "move-to-workspace" ||
+      view === "move-to-folder" ||
+      view === "open-in-container" ||
+      view === "profiles" ||
+      view === "duplicate-prompt";
+  }
+
   const headerHidden = $derived(palette.currentView === "actions");
+  const fitContentHeight = $derived(usesFitContentHeight(palette.currentView));
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
   const viewLoad = createViewLoadController<ViewId>({
     getCurrentView: () => palette.currentView,
@@ -212,6 +231,10 @@
   const sidebarHidden = $derived(sidebarModel.hidden);
   const interactionRuntime: InteractionRuntimeHandlers = {
     runAction: async (actionId) => {
+      if (isActionEffectId(actionId)) {
+        await performActionItemActivation({ kind: "fire-action", actionId });
+        return;
+      }
       const item = [...allActionItems, ...prefixItems].find((candidate) => candidate.id === actionId);
       if (item) await performActionItem(item);
     },
@@ -224,7 +247,7 @@
         navigateToHistoryIndex(target);
       }
     },
-    cancel: () => fireMessage({ type: "hide-palette" }),
+    cancel: effects.hidePalette,
     back: goBack,
     moveSelection,
     moveSelectionDirectional,
@@ -298,7 +321,7 @@
         workspaceClient,
         extensionClient,
         historyClient,
-        getSelectedTabDomIds: () => sendMessage<string[]>({ type: "get-selected-tab-dom-ids" }),
+        getSelectedTabDomIds: effects.getSelectedTabDomIds,
       });
       applyActionsMenuData(data);
     } catch {
@@ -523,16 +546,24 @@
   };
 
   function notifyChromeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>) {
-    fireMessage(chromeNavigationMessage(view, params));
+    effects.notifyChromeView(view, params);
   }
 
   async function finishOpenView(view: ViewId) {
     await requestPanelResize(view);
+    if (usesFitContentHeight(view)) {
+      window.setTimeout(() => {
+        if (pageAlive && palette.currentView === view) void requestPanelResize(view);
+      }, 80);
+      window.setTimeout(() => {
+        if (pageAlive && palette.currentView === view) void requestPanelResize(view);
+      }, 220);
+    }
     return true;
   }
 
   async function openNativeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>, notifyChrome = false) {
-    terminalCommandDispatched = false;
+    clearTerminalCommandDispatched();
     if (notifyChrome) notifyChromeView(view, params);
     const plan = resolveViewOpenPlan(view, params);
 
@@ -557,13 +588,13 @@
 
   async function performActionItemActivation(activation: ActionItemActivation) {
     if (activation.kind === "fire-action") {
-      terminalCommandDispatched = true;
+      markTerminalCommandDispatched();
       revealController.clear();
-      fireMessage({ type: activation.actionId });
+      effects.runAction(activation.actionId);
       return;
     }
     if (activation.kind === "switch-workspace") {
-      terminalCommandDispatched = true;
+      markTerminalCommandDispatched();
       switchWorkspace(activation.workspaceId);
       return;
     }
@@ -597,14 +628,18 @@
   }
 
   function activateTab(row: { domId: string }) {
-    terminalCommandDispatched = true;
+    markTerminalCommandDispatched();
     revealController.clear();
-    fireMessage({ type: "activate-tab", domId: row.domId });
+    effects.activateTab(row.domId);
   }
 
   function traceReplayKey(key: string | null | undefined) {
     if (!key) return;
-    fireMessage({ type: "trace-replay-key", key });
+    try {
+      effects.traceReplayKey(key);
+    } catch {
+      // Replay tracing is best-effort; it must never block the command.
+    }
   }
 
   function traceReplayInput(input: BridgeKeyData) {
@@ -636,9 +671,9 @@
 
   function navigateToHistoryIndex(index: number) {
     const historyIndex = palette.navigationHistory?.entries[index]?.historyIndex ?? index;
-    terminalCommandDispatched = true;
+    markTerminalCommandDispatched();
     revealController.clear();
-    fireMessage({ type: "navigate-to-history-index", index: historyIndex });
+    effects.navigateToHistoryIndex(historyIndex);
   }
 
   function navigateToHistoryIndexWithTrace(index: number) {
@@ -647,12 +682,9 @@
   }
 
   function restoreClosedTab(row: RecentlyClosedRow, keepOpen = false) {
-    if (!keepOpen) terminalCommandDispatched = true;
+    if (!keepOpen) markTerminalCommandDispatched();
     if (!keepOpen) revealController.clear();
-    fireMessage({
-      type: keepOpen ? "restore-closed-tab-keep-open" : "restore-closed-tab",
-      sessionId: row.sessionId,
-    });
+    effects.restoreClosedTab(row.sessionId, keepOpen);
   }
 
   function restoreClosedTabWithTrace(row: RecentlyClosedRow) {
@@ -661,9 +693,9 @@
   }
 
   function moveToWorkspace(row: WorkspaceRow) {
-    terminalCommandDispatched = true;
+    markTerminalCommandDispatched();
     revealController.clear();
-    fireMessage({ type: "move-selected-tabs-to-workspace", workspaceId: row.uuid });
+    effects.moveSelectedTabsToWorkspace(row.uuid);
   }
 
   function moveToWorkspaceWithTrace(row: WorkspaceRow) {
@@ -672,9 +704,9 @@
   }
 
   function reopenInContainer(row: ContainerRow) {
-    terminalCommandDispatched = true;
+    markTerminalCommandDispatched();
     revealController.clear();
-    fireMessage({ type: "reopen-in-container", userContextId: row.userContextId });
+    effects.reopenInContainer(row.userContextId);
   }
 
   function reopenInContainerWithTrace(row: ContainerRow) {
@@ -683,9 +715,9 @@
   }
 
   function moveToFolder(row: FolderRow) {
-    terminalCommandDispatched = true;
+    markTerminalCommandDispatched();
     revealController.clear();
-    fireMessage({ type: "move-tab-to-folder", folderId: row.id });
+    effects.moveTabToFolder(row.id);
   }
 
   function moveToFolderWithTrace(row: FolderRow) {
@@ -695,9 +727,9 @@
 
   function launchProfile(row: ProfileRow) {
     if (row.isCurrent) return;
-    terminalCommandDispatched = true;
+    markTerminalCommandDispatched();
     revealController.clear();
-    fireMessage({ type: "launch-profile", name: row.name });
+    effects.launchProfile(row.name);
   }
 
   function launchProfileWithTrace(row: ProfileRow) {
@@ -706,15 +738,15 @@
   }
 
   function switchWorkspace(workspaceId: string) {
-    terminalCommandDispatched = true;
+    markTerminalCommandDispatched();
     revealController.clear();
-    fireMessage({ type: "switch-workspace", workspaceId });
+    effects.switchWorkspace(workspaceId);
   }
 
   function openExtensionPopup(extension: ExtensionRow) {
-    terminalCommandDispatched = true;
+    markTerminalCommandDispatched();
     revealController.clear();
-    fireMessage({ type: "open-extension-popup", extensionId: extension.id });
+    effects.openExtensionPopup(extension.id);
   }
 
   function activateTabRowWithTrace(row: TabIndexRow) {
@@ -740,14 +772,14 @@
   }
 
   function closeDuplicateTab(row: TabIndexRow) {
-    fireMessage({ type: "close-tab", domId: row.domId });
+    effects.closeTab(row.domId);
     palette.duplicateGroups = removeTabFromDuplicateGroups(palette.duplicateGroups, row.domId);
   }
 
   function closeSelectedTabRow() {
     const row = selectedTabRow;
     if (!row) return;
-    fireMessage({ type: "close-tab", domId: row.domId });
+    effects.closeTab(row.domId);
     const result = removeTabFromRows({ rows: palette.rows, total: palette.total, selectedIndex: palette.selectedIndex, domId: row.domId });
     palette.rows = result.rows;
     palette.total = result.total;
@@ -758,7 +790,7 @@
     if (!isNativeTabView(palette.currentView)) return;
     const domIds = palette.rows.filter(isTabRow).map((row) => row.domId);
     if (!domIds.length) return;
-    await Promise.all(domIds.map((domId) => sendMessage({ type: "close-tab", domId }).catch(() => {})));
+    await Promise.all(domIds.map((domId) => effects.closeTabAndWait(domId).catch(() => {})));
     loadListView(palette.currentView, 0, 80, true, viewParams(palette.currentView));
   }
 
@@ -810,7 +842,7 @@
   }
 
   function closeTabInfoDuplicate(row: TabIndexRow) {
-    fireMessage({ type: "close-tab", domId: row.domId });
+    effects.closeTab(row.domId);
     palette.tabInfoDuplicates = removeTabInfoDuplicate(palette.tabInfoDuplicates, row.domId);
   }
 
@@ -819,29 +851,29 @@
     const selfDomId = palette.tabInfo.domId;
     for (const duplicate of palette.tabInfoDuplicates) {
       if (duplicate.domId !== selfDomId) {
-        fireMessage({ type: "close-tab", domId: duplicate.domId });
+        effects.closeTab(duplicate.domId);
       }
     }
     palette.tabInfoDuplicates = keepOnlyTabInfoDuplicate(palette.tabInfoDuplicates, selfDomId);
   }
 
   function runDuplicatePromptAction(action: DuplicatePromptAction) {
-    terminalCommandDispatched = true;
+    markTerminalCommandDispatched();
     revealController.clear();
-    fireMessage({ type: action });
+    effects.runDuplicatePromptAction(action);
   }
 
 
   function previewTab(row: TabIndexRow) {
-    fireMessage({ type: "preview-tab", domId: row.domId });
+    effects.previewTab(row.domId);
   }
 
   function previewTabLike(row: { domId: string }) {
-    fireMessage({ type: "preview-tab", domId: row.domId });
+    effects.previewTab(row.domId);
   }
 
   function clearPreview() {
-    fireMessage({ type: "clear-preview" });
+    effects.clearPreview();
   }
 
   function resetToActions() {
@@ -974,10 +1006,10 @@
   async function applyViewCommand(command: ViewCommand) {
     if (command.kind === "message") {
       if (command.clearReveal) {
-        terminalCommandDispatched = true;
+        markTerminalCommandDispatched();
         revealController.clear();
       }
-      fireMessage(command.message);
+      effects.sendViewCommand(command.message);
     } else if (command.kind === "open-domain") {
       await activateDomain({ kind: "domain", domain: command.domain, count: 0 });
     } else if (command.kind === "duplicate-prompt-action") {
@@ -1035,7 +1067,7 @@
   }
 
   async function handleKeyInput(input: BridgeKeyData) {
-    if (terminalCommandDispatched) {
+    if (terminalCommandStillBlocking()) {
       return false;
     }
     const actionNodes = palette.currentView === "actions" ? allActionNodes : isNativePrefixView(palette.currentView) ? prefixNodes : [];
@@ -1063,16 +1095,42 @@
   }
 
   async function requestPanelResize(view: ViewId = palette.currentView) {
+    const requestId = ++resizeRequestId;
+    const resizeView = view;
     await tick();
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    if (!pageAlive) return;
-    await sendMessage({ type: "resize-panel", view, height: measurePaletteNaturalHeight() }).catch(() => {});
+    if (!pageAlive || requestId !== resizeRequestId) return;
+    const waitMeasureTurn = () => new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 0);
+    });
+    await waitMeasureTurn();
+    if (!pageAlive || requestId !== resizeRequestId) return;
+    if (usesFitContentHeight(resizeView)) {
+      await waitMeasureTurn();
+      if (!pageAlive || requestId !== resizeRequestId) return;
+    }
+    const measuredHeight = usesFitContentHeight(resizeView)
+      ? Math.max(
+        document.getElementById("palette")?.scrollHeight ?? 0,
+        document.getElementById("palette")?.getBoundingClientRect().height ?? 0,
+        paletteHeight,
+      )
+      : paletteHeight;
+    if (!pageAlive || measuredHeight <= 0) return;
+    const resizeKey = `${resizeView}:${measuredHeight}`;
+    if (resizeKey === lastResizeKey) return;
+    lastResizeKey = resizeKey;
+    await effects.resizePanel(resizeView, measuredHeight).catch(() => {});
+  }
+
+  function handlePaletteHeightChange(height: number) {
+    paletteHeight = height;
+    void requestPanelResize();
   }
 
   async function signalPopupReady() {
     if (!pageAlive) return null;
     try {
-      return await sendMessage<BridgeReply>(revealController.popupReadyMessage());
+      return await effects.popupReady<BridgeReply>(revealController.popupReadyMessage());
     } catch {
       return null;
     }
@@ -1115,6 +1173,7 @@
   }
 
   function handleForceReady(data: ForceReadyPayload) {
+    clearTerminalCommandDispatched();
     bridgeDispatch.forceReady(data);
   }
 
@@ -1137,6 +1196,7 @@
     void initializeBridge(initialViewReady);
     return () => {
       revealController.clear();
+      resizeRequestId++;
       window.removeEventListener("keydown", handleKeydown);
       window.removeEventListener("pagehide", handlePageHide);
       uninstallBridge();
@@ -1177,117 +1237,41 @@
   pageIndicatorHidden={palette.currentView !== "actions" || pageCount <= 1}
   {pageCount}
   currentPage={palette.currentPage}
+  {fitContentHeight}
   onSidebarSort={toggleCurrentSort}
   onWorkspaceFilter={setWorkspaceFilter}
   onPage={setActionsPage}
+  onheightchange={handlePaletteHeightChange}
 >
-  {#if palette.error}
-    <div class="empty-state">{palette.error}</div>
-  {:else if palette.currentView === "actions"}
-    <ActionsMenu
-      sections={actionSectionsForRender}
-      currentPage={palette.currentPage}
-      extensions={palette.actionExtensions}
-      workspaces={palette.actionsWorkspaces}
-      onactivate={activateAction}
-      onextension={openExtensionPopup}
-      onpreview={(domId) => previewTabLike({ domId })}
-      onclearpreview={clearPreview}
-    />
-  {:else if isNativePrefixView(palette.currentView)}
-    <PrefixMenu view={palette.currentView} items={prefixItemsForRender} onactivate={activateAction} />
-  {:else if palette.loading}
-    <div class="empty-state">Loading...</div>
-  {:else if palette.currentView === "navigation"}
-    <NavigationList
-      history={palette.navigationHistory}
-      selectedIndex={palette.selectedIndex}
-      onactivate={navigateToHistoryIndexWithTrace}
-    />
-  {:else if palette.currentView === "recently-closed"}
-    <RecentlyClosedList
-      rows={palette.recentlyClosedRows}
-      selectedIndex={palette.selectedIndex}
-      onactivate={restoreClosedTabWithTrace}
-      onrestore={(row) => restoreClosedTab(row, true)}
-    />
-  {:else if palette.currentView === "move-to-workspace"}
-    <WorkspaceList
-      rows={palette.workspaceRows}
-      selectedIndex={palette.selectedIndex}
-      onactivate={moveToWorkspaceWithTrace}
-    />
-  {:else if palette.currentView === "open-in-container"}
-    <ContainerList
-      rows={palette.containerRows}
-      selectedIndex={palette.selectedIndex}
-      onactivate={reopenInContainerWithTrace}
-    />
-  {:else if palette.currentView === "move-to-folder"}
-    <FolderList
-      rows={palette.folderRows}
-      workspaces={palette.folderWorkspaces}
-      selectedIndex={palette.selectedIndex}
-      onactivate={moveToFolderWithTrace}
-    />
-  {:else if palette.currentView === "profiles"}
-    <ProfileList
-      rows={palette.profileRows}
-      selectedIndex={palette.selectedIndex}
-      onactivate={launchProfileWithTrace}
-    />
-  {:else if palette.currentView === "duplicates"}
-    <DuplicateGroups
-      groups={palette.duplicateGroups}
-      workspaces={palette.duplicateWorkspaces}
-      onactivate={activateTab}
-      onclose={closeDuplicateTab}
-      onpreview={previewTab}
-      onclearpreview={clearPreview}
-    />
-  {:else if palette.currentView === "tab-info"}
-    <TabInfoView
-      info={palette.tabInfo}
-      visits={palette.tabInfoVisits}
-      duplicates={palette.tabInfoDuplicates}
-      workspaces={palette.tabInfoWorkspaces}
-      onactivate={activateTab}
-      onclose={closeTabInfoDuplicate}
-      oncloseothers={closeOtherTabInfoDuplicates}
-      onpreview={previewTabLike}
-      onclearpreview={clearPreview}
-    />
-  {:else if palette.currentView === "duplicate-prompt"}
-    <DuplicatePrompt
-      url={palette.duplicatePromptUrl}
-      existingDomId={palette.duplicatePromptDomId}
-      selectedIndex={palette.selectedIndex}
-      onactivate={runDuplicatePromptAction}
-      onpreview={(domId) => previewTabLike({ domId })}
-      onclearpreview={clearPreview}
-    />
-  {:else if isNativeTabView(palette.currentView)}
-    <TabList
-      rows={tabRows}
-      total={palette.total}
-      offset={palette.offset}
-      selectedDomId={selectedRowDomId}
-      workspaces={palette.sidebarWorkspaces}
-      {activeWorkspaceId}
-      onactivate={activateTabRowWithTrace}
-      onpreview={previewTab}
-      onclearpreview={clearPreview}
-      onrange={loadVisibleRange}
-      subtitle={tabSubtitle}
-    />
-  {:else if palette.currentView === "domains"}
-    <DomainList
-      rows={domainRows}
-      total={palette.total}
-      offset={palette.offset}
-      {selectedDomain}
-      onactivate={activateDomainWithTrace}
-      onrange={loadVisibleRange}
-    />
-  {/if}
+  <ViewHost
+    {palette}
+    actionSections={actionSectionsForRender}
+    prefixItems={prefixItemsForRender}
+    {tabRows}
+    {domainRows}
+    {selectedRowDomId}
+    {selectedDomain}
+    {activeWorkspaceId}
+    {activateAction}
+    {openExtensionPopup}
+    {previewTabLike}
+    {clearPreview}
+    {navigateToHistoryIndexWithTrace}
+    {restoreClosedTabWithTrace}
+    restoreClosedTabKeepOpen={(row) => restoreClosedTab(row, true)}
+    {moveToWorkspaceWithTrace}
+    {reopenInContainerWithTrace}
+    {moveToFolderWithTrace}
+    {launchProfileWithTrace}
+    {activateTab}
+    {closeDuplicateTab}
+    {previewTab}
+    {closeTabInfoDuplicate}
+    {closeOtherTabInfoDuplicates}
+    {runDuplicatePromptAction}
+    {activateTabRowWithTrace}
+    {loadVisibleRange}
+    {tabSubtitle}
+    {activateDomainWithTrace}
+  />
 </PaletteShell>

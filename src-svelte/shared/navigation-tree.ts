@@ -168,7 +168,13 @@ export const NAVIGATION_TREE = [
       { id: "close-and-select-unvisited-oldest", kind: "action", chord: "Shift+G", label: "Oldest unvisited",   icon: "svg:circle-dot" },
     ],
   },
-] satisfies NavNode[];
+] as const satisfies readonly NavNode[];
+
+type NavigationNode = (typeof NAVIGATION_TREE)[number];
+type PrefixChildNode = Extract<NavigationNode, { kind: "prefix" }>["children"][number];
+export type NavigationTerminalNode = NavigationNode | PrefixChildNode;
+export type ActionEffectId = Extract<NavigationTerminalNode, { kind: "action" }>["id"];
+export type NavigationViewId = Extract<NavigationTerminalNode, { kind: "open-view" | "prefix" }>["view"];
 
 // Workspace digit chords. Each digit selects the workspace at the given
 // index. "0" selects the 10th workspace (matching keyboard layout where 0

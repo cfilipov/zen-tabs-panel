@@ -1,19 +1,24 @@
+import type { NavigationViewId } from "../../shared/navigation-tree";
 import type { ViewId } from "../../shared/types";
 
-export type NativeTabView = Extract<
-  ViewId,
-  | "child-tabs"
-  | "sibling-tabs"
-  | "parent-tabs"
-  | "last-visited"
-  | "unvisited-tabs"
-  | "tabs-by-age"
-  | "most-visited"
-  | "domain-tabs"
->;
-export type NativeDomainView = Extract<ViewId, "domains">;
+const nativeTabViews = [
+  "child-tabs",
+  "sibling-tabs",
+  "parent-tabs",
+  "last-visited",
+  "unvisited-tabs",
+  "tabs-by-age",
+  "most-visited",
+  "domain-tabs",
+] as const satisfies readonly ViewId[];
+
+const nativeDomainViews = ["domains"] as const satisfies readonly ViewId[];
+const prefixViewIds = ["reorder-tabs", "close-and-select", "split-view"] as const satisfies readonly NavigationViewId[];
+
+export type NativeTabView = (typeof nativeTabViews)[number];
+export type NativeDomainView = (typeof nativeDomainViews)[number];
 export type NativeListView = NativeTabView | NativeDomainView;
-export type NativePrefixView = Extract<ViewId, "reorder-tabs" | "close-and-select" | "split-view">;
+export type NativePrefixView = (typeof prefixViewIds)[number];
 
 export const LIST_VIEW_TITLES: Record<NativeListView, string> = {
   "last-visited": "Recent",
@@ -27,30 +32,9 @@ export const LIST_VIEW_TITLES: Record<NativeListView, string> = {
   "domains": "Domains",
 };
 
-const listViews = new Set<ViewId>([
-  "child-tabs",
-  "sibling-tabs",
-  "parent-tabs",
-  "last-visited",
-  "unvisited-tabs",
-  "tabs-by-age",
-  "most-visited",
-  "domain-tabs",
-  "domains",
-]);
-
-const tabViews = new Set<ViewId>([
-  "child-tabs",
-  "sibling-tabs",
-  "parent-tabs",
-  "last-visited",
-  "unvisited-tabs",
-  "tabs-by-age",
-  "most-visited",
-  "domain-tabs",
-]);
-
-const prefixViews = new Set<ViewId>(["reorder-tabs", "close-and-select", "split-view"]);
+const listViews = new Set<ViewId>([...nativeTabViews, ...nativeDomainViews]);
+const tabViews = new Set<ViewId>(nativeTabViews);
+const prefixViews = new Set<ViewId>(prefixViewIds);
 
 export const VIEW_LOADERS = {
   navigation: "navigation",
@@ -62,10 +46,13 @@ export const VIEW_LOADERS = {
   duplicates: "duplicates",
   "tab-info": "tab-info",
   "duplicate-prompt": "duplicate-prompt",
-} as const satisfies Partial<Record<ViewId, string>>;
+} as const satisfies Partial<Record<NavigationViewId | "duplicate-prompt", string>>;
 
 export type LoaderView = keyof typeof VIEW_LOADERS;
 export type ViewLoaderId = (typeof VIEW_LOADERS)[LoaderView];
+type PlannedNavigationView = NativeListView | NativePrefixView | LoaderView;
+const _viewCoverage: Record<Exclude<NavigationViewId, PlannedNavigationView>, never> = {};
+void _viewCoverage;
 
 const CONCRETE_VIEW_TITLES: Partial<Record<ViewId, string>> = {
   navigation: "Tab history",

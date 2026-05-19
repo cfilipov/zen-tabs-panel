@@ -137,7 +137,7 @@ export function prefixItemsForView(view: ViewId): ActionMenuItem[] {
 }
 
 export function prefixChildNodesForView(view: ViewId): TerminalNode[] {
-  return prefixNodeForView(view)?.children ?? [];
+  return [...(prefixNodeForView(view)?.children ?? [])];
 }
 
 export function appendWorkspaceSwitchItems(

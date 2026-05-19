@@ -99,7 +99,7 @@ export function resolveViewActivation(
     return action ? { kind: "duplicate-prompt-action", action } : { kind: "none" };
   }
 
-  const row = rowForIndex(context.rows, context.offset, index);
+  const row = source === "shortcut" ? context.rows[index] ?? null : rowForIndex(context.rows, context.offset, index);
   if (isTabRow(row)) return { kind: "activate-tab", row };
   if (isDomainRow(row)) return { kind: "activate-domain", row };
   return { kind: "none" };

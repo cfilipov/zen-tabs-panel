@@ -27,9 +27,11 @@
     pageIndicatorHidden?: boolean;
     pageCount?: number;
     currentPage?: number;
+    fitContentHeight?: boolean;
     onSidebarSort?: () => void;
     onWorkspaceFilter?: (workspaceId: string) => void;
     onPage?: (page: number) => void;
+    onheightchange?: (height: number) => void;
   };
 
   let {
@@ -48,18 +50,58 @@
     pageIndicatorHidden = true,
     pageCount = 1,
     currentPage = 1,
+    fitContentHeight = false,
     onSidebarSort,
     onWorkspaceFilter,
     onPage,
+    onheightchange,
   }: Props = $props();
 
+  let paletteHeight = $state(0);
+  let paletteElement = $state<HTMLDivElement | undefined>();
+  let listElement = $state<HTMLDivElement | undefined>();
   const pages = $derived(Array.from({ length: Math.max(0, pageCount) }, (_, index) => index + 1));
+
+  function reportHeight() {
+    if (!paletteElement) return;
+    const height = fitContentHeight
+      ? Math.max(paletteElement.scrollHeight, paletteElement.getBoundingClientRect().height)
+      : paletteElement.clientHeight;
+    if (height > 0) onheightchange?.(height);
+  }
+
+  $effect(() => {
+    if (paletteHeight > 0) reportHeight();
+  });
+
+  $effect(() => {
+    fitContentHeight;
+    if (!paletteElement) return;
+
+    let frame: number | null = null;
+    const scheduleReport = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        reportHeight();
+      });
+    };
+    const observer = new ResizeObserver(scheduleReport);
+    observer.observe(paletteElement);
+    if (listElement) observer.observe(listElement);
+    scheduleReport();
+
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  });
 </script>
 
-<div id="palette">
+<div id="palette" class:fit-content-height={fitContentHeight} bind:this={paletteElement} bind:clientHeight={paletteHeight}>
   <Header hidden={headerHidden} {title} {hint} {onback} />
   <div id="content">
-    <div id="list">
+    <div id="list" bind:this={listElement}>
       {@render children?.()}
     </div>
     <Sidebar

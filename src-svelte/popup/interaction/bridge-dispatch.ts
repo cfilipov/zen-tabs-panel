@@ -31,6 +31,7 @@ function forceBuffered(data: ForceReadyPayload) {
 export function createBridgeDispatchController(options: BridgeDispatchOptions): BridgeDispatchController {
   let ready = false;
   let dispatchRunning = false;
+  let liveDispatchGeneration = 0;
   let warmGeneration = 0;
   const heldLiveKeys: BridgeKeyData[] = [];
   const liveDispatchQueue: BridgeKeyData[] = [];
@@ -40,21 +41,31 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
   async function runLiveDispatchQueue() {
     if (dispatchRunning) return;
     dispatchRunning = true;
+    const generation = liveDispatchGeneration;
     try {
-      while (liveDispatchQueue.length > 0) {
+      while (generation === liveDispatchGeneration && liveDispatchQueue.length > 0) {
         const input = liveDispatchQueue.shift();
         if (!input) continue;
         await options.dispatchKey(input);
+        if (generation !== liveDispatchGeneration) return;
         if (liveDispatchQueue.length === 0) options.armRevealTimer();
       }
     } finally {
-      dispatchRunning = false;
+      if (generation === liveDispatchGeneration) {
+        dispatchRunning = false;
+      }
     }
   }
 
   function enqueue(input: BridgeKeyData) {
     liveDispatchQueue.push(input);
     void runLiveDispatchQueue();
+  }
+
+  function cancelLiveDispatch() {
+    liveDispatchGeneration += 1;
+    dispatchRunning = false;
+    liveDispatchQueue.length = 0;
   }
 
   function queueOrHold(input: BridgeKeyData) {
@@ -99,7 +110,7 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
     resetForWarmRearm() {
       warmGeneration += 1;
       ready = false;
-      liveDispatchQueue.length = 0;
+      cancelLiveDispatch();
       heldLiveKeys.length = 0;
       options.clearRevealTimer();
       return warmGeneration;
@@ -122,7 +133,7 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       const held = heldLiveKeys.splice(0);
       ready = true;
       options.clearRevealTimer();
-      liveDispatchQueue.push(...buffered, ...held);
+      liveDispatchQueue.unshift(...buffered, ...held);
       void runLiveDispatchQueue();
     },
   };

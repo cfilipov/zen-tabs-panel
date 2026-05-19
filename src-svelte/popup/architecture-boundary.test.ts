@@ -80,6 +80,35 @@ describe("popup architecture boundary", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("keeps low-level IPC out of the palette component", () => {
+    const source = readFileSync(join(popupRoot, "NativePalette.svelte"), "utf8");
+
+    expect(source).not.toMatch(/\.\/runtime\/ipc/);
+    expect(source).not.toMatch(/\bsendMessage\s*\(/);
+    expect(source).not.toMatch(/\bfireMessage\s*\(/);
+  });
+
+  it("keeps leaf view imports behind ViewHost", () => {
+    const source = readFileSync(join(popupRoot, "NativePalette.svelte"), "utf8");
+    const offenders = [...source.matchAll(/from\s+["']\.\/views\/(?!ViewHost\.svelte["'])[^"']+\.svelte["']/g)]
+      .map((match) => match[0]);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps typed navigation registries present", () => {
+    const navigationTree = readFileSync(join(popupRoot, "..", "shared", "navigation-tree.ts"), "utf8");
+    const actionRegistry = readFileSync(join(popupRoot, "interaction", "action-registry.ts"), "utf8");
+    const availability = readFileSync(join(popupRoot, "interaction", "availability.ts"), "utf8");
+    const viewRegistry = readFileSync(join(popupRoot, "view-loaders", "view-registry.ts"), "utf8");
+
+    expect(navigationTree).toMatch(/\bActionEffectId\b/);
+    expect(actionRegistry).toMatch(/Record<ActionEffectId,/);
+    expect(availability).toMatch(/Record<AvailabilityPredicateId,/);
+    expect(viewRegistry).toMatch(/\bViewLoaderId\b/);
+    expect(viewRegistry).toMatch(/Exclude<NavigationViewId, PlannedNavigationView>/);
+  });
+
   it("keeps DOM access out of pure state and interaction modules", () => {
     const forbidden = [
       /\bdocument\s*\./,

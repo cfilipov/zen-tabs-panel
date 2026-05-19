@@ -50,6 +50,13 @@ describe("view activation resolver", () => {
       .toEqual({ kind: "activate-domain", row: domainRow });
   });
 
+  it("resolves digit shortcuts relative to the visible list window", () => {
+    expect(resolveViewActivation(context({ offset: 80, rows: [tabRow] }), 0, "shortcut"))
+      .toEqual({ kind: "activate-tab", row: tabRow });
+    expect(resolveViewActivation(context({ view: "domains", offset: 80, rows: [domainRow] }), 0, "shortcut"))
+      .toEqual({ kind: "activate-domain", row: domainRow });
+  });
+
   it("keeps navigation selection absolute but digit shortcuts relative to visible badges", () => {
     const navigationHistory = {
       index: 1,

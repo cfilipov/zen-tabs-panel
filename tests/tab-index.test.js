@@ -87,6 +87,22 @@ function makeRichIndex(tabs) {
   });
 }
 
+function makeIndexWithStoredValues(tabs, valuesByTabId, statsByTabId = {}) {
+  return createZenTabIndex({
+    getWin: fakeWindow,
+    getAllTabElements: () => tabs,
+    readTabStats: (tab) => statsByTabId[tab.id] || null,
+    getExtTabId: (tab) => Number(tab.id.replace(/\D/g, "")) || null,
+    unwrapFavicon: (url) => url,
+    readTabValue: (tab, key) => {
+      const values = valuesByTabId[tab.id] || {};
+      return values[key] ?? null;
+    },
+    ensureTabUuid: (tab) => valuesByTabId[tab.id]?.panelTabUuid || `uuid-${tab.id}`,
+    recordInterval() {},
+  });
+}
+
 test("tab index returns duplicate URL groups without about:newtab/about:blank", () => {
   const index = makeIndex([
     fakeTab("tab-1", "https://example.test/a", "ws-1", { title: "A1" }),
@@ -224,6 +240,57 @@ test("tab index hides new-tab pages from recents and action previews", () => {
   assert.equal(snapshot.previews["go-to-previous-tab"].title, "tab-6");
   assert.equal(snapshot.unvisitedTabCount, 1);
   assert.equal(snapshot.domainCount, 3);
+});
+
+test("tab index uses persisted parent UUIDs when openerTab is gone after restart", () => {
+  const tabs = [
+    fakeTab("tab-1", "https://parent.test", "ws-1", { title: "Parent" }),
+    fakeTab("tab-2", "https://child-a.test", "ws-1", { title: "Child A", active: true }),
+    fakeTab("tab-3", "https://child-b.test", "ws-1", { title: "Child B" }),
+    fakeTab("tab-4", "https://unrelated.test", "ws-1", { title: "Unrelated" }),
+  ];
+  const index = makeIndexWithStoredValues(tabs, {
+    "tab-1": { panelTabUuid: "parent-uuid" },
+    "tab-2": { panelTabUuid: "child-a-uuid", panelParentUuid: "parent-uuid" },
+    "tab-3": { panelTabUuid: "child-b-uuid", panelParentUuid: "parent-uuid" },
+    "tab-4": { panelTabUuid: "unrelated-uuid" },
+  });
+
+  assert.deepEqual(index.getWindow("parent-tabs", 0, 20, {}).rows.map((row) => row.domId), ["tab-1"]);
+  assert.deepEqual(index.getWindow("child-tabs", 0, 20, { parentDomId: "tab-1" }).rows.map((row) => row.domId), [
+    "tab-2",
+    "tab-3",
+  ]);
+  assert.deepEqual(index.getWindow("sibling-tabs", 0, 20, {}).rows.map((row) => row.domId), ["tab-3"]);
+
+  const snapshot = index.getActionsSnapshot();
+  assert.equal(snapshot.currentTabHasParent, true);
+  assert.equal(snapshot.parentTabCount, 1);
+  assert.equal(snapshot.siblingTabCount, 1);
+  assert.equal(snapshot.previews["go-to-parent-tab"].title, "Parent");
+});
+
+test("tab index carries persisted focus stats into most-visited rows", () => {
+  const index = makeIndexWithStoredValues(
+    [
+      fakeTab("tab-1", "https://low.test", "ws-1"),
+      fakeTab("tab-2", "https://high.test", "ws-1"),
+      fakeTab("tab-3", "https://none.test", "ws-1"),
+    ],
+    {},
+    {
+      "tab-1": { v: 1, focusCount: 2, focusDurationSeconds: 10, createdAt: 100, openerType: "manual" },
+      "tab-2": { v: 1, focusCount: 50, focusDurationSeconds: 20, createdAt: 200, openerType: "link" },
+    }
+  );
+
+  const rows = index.getWindow("most-visited", 0, 20, {}).rows;
+
+  assert.deepEqual(rows.map((row) => [row.domId, row.focusCount]), [
+    ["tab-2", 50],
+    ["tab-1", 2],
+    ["tab-3", 0],
+  ]);
 });
 
 test("tab index unwraps proxied data favicons and keeps large data favicons", () => {

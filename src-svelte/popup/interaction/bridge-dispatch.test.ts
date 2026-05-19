@@ -108,6 +108,65 @@ describe("bridge dispatch controller", () => {
     expect(events).toEqual(["clear", "key:buffered", "key:held", "arm"]);
   });
 
+  it("force-ready waits for the active visible dispatch before forced keys", async () => {
+    const events: string[] = [];
+    let release: () => void = () => {};
+    const controller = createBridgeDispatchController({
+      dispatchKey: async (input) => {
+        events.push(`key:${input.key}`);
+        if (input.key === "stale") {
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        }
+      },
+      armRevealTimer: () => events.push("arm"),
+      clearRevealTimer: () => events.push("clear"),
+    });
+
+    await controller.drainReply({ buffered: [] });
+    controller.queueOrHold(key("stale"));
+    await Promise.resolve();
+    controller.forceReady({ buffered: [key("forced")] });
+    await flushDispatchQueue();
+
+    expect(events).toEqual(["arm", "clear", "key:stale", "clear"]);
+    release();
+    await flushDispatchQueue();
+
+    expect(events).toEqual(["arm", "clear", "key:stale", "clear", "key:forced", "arm"]);
+  });
+
+  it("warm rearm cancels a stale live dispatch before visible popup keys", async () => {
+    const events: string[] = [];
+    let release: () => void = () => {};
+    const controller = createBridgeDispatchController({
+      dispatchKey: async (input) => {
+        events.push(`key:${input.key}`);
+        if (input.key === "stale") {
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        }
+      },
+      armRevealTimer: () => events.push("arm"),
+      clearRevealTimer: () => events.push("clear"),
+    });
+
+    await controller.drainReply({ buffered: [] });
+    controller.queueOrHold(key("stale"));
+    await Promise.resolve();
+    controller.resetForWarmRearm();
+    controller.visibleKeydownInput(key("visible"));
+    await flushDispatchQueue();
+
+    expect(events).toEqual(["arm", "clear", "key:stale", "clear", "clear", "key:visible", "arm"]);
+    release();
+    await flushDispatchQueue();
+
+    expect(events).toEqual(["arm", "clear", "key:stale", "clear", "clear", "key:visible", "arm"]);
+  });
+
   it("arms reveal only after a single async buffered key finishes", async () => {
     const events: string[] = [];
     let release: () => void = () => {};

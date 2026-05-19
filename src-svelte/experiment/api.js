@@ -766,13 +766,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     const PANEL_ID = "zen-tabs-panel-panel";
     const BROWSER_ID = "zen-tabs-panel-browser";
 
-    // Per-view dimensions. `width` is fixed (so chord-chain navigation
-    // doesn't reflow horizontally). `height` is a MAXIMUM — the popup
-    // measures its natural content height after rendering and sends a
-    // resize-panel message with the actual height; resizePanelToView
-    // caps that to VIEW_SIZES[view].height so list-y views with many
-    // rows still get a scrollable bounded panel instead of growing
-    // off-screen.
+    // Per-view dimensions. `width` is fixed so chord-chain navigation does
+    // not reflow horizontally. Most views also have fixed height; only the
+    // compact menu views below are allowed to shrink to measured content.
     const VIEW_SIZES = {
       actions:              { width: 960, height: 604 },
       "child-tabs":         { width: 720, height: 604 },
@@ -798,6 +794,21 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "duplicate-prompt":   { width: 420, height: 604 },
       "extension-popup":    { width: 360, height: 500 },
     };
+
+    const COMPACT_MEASURED_VIEWS = new Set([
+      "reorder-tabs",
+      "close-and-select",
+      "move-to-workspace",
+      "move-to-folder",
+      "split-view",
+      "open-in-container",
+      "profiles",
+      "duplicate-prompt",
+    ]);
+
+    function isCompactMeasuredView(view) {
+      return COMPACT_MEASURED_VIEWS.has(view);
+    }
 
     // Chord engine: same shared/chord-engine.js module instantiated here
     // (chrome side) and in the per-content-process frame script (see below).
@@ -1497,10 +1508,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "overflow: hidden",
         "display: flex",
         "flex-direction: column",
-        "transition: width 0.15s ease-out, height 0.15s ease-out",
+        "min-height: 0",
+        // Fresh overlays can resize to their measured content height before
+        // reveal. Keep that resize as a snap so compact views do not open at
+        // the previous/default tall size and then animate down.
+        "transition: none",
       ].join(";");
 
       const br = createBrowserElement(w, size, { view, params });
+      br.style.transition = "none";
       panel.appendChild(br);
       overlay.appendChild(panel);
 
@@ -1512,6 +1528,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       w.document.documentElement.appendChild(overlay);
       scheduleBrowserLoadKicks(w, br);
+      scheduleNativePopupContentResize(viewName);
 
       const reveal = () => {
         if (pendingReveal !== reveal) return;
@@ -1523,6 +1540,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
           overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
           panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
         }
+        // Restore size transitions after the hidden first measurement has
+        // snapped into place. Subsequent in-popup view changes should still
+        // animate smoothly.
+        w.requestAnimationFrame(() => {
+          panel.style.transition = "width 0.15s ease-out, height 0.15s ease-out";
+          br.style.transition = "width 0.15s ease-out, height 0.15s ease-out";
+        });
         br.focus();
       };
       pendingReveal = reveal;
@@ -1646,6 +1670,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           });
         } catch (e) {}
       }
+      scheduleNativePopupContentResize(viewName);
 
       return overlay;
     }
@@ -1800,14 +1825,82 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const panel = w.document.getElementById(PANEL_ID);
       const br = w.document.getElementById(BROWSER_ID);
       if (!panel || !br) return;
+      const previousView = currentViewName;
+      currentViewName = view || "actions";
+      if (view === "actions" && paletteURLView(br) !== "actions") {
+        morphToView("actions", {});
+        return;
+      }
       const targetSize = getViewSize(view);
-      const height = (typeof measuredHeight === "number" && measuredHeight > 0)
-        ? Math.min(Math.ceil(measuredHeight), targetSize.height)
+      const canUseMeasuredHeight = isCompactMeasuredView(view);
+      const height = (canUseMeasuredHeight && typeof measuredHeight === "number" && measuredHeight > 0)
+        ? Math.min(Math.ceil(measuredHeight) + 2, targetSize.height)
         : targetSize.height;
       panel.style.width = targetSize.width + "px";
       panel.style.height = height + "px";
       br.style.width = targetSize.width + "px";
       br.style.height = height + "px";
+      if (previousView !== view && isCompactMeasuredView(view)) {
+        scheduleNativePopupContentResize(view);
+      }
+    }
+
+    function scheduleNativePopupContentResize(view) {
+      if (!isCompactMeasuredView(view)) return;
+      const delays = [0, 50, 120, 220, 360, 600, 1000, 1400];
+      const w = getWin();
+      if (!w) return;
+      for (const delay of delays) {
+        w.setTimeout(() => measureNativePopupContentResize(view), delay);
+      }
+    }
+
+    function measureNativePopupContentResize(view) {
+      const w = getWin();
+      if (!w || currentViewName !== (view || "actions")) return;
+      const br = w.document.getElementById(BROWSER_ID);
+      const mm = browserMessageManager(br);
+      if (!br || !mm || !String(br.currentURI?.spec || "").includes("/popup/popup.html")) return;
+
+      const name = "ZenTabsPanel:MeasureNativePopup:" + CHORD_GENERATION + ":" + Date.now() + ":" + Math.random();
+      const timeout = w.setTimeout(() => {
+        try { mm.removeMessageListener(name, handler); } catch (e) {}
+      }, 1200);
+
+      function handler(msg) {
+        w.clearTimeout(timeout);
+        try { mm.removeMessageListener(name, handler); } catch (e) {}
+        if (currentViewName !== (view || "actions")) return;
+        const height = Number(msg.data && msg.data.height);
+        if (height > 0) {
+          resizePanelToView(view, height);
+          if (revealDeferred && pendingReveal && (!bridgeBuffer || bridgeBuffer.length === 0)) {
+            revealDeferred = false;
+            const w2 = getWin();
+            if (w2) w2.setTimeout(() => { if (pendingReveal) revealOverlay(); }, 0);
+          }
+        }
+      }
+
+      mm.addMessageListener(name, handler);
+      const code =
+        "(() => {\n" +
+        "  try {\n" +
+        "    const doc = content.document;\n" +
+        "    const palette = doc.getElementById('palette');\n" +
+        "    const rectHeight = palette ? palette.getBoundingClientRect().height : 0;\n" +
+        "    const height = palette ? Math.max(palette.scrollHeight, rectHeight) : Math.max(doc.body?.scrollHeight || 0, doc.documentElement?.scrollHeight || 0);\n" +
+        "    sendAsyncMessage(" + JSON.stringify(name) + ", { height });\n" +
+        "  } catch (e) {\n" +
+        "    sendAsyncMessage(" + JSON.stringify(name) + ", { height: 0 });\n" +
+        "  }\n" +
+        "})();";
+      try {
+        mm.loadFrameScript("data:application/javascript," + encodeURIComponent(code), false);
+      } catch (e) {
+        w.clearTimeout(timeout);
+        try { mm.removeMessageListener(name, handler); } catch (e2) {}
+      }
     }
 
     // Resize the panel and browser to match the popup body's natural size.
@@ -3037,12 +3130,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  try {\n" +
         "    if (__shutdown) return;\n" +
         "    if (!content) return;\n" +
+        "    try { content.removeEventListener('keydown', blockDefaultGroup, { capture: true }); } catch(_) {}\n" +
         "    // Extension pages skip engine attachment — they have their own keybindings.\n" +
-        "    if (isExtensionPage()) return;\n" +
+        "    // The same remote browser can be reused after a regular page, so also\n" +
+        "    // detach any blocker/engine left from the prior document.\n" +
+        "    if (isExtensionPage()) { try { __engine.reset(); __engine.detach(); } catch(_) {} return; }\n" +
         "    __engine.attach(content);\n" +
         "    // Detach-then-attach the default-group blocker so duplicate\n" +
         "    // DOMWindowCreated firings don't stack listeners.\n" +
-        "    try { content.removeEventListener('keydown', blockDefaultGroup, { capture: true }); } catch(_) {}\n" +
         "    content.addEventListener('keydown', blockDefaultGroup, { capture: true });\n" +
         "  } catch (err) { /* ignore */ }\n" +
         "}\n" +
@@ -4810,6 +4905,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // when it's done. That avoids reflow during the fade.
           if (view === "extension-popup" || prevView === "extension-popup") {
             morphToView(view, parsed);
+          } else {
+            scheduleNativePopupContentResize(view);
           }
         },
 

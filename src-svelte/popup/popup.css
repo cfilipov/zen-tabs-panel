@@ -47,6 +47,11 @@ html, body {
   max-height: 100vh;
 }
 
+#palette.fit-content-height {
+  min-height: 0;
+  max-height: none;
+}
+
 /* Header / breadcrumb */
 #header {
   display: flex;
@@ -134,6 +139,10 @@ html, body {
   min-height: 0;
 }
 
+#palette.fit-content-height #content {
+  flex: 0 0 auto;
+}
+
 /* Scrollable list */
 #list {
   overflow-y: auto;
@@ -144,8 +153,18 @@ html, body {
   scrollbar-width: none;
 }
 
+#palette.fit-content-height #list {
+  flex: 1 1 auto;
+  overflow-y: visible;
+}
+
 #list::-webkit-scrollbar {
   display: none;
+}
+
+.view-frame {
+  width: 100%;
+  min-width: 0;
 }
 
 /* Actions menu pager: each page renders as a full-width pane laid out in

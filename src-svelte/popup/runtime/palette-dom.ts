@@ -1,5 +1,4 @@
 import type { BridgeKeyData } from "../chord-bridge";
-import { naturalPanelHeight } from "../interaction/panel-measure";
 import { scrollTopForIndex } from "../interaction/list-window";
 
 export function snapshotKeyEvent(event: KeyboardEvent): BridgeKeyData {
@@ -11,34 +10,6 @@ export function snapshotKeyEvent(event: KeyboardEvent): BridgeKeyData {
     ctrlKey: event.ctrlKey,
     metaKey: event.metaKey,
   };
-}
-
-export function measurePaletteNaturalHeight(doc: Document = document) {
-  const header = doc.getElementById("header");
-  const list = doc.getElementById("list");
-  const indicator = doc.getElementById("page-indicator");
-  const children = list?.children ?? [];
-  let listFirstTop: number | null = null;
-  let listLastBottom: number | null = null;
-
-  if (children.length > 0) {
-    const first = children[0].getBoundingClientRect();
-    const last = children[children.length - 1].getBoundingClientRect();
-    listFirstTop = first.top;
-    listLastBottom = last.bottom;
-  }
-
-  const headerVisible = !!header && !header.classList.contains("hidden") && header.children.length > 0;
-  const indicatorVisible = !!indicator && !indicator.classList.contains("hidden");
-
-  return naturalPanelHeight({
-    listFirstTop,
-    listLastBottom,
-    headerVisible,
-    headerHeight: headerVisible ? header.getBoundingClientRect().height : 0,
-    indicatorVisible,
-    indicatorHeight: indicatorVisible ? indicator.getBoundingClientRect().height : 0,
-  });
 }
 
 function verticalPadding(element: HTMLElement) {

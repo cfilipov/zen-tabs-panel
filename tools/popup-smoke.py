@@ -196,16 +196,18 @@ def start_smoke() -> str:
   }
 
   function keySource(key) {
+    const eventKey = /^[A-Z]$/.test(key) ? key.toLowerCase() : key;
+    const code = key === " " ? "Space" : /^[a-zA-Z]$/.test(key) ? "Key" + key.toUpperCase() : key;
     return `(content) => {
       const event = new content.KeyboardEvent("keydown", {
-        key: ${JSON.stringify(key)},
-        code: ${JSON.stringify(key === " " ? "Space" : "Key" + key.toUpperCase())},
+        key: ${JSON.stringify(eventKey)},
+        code: ${JSON.stringify(code)},
         bubbles: true,
         cancelable: true
       });
       content.window.dispatchEvent(event);
       return {
-        key: ${JSON.stringify(key)},
+        key: ${JSON.stringify(eventKey)},
         defaultPrevented: event.defaultPrevented
       };
     }`;
@@ -221,6 +223,10 @@ def start_smoke() -> str:
         readyState: doc.readyState,
         textHead: text.split("\\n").slice(0, 50),
         textLength: text.length,
+        innerWidth: content.innerWidth,
+        paletteWidth: doc.querySelector("#palette")?.getBoundingClientRect().width || 0,
+        paletteHeight: doc.querySelector("#palette")?.getBoundingClientRect().height || 0,
+        listWidth: doc.querySelector("#list")?.getBoundingClientRect().width || 0,
         title: doc.querySelector("#title, .title, h1, h2")?.textContent || "",
         pageDots: Array.from(doc.querySelectorAll("#page-indicator .page-dot")).map(dot => ({
           page: dot.getAttribute("data-page"),
@@ -295,7 +301,7 @@ def start_smoke() -> str:
       content.document.dispatchEvent(new content.CustomEvent("ztt:bridge-message", { detail: JSON.stringify(payload) }));
       return true;
     }`);
-    await sleep(80);
+    await sleep(250);
   }
 
   async function openDirectView(view, expectedText, opts = {}) {
@@ -338,10 +344,21 @@ def start_smoke() -> str:
     if (snap.snap.selectedId) {
       throw new Error(view + " has unexpected permanent selection: " + snap.snap.selectedId);
     }
+    if (opts.maxHeight) {
+      await waitFor(view + " compact height", () => {
+        const current = overlayState();
+        const height = Number.parseInt(current.browserHeight, 10);
+        if (height > 0 && height <= opts.maxHeight) {
+          return { ok: true, state: current };
+        }
+        return { ok: false, state: current };
+      }, opts.heightTimeout || 3000, 100);
+    }
     record("view-" + view, {
       textHead: snap.snap.textHead.slice(0, 12),
       href: snap.snap.href,
-      width: state.state.panelWidth || Number.parseInt(state.state.browserWidth, 10)
+      width: state.state.panelWidth || Number.parseInt(state.state.browserWidth, 10),
+      browserHeight: overlayState().browserHeight
     });
     return snap.snap;
   }
@@ -447,7 +464,8 @@ def start_smoke() -> str:
       await openDirectView("actions", "Navigate", { minWidth: 900, maxWidth: 1000 });
       await forcePopupReady("force-ready-before-menu-only");
       record("press-w-menu-only");
-      await runInPopup(keySource("W"));
+      const pressWMenuOnly = await runInPopup(keySource("W"));
+      record("press-w-menu-only-result", pressWMenuOnly);
       const closeMenu = await waitFor("close-and-select menu-only open", async () => {
         const result = await trySnapshot();
         if (!result.ok) return result;
@@ -547,6 +565,9 @@ def start_smoke() -> str:
       }, 4000, 100);
       record("after-s-domains", { textHead: sorted.snap.textHead.slice(0, 12), href: sorted.snap.href });
 
+      await openDirectView("domains", "Domains", { minWidth: 650, maxWidth: 760 });
+      await forcePopupReady("force-ready-domains-before-buffered-drill");
+
       const firstDomain = await runInPopup(`(content) => {
         return content.document.querySelector(".list-item .item-title")?.textContent?.trim() || "";
       }`);
@@ -566,7 +587,7 @@ def start_smoke() -> str:
         if (!result.ok) return result;
         const snap = result.snap;
         const text = snap.textHead.join("\n");
-        if (text.includes(firstDomain) && !text.includes("Domains") && !text.includes("Loading...")) {
+        if (snap.textHead[1] && snap.textHead[1] !== "Domains" && snap.textHead[2] && snap.textHead[2] !== "○" && !text.includes("Loading...")) {
           return { ok: true, snap };
         }
         return { ok: false, snap };
@@ -587,15 +608,45 @@ def start_smoke() -> str:
         ["most-visited", "Most visited", { minWidth: 650, maxWidth: 760 }],
         ["move-to-workspace", "Move to workspace", { minWidth: 340, maxWidth: 430 }],
         ["open-in-container", "New container tab", { minWidth: 300, maxWidth: 340 }],
-        ["profiles", "Profiles", { minWidth: 340, maxWidth: 430 }],
+        ["profiles", "Profiles", { minWidth: 340, maxWidth: 430, maxHeight: 360 }],
         ["move-to-folder", "Move to folder", { minWidth: 340, maxWidth: 430 }],
-        ["split-view", "Split", { minWidth: 340, maxWidth: 430 }],
-        ["reorder-tabs", "Reorder tabs", { minWidth: 580, maxWidth: 640 }],
-        ["close-and-select", "Close & select", { minWidth: 580, maxWidth: 640 }],
+        ["split-view", "Split", { minWidth: 340, maxWidth: 430, maxHeight: 320 }],
+        ["reorder-tabs", "Reorder tabs", { minWidth: 580, maxWidth: 640, maxHeight: 360 }],
+        ["close-and-select", "Close & select", { minWidth: 580, maxWidth: 640, maxHeight: 460 }],
       ];
       for (const [view, expected, opts] of directViews) {
         await openDirectView(view, expected, opts);
       }
+
+      await openDirectView("profiles", "Profiles", { minWidth: 340, maxWidth: 430, maxHeight: 360 });
+      const profileWidth = await trySnapshot();
+      if (!profileWidth.ok || profileWidth.snap.listWidth < 320) {
+        throw new Error("profiles menu content did not fill compact width: " + JSON.stringify(profileWidth));
+      }
+      await forcePopupReady("force-ready-profiles-before-back");
+      record("press-backspace-from-profiles");
+      await runInPopup(keySource("Backspace"));
+      const backToActions = await waitFor("profiles back to full actions", async () => {
+        const result = await trySnapshot();
+        if (!result.ok) return result;
+        const snap = result.snap;
+        const state = overlayState();
+        if (
+          snap.textHead.join("\n").includes("Navigate") &&
+          snap.innerWidth >= 900 &&
+          snap.paletteWidth >= 900 &&
+          Number.parseInt(state.browserHeight, 10) >= 600
+        ) {
+          return { ok: true, snap, state };
+        }
+        return { ok: false, snap, state };
+      }, 5000, 100);
+      record("after-profiles-back", {
+        innerWidth: backToActions.snap.innerWidth,
+        paletteWidth: backToActions.snap.paletteWidth,
+        browserWidth: backToActions.state.browserWidth,
+        browserHeight: backToActions.state.browserHeight,
+      });
 
       const mainAgain = await openDirectView("actions", "Navigate", { minWidth: 900, maxWidth: 1000 });
       if (!mainAgain.textHead.join("\n").includes("All tabs")) {

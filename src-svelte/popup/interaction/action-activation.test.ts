@@ -43,4 +43,8 @@ describe("action item activation", () => {
     expect(resolveActionItemActivation(item({ kind: "workspace-switch" }))).toEqual({ kind: "none" });
     expect(resolveActionItemActivation(item({ kind: "open-view" }))).toEqual({ kind: "none" });
   });
+
+  it("returns none for action items missing from the typed action registry", () => {
+    expect(resolveActionItemActivation(item({ id: "not-implemented" }))).toEqual({ kind: "none" });
+  });
 });
