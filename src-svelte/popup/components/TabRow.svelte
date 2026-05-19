@@ -12,6 +12,7 @@
     workspaces?: WorkspaceRow[];
     activeWorkspaceId?: string | null;
     onactivate?: (row: TabIndexRow) => void;
+    ondrillchildren?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
   };
@@ -24,14 +25,27 @@
     workspaces = [],
     activeWorkspaceId = null,
     onactivate,
+    ondrillchildren,
     onpreview,
     onclearpreview,
   }: Props = $props();
   const title = $derived(row.title || "Untitled");
-  const hasSubtitle = $derived(Boolean(row.domain || subtitle));
+  const childLabel = $derived(
+    row.childCount != null ? `${row.childCount} ${row.childCount === 1 ? "child" : "children"}` : null,
+  );
+  const hasSubtitle = $derived(Boolean(row.domain || subtitle || childLabel));
   const selected = $derived(row.domId === selectedDomId);
   const workspace = $derived(row.workspaceId ? workspaces.find((item) => item.uuid === row.workspaceId) : null);
   const showWorkspace = $derived(Boolean(workspace && row.workspaceId && row.workspaceId !== activeWorkspaceId));
+
+  function handleClick(event: MouseEvent) {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest(".subtitle-children")) {
+      ondrillchildren?.(row);
+      return;
+    }
+    onactivate?.(row);
+  }
 </script>
 
 <button
@@ -40,7 +54,7 @@
   class:tab-pending={row.pending}
   class:selected
   data-dom-id={row.domId}
-  onclick={() => onactivate?.(row)}
+  onclick={handleClick}
   onmouseenter={() => onpreview?.(row)}
   onmouseleave={() => onclearpreview?.()}
 >
@@ -65,6 +79,11 @@
         {/if}
         {#if subtitle}
           <span class="subtitle-age subtitle-pill">{subtitle}</span>
+        {/if}
+        {#if childLabel}
+          <span class="subtitle-age subtitle-pill subtitle-children">
+            {childLabel}
+          </span>
         {/if}
       </span>
     {/if}

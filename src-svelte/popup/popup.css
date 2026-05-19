@@ -1463,6 +1463,8 @@ html, body {
 }
 
 .subtitle-children {
+  border: 0;
+  font: inherit;
   cursor: pointer;
 }
 

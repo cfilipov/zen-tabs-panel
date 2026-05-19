@@ -367,7 +367,7 @@ test("tab index uses persisted parent UUIDs when openerTab is gone after restart
     "tab-4": { panelTabUuid: "unrelated-uuid" },
   });
 
-  assert.deepEqual(index.getWindow("parent-tabs", 0, 20, {}).rows.map((row) => row.domId), ["tab-1"]);
+  assert.deepEqual(index.getWindow("parent-tabs", 0, 20, {}).rows.map((row) => [row.domId, row.childCount]), [["tab-1", 2]]);
   assert.deepEqual(index.getWindow("child-tabs", 0, 20, { parentDomId: "tab-1" }).rows.map((row) => row.domId), [
     "tab-2",
     "tab-3",

@@ -70,7 +70,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
   }
 
   function compactTabRow(row) {
-    return {
+    const out = {
       index: row.index,
       domId: row.domId,
       title: row.title,
@@ -83,6 +83,8 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       pending: row.pending,
       focusCount: row.focusCount,
     };
+    if (row.childCount != null) out.childCount = row.childCount;
+    return out;
   }
 
   function compactTabRowForWindow(row, faviconRefs) {
@@ -402,9 +404,11 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       if (row.panelParentUuid) parentUuids.add(row.panelParentUuid);
       else if (row.openerTabDomId) parentDomIds.add(row.openerTabDomId);
     }
-    return sourceRows.filter((row) => {
+    return sourceRows.flatMap((row) => {
       const isParent = (row.panelTabUuid && parentUuids.has(row.panelTabUuid)) || parentDomIds.has(row.domId);
-      return isParent && childrenOfParent(sourceRows, row).length > 0;
+      if (!isParent) return [];
+      const childCount = childrenOfParent(sourceRows, row).length;
+      return childCount > 0 ? [{ ...row, childCount }] : [];
     });
   }
 

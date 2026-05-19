@@ -53,6 +53,7 @@
     closeOtherTabInfoDuplicates: () => void;
     runDuplicatePromptAction: (action: DuplicatePromptAction) => void;
     activateTabRowWithTrace: (row: TabIndexRow) => void;
+    drillParentRow: (row: TabIndexRow) => void | Promise<void>;
     loadVisibleRange: (offset: number, limit: number) => void;
     tabSubtitle: (row: TabIndexRow) => string | null;
     activateDomainWithTrace: (row: DomainIndexRow) => void | Promise<void>;
@@ -85,6 +86,7 @@
     closeOtherTabInfoDuplicates,
     runDuplicatePromptAction,
     activateTabRowWithTrace,
+    drillParentRow,
     loadVisibleRange,
     tabSubtitle,
     activateDomainWithTrace,
@@ -202,6 +204,7 @@
         workspaces={palette.sidebarWorkspaces}
         {activeWorkspaceId}
         onactivate={activateTabRowWithTrace}
+        ondrillchildren={drillParentRow}
         onpreview={previewTab}
         onclearpreview={clearPreview}
         onrange={loadVisibleRange}

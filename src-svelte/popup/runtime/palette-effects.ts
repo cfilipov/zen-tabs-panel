@@ -15,6 +15,9 @@ export function createPaletteEffects() {
     notifyChromeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>) {
       fireMessage(chromeNavigationMessage(view, params));
     },
+    navigateBack() {
+      return sendMessage<{ view: ViewId; params?: Record<string, unknown> } | null>({ type: "navigate-back" });
+    },
     getSelectedTabDomIds() {
       return sendMessage<string[]>({ type: "get-selected-tab-dom-ids" });
     },

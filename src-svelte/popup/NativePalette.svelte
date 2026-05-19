@@ -84,6 +84,7 @@
     resolveViewOpenPlan,
     type NativeListView,
   } from "./view-loaders/view-registry";
+  import { formatDuration } from "./views/format";
   import {
     actionItemsForPage,
     actionNodesForSections,
@@ -309,8 +310,8 @@
     const plan = resolveViewOpenPlan(view, params);
 
     if (plan.kind === "actions") {
-      await goBack();
-      return true;
+      resetToActions();
+      await paletteLoaders.loadActionsData();
     } else if (plan.kind === "list") {
       paletteStore.enterDomainList(plan.domain);
       await paletteLoaders.loadListView(plan.view, 0, 80, true, { ...plan.params, ...viewParams(plan.view) });
@@ -540,9 +541,14 @@
     paletteStore.commitRecentlyClosed(result);
   }
 
+  async function drillParentRow(row: TabIndexRow) {
+    if (!canDrillSelectionInView(palette.currentView)) return;
+    await openNativeView("child-tabs", { ...viewParams("child-tabs"), parentDomId: row.domId }, true);
+  }
+
   async function drillSelectedParent() {
     if (!canDrillSelectionInView(palette.currentView) || !selectedTabRow) return;
-    await openNativeView("child-tabs", { ...viewParams("child-tabs"), parentDomId: selectedTabRow.domId }, true);
+    await drillParentRow(selectedTabRow);
   }
 
   async function toggleCurrentSort() {
@@ -617,6 +623,12 @@
   }
 
   async function goBack() {
+    const previous = await effects.navigateBack().catch(() => null);
+    if (previous?.view && previous.view !== "actions") {
+      clearPreview();
+      await openNativeView(previous.view, previous.params || {});
+      return;
+    }
     resetToActions();
     await paletteLoaders.loadActionsData();
     await requestPanelResize("actions");
@@ -790,8 +802,15 @@
     paletteLoaders.loadListView(palette.currentView, request.offset, request.limit, false, viewParams(palette.currentView));
   }
 
+  function tabAge(row: TabIndexRow) {
+    const created = Number.parseInt(row.domId.split("-")[0] || "", 10);
+    return formatDuration(Date.now() - created);
+  }
+
   function tabSubtitle(row: TabIndexRow) {
-    return palette.currentView === "most-visited" ? `${row.focusCount ?? 0} focuses` : null;
+    if (palette.currentView === "most-visited") return `${row.focusCount ?? 0} focuses`;
+    if (palette.currentView === "tabs-by-age") return tabAge(row);
+    return null;
   }
 
   async function runCommand(command: InteractionCommand) {
@@ -972,6 +991,7 @@
     {closeOtherTabInfoDuplicates}
     {runDuplicatePromptAction}
     {activateTabRowWithTrace}
+    {drillParentRow}
     {loadVisibleRange}
     {tabSubtitle}
     {activateDomainWithTrace}

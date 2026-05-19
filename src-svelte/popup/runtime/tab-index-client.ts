@@ -34,6 +34,7 @@ export type TabIndexRow = {
   panelTabUuid?: string | null;
   panelParentUuid?: string | null;
   focusCount?: number;
+  childCount?: number;
 };
 
 export type DomainIndexRow = {

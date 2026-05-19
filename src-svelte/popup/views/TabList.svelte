@@ -12,6 +12,7 @@
     workspaces?: WorkspaceRow[];
     activeWorkspaceId?: string | null;
     onactivate?: (row: TabIndexRow) => void;
+    ondrillchildren?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
     onrange?: (offset: number, limit: number) => void;
@@ -26,6 +27,7 @@
     workspaces = [],
     activeWorkspaceId = null,
     onactivate,
+    ondrillchildren,
     onpreview,
     onclearpreview,
     onrange,
@@ -46,6 +48,7 @@
         {workspaces}
         {activeWorkspaceId}
         onactivate={onactivate}
+        ondrillchildren={ondrillchildren}
         onpreview={onpreview}
         onclearpreview={onclearpreview}
       />

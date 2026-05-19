@@ -905,6 +905,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     let navStack = [];
     let currentViewName = null;
+    let currentViewParams = {};
     let morphGeneration = 0;
     // Set by createOverlay to the function that flips the (initially hidden)
     // overlay to visible and starts the in animations. Stays non-null until
@@ -1275,8 +1276,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!isOverlayOpen()) {
         openOverlayWithView(null);
       }
-      navStack.push({ view: currentViewName, params: {} });
+      navStack.push({ view: currentViewName, params: currentViewParams || {} });
       currentViewName = "extension-popup";
+      currentViewParams = { popupUrl, extensionId, viewType: "popup" };
       morphToView("extension-popup", { popupUrl, extensionId, viewType: "popup" });
       return true;
     }
@@ -1468,8 +1470,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!isOverlayOpen()) {
         openOverlayWithView(null);
       }
-      navStack.push({ view: currentViewName, params: {} });
+      navStack.push({ view: currentViewName, params: currentViewParams || {} });
       currentViewName = "extension-popup";
+      currentViewParams = { popupUrl, extensionId };
       morphToView("extension-popup", { popupUrl, extensionId });
     }
 
@@ -1524,8 +1527,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!isOverlayOpen()) {
         openOverlayWithView(null);
       }
-      navStack.push({ view: currentViewName, params: {} });
+      navStack.push({ view: currentViewName, params: currentViewParams || {} });
       currentViewName = "extension-popup";
+      currentViewParams = { popupUrl, extensionId: resolved.id, viewType: null };
       // viewType: null so the hosted browser presents as a popout window
       // (no `webextension-view-type` attribute) — see createBrowserElement
       // for the reasoning. The icon-strip path stays at the default "popup".
@@ -1711,6 +1715,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       navStack = [];
       currentViewName = viewName;
+      currentViewParams = {};
 
       const overlay = w.document.createElement("div");
       overlay.id = OVERLAY_ID;
@@ -1833,6 +1838,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       popupReady = false;
       navStack = [];
       currentViewName = view || "actions";
+      currentViewParams = {};
 
       const viewName = view || "actions";
       const panel = w.document.getElementById(PANEL_ID);
@@ -1917,7 +1923,38 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function revealOverlay() {
-      if (pendingReveal) pendingReveal();
+      const reveal = pendingReveal;
+      if (reveal) reveal();
+
+      // Reloads can leave a warm hidden overlay whose pending reveal closure
+      // no longer corresponds to the current DOM. Once a caller has decided
+      // that the palette should be shown, make that decision authoritative.
+      const w = getWin();
+      const overlay = w && w.document.getElementById(OVERLAY_ID);
+      if (!overlay || overlay.dataset.closing) return;
+      if (
+        overlay.style.visibility === "hidden" ||
+        overlay.style.opacity === "0" ||
+        overlay.style.pointerEvents === "none"
+      ) {
+        pendingReveal = null;
+        overlay.style.visibility = "visible";
+        overlay.style.opacity = "1";
+        overlay.style.pointerEvents = "auto";
+
+        const panel = w.document.getElementById(PANEL_ID);
+        const br = w.document.getElementById(BROWSER_ID);
+        if (!skipOverlayAnimations) {
+          overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
+          if (panel) panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
+        }
+        if (panel) {
+          w.requestAnimationFrame(() => {
+            panel.style.transition = "width 0.15s ease-out, height 0.15s ease-out";
+          });
+        }
+        if (br) br.focus();
+      }
     }
 
     function forceRevealOverlay() {
@@ -2068,6 +2105,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!panel || !br) return;
       const previousView = currentViewName;
       currentViewName = view || "actions";
+      if (!view || view === "actions") currentViewParams = {};
       if (view === "actions" && paletteURLView(br) !== "actions") {
         morphToView("actions", {});
         return;
@@ -2331,6 +2369,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!mm) return;
       navStack = [];
       currentViewName = "actions";
+      currentViewParams = {};
       popupReady = false;
       if (paletteURLView(br) !== "actions") {
         try {
@@ -2400,6 +2439,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       morphGeneration++;
       navStack = [];
       currentViewName = null;
+      currentViewParams = {};
 
       // Prerender that never revealed (chord cancelled, action fired, view
       // mismatch on timeout). Usually the overlay is invisible — skip the
@@ -2439,6 +2479,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const panel = w.document.getElementById(PANEL_ID);
 
       const finish = () => {
+        if (!hard && overlay.dataset.closing !== "true") return;
         if (hard) {
           if (overlay.isConnected) overlay.remove();
           focusSelectedTabBrowser();
@@ -2816,19 +2857,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
           (!!requestedView && currentViewName === requestedView)
         );
         if (prerenderMatches) {
-          // If the popup hasn't finished rendering + measuring yet
-          // (slow showActionsMenu data fetch on a tab-heavy session),
-          // revealing now paints the panel at its preset preset height
-          // and then a moment later requestPanelResize shrinks it,
-          // producing a visible "expand-then-settle" jitter. Defer to
-          // takeChordBridgeBuffer, which reveals on POPUP_READY (after
-          // the resize has already been applied).
-          if (!popupReady) {
-            revealDeferred = true;
-            scheduleDeferredRevealFallback();
-          } else {
-            revealOverlay();
-          }
+          // Timeout means the user paused after the leader/prefix: show the
+          // menu now. There are no buffered chord keys to preserve here, and
+          // waiting for a warm hidden popup to re-emit POPUP_READY can strand
+          // the overlay invisible after reload/rearm races.
+          if (!popupReady) forcePopupBridgeReady();
+          revealDeferred = false;
+          revealOverlay();
         } else {
           if (pendingReveal) destroyOverlay({ silent: true });
           openOverlayWithView(requestedView);
@@ -2872,7 +2907,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       if (!w) return;
       w.setTimeout(() => {
-        if (!pendingReveal || !revealDeferred || popupReady) return;
+        if (!pendingReveal || !revealDeferred) return;
         // If the user has already typed chord-chain keys, do not fake
         // readiness. Those keys must be delivered through the popup's real
         // POPUP_READY drain so Svelte's bridge listener is definitely
@@ -2881,7 +2916,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           scheduleDeferredRevealFallback();
           return;
         }
-        forcePopupBridgeReady();
+        if (!popupReady) forcePopupBridgeReady();
         revealDeferred = false;
         revealOverlay();
       }, 250);
@@ -3020,6 +3055,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
         navStack = [];
         currentViewName = "actions";
+        currentViewParams = {};
         const w0 = getWin();
         const br0 = w0 && w0.document.getElementById(BROWSER_ID);
         const mm0 = browserMessageManager(br0);
@@ -5144,9 +5180,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async navigateToView(view, params) {
           if (!isOverlayOpen()) return;
           const parsed = params ? JSON.parse(params) : {};
-          navStack.push({ view: currentViewName, params: {} });
+          navStack.push({ view: currentViewName, params: currentViewParams || {} });
           const prevView = currentViewName;
           currentViewName = view;
+          currentViewParams = parsed;
           // Record the nav as the in-flight chord's open-view target so
           // cmd+.,. replay rebuilds the same sequence. This is only for
           // chord-opened popups (root timeout / bridge); toolbar-clicked
@@ -5180,12 +5217,23 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async navigateBack() {
           if (!isOverlayOpen()) return null;
           if (navStack.length === 0) {
+            if (currentViewName && currentViewName !== "actions") {
+              const wasInForeign = currentViewName === "extension-popup";
+              currentViewName = "actions";
+              currentViewParams = {};
+              if (wasInForeign) {
+                morphToView("actions", {});
+                return null;
+              }
+              return { view: "actions", params: {} };
+            }
             destroyOverlay();
             return null;
           }
           const prev = navStack.pop();
           const wasInForeign = currentViewName === "extension-popup";
           currentViewName = prev.view;
+          currentViewParams = prev.params || {};
           if (wasInForeign) {
             morphToView(prev.view, prev.params);
             return null;
