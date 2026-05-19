@@ -517,6 +517,13 @@
         "parameters": []
       },
       {
+        "name": "duplicateOpenAndCloseOthers",
+        "type": "function",
+        "async": true,
+        "description": "Duplicate-prompt outcome: open the duplicate anyway and close other non-pinned tabs with the duplicate URL.",
+        "parameters": []
+      },
+      {
         "name": "showDuplicatePrompt",
         "type": "function",
         "async": true,
@@ -535,6 +542,16 @@
         "parameters": [
           { "name": "url", "type": "string" },
           { "name": "sourceTabId", "type": "integer", "optional": true }
+        ]
+      },
+      {
+        "name": "closeDuplicateTabsForUrl",
+        "type": "function",
+        "async": true,
+        "description": "Close non-pinned tabs with the given URL, excluding an optional source tab.",
+        "parameters": [
+          { "name": "url", "type": "string" },
+          { "name": "excludeTabId", "type": "integer", "optional": true }
         ]
       },
       {

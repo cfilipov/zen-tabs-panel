@@ -1,4 +1,8 @@
-export type DuplicatePromptAction = "duplicate-switch" | "duplicate-open-anyway" | "hide-palette";
+export type DuplicatePromptAction =
+  | "duplicate-switch"
+  | "duplicate-open-anyway"
+  | "duplicate-open-and-close-others"
+  | "hide-palette";
 
 export type DuplicatePromptOption = {
   label: string;
@@ -10,6 +14,7 @@ export type DuplicatePromptOption = {
 export const DUPLICATE_PROMPT_OPTIONS: readonly DuplicatePromptOption[] = [
   { label: "Switch to existing tab", hotkey: "S", action: "duplicate-switch", icon: "svg:arrow-right" },
   { label: "Open anyway", hotkey: "O", action: "duplicate-open-anyway", icon: "svg:plus" },
+  { label: "Open and close others", hotkey: "W", action: "duplicate-open-and-close-others", icon: "svg:x-circle" },
   { label: "Cancel", hotkey: "C", action: "hide-palette", icon: "svg:x-circle" },
 ];
 

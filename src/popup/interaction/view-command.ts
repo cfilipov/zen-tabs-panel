@@ -1,10 +1,11 @@
 import type { ViewActivation } from "./view-activation";
+import type { DuplicatePromptAction } from "./duplicate-prompt-options";
 
 export type ViewCommand =
   | { kind: "none" }
   | { kind: "message"; message: Record<string, unknown>; clearReveal?: boolean }
   | { kind: "open-domain"; domain: string }
-  | { kind: "duplicate-prompt-action"; action: "duplicate-switch" | "duplicate-open-anyway" | "hide-palette" };
+  | { kind: "duplicate-prompt-action"; action: DuplicatePromptAction };
 
 export function commandForViewActivation(activation: ViewActivation): ViewCommand {
   switch (activation.kind) {

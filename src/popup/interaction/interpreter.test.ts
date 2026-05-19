@@ -98,6 +98,8 @@ describe("interaction interpreter", () => {
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-switch" });
     expect(interpretVisibleInput({ kind: "key", key: "o" }, { view: "duplicate-prompt" }, []))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-anyway" });
+    expect(interpretVisibleInput({ kind: "key", key: "w" }, { view: "duplicate-prompt" }, []))
+      .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-and-close-others" });
     expect(interpretVisibleInput({ kind: "key", key: "c" }, { view: "duplicate-prompt" }, []))
       .toEqual({ kind: "duplicate-prompt-action", action: "hide-palette" });
   });

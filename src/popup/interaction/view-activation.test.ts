@@ -110,5 +110,7 @@ describe("view activation resolver", () => {
       .toEqual({ kind: "launch-profile", row: profile });
     expect(resolveViewActivation(context({ view: "duplicate-prompt" }), 1, "shortcut"))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-anyway" });
+    expect(resolveViewActivation(context({ view: "duplicate-prompt" }), 2, "shortcut"))
+      .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-and-close-others" });
   });
 });

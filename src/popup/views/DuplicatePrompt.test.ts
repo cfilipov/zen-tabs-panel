@@ -39,4 +39,19 @@ describe("DuplicatePrompt", () => {
     await fireEvent.mouseEnter(screen.getByRole("button", { name: /open anyway/i }));
     expect(onpreview).not.toHaveBeenCalled();
   });
+
+  it("renders the combined open-and-close option between open anyway and cancel", () => {
+    render(DuplicatePrompt, {
+      props: {
+        url: "https://example.com/",
+        existingDomId: "existing-tab",
+      },
+    });
+
+    const labels = screen.getAllByRole("button").map((button) => button.textContent || "");
+    expect(labels[1]).toContain("Open anyway");
+    expect(labels[2]).toContain("Open and close others");
+    expect(labels[2]).toContain("W");
+    expect(labels[3]).toContain("Cancel");
+  });
 });

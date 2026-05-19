@@ -2752,6 +2752,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       MSG_REPLAY_LAST_CHORD,
       "duplicate-switch",
       "duplicate-open-anyway",
+      "duplicate-open-and-close-others",
     ]);
     function recordReplayFromPopupAction(message) {
       if (!message || !message.type) return;
@@ -3907,6 +3908,41 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (u === url) return tab;
       }
       return null;
+    }
+
+    function closeDuplicateTabsForUrlInternal(url, excludeTab) {
+      const w = getWin();
+      if (!w?.gBrowser || !url) return 0;
+      let closed = 0;
+      for (const tab of [...w.gBrowser.tabs]) {
+        if (tab === excludeTab || tab.pinned) continue;
+        const u = tab.linkedBrowser?.currentURI?.spec || "";
+        if (u !== url) continue;
+        try {
+          w.gBrowser.removeTab(tab);
+          closed += 1;
+        } catch (e) {}
+      }
+      return closed;
+    }
+
+    function tabFromOpenLinkResult(result) {
+      const w = getWin();
+      if (!w?.gBrowser || !result) return null;
+      if (result.localName === "tab") return result;
+      const browser = result.linkedBrowser ? result.linkedBrowser : result;
+      for (const tab of w.gBrowser.tabs) {
+        if (tab.linkedBrowser === browser) return tab;
+      }
+      return null;
+    }
+
+    function findNewTabSince(beforeTabs, fallbackUrl) {
+      const w = getWin();
+      if (!w?.gBrowser) return null;
+      const added = [...w.gBrowser.tabs].filter((tab) => !beforeTabs.has(tab));
+      if (added.length === 0) return null;
+      return added.find((tab) => (tab.linkedBrowser?.currentURI?.spec || "") === fallbackUrl) || added[added.length - 1];
     }
 
     function browserHasCurrentGeneration(br) {
@@ -5352,6 +5388,27 @@ this.zenWorkspaces = class extends ExtensionAPI {
           catch (e) { return false; }
         },
 
+        async duplicateOpenAndCloseOthers() {
+          if (!pendingDuplicate || !origOpenLinkIn) { destroyOverlay(); return false; }
+          const { url, where, params } = pendingDuplicate;
+          const w = getWin();
+          const sourceTab = where === "current" ? (w?.gBrowser?.selectedTab || null) : null;
+          const beforeTabs = w?.gBrowser ? new Set(w.gBrowser.tabs) : new Set();
+          approveDuplicateNavigationInternal(url, sourceTab);
+          pendingDuplicate = null;
+          destroyOverlay();
+          try {
+            const result = origOpenLinkIn.call(null, url, where, params);
+            if (w?.setTimeout) {
+              await new Promise((resolve) => w.setTimeout(resolve, 0));
+            }
+            const openedTab = tabFromOpenLinkResult(result) || findNewTabSince(beforeTabs, url) || sourceTab;
+            closeDuplicateTabsForUrlInternal(url, openedTab);
+            if (openedTab) activateNativeTab(openedTab);
+            return true;
+          } catch (e) { return false; }
+        },
+
         // Pop the duplicate-prompt overlay for a URL detected by some path
         // other than openLinkIn (e.g. bg's webRequest blocker for plain
         // same-tab link clicks). Caller owns the "switch / open anyway /
@@ -5373,6 +5430,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async approveDuplicateNavigation(url, sourceTabId) {
           const sourceTab = typeof sourceTabId === "number" ? getNativeTabByExtId(sourceTabId) : null;
           approveDuplicateNavigationInternal(url, sourceTab);
+        },
+
+        async closeDuplicateTabsForUrl(url, excludeTabId) {
+          const excludeTab = typeof excludeTabId === "number" ? getNativeTabByExtId(excludeTabId) : null;
+          return closeDuplicateTabsForUrlInternal(url, excludeTab);
         },
 
         // Replay the last engine-fired chord. Returns true if something

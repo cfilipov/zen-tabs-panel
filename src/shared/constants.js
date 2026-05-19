@@ -141,12 +141,13 @@ this.MSG = Object.freeze({
   // recorded the same as a fast-typed chord (engine-bridged).
   TRACE_REPLAY_KEY:               "trace-replay-key",
 
-  // Duplicate-link intercept: popup-fired actions for the three buttons
+  // Duplicate-link intercept: popup-fired actions for the buttons
   // in the duplicate-prompt view. Excluded from chord-replay tracking —
   // they're context-bound (refer to a specific in-flight openLinkIn
   // intercept) and have no meaning outside that flow.
   DUPLICATE_SWITCH:               "duplicate-switch",
   DUPLICATE_OPEN_ANYWAY:          "duplicate-open-anyway",
+  DUPLICATE_OPEN_AND_CLOSE_OTHERS: "duplicate-open-and-close-others",
 
   // Companion mods
   CHECK_COMPANION_MOD:            "check-companion-mod",

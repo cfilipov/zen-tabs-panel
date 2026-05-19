@@ -472,6 +472,7 @@ const ACTIONS = Object.freeze({
   [MSG.REPLAY_LAST_CHORD]:                ()  => replayLastChord(),
   [MSG.DUPLICATE_SWITCH]:                 ()  => handleDuplicateSwitch(),
   [MSG.DUPLICATE_OPEN_ANYWAY]:            ()  => handleDuplicateOpenAnyway(),
+  [MSG.DUPLICATE_OPEN_AND_CLOSE_OTHERS]:  ()  => handleDuplicateOpenAndCloseOthers(),
   [MSG.ACTIVATE_TAB]:                     (m) => api.activateTabByDomId(m.domId),
   [MSG.GO_TO_PREVIOUS_TAB]:               ()  => api.goToPreviousTab(),
   [MSG.GO_TO_PARENT_TAB]:                 ()  => api.goToParentTab(),
@@ -641,7 +642,11 @@ function recordChordAction(message) {
   // would mask the previous replayable chord by overwriting the bg
   // fallback). Don't record either lastChordAction or chrome's
   // chord-chain context for these.
-  if (message.type === MSG.DUPLICATE_SWITCH || message.type === MSG.DUPLICATE_OPEN_ANYWAY) return;
+  if (
+    message.type === MSG.DUPLICATE_SWITCH ||
+    message.type === MSG.DUPLICATE_OPEN_ANYWAY ||
+    message.type === MSG.DUPLICATE_OPEN_AND_CLOSE_OTHERS
+  ) return;
   lastChordAction = message;
   // Let chrome decide whether this terminal action commits a chord
   // chain (open-view + bridge keys → cycling replay) or just gets
@@ -771,6 +776,24 @@ async function handleDuplicateOpenAnyway() {
     return;
   }
   await api.duplicateOpenAnyway();
+}
+
+async function handleDuplicateOpenAndCloseOthers() {
+  if (webRequestPendingDuplicate) {
+    const { tabId, url } = webRequestPendingDuplicate;
+    webRequestPendingDuplicate = null;
+    allowOnce = { tabId, url };
+    try { await api.approveDuplicateNavigation(url, tabId); } catch (e) {}
+    try {
+      await api.closeDuplicateTabsForUrl(url, tabId);
+      await browser.tabs.update(tabId, { url });
+    } catch (e) {
+      allowOnce = null;
+    }
+    await api.hidePalette();
+    return;
+  }
+  await api.duplicateOpenAndCloseOthers();
 }
 
 browser.webRequest.onBeforeRequest.addListener(
