@@ -36,7 +36,7 @@
 {#if total === 0}
   <div class="empty-state">No tabs</div>
 {:else}
-  <VirtualList {rows} {total} {offset} onrange={onrange}>
+  <VirtualList {rows} {total} {offset} getKey={(row) => row.domId} onrange={onrange}>
     {#snippet children(row: TabIndexRow, index: number)}
       <TabRow
         {row}

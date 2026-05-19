@@ -18,7 +18,7 @@
 {#if total === 0}
   <div class="empty-state">No domains</div>
 {:else}
-  <VirtualList {rows} {total} {offset} onrange={onrange}>
+  <VirtualList {rows} {total} {offset} getKey={(row) => row.domain} onrange={onrange}>
     {#snippet children(row: DomainIndexRow, index: number)}
       <DomainRow
         {row}

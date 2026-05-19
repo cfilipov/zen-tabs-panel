@@ -374,6 +374,10 @@ html, body {
   inset: 0 0 auto 0;
 }
 
+.virtual-list-row {
+  height: var(--ztp-row-height);
+}
+
 /* Multi-column grid for compact action items */
 .actions-grid {
   display: grid;

@@ -13,14 +13,20 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
   let rows = [];
   let byDomId = new Map();
   let mutationObserver = null;
+  let rebuildCount = 0;
+  let incrementalUpdateCount = 0;
+  let dirtyFallbackCount = 0;
+  let lastRebuildMs = 0;
 
   function markDirty() {
     dirty = true;
     version++;
+    dirtyFallbackCount++;
   }
 
   function bumpVersion() {
     version++;
+    incrementalUpdateCount++;
   }
 
   function domainOf(url) {
@@ -171,11 +177,14 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     start();
     if (!dirty) return;
     try { deps.recordInterval(); } catch (e) {}
+    const startMs = deps.now ? deps.now() : Date.now();
     const win = deps.getWin();
     const tabToGroupId = splitGroupMap(win);
     rows = deps.getAllTabElements().map((tab, index) => readRow(tab, index, tabToGroupId));
     byDomId = new Map(rows.map((row) => [row.domId, row]));
     dirty = false;
+    rebuildCount++;
+    lastRebuildMs = Math.max(0, (deps.now ? deps.now() : Date.now()) - startMs);
   }
 
   function currentTabElements() {
@@ -303,7 +312,6 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       if (tab) tabs.add(tab);
     }
     if (!tabs.size) {
-      markDirty();
       return;
     }
     let changed = false;
@@ -518,6 +526,18 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     start,
     stop,
     markDirty,
+    getDebugStats() {
+      return {
+        dirty,
+        version,
+        rowCount: rows.length,
+        indexed: isIndexed(),
+        rebuildCount,
+        incrementalUpdateCount,
+        dirtyFallbackCount,
+        lastRebuildMs,
+      };
+    },
     getVersion() {
       rebuildIfNeeded();
       return version;

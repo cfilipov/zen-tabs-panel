@@ -104,6 +104,12 @@ describe("popup architecture boundary", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("keeps negative current-view guards out of the palette component", () => {
+    const source = readFileSync(join(popupRoot, "NativePalette.svelte"), "utf8");
+
+    expect(source).not.toMatch(/\bcurrentView\s*!==/);
+  });
+
   it("keeps typed navigation registries present", () => {
     const navigationTree = readFileSync(join(popupRoot, "..", "shared", "navigation-tree.ts"), "utf8");
     const actionRegistry = readFileSync(join(popupRoot, "interaction", "action-registry.ts"), "utf8");

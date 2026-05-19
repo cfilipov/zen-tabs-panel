@@ -23,7 +23,10 @@
 //   page flip. Chord namespace is shared across pages, so collisions across
 //   pages are not allowed.
 
-import type { NavNode } from "./types";
+import type { NavNode, ViewCapabilityId, ViewId } from "./types";
+
+const TAB_LIST_CAPABILITIES = ["closeSelection", "workspaceFilter"] as const;
+const SORTABLE_TAB_LIST_CAPABILITIES = ["closeSelection", "sort", "workspaceFilter"] as const;
 
 export const NAVIGATION_TREE = [
   // Tab navigation
@@ -35,18 +38,18 @@ export const NAVIGATION_TREE = [
   { id: "go-to-next-vertical-tab", kind: "action", chord: "K", label: "Below",    icon: "svg:arrow-down" },
 
   // Browse views
-  { id: "child-tabs",      kind: "open-view", chord: "C",       view: "child-tabs",      label: "Children",        icon: "svg:move-down",     needsChildren: true },
-  { id: "sibling-tabs",    kind: "open-view", chord: "B",       view: "sibling-tabs",    label: "Siblings",        icon: "svg:git-branch",    needsSiblings: true },
-  { id: "parent-tabs",     kind: "open-view", chord: "Shift+T", view: "parent-tabs",     label: "Parent tabs",     icon: "svg:parent-node",   needsParentTabs: true },
+  { id: "child-tabs",      kind: "open-view", chord: "C",       view: "child-tabs",      label: "Children",        icon: "svg:move-down",     needsChildren: true, viewCapabilities: ["closeSelection", "closeAll", "workspaceFilter"] },
+  { id: "sibling-tabs",    kind: "open-view", chord: "B",       view: "sibling-tabs",    label: "Siblings",        icon: "svg:git-branch",    needsSiblings: true, viewCapabilities: TAB_LIST_CAPABILITIES },
+  { id: "parent-tabs",     kind: "open-view", chord: "Shift+T", view: "parent-tabs",     label: "Parent tabs",     icon: "svg:parent-node",   needsParentTabs: true, viewCapabilities: ["closeSelection", "drillSelection", "workspaceFilter"] },
   { id: "navigation",      kind: "open-view", chord: "H",       view: "navigation",      label: "Tab history",     icon: "svg:history",       needsHistory: true },
-  { id: "unvisited-tabs",  kind: "open-view", chord: "N",       view: "unvisited-tabs",  label: "New tabs",        icon: "svg:circle-dot",    needsUnvisited: true },
-  { id: "last-visited",    kind: "open-view", chord: "R",       view: "last-visited",    label: "Recent",          icon: "svg:clock" },
-  { id: "recently-closed", kind: "open-view", chord: "X",       view: "recently-closed", label: "Recently closed", icon: "svg:rotate-ccw",    needsRecentlyClosed: true },
-  { id: "duplicates",      kind: "open-view", chord: "D",       view: "duplicates",      label: "Duplicates",      icon: "svg:copy",          needsDuplicates: true },
+  { id: "unvisited-tabs",  kind: "open-view", chord: "N",       view: "unvisited-tabs",  label: "New tabs",        icon: "svg:circle-dot",    needsUnvisited: true, viewCapabilities: TAB_LIST_CAPABILITIES },
+  { id: "last-visited",    kind: "open-view", chord: "R",       view: "last-visited",    label: "Recent",          icon: "svg:clock", viewCapabilities: TAB_LIST_CAPABILITIES },
+  { id: "recently-closed", kind: "open-view", chord: "X",       view: "recently-closed", label: "Recently closed", icon: "svg:rotate-ccw",    needsRecentlyClosed: true, viewCapabilities: ["restoreSelection"] },
+  { id: "duplicates",      kind: "open-view", chord: "D",       view: "duplicates",      label: "Duplicates",      icon: "svg:copy",          needsDuplicates: true, viewCapabilities: ["workspaceFilter"] },
   { id: "tab-info",        kind: "open-view", chord: "I",       view: "tab-info",        label: "Tab info",        icon: "svg:info" },
-  { id: "domains",         kind: "open-view", chord: "Q",       view: "domains",         label: "Domains",         icon: "svg:globe" },
-  { id: "tabs-by-age",     kind: "open-view", chord: "A",       view: "tabs-by-age",     label: "Tabs by age",     icon: "svg:calendar-clock" },
-  { id: "most-visited",    kind: "open-view", chord: "V",       view: "most-visited",    label: "Most visited",    icon: "svg:star" },
+  { id: "domains",         kind: "open-view", chord: "Q",       view: "domains",         label: "Domains",         icon: "svg:globe", viewCapabilities: ["sort", "workspaceFilter"] },
+  { id: "tabs-by-age",     kind: "open-view", chord: "A",       view: "tabs-by-age",     label: "Tabs by age",     icon: "svg:calendar-clock", viewCapabilities: SORTABLE_TAB_LIST_CAPABILITIES },
+  { id: "most-visited",    kind: "open-view", chord: "V",       view: "most-visited",    label: "Most visited",    icon: "svg:star", viewCapabilities: TAB_LIST_CAPABILITIES },
 
   // Tab actions
   { id: "move-tab-to-start",     kind: "action",    chord: "S", label: "Move to start",      icon: "svg:arrow-up-to-line" },
@@ -175,6 +178,57 @@ type PrefixChildNode = Extract<NavigationNode, { kind: "prefix" }>["children"][n
 export type NavigationTerminalNode = NavigationNode | PrefixChildNode;
 export type ActionEffectId = Extract<NavigationTerminalNode, { kind: "action" }>["id"];
 export type NavigationViewId = Extract<NavigationTerminalNode, { kind: "open-view" | "prefix" }>["view"];
+
+const ALL_VIEW_IDS = [
+  "actions",
+  "child-tabs",
+  "sibling-tabs",
+  "parent-tabs",
+  "navigation",
+  "unvisited-tabs",
+  "last-visited",
+  "recently-closed",
+  "duplicates",
+  "tab-info",
+  "domains",
+  "domain-tabs",
+  "tabs-by-age",
+  "most-visited",
+  "move-to-workspace",
+  "open-in-container",
+  "profiles",
+  "move-to-folder",
+  "reorder-tabs",
+  "split-view",
+  "close-and-select",
+  "duplicate-prompt",
+  "extension-popup",
+] as const satisfies readonly ViewId[];
+
+const DERIVED_VIEW_CAPABILITIES = {
+  "domain-tabs": SORTABLE_TAB_LIST_CAPABILITIES,
+} as const satisfies Partial<Record<ViewId, readonly ViewCapabilityId[]>>;
+
+function capabilitiesFromTree() {
+  const out: Partial<Record<ViewId, readonly ViewCapabilityId[]>> = {};
+  for (const node of NAVIGATION_TREE) {
+    const viewCapabilities = "viewCapabilities" in node ? node.viewCapabilities : undefined;
+    if ((node.kind === "open-view" || node.kind === "prefix") && viewCapabilities) {
+      out[node.view] = viewCapabilities;
+    }
+  }
+  return out;
+}
+
+export const VIEW_CAPABILITIES: Record<ViewId, readonly ViewCapabilityId[]> = {
+  ...(Object.fromEntries(ALL_VIEW_IDS.map((view) => [view, [] as readonly ViewCapabilityId[]])) as Record<ViewId, readonly ViewCapabilityId[]>),
+  ...capabilitiesFromTree(),
+  ...DERIVED_VIEW_CAPABILITIES,
+};
+
+export function hasViewCapability(view: ViewId | undefined, capability: ViewCapabilityId) {
+  return !!view && VIEW_CAPABILITIES[view].includes(capability);
+}
 
 // Workspace digit chords. Each digit selects the workspace at the given
 // index. "0" selects the 10th workspace (matching keyboard layout where 0

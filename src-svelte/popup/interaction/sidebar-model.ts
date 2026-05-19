@@ -1,5 +1,11 @@
 import type { ViewId } from "../../shared/types";
-import { isCloseableView, isWorkspaceFilterView } from "./view-capabilities";
+import {
+  canCloseAllInView,
+  canDrillSelectionInView,
+  canRestoreInView,
+  isCloseableView,
+  isWorkspaceFilterView,
+} from "./view-capabilities";
 
 export type SidebarHintId = "close" | "close-all" | "restore" | "children";
 
@@ -51,10 +57,10 @@ function sidebarHints(context: SidebarModelContext): SidebarHintModel[] {
       hidden: context.selectedIndex < 0,
     });
   }
-  if (context.view === "child-tabs") {
+  if (canCloseAllInView(context.view)) {
     hints.push({ id: "close-all", label: "Close all", badge: "⇧W" });
   }
-  if (context.view === "recently-closed") {
+  if (canRestoreInView(context.view)) {
     hints.push({
       id: "restore",
       label: "Restore tab",
@@ -62,7 +68,7 @@ function sidebarHints(context: SidebarModelContext): SidebarHintModel[] {
       hidden: context.selectedIndex < 0,
     });
   }
-  if (context.view === "parent-tabs") {
+  if (canDrillSelectionInView(context.view)) {
     hints.push({
       id: "children",
       label: "Show children",

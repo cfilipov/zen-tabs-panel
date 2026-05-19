@@ -38,6 +38,14 @@ export type NavFlag =
 
 export type AvailabilityPredicateId = NavFlag;
 
+export type ViewCapabilityId =
+  | "closeSelection"
+  | "closeAll"
+  | "restoreSelection"
+  | "sort"
+  | "drillSelection"
+  | "workspaceFilter";
+
 export type NavBase = {
   id: string;
   chord: Chord;
@@ -53,11 +61,13 @@ export type ActionNode = NavBase & {
 export type OpenViewNode = NavBase & {
   kind: "open-view";
   view: ViewId;
+  viewCapabilities?: readonly ViewCapabilityId[];
 };
 
 export type PrefixNode = NavBase & {
   kind: "prefix";
   view: ViewId;
+  viewCapabilities?: readonly ViewCapabilityId[];
   children: readonly ActionNode[];
 };
 

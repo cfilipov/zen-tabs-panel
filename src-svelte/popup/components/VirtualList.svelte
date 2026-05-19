@@ -1,4 +1,5 @@
 <script lang="ts" generics="T">
+  import { flip } from "svelte/animate";
   import { onMount } from "svelte";
   import type { Snippet } from "svelte";
 
@@ -8,11 +9,21 @@
     offset?: number;
     rowHeight?: number;
     overscan?: number;
+    getKey?: (row: T, absoluteIndex: number) => string | number;
     onrange?: (offset: number, limit: number) => void;
     children: Snippet<[T, number]>;
   };
 
-  let { rows, total, offset = 0, rowHeight = 48, overscan = 8, onrange, children }: Props = $props();
+  let {
+    rows,
+    total,
+    offset = 0,
+    rowHeight = 48,
+    overscan = 8,
+    getKey = (_row, absoluteIndex) => absoluteIndex,
+    onrange,
+    children,
+  }: Props = $props();
 
   let host: HTMLDivElement;
   let lastRequested = "";
@@ -76,8 +87,10 @@
   data-offset={offset}
 >
   <div class="virtual-list-window" style={`transform: translateY(${offset * rowHeight}px)`}>
-    {#each rows as row, index}
-      {@render children(row, index)}
+    {#each rows as row, index (getKey(row, offset + index))}
+      <div class="virtual-list-row" animate:flip={{ duration: 120 }}>
+        {@render children(row, index)}
+      </div>
     {/each}
   </div>
 </div>

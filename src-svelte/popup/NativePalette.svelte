@@ -258,6 +258,22 @@
     return drillSelectedParent;
   }
 
+  function isActionsView(view: ViewId) {
+    return view === "actions";
+  }
+
+  function isCurrentView(view: ViewId) {
+    return palette.currentView === view;
+  }
+
+  function isCurrentActionsView() {
+    return isActionsView(palette.currentView);
+  }
+
+  function shouldScrollListSelection() {
+    return !isCurrentActionsView() && !isNativePrefixView(palette.currentView);
+  }
+
   function isDomainRow(row: NativeListRow | null): row is DomainIndexRow {
     return row?.kind === "domain";
   }
@@ -516,7 +532,7 @@
   }
 
   function restoreSelectedRecentlyClosed() {
-    if (palette.currentView !== "recently-closed") return;
+    if (!isCurrentView("recently-closed")) return;
     const row = palette.recentlyClosedRows[palette.selectedIndex];
     if (!row) return;
     restoreClosedTab(row, true);
@@ -525,7 +541,7 @@
   }
 
   async function drillSelectedParent() {
-    if (palette.currentView !== "parent-tabs" || !selectedTabRow) return;
+    if (!isCurrentView("parent-tabs") || !selectedTabRow) return;
     await openNativeView("child-tabs", { ...viewParams("child-tabs"), parentDomId: selectedTabRow.domId }, true);
   }
 
@@ -608,7 +624,7 @@
 
   function moveSelection(delta: 1 | -1) {
     paletteStore.selectIndex(nextSelectionIndex(selectionContext(), delta));
-    if (palette.currentView !== "actions" && !isNativePrefixView(palette.currentView)) {
+    if (shouldScrollListSelection()) {
       ensureListIndexLoaded(palette.selectedIndex);
     }
     scrollCurrentSelectionIntoView();
@@ -655,7 +671,7 @@
   }
 
   function setActionsPage(targetPage: number) {
-    if (palette.currentView !== "actions" || pageCount <= 1) return;
+    if (!isCurrentActionsView() || pageCount <= 1) return;
     const nextPage = nextActionsPage(palette.currentPage, targetPage, pageCount);
     if (nextPage === null) return;
     paletteStore.selectActionsPage(nextPage);
@@ -663,7 +679,7 @@
   }
 
   function jumpSection(delta: 1 | -1) {
-    if (palette.currentView !== "actions") return;
+    if (!isCurrentActionsView()) return;
     const nextIndex = nextActionSectionIndex({
       sections: renderedActionSections,
       currentPage: palette.currentPage,
@@ -755,7 +771,7 @@
       if (!pageAlive) return;
       const scroll = () => {
         if (!pageAlive) return;
-        if (palette.currentView !== "actions" && !isNativePrefixView(palette.currentView)) {
+        if (shouldScrollListSelection()) {
           scrollListIndexIntoView(palette.selectedIndex);
         }
         scrollSelectedItemIntoView();
@@ -895,7 +911,7 @@
   }
 
   function goToActions() {
-    if (palette.currentView !== "actions") {
+    if (!isCurrentActionsView()) {
       void openNativeView("actions").then(() => requestPanelResize("actions"));
     }
   }
@@ -920,7 +936,7 @@
   sidebarWorkspaces={palette.sidebarWorkspaces}
   workspaceFilter={palette.workspaceFilter}
   {activeWorkspaceId}
-  pageIndicatorHidden={palette.currentView !== "actions" || pageCount <= 1}
+  pageIndicatorHidden={!isCurrentActionsView() || pageCount <= 1}
   {pageCount}
   currentPage={palette.currentPage}
   {fitContentHeight}

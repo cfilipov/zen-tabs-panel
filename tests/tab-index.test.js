@@ -5,6 +5,7 @@ const { createZenTabIndex } = require("../src-svelte/experiment/tab-index.js");
 
 function fakeWindow() {
   const listeners = new Map();
+  let mutationHandler = null;
   const tabContainer = {
     addEventListener(name, handler) {
       const handlers = listeners.get(name) || new Set();
@@ -22,7 +23,13 @@ function fakeWindow() {
     gBrowser: {
       tabContainer,
     },
+    dispatchMutations(records) {
+      mutationHandler?.(records);
+    },
     MutationObserver: class {
+      constructor(handler) {
+        mutationHandler = handler;
+      }
       observe() {}
       disconnect() {}
     },
@@ -252,6 +259,51 @@ test("tab index updates changed tab rows incrementally after the first build", (
   assert.equal(index.getRowTarget("tab-2").title, "Two updated");
   assert.equal(calls.ensureTabUuid, 4);
   assert.equal(calls.readTabStats, 4);
+});
+
+test("tab index profiles large-session incremental changes without a full rebuild", () => {
+  const tabs = Array.from({ length: 3000 }, (_, i) =>
+    fakeTab(`tab-${i + 1}`, `https://site-${i % 100}.test/${i + 1}`, `ws-${i % 3}`, {
+      title: `Tab ${i + 1}`,
+      lastAccessed: i,
+    })
+  );
+  const { index, calls, win } = makeIndexWithDeps(tabs);
+
+  index.getWindow("last-visited", 0, 20, {});
+  assert.equal(calls.ensureTabUuid, 3000);
+  assert.deepEqual(
+    {
+      rebuildCount: index.getDebugStats().rebuildCount,
+      dirtyFallbackCount: index.getDebugStats().dirtyFallbackCount,
+    },
+    { rebuildCount: 1, dirtyFallbackCount: 0 }
+  );
+
+  tabs[1499].label = "Updated tab";
+  win.gBrowser.tabContainer.dispatch("TabAttrModified", { target: tabs[1499] });
+
+  assert.equal(index.getRowTarget("tab-1500").title, "Updated tab");
+  assert.equal(calls.ensureTabUuid, 3001);
+  assert.equal(index.getDebugStats().rebuildCount, 1);
+  assert.equal(index.getDebugStats().incrementalUpdateCount, 1);
+  assert.equal(index.getDebugStats().dirtyFallbackCount, 0);
+});
+
+test("tab index ignores unrelated mutation records instead of forcing a rebuild", () => {
+  const tabs = [
+    fakeTab("tab-1", "https://one.test", "ws-1", { title: "One", lastAccessed: 10 }),
+    fakeTab("tab-2", "https://two.test", "ws-1", { title: "Two", lastAccessed: 20 }),
+  ];
+  const { index, calls, win } = makeIndexWithDeps(tabs);
+
+  index.getWindow("last-visited", 0, 10, {});
+  win.dispatchMutations([{ target: { id: "not-a-tab", parentNode: null } }]);
+
+  assert.equal(index.getDebugStats().dirty, false);
+  assert.equal(index.getDebugStats().dirtyFallbackCount, 0);
+  assert.equal(index.getDebugStats().rebuildCount, 1);
+  assert.equal(calls.ensureTabUuid, 2);
 });
 
 test("tab index reindexes cached rows incrementally after close and move", () => {
