@@ -2,6 +2,9 @@ import type { ViewId } from "../../shared/types";
 import type { DuplicatePromptAction } from "./duplicate-prompt-options";
 import type { InteractionCommand } from "./interpreter";
 
+// Generic command dispatcher. The palette-specific runtime factory lives in
+// native-palette-runtime.ts, where these handlers are wired to store/effect code.
+
 type MaybePromise<T> = T | Promise<T>;
 
 export type InteractionRuntimeHandlers = {
