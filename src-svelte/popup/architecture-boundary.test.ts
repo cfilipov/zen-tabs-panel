@@ -108,6 +108,19 @@ describe("popup architecture boundary", () => {
     const source = readFileSync(join(popupRoot, "NativePalette.svelte"), "utf8");
 
     expect(source).not.toMatch(/\bcurrentView\s*!==/);
+    expect(source).not.toMatch(/\bisCurrentView\b/);
+    expect(source).not.toMatch(/\bcurrentView\s*===\s*["'](?:recently-closed|parent-tabs)["']/);
+  });
+
+  it("keeps virtualized list callers keyed by stable row identity", () => {
+    const offenders = collectSourceFilesFrom(["views"]).flatMap((path) => {
+      const source = readFileSync(path, "utf8");
+      return [...source.matchAll(/<VirtualList\b[\s\S]*?>/g)]
+        .filter((match) => !/\bgetKey\s*=/.test(match[0]))
+        .map(() => relative(popupRoot, path));
+    });
+
+    expect(offenders).toEqual([]);
   });
 
   it("keeps typed navigation registries present", () => {

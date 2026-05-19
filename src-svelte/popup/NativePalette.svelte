@@ -48,6 +48,10 @@
   } from "./interaction/view-activation";
   import { commandForViewActivation, type ViewCommand } from "./interaction/view-command";
   import { buildSidebarModel, type SidebarHintId } from "./interaction/sidebar-model";
+  import {
+    canDrillSelectionInView,
+    canRestoreInView,
+  } from "./interaction/view-capabilities";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
   import { createFolderClient, type FolderRow } from "./runtime/folder-client";
@@ -260,10 +264,6 @@
 
   function isActionsView(view: ViewId) {
     return view === "actions";
-  }
-
-  function isCurrentView(view: ViewId) {
-    return palette.currentView === view;
   }
 
   function isCurrentActionsView() {
@@ -532,7 +532,7 @@
   }
 
   function restoreSelectedRecentlyClosed() {
-    if (!isCurrentView("recently-closed")) return;
+    if (!canRestoreInView(palette.currentView)) return;
     const row = palette.recentlyClosedRows[palette.selectedIndex];
     if (!row) return;
     restoreClosedTab(row, true);
@@ -541,7 +541,7 @@
   }
 
   async function drillSelectedParent() {
-    if (!isCurrentView("parent-tabs") || !selectedTabRow) return;
+    if (!canDrillSelectionInView(palette.currentView) || !selectedTabRow) return;
     await openNativeView("child-tabs", { ...viewParams("child-tabs"), parentDomId: selectedTabRow.domId }, true);
   }
 
