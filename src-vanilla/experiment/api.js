@@ -585,7 +585,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           color: black !important;
           font: 700 10px/1 system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
           text-align: center !important;
-          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
+          box-shadow: none !important;
           z-index: 9999 !important;
           pointer-events: none !important;
         }
