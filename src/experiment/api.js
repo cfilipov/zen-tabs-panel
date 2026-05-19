@@ -945,6 +945,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let navStack = [];
     let currentViewName = null;
     let currentViewParams = {};
+    // The view the popup should confirm on its next POPUP_READY reply.
+    // Keep this separate from currentViewName: resizePanelToView updates
+    // currentViewName from popup-side measurements, and a stale resize from
+    // an old warm view must not be allowed to reopen that view on the next
+    // leader arm.
+    let popupReadyTargetView = null;
     let morphGeneration = 0;
     // Set by createOverlay to the function that flips the (initially hidden)
     // overlay to visible and starts the in animations. Stays non-null until
@@ -1761,6 +1767,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       navStack = [];
       currentViewName = viewName;
       currentViewParams = {};
+      popupReadyTargetView = viewName;
 
       const overlay = w.document.createElement("div");
       overlay.id = OVERLAY_ID;
@@ -1887,6 +1894,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       currentViewParams = {};
 
       const viewName = view || "actions";
+      popupReadyTargetView = viewName;
       const panel = w.document.getElementById(PANEL_ID);
       const br = w.document.getElementById(BROWSER_ID);
       const idleHidden = overlay.style.visibility === "hidden" && !pendingReveal;
@@ -2068,6 +2076,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!panel || !oldBrowser) return;
 
       const gen = ++morphGeneration;
+      popupReadyTargetView = view || "actions";
       // For extension-popup view, prefer the cached natural size from a
       // previous open so we morph straight there. For the first open
       // of a given extension we have no idea what size the popup wants,
@@ -2420,6 +2429,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       navStack = [];
       currentViewName = "actions";
       currentViewParams = {};
+      popupReadyTargetView = "actions";
       popupReady = false;
       if (paletteURLView(br) !== "actions") {
         try {
@@ -2491,6 +2501,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       navStack = [];
       currentViewName = null;
       currentViewParams = {};
+      popupReadyTargetView = null;
 
       // Prerender that never revealed (chord cancelled, action fired, view
       // mismatch on timeout). Usually the overlay is invisible — skip the
@@ -5286,7 +5297,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // script wasn't registered yet. The popup's IIFE will see this
           // `view` in the reply and navigate before replaying buffered
           // keys, so chord-chain digits land at the right view.
-          const replyView = (currentViewName && currentViewName !== "actions") ? currentViewName : null;
+          const readyView = popupReadyTargetView || "actions";
+          popupReadyTargetView = null;
+          const replyView = readyView !== "actions" ? readyView : null;
           return {
             buffered: drained,
             stateSnapshot: snapshot,
