@@ -4430,6 +4430,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
           catch (e) { return false; }
         },
 
+        async replacePinnedUrl() {
+          const w = getWin();
+          const tab = w?.gBrowser?.selectedTab;
+          if (!tab?.pinned || !w?.gZenPinnedTabManager?.replacePinnedUrlWithCurrent) return false;
+          try { w.gZenPinnedTabManager.replacePinnedUrlWithCurrent(tab); return true; }
+          catch (e) { return false; }
+        },
+
         async addToEssentials() {
           const w = getWin();
           const cmd = w?.document.getElementById("cmd_contextZenAddToEssentials");

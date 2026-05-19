@@ -669,6 +669,13 @@
         "parameters": []
       },
       {
+        "name": "replacePinnedUrl",
+        "type": "function",
+        "async": true,
+        "description": "Replace the active pinned tab's stored URL with the current page URL",
+        "parameters": []
+      },
+      {
         "name": "addToEssentials",
         "type": "function",
         "async": true,

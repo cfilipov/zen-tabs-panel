@@ -29,6 +29,7 @@ export const ACTION_EFFECTS = {
   "view-page-info": true,
   "toggle-mute": true,
   "reset-pinned-tab": true,
+  "replace-pinned-url": true,
   "add-to-essentials": true,
   "take-screenshot": true,
   "toggle-pip": true,

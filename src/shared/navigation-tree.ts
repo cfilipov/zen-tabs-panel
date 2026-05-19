@@ -77,6 +77,7 @@ export const NAVIGATION_TREE = [
   { id: "view-page-info",     kind: "action", chord: "Shift+I", label: "Page info",         icon: "svg:info",             page: 2 },
   { id: "toggle-mute",        kind: "action", chord: "Shift+V", label: "Mute/unmute",       icon: "svg:volume-x",         page: 2 },
   { id: "reset-pinned-tab",   kind: "action", chord: "Shift+P", label: "Reset pinned url",  icon: "svg:pin",              page: 2, needsPinnedTab: true },
+  { id: "replace-pinned-url", kind: "action", chord: "Shift+C", label: "Replace pinned URL", icon: "svg:pin",             page: 2, needsPinnedTab: true },
   { id: "add-to-essentials",  kind: "action", chord: "Shift+E", label: "Add to essentials", icon: "svg:star",             page: 2 },
   { id: "take-screenshot",    kind: "action", chord: "Shift+S", label: "Screenshot",        icon: "svg:camera",           page: 2 },
   { id: "toggle-pip",         kind: "action", chord: ";",       label: "Picture-in-picture", icon: "svg:picture-in-picture", page: 2 },

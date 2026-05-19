@@ -528,6 +528,7 @@ const ACTIONS = Object.freeze({
   [MSG.VIEW_PAGE_INFO]:                   ()  => api.viewPageInfo(),
   [MSG.TOGGLE_MUTE]:                      ()  => api.toggleMute(),
   [MSG.RESET_PINNED_TAB]:                 ()  => api.resetPinnedTab(),
+  [MSG.REPLACE_PINNED_URL]:               ()  => api.replacePinnedUrl(),
   [MSG.ADD_TO_ESSENTIALS]:                ()  => api.addToEssentials(),
   [MSG.TAKE_SCREENSHOT]:                  ()  => api.takeScreenshot(),
   [MSG.TOGGLE_PIP]:                       ()  => api.togglePictureInPicture(),

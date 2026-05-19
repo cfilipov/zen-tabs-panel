@@ -111,6 +111,7 @@ this.MSG = Object.freeze({
   VIEW_PAGE_INFO:                 "view-page-info",
   TOGGLE_MUTE:                    "toggle-mute",
   RESET_PINNED_TAB:               "reset-pinned-tab",
+  REPLACE_PINNED_URL:             "replace-pinned-url",
   ADD_TO_ESSENTIALS:              "add-to-essentials",
   TAKE_SCREENSHOT:                "take-screenshot",
   TOGGLE_PIP:                     "toggle-pip",
