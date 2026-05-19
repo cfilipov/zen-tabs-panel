@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live smoke test for the Zen Tabs Panel popup.
+"""Live smoke test for the ErgoZen popup.
 
 Runs through the same chrome DevTools bridge as tools/firefox-eval.py. The
 check is intentionally integration-heavy: it verifies that the chrome overlay
@@ -698,7 +698,7 @@ def poll_smoke(timeout: float) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run the live Zen Tabs Panel popup smoke test.")
+    parser = argparse.ArgumentParser(description="Run the live ErgoZen popup smoke test.")
     parser.add_argument("--timeout", type=float, default=90.0, help="seconds to wait for the smoke to finish")
     args = parser.parse_args()
 

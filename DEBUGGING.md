@@ -106,7 +106,7 @@ python3 tools/firefox-eval.py '
 (async () => {
   const { AddonManager } = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
   const { FileUtils } = ChromeUtils.importESModule("resource://gre/modules/FileUtils.sys.mjs");
-  const file = new FileUtils.File("/Users/cfilipov/Developer/zen-tabs-panel/dist");
+  const file = new FileUtils.File("/Users/cfilipov/Developer/ergozen/dist");
   const addon = await AddonManager.installTemporaryAddon(file);
   return JSON.stringify({
     ok: true,
@@ -455,8 +455,8 @@ Minimal page-side harness:
 (() => { const w = Services.wm.getMostRecentWindow("navigator:browser"); const o = w.document.getElementById("zen-tabs-panel-overlay"); if (!o) return { overlay: false }; const br = o.querySelector("browser"); return { overlay: true, display: w.getComputedStyle(o).display, visibility: w.getComputedStyle(o).visibility, opacity: w.getComputedStyle(o).opacity, src: br?.getAttribute("src") || br?.currentURI?.spec }; })()
 
 // Recent JS errors mentioning the extension
-(() => Services.console.getMessageArray().slice(-30).map(m => m.message || String(m)).filter(s => s.toLowerCase().includes("zen-tabs") || s.toLowerCase().includes("error")).slice(-5).join(" || "))()
+(() => Services.console.getMessageArray().slice(-30).map(m => m.message || String(m)).filter(s => s.toLowerCase().includes("ergozen") || s.toLowerCase().includes("zen-tabs") || s.toLowerCase().includes("error")).slice(-5).join(" || "))()
 
-// Installed Zen Tabs Panel extension state
+// Installed ErgoZen extension state
 (() => { const { ExtensionParent } = ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs"); const ext = ExtensionParent.GlobalManager.extensionMap.get("zen-tabs-panel@c13v.com"); return ext && { id: ext.id, uuid: ext.uuid, state: ext.state, backgroundState: ext.backgroundState, version: ext.manifest?.version }; })()
 ```

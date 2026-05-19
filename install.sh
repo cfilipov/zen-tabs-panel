@@ -4,8 +4,9 @@ set -e
 
 EXTENSION_ID="zen-tabs-panel@c13v.com"
 XPI_NAME="$EXTENSION_ID.xpi"
-REPO="cfilipov/zen-tabs-panel"
-RELEASE_URL="https://github.com/$REPO/releases/latest/download/zen-tabs-panel.xpi"
+REPO="cfilipov/ergozen"
+RELEASE_URL="https://github.com/$REPO/releases/latest/download/ergozen.xpi"
+LEGACY_RELEASE_URL="https://github.com/$REPO/releases/latest/download/zen-tabs-panel.xpi"
 
 # -- OS check ---------------------------------------------------------------
 
@@ -197,7 +198,7 @@ do_uninstall() {
 
 if [ -n "$CURRENT_VERSION" ]; then
   echo ""
-  echo "Zen Tabs Panel v$CURRENT_VERSION is currently installed."
+  echo "ErgoZen v$CURRENT_VERSION is currently installed."
 
   if [ "$CURRENT_VERSION" = "$LATEST_VERSION" ]; then
     echo "You are already on the latest version (v$LATEST_VERSION)."
@@ -240,13 +241,13 @@ fi
 
 mkdir -p "$PROFILE_DIR/extensions"
 
-echo "Downloading Zen Tabs Panel v$LATEST_VERSION..."
-curl -fsSL -o "$XPI_PATH" "$RELEASE_URL"
+echo "Downloading ErgoZen v$LATEST_VERSION..."
+curl -fsSL -o "$XPI_PATH" "$RELEASE_URL" || curl -fsSL -o "$XPI_PATH" "$LEGACY_RELEASE_URL"
 
 echo ""
 if [ -n "$CURRENT_VERSION" ]; then
-  echo "Updated Zen Tabs Panel from v$CURRENT_VERSION to v$LATEST_VERSION."
+  echo "Updated ErgoZen from v$CURRENT_VERSION to v$LATEST_VERSION."
 else
-  echo "Installed Zen Tabs Panel v$LATEST_VERSION."
+  echo "Installed ErgoZen v$LATEST_VERSION."
 fi
 echo "Restart Zen Browser to activate."

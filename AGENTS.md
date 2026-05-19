@@ -1,4 +1,4 @@
-# Zen Tabs Panel
+# ErgoZen
 
 Firefox MV2 WebExtension + Experiment API for Zen Browser. Command palette for tab management.
 

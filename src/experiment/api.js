@@ -4612,7 +4612,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             const mods = await w.gZenMods.getMods();
             mods[modId] = {
               id: modId,
-              name: "Zen Tabs Panel — " + def.name,
+              name: "ErgoZen — " + def.name,
               description: def.description,
               author: "c13v",
               version: def.version,

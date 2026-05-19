@@ -1,13 +1,15 @@
-# Zen Tabs Panel
+# ErgoZen
 
 **Version 0.4.0** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
 
 A keyboard-driven tab management extension for [Zen Browser](https://zen-browser.app/) with a command palette UI and optional companion Zen Mods.
 
+Formerly **Zen Tabs Panel**.
+
 > [!CAUTION]
 > This extension uses internal Zen APIs which could change and break with any Zen update. Use at your own risk.
 
-Zen Tabs Panel gives you keyboard access to far more tab and workspace actions than Zen exposes by default. It is built around one leader shortcut: `⌘.` on macOS, or `⌃.` on Windows/Linux. After pressing the leader, you type a sequence of follow-up keys, one after another, instead of holding a complicated shortcut all at once. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. These sequences mirror the same keys you would press when navigating the menu visually. If you type quickly, the action runs immediately without showing the menu. If you pause, the menu appears and shows the available options, helping you find the right key when you forget. Over time, common actions become muscle memory while less-used tools remain easy to discover. The palette is designed for fast keyboard use, but it is also fully mouse-friendly and can be navigated with the arrow keys.
+ErgoZen gives you keyboard access to far more tab and workspace actions than Zen exposes by default. It is built around one leader shortcut: `⌘.` on macOS, or `⌃.` on Windows/Linux. After pressing the leader, you type a sequence of follow-up keys, one after another, instead of holding a complicated shortcut all at once. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. These sequences mirror the same keys you would press when navigating the menu visually. If you type quickly, the action runs immediately without showing the menu. If you pause, the menu appears and shows the available options, helping you find the right key when you forget. Over time, common actions become muscle memory while less-used tools remain easy to discover. The palette is designed for fast keyboard use, but it is also fully mouse-friendly and can be navigated with the arrow keys.
 
 > [!NOTE]
 > Windows and Linux have not been tested yet, but should work in theory.
@@ -52,7 +54,7 @@ Zen Tabs Panel gives you keyboard access to far more tab and workspace actions t
 - Settings
 - "Copy selected tab URLs" right click menu item when multiple tabs are selected
 
-**Cross-workspace tab switching** - Zen's workspace system isolates tabs at the API level. `browser.tabs.query()` only returns tabs in the current workspace, and `browser.tabs.update()` silently fails for tabs in other workspaces. Every other Firefox tab-switching extension is broken by this. Zen Tabs Panel uses a privileged Experiment API to access Zen's internal workspace APIs directly, making it the only extension that can reliably switch to any tab regardless of which workspace it's in.
+**Cross-workspace tab switching** - Zen's workspace system isolates tabs at the API level. `browser.tabs.query()` only returns tabs in the current workspace, and `browser.tabs.update()` silently fails for tabs in other workspaces. Every other Firefox tab-switching extension is broken by this. ErgoZen uses a privileged Experiment API to access Zen's internal workspace APIs directly, making it the only extension that can reliably switch to any tab regardless of which workspace it's in.
 
 **Keyboard shortcuts** (configurable via `about:addons` › Manage Extension Shortcuts):
 
@@ -149,7 +151,7 @@ If you don't press a follow-up key, the main menu opens after the timeout. Press
 
 **Workspace filtering** - In tab list views, a sidebar shows workspace icons. Press `⇧1`–`⇧9` to filter the list by the 1st–9th workspace, or `0` to toggle between "all workspaces" and the current one. Tab/Shift-Tab moves focus between the list and the sidebar.
 
-**Settings** (accessible from the palette or `about:addons` › Extensions › Zen Tabs Panel › Preferences):
+**Settings** (accessible from the palette or `about:addons` › Extensions › ErgoZen › Preferences):
 
 - Auto-close unpinned tabs after a configurable period (24h / 48h / 1 week / 1 month)
 - Auto-move active tab to top with configurable delay
@@ -176,7 +178,7 @@ This means two `about:config` flags must be enabled to install it.
 ### Quick install (macOS)
 
 ```sh
-/bin/sh -c "$(curl -fsSL https://raw.githubusercontent.com/cfilipov/zen-tabs-panel/main/install.sh)"
+/bin/sh -c "$(curl -fsSL https://raw.githubusercontent.com/cfilipov/ergozen/main/install.sh)"
 ```
 
 This automatically sets the required `about:config` flags, downloads the latest release, and installs it into your Zen profile. Run the same command to update. Restart Zen after installing.
@@ -194,7 +196,7 @@ Open `about:config` in Zen and set both of these:
 
 #### 2. Install the extension
 
-1. Download `zen-tabs-panel.xpi` from the [latest release](../../releases/latest).
+1. Download `ergozen.xpi` from the [latest release](../../releases/latest).
 2. Open `about:addons` in Zen
 3. Click the gear icon (⚙) › **Install Add-on From File...**
 4. Select the downloaded `.xpi` file
@@ -263,7 +265,7 @@ make package
 
 `npm run build` and `make build` write the Svelte source from `src/` to
 `dist/` only. `make package` builds the extension and zips `dist/` into
-`zen-tabs-panel.xpi`. Install the `.xpi` from `about:addons` as described above.
+`ergozen.xpi`. Install the `.xpi` from `about:addons` as described above.
 
 ### Architecture notes
 

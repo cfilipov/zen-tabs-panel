@@ -1,4 +1,4 @@
-XPI = zen-tabs-panel.xpi
+XPI = ergozen.xpi
 
 .PHONY: build package xpi clean test
 
