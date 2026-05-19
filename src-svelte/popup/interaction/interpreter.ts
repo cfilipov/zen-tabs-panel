@@ -126,7 +126,10 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
   },
   {
     id: "back",
-    resolve: (input, context) => commandWhen(input.key === "Backspace" && context.view !== "actions", { kind: "back" }),
+    resolve: (input, context) => {
+      if (input.key !== "Backspace") return noCommand;
+      return context.view === "actions" ? { kind: "cancel" } : { kind: "back" };
+    },
   },
   {
     id: "jump-section",

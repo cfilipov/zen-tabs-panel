@@ -48,6 +48,8 @@ describe("interaction interpreter", () => {
       .toEqual({ kind: "move-selection", delta: 1 });
     expect(interpretVisibleInput({ kind: "key", key: "Backspace" }, { view: "last-visited" }, fixtureTree))
       .toEqual({ kind: "back" });
+    expect(interpretVisibleInput({ kind: "key", key: "Backspace" }, { view: "actions" }, fixtureTree))
+      .toEqual({ kind: "cancel" });
     expect(interpretVisibleInput({ kind: "key", key: " " }, { view: "actions" }, fixtureTree))
       .toEqual({ kind: "cycle-page", delta: 1 });
     expect(interpretVisibleInput({ kind: "key", key: "ArrowRight" }, { view: "actions" }, fixtureTree))
