@@ -3049,8 +3049,25 @@ this.zenWorkspaces = class extends ExtensionAPI {
       try { Services.mm.broadcastAsyncMessage("ZenChord:Disarm:" + CHORD_GENERATION, { reason: reason || "disarm" }); } catch (e) {}
     }
 
+    let lastAcceptedShimKeySignature = null;
+
     function acceptShimKey(keyData, source) {
       if (!chordSession || !keyData || keyData.kind !== "key") return;
+      const hasShimSequence = keyData.shimSeq != null || keyData.shimTs != null;
+      const signature = hasShimSequence
+        ? [
+            source || "",
+            keyData.shimSeq == null ? "" : String(keyData.shimSeq),
+            keyData.shimTs == null ? "" : String(keyData.shimTs),
+            keyData.key || "",
+            keyData.code || "",
+          ].join(":")
+        : null;
+      if (signature && signature === lastAcceptedShimKeySignature) {
+        debugChordTrace("shim-key-duplicate-ignored", { source, key: keyData.key, seq: keyData.shimSeq, ts: keyData.shimTs });
+        return;
+      }
+      if (signature) lastAcceptedShimKeySignature = signature;
       debugChordTrace("shim-key", { source, key: keyData.key, seq: keyData.shimSeq, ts: keyData.shimTs });
       chordSession.acceptKey({
         kind: "key",
@@ -3617,6 +3634,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
 
       try { chordSession.arm(); } catch (e) {}
+      lastAcceptedShimKeySignature = null;
       try { if (chromeShim) chromeShim.arm(); } catch (e) {}
       try { if (chordSession) chordSession.beginArm(); } catch (e) {}
       debugChordTrace("chrome-arm-called", {});
