@@ -85,7 +85,7 @@
     let state = "idle";
     let lastChordReplay = null;
     let currentChordReplay = null;
-    let pretracedReplayKeys = [];
+    let preRecordedReplayKeys = [];
     const syntheticReplayEvents = [];
     let currentNode = options && options.chordTree;
     let currentPath = [];
@@ -141,7 +141,7 @@
 
     function resetCurrentReplay() {
       currentChordReplay = null;
-      pretracedReplayKeys = [];
+      preRecordedReplayKeys = [];
     }
 
     function trackTerminalAction(payload) {
@@ -167,19 +167,19 @@
       // replace the root trace with a menu-opening-only trace.
       if (currentChordReplay && currentChordReplay.kind === "open-view") return;
       currentChordReplay = { kind: "open-view", view: view || null, bridgeKeys: [] };
-      pretracedReplayKeys = [];
+      preRecordedReplayKeys = [];
     }
 
     function trackBridgeKey(keyData) {
       const key = replayKeyFromBridgeKey(keyData);
       if (currentChordReplay && currentChordReplay.kind === "open-view" && key) {
-        if (keyData && keyData.__pretraced) {
+        if (keyData && keyData.__preRecorded) {
           currentChordReplay.bridgeKeys.push(key);
-          pretracedReplayKeys.push(key);
+          preRecordedReplayKeys.push(key);
           return;
         }
-        if (pretracedReplayKeys.length > 0 && pretracedReplayKeys[0] === key) {
-          pretracedReplayKeys.shift();
+        if (preRecordedReplayKeys.length > 0 && preRecordedReplayKeys[0] === key) {
+          preRecordedReplayKeys.shift();
           return;
         }
         currentChordReplay.bridgeKeys.push(key);
@@ -445,7 +445,7 @@
       return clonePlain({
         lastChordReplay,
         currentChordReplay,
-        pretracedReplayKeys,
+        preRecordedReplayKeys,
         syntheticReplayEvents,
       });
     }

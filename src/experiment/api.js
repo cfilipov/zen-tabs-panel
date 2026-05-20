@@ -3231,11 +3231,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // forwards typed key data into the Svelte bridge module. Before
     // POPUP_READY, queue in bridgeState.buffer (drained on POPUP_READY).
     function forwardKeyToPopup(keyData) {
-      // Pre-track ChordSession/chrome-forwarded bridge keys so replay traces
+      // Pre-record ChordSession/chrome-forwarded bridge keys so replay traces
       // commit deterministically even if the terminal popup action reaches
       // background before the popup's synthetic replay trace. Matching
-      // synthetic events for pre-tracked keys are ignored by ChordSession.
-      trackChordBridgeKey(Object.assign({}, keyData, { __pretraced: true }));
+      // synthetic events for pre-recorded keys are ignored by ChordSession.
+      trackChordBridgeKey(Object.assign({}, keyData, { __preRecorded: true }));
       if (tryHandleChromeOwnedBridgeKey(keyData)) return;
       //
       // Any chord key after the initial leader means the user is committed

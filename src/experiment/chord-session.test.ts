@@ -26,7 +26,7 @@ type ChordSession = {
   getReplayState: () => {
     lastChordReplay: unknown;
     currentChordReplay: unknown;
-    pretracedReplayKeys: unknown[];
+    preRecordedReplayKeys: unknown[];
     syntheticReplayEvents: unknown[];
   };
 };
@@ -80,10 +80,10 @@ describe("chord-session replay recording", () => {
     });
   });
 
-  it("deduplicates popup echoes for pretraced bridge keys", () => {
+  it("deduplicates popup echoes for pre-recorded bridge keys", () => {
     const session = makeSession();
     session.recordEvent({ kind: "open-view", view: "last-visited" });
-    session.recordEvent({ kind: "bridge-key", keyData: { key: "3", code: "Digit3", __pretraced: true } });
+    session.recordEvent({ kind: "bridge-key", keyData: { key: "3", code: "Digit3", __preRecorded: true } });
     session.recordEvent({ kind: "bridge-key", keyData: { key: "3", code: "Digit3" } });
     session.recordEvent({ kind: "popup-action", message: { type: "activate-tab", tabId: 42 } });
 
