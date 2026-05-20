@@ -963,8 +963,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     let chromeShim = null;
     // Per-content-process frame script registration handle. Populated once
-    // by installContentEngineFrameScript() below.
-    let contentEngineFrameScriptUrl = null;
+    // by installContentShimFrameScript() below.
+    let contentShimFrameScriptUrl = null;
     // Unique generation tag for this extension-load instance. Embedded into
     // the frame script body so each content-process shim knows its own
     // generation. Chrome ignores incoming ZenChord:* messages whose gen
@@ -2597,8 +2597,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       // Bridge mode can't outlive the chord chain it was driving. If a
       // bridge is active when the overlay is being destroyed, tear it down
-      // now — otherwise the engine that owned the bridge would keep
-      // capturing keys until the safety timeout.
+      // now — otherwise the session/shims would keep capturing keys until the
+      // safety timeout.
       //
       // EXCEPT during a "silent" destroy (used by enterBridgeFromOpenView
       // when swapping the prerender's view mid-chord). In that case the
@@ -2747,7 +2747,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // See CHORD_LEAK_HANDOFF.md for the full investigation log.
 
     // Pre-declared so functions defined earlier (destroyOverlay, etc.) can
-    // call into the engine for state queries.
+    // call into the session for state queries.
     let paletteRequestFire = null;
 
     function debugChordTrace(type, data) {
@@ -2883,8 +2883,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       createOverlay(view);
     }
 
-    // Dispatch a chord action coming from EITHER engine (chrome direct call
-    // or content via stale pre-shim ZenChord:Action IPC). Same routing either way —
+    // Dispatch a chord action coming from ChordSession or from a stale
+    // pre-shim ZenChord:Action IPC. Same routing either way —
     // payload shape is { type: "action" | "switch-workspace" | "open-extension-popup", ...}.
 
     // The replay-last-chord action's id. Hoisted here because the
@@ -3499,8 +3499,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const mm = browserMessageManager(br);
       if (mm) {
         try {
-          if (contentEngineFrameScriptUrl) {
-            mm.loadFrameScript(contentEngineFrameScriptUrl, false);
+          if (contentShimFrameScriptUrl) {
+            mm.loadFrameScript(contentShimFrameScriptUrl, false);
           }
         } catch (e) {}
         try { mm.sendAsyncMessage("ZenChord:Arm"); debugChordTrace("content-arm-sent", {}); } catch (e) {}
@@ -3676,8 +3676,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // single chord traverser owns progression.
     // Skips activation when the document is moz-extension:// (our popup and
     // foreign-extension popups handle their own keys).
-    function installContentEngineFrameScript() {
-      if (contentEngineFrameScriptUrl) return;
+    function installContentShimFrameScript() {
+      if (contentShimFrameScriptUrl) return;
       const shimURL = context.extension.getURL("shared/chord-shim.js");
       const constantsURL = context.extension.getURL("shared/constants.js");
       // The frame-script body runs in EVERY content process. Two paths:
@@ -3945,7 +3945,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const url = "data:application/javascript;charset=utf-8," + encodeURIComponent(body);
       try {
         Services.mm.loadFrameScript(url, true);
-        contentEngineFrameScriptUrl = url;
+        contentShimFrameScriptUrl = url;
       } catch (e) {}
     }
 
@@ -4395,7 +4395,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         }
       } catch (e) {}
-      contentEngineFrameScriptUrl = null;
+      contentShimFrameScriptUrl = null;
       try { Services.mm.removeMessageListener("ZenChord:Key:" + CHORD_GENERATION, onContentKey); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:Action",    onContentAction); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:Armed",     onContentArmed); } catch (e) {}
@@ -4695,7 +4695,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     installChordStateInspector();
     installChromeEngine();
-    installContentEngineFrameScript();
+    installContentShimFrameScript();
     installDuplicateLinkIndicator();
     installDuplicateLinkInterceptor();
 
@@ -5964,7 +5964,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return closeDuplicateTabsForUrlInternal(url, excludeTab);
         },
 
-        // Replay the last engine-fired chord. Returns true if something
+        // Replay the last ChordSession-recorded chord. Returns true if something
         // was replayed; false if no chord has been recorded yet (cold
         // session). Bg's REPLAY_LAST_CHORD handler calls this; only falls
         // back to its own popup-action recording if this returns false.
