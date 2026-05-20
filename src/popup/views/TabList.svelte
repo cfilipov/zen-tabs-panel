@@ -12,7 +12,7 @@
     selectedDomId?: string | null;
     workspaces?: WorkspaceRow[];
     activeWorkspaceId?: string | null;
-    onactivate?: (row: TabIndexRow) => void;
+    onactivate?: (index: number) => void;
     ondrillchildren?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
@@ -44,6 +44,7 @@
     {#snippet children(row: TabIndexRow, index: number)}
       <TabRow
         {row}
+        index={offset + index}
         badge={offset + index < 9 ? String(offset + index + 1) : null}
         subtitle={subtitle(row)}
         {selectedDomId}

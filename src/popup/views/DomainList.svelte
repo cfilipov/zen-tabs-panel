@@ -9,7 +9,7 @@
     offset?: number;
     skipAnimations?: boolean;
     selectedDomain?: string | null;
-    onactivate?: (row: DomainIndexRow) => void;
+    onactivate?: (index: number) => void;
     onrange?: (offset: number, limit: number) => void;
   };
 
@@ -23,6 +23,7 @@
     {#snippet children(row: DomainIndexRow, index: number)}
       <DomainRow
         {row}
+        index={offset + index}
         badge={offset + index < 9 ? String(offset + index + 1) : null}
         {selectedDomain}
         onactivate={onactivate}

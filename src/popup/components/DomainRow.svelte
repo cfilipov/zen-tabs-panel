@@ -4,12 +4,13 @@
 
   type Props = {
     row: DomainIndexRow;
+    index?: number;
     badge?: string | null;
     selectedDomain?: string | null;
-    onactivate?: (row: DomainIndexRow) => void;
+    onactivate?: (index: number) => void;
   };
 
-  let { row, badge = null, selectedDomain = null, onactivate }: Props = $props();
+  let { row, index = -1, badge = null, selectedDomain = null, onactivate }: Props = $props();
   const selected = $derived(row.domain === selectedDomain);
 </script>
 
@@ -18,7 +19,7 @@
   class="list-item"
   class:selected
   data-domain={row.domain}
-  onclick={() => onactivate?.(row)}
+  onclick={() => onactivate?.(index)}
 >
   <span class="item-icon-placeholder">○</span>
   <span class="item-text">

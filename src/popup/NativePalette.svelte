@@ -429,11 +429,6 @@
     traceReplayForListIndex(palette.selectedIndex, shifted);
   }
 
-  function traceReplayForRowIndex<T>(rows: readonly T[], row: T, shifted = false) {
-    const index = rows.indexOf(row);
-    traceReplayForListIndex(index, shifted);
-  }
-
   async function activateDomain(row: DomainIndexRow) {
     paletteStore.setCurrentDomain(row.domain);
     await openNativeView("domain-tabs", { domain: row.domain }, true);
@@ -459,16 +454,6 @@
     markTerminalCommandDispatched();
     revealController.clear();
     effects.openExtensionPopup(extension.id);
-  }
-
-  function activateTabRowWithTrace(row: TabIndexRow) {
-    traceReplayForListIndex(row.index);
-    activateTab(row);
-  }
-
-  async function activateDomainWithTrace(row: DomainIndexRow) {
-    traceReplayForRowIndex(domainRows, row);
-    await activateDomain(row);
   }
 
   function switchWorkspaceByIndex(index: number) {
@@ -1039,10 +1024,8 @@
     {closeTabInfoDuplicate}
     {closeOtherTabInfoDuplicates}
     {runDuplicatePromptAction}
-    {activateTabRowWithTrace}
     {drillParentRow}
     {loadVisibleRange}
     {tabSubtitle}
-    {activateDomainWithTrace}
   />
 </PaletteShell>

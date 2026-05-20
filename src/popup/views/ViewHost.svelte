@@ -44,11 +44,9 @@
     closeTabInfoDuplicate: (row: TabIndexRow) => void;
     closeOtherTabInfoDuplicates: () => void;
     runDuplicatePromptAction: (action: DuplicatePromptAction) => void;
-    activateTabRowWithTrace: (row: TabIndexRow) => void;
     drillParentRow: (row: TabIndexRow) => void | Promise<void>;
     loadVisibleRange: (offset: number, limit: number) => void;
     tabSubtitle: (row: TabIndexRow) => string | null;
-    activateDomainWithTrace: (row: DomainIndexRow) => void | Promise<void>;
   };
 
   let {
@@ -74,11 +72,9 @@
     closeTabInfoDuplicate,
     closeOtherTabInfoDuplicates,
     runDuplicatePromptAction,
-    activateTabRowWithTrace,
     drillParentRow,
     loadVisibleRange,
     tabSubtitle,
-    activateDomainWithTrace,
   }: Props = $props();
 
   function hasRenderableRows() {
@@ -199,7 +195,7 @@
         selectedDomId={selectedRowDomId}
         workspaces={palette.sidebarWorkspaces}
         {activeWorkspaceId}
-        onactivate={activateTabRowWithTrace}
+        onactivate={activateRenderedRow}
         ondrillchildren={drillParentRow}
         onpreview={previewTab}
         onclearpreview={clearPreview}
@@ -213,7 +209,7 @@
         offset={palette.offset}
         {skipAnimations}
         {selectedDomain}
-        onactivate={activateDomainWithTrace}
+        onactivate={activateRenderedRow}
         onrange={loadVisibleRange}
       />
     {/if}

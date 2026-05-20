@@ -6,12 +6,13 @@
 
   type Props = {
     row: TabIndexRow;
+    index?: number;
     badge?: string | null;
     subtitle?: string | null;
     selectedDomId?: string | null;
     workspaces?: WorkspaceRow[];
     activeWorkspaceId?: string | null;
-    onactivate?: (row: TabIndexRow) => void;
+    onactivate?: (index: number) => void;
     ondrillchildren?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
@@ -19,6 +20,7 @@
 
   let {
     row,
+    index = -1,
     badge = null,
     subtitle = null,
     selectedDomId = null,
@@ -44,7 +46,7 @@
       ondrillchildren?.(row);
       return;
     }
-    onactivate?.(row);
+    onactivate?.(index);
   }
 </script>
 
