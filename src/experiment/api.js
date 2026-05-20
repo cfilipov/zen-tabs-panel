@@ -862,15 +862,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return COMPACT_MEASURED_VIEWS.has(view);
     }
 
-    // Chord engine: same shared/chord-engine.js module instantiated here
-    // (chrome side) and in the per-content-process frame script (see below).
-    // Both engines are armed in parallel by armChord (commands.onCommand →
-    // chrome arms synchronously + targeted IPC arms the focused tab's
-    // content engine). Whichever engine sees the next chord key processes
-    // it; the other resets via cross-process IPC when chrome receives the
-    // firing engine's output message. The chord tree is built from the
-    // shared keybindings registry (shared/keybindings.js) so chord
-    // shortcuts and popup-menu hotkey badges stay in sync.
+    // Chord core + capture shim. The chord tree is traversed once in chrome;
+    // chrome/content key listeners are capture-only shims that suppress
+    // local keydowns and forward normalized keys into that single traverser.
     const engineScope = {};
     Services.scriptloader.loadSubScript(
       context.extension.getURL("shared/keybindings.js"),
@@ -882,6 +876,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
     );
     Services.scriptloader.loadSubScript(
       context.extension.getURL("shared/chord-engine.js"),
+      engineScope
+    );
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("shared/chord-shim.js"),
       engineScope
     );
     const chordSessionScope = {};
@@ -976,6 +974,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // construction site (destroyOverlay etc.) can reference it for state
     // queries.
     let chromeEngine = null;
+    let chromeShim = null;
     // Per-content-process frame script registration handle. Populated once
     // by installContentEngineFrameScript() below.
     let contentEngineFrameScriptUrl = null;
@@ -2981,10 +2980,37 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function replayLastChordFromRepeatedLeader() {
       debugChordTrace("leader-repeat-as-replay", {});
       try { if (chromeEngine) chromeEngine.reset(); } catch (e) {}
+      try { if (chromeShim) chromeShim.disarm("replay"); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
+      try { Services.mm.broadcastAsyncMessage("ZenChord:Disarm:" + CHORD_GENERATION); } catch (e) {}
       chordSession.resetCurrentReplay();
       if (replayLastChordTrace()) return;
       dispatchChordAction({ type: "action", actionId: MSG_REPLAY_LAST_CHORD });
+    }
+
+    function disarmChordShims(reason) {
+      try { if (chromeShim) chromeShim.disarm(reason || "disarm"); } catch (e) {}
+      try { Services.mm.broadcastAsyncMessage("ZenChord:Disarm:" + CHORD_GENERATION, { reason: reason || "disarm" }); } catch (e) {}
+      // Compatibility for stale pre-shim frame scripts still alive in content
+      // processes after extension reload.
+      try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
+    }
+
+    function acceptShimKey(keyData, source) {
+      if (!chromeEngine || !keyData || keyData.kind !== "key") return;
+      debugChordTrace("shim-key", { source, key: keyData.key, seq: keyData.shimSeq, ts: keyData.shimTs });
+      chromeEngine.handleKey({
+        key: keyData.key,
+        code: keyData.code,
+        shiftKey: !!keyData.shiftKey,
+        altKey: !!keyData.altKey,
+        ctrlKey: !!keyData.ctrlKey,
+        metaKey: !!keyData.metaKey,
+        isTrusted: true,
+        timeStamp: keyData.shimTs,
+        preventDefault() {},
+        stopPropagation() {},
+      });
     }
 
     function dispatchChordAction(payload) {
@@ -3000,6 +3026,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         terminalDispatchArmSequence = chordArmSequence;
       }
       trackChordTerminalAction(payload);
+      disarmChordShims("terminal-action");
       if (pendingReveal) destroyOverlay();
       if (payload.type === "action") {
         if (paletteRequestFire) {
@@ -3248,12 +3275,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       bridgeBuffer = null;
       pendingStateSnapshot = null;
       popupReady = false;
-      // Tell the engine that owned the bridge to exit. Either engine's
-      // exitBridge() is safe to call even when not bridging (no-op).
-      if (bridgingEngineKind === "chrome" && chromeEngine) {
+      // The single chrome traverser owns bridge state in the shim model.
+      if (chromeEngine) {
         try { chromeEngine.exitBridge(); } catch (e) {}
       }
-      // Content engines: broadcast — any one of them might own the bridge.
+      disarmChordShims("finish-bridge");
+      // Compatibility for stale pre-shim content engines.
       try { Services.mm.broadcastAsyncMessage("ZenChord:ExitBridge"); } catch (e) {}
       bridgingEngineKind = null;
       if (chordSession) chordSession.transition("idle", "finishBridge");
@@ -3300,6 +3327,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
 
       try { if (chromeEngine) chromeEngine.arm(); } catch (e) {}
+      try { if (chromeShim) chromeShim.arm(); } catch (e) {}
       chordArmSequence++;
       terminalDispatchArmSequence = -1;
       debugChordTrace("chrome-arm-called", {});
@@ -3328,16 +3356,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     chromeEngine = engineScope.createChordEngine({
       chordTree: CHORD_TREE,
       constants: CHORD_CONSTANTS,
-      // We only handle keys delivered to chrome targets (URL bar, browser
-      // chrome). Content-routed keys have target=<browser>; let the
-      // per-content-process engine handle them.
-      filterEvent: (e) => {
-        if (e && e.__zenTabsPanelFallbackHandled) return false;
-        const t = e && e.target;
-        if (!t) return true;
-        const name = (t.tagName || t.nodeName || "").toLowerCase();
-        return name !== "browser";
-      },
+      filterEvent: () => true,
       setTimeoutFn: (fn, ms) => {
         const w = getWin();
         return w ? w.setTimeout(fn, ms) : null;
@@ -3354,34 +3373,21 @@ this.zenWorkspaces = class extends ExtensionAPI {
         chordSession.acceptEngineEvent({ kind: "armed" });
         createOverlay();
       },
-      // Any chrome-engine terminal/transition event resets content engines
-      // that may have been armed in parallel (armChord arms both so a
-      // user-customized commands shortcut works regardless of focus).
-      // Without this, the content engine's stale root timer would fire
-      // ~400ms later and pop an unwanted menu after a chrome-side action.
       onAction: (payload) => {
         debugChordTrace("chrome-on-action", payload);
-        try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
         dispatchChordAction(payload);
       },
       onOpenView: (view, snapshot, source) => {
         debugChordTrace("chrome-on-open-view", { view, snapshot, source });
-        try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
         enterBridgeFromOpenView(view, snapshot, "chrome", source);
       },
       onStateChange: (snapshot) => {
         debugChordTrace("chrome-on-state-change", { snapshot });
-        // Chrome engine descended into a prefix. Reset content engines
-        // (armed in parallel via armChord) so their stale root timers
-        // don't fire one chord-delay later and overwrite the prefix prerender
-        // with the default actions view. Mirror of the
-        // resetChromeEngineIfArmed call in onContentStateChange.
-        try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
         prerenderPrefixView(snapshot);
       },
       onCancel: () => {
         debugChordTrace("chrome-on-cancel", {});
-        try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
+        disarmChordShims("cancel");
         if (pendingReveal) destroyOverlay();
       },
       onBridgeKey: (k) => {
@@ -3389,11 +3395,29 @@ this.zenWorkspaces = class extends ExtensionAPI {
         forwardKeyToPopup(k);
       },
     });
+    chromeShim = engineScope.createChordShim({
+      filterEvent: (e) => {
+        if (e && e.__zenTabsPanelFallbackHandled) return false;
+        const t = e && e.target;
+        if (!t) return true;
+        const name = (t.tagName || t.nodeName || "").toLowerCase();
+        return name !== "browser";
+      },
+      setTimeoutFn: (fn, ms) => {
+        const w = getWin();
+        return w ? w.setTimeout(fn, ms) : null;
+      },
+      clearTimeoutFn: (id) => {
+        const w = getWin();
+        if (w && id != null) try { w.clearTimeout(id); } catch (e) {}
+      },
+      forwardKey: (keyData) => acceptShimKey(keyData, "chrome-shim"),
+    });
 
     function installChromeEngine() {
       const w = getWin();
       if (!w) return;
-      chromeEngine.attach(w);
+      chromeShim.attach(w);
 
       // Intra-window focus shifts: when the user clicks between URL bar
       // and content (or vice versa) mid-chord, the chord engine that was
@@ -3411,6 +3435,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (name === "browser" && Date.now() - lastLeaderArmAt > CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS) {
           debugChordTrace("chrome-reset-focus-browser", { since: Date.now() - lastLeaderArmAt });
           chromeEngine.reset();
+          try { if (chromeShim) chromeShim.disarm("focus-browser"); } catch (e) {}
         }
       }, true);
 
@@ -3525,17 +3550,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     // ---- Per-content-process frame script ------------------------------
     //
-    // Loads the same shared/chord-engine.js + shared/keybindings.js +
-    // shared/constants.js into the content process via Services.scriptloader
-    // and instantiates an engine attached to the `content` window. The
-    // engine reports actions/open-view/cancel/bridge-key back to chrome via
-    // sendAsyncMessage. Re-attaches on DOMWindowCreated for navigations.
+    // Loads a capture-only shim into the content process. The shim suppresses
+    // chord keys in-process and forwards normalized keys to chrome, where the
+    // single chord traverser owns progression.
     // Skips activation when the document is moz-extension:// (our popup and
     // foreign-extension popups handle their own keys).
     function installContentEngineFrameScript() {
       if (contentEngineFrameScriptUrl) return;
-      const engineURL = context.extension.getURL("shared/chord-engine.js");
-      const bindingsURL = context.extension.getURL("shared/keybindings.js");
+      const shimURL = context.extension.getURL("shared/chord-shim.js");
       const constantsURL = context.extension.getURL("shared/constants.js");
       // The frame-script body runs in EVERY content process. Two paths:
       //
@@ -3572,9 +3594,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "var __duplicateInterceptEnabled = true;\n" +
         "var __duplicateUrlCache = Object.create(null);\n" +
         "try {\n" +
-        "  Services.scriptloader.loadSubScript(" + JSON.stringify(bindingsURL) + ", __scope);\n" +
         "  Services.scriptloader.loadSubScript(" + JSON.stringify(constantsURL) + ", __scope);\n" +
-        "  Services.scriptloader.loadSubScript(" + JSON.stringify(engineURL) + ", __scope);\n" +
+        "  Services.scriptloader.loadSubScript(" + JSON.stringify(shimURL) + ", __scope);\n" +
         "} catch (err) {\n" +
         "  try { if (content && content.__zenTabsPanelChordEngineGen === __GEN) content.__zenTabsPanelChordEngineGen = null; } catch(e){}\n" +
         "  return;\n" +
@@ -3670,19 +3691,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  if (!d.url) return;\n" +
         "  __duplicateUrlCache[d.url] = !!d.duplicate;\n" +
         "});\n" +
-        "var __tree = __scope.buildChordTree(__scope.ZEN_KEYBINDINGS, __scope.ZEN_WORKSPACE_DIGIT_CHORDS, __constants);\n" +
-        "var __engine = __scope.createChordEngine({\n" +
-        "  chordTree: __tree,\n" +
-        "  constants: __constants,\n" +
+        "var __shim = __scope.createChordShim({\n" +
         "  filterEvent: function(){ return true; },\n" +
         "  setTimeoutFn: function(fn, ms){ return content ? content.setTimeout(fn, ms) : null; },\n" +
         "  clearTimeoutFn: function(id){ if (content && id != null) try { content.clearTimeout(id); } catch (e) {} },\n" +
-        "  onArmed: function(){ try { sendAsyncMessage('ZenChord:Armed', tag({})); } catch(e){} },\n" +
-        "  onAction: function(p){ try { sendAsyncMessage('ZenChord:Action', tag(p)); } catch(e){} },\n" +
-        "  onOpenView: function(v, s, source){ try { sendAsyncMessage('ZenChord:OpenView', tag({ view: v, snapshot: s, source: source })); } catch(e){} },\n" +
-        "  onCancel: function(){ try { sendAsyncMessage('ZenChord:Cancel', tag({})); } catch(e){} },\n" +
-        "  onBridgeKey: function(k){ try { sendAsyncMessage('ZenChord:BridgeKey', tag(k)); } catch(e){} },\n" +
-        "  onStateChange: function(snapshot){ try { sendAsyncMessage('ZenChord:StateChange', tag({ snapshot: snapshot })); } catch(e){} },\n" +
+        "  failsafeTimeoutMs: 5000,\n" +
+        "  forwardKey: function(k){ try { sendAsyncMessage('ZenChord:Key:' + __GEN, tag(k)); } catch(e){} },\n" +
         "});\n" +
         "var __shutdown = false;\n" +
         // Default-group capture listener. The system-group engine listener
@@ -3698,7 +3712,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // to OTHER nodes, not other listeners on the same node.
         "function blockDefaultGroup(e){\n" +
         "  if (__shutdown) return;\n" +
-        "  if (!__engine.isArmed()) return;\n" +
+        "  if (!__shim.isArmed()) return;\n" +
         "  if (e.key === 'Meta' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift') return;\n" +
         "  if (e.metaKey || e.ctrlKey || e.altKey) return;\n" +
         "  try { e.preventDefault(); } catch(_) {}\n" +
@@ -3765,8 +3779,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    // root timer only opens the main menu.\n" +
         "    // The same remote browser can be reused after a regular page, so also\n" +
         "    // detach any blocker/engine left from the prior document.\n" +
-        "    if (isOverlayBrowser()) { try { __engine.reset(); __engine.detach(); } catch(_) {} return; }\n" +
-        "    __engine.attach(content);\n" +
+        "    if (isOverlayBrowser()) { try { __shim.disarm('overlay'); __shim.detach(); } catch(_) {} return; }\n" +
+        "    __shim.attach(content);\n" +
         "    // Detach-then-attach the default-group blocker so duplicate\n" +
         "    // DOMWindowCreated firings don't stack listeners.\n" +
         "    content.addEventListener('keydown', blockDefaultGroup, { capture: true });\n" +
@@ -3776,13 +3790,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "}\n" +
         "attach();\n" +
         "addEventListener('DOMWindowCreated', attach, true);\n" +
-        "addMessageListener('ZenChord:ExitBridge', function(){ try { __engine.exitBridge(); } catch(e){} });\n" +
-        "addMessageListener('ZenChord:Reset', function(){ try { __engine.reset(); } catch(e){} });\n" +
+        "addMessageListener('ZenChord:ExitBridge', function(){ try { __shim.disarm('exit-bridge'); } catch(e){} });\n" +
+        "addMessageListener('ZenChord:Reset', function(){ try { __shim.disarm('reset'); } catch(e){} });\n" +
+        "addMessageListener('ZenChord:Disarm:' + __GEN, function(){ try { __shim.disarm('disarm'); } catch(e){} });\n" +
         // External-trigger arm — chrome calls this when the open-palette
         // commands shortcut fires. Sent to the focused tab's MM only.
         "addMessageListener('ZenChord:Arm', function(){\n" +
         "  if (__shutdown) return;\n" +
-        "  try { __engine.arm(); } catch(e){}\n" +
+        "  try { __shim.arm(); } catch(e){}\n" +
         "});\n" +
         // Shutdown signal: extension reload broadcasts this. We detach the
         // engine and stop responding so a stale frame script (which Firefox
@@ -3791,7 +3806,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "addMessageListener('ZenChord:Shutdown', function(){\n" +
         "  __shutdown = true;\n" +
         "  try { if (content && content.__zenTabsPanelChordEngineGen === __GEN) content.__zenTabsPanelChordEngineGen = null; } catch(e){}\n" +
-        "  try { __engine.detach(); } catch(e){}\n" +
+        "  try { __shim.detach(); } catch(e){}\n" +
         "  try { content && content.removeEventListener('keydown', blockDefaultGroup, { capture: true }); } catch(e){}\n" +
         "  try { content && content.removeEventListener('mouseover', onDuplicateLinkMouseover, { capture: true }); } catch(e){}\n" +
         "  try { content && content.removeEventListener('click', onDuplicateLinkClick, { capture: true }); } catch(e){}\n" +
@@ -3800,7 +3815,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  try {\n" +
         "    if (__shutdown) return;\n" +
         "    var d = m && m.data;\n" +
-        "    if (d && d.key && d.node && __tree && __tree.children) __tree.children[d.key] = d.node;\n" +
+        "    // Dynamic chord entries are resolved by the chrome traverser in the shim model.\n" +
         "  } catch(e){}\n" +
         "});\n" +
         // Ask chrome for any dynamic chord entries that were registered
@@ -3834,6 +3849,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // engines themselves via the ZenChord:Reset broadcast.
     function resetChromeEngineIfArmed() {
       try { if (chromeEngine && chromeEngine.isArmed()) chromeEngine.reset(); } catch (e) {}
+    }
+    function onContentKey(m) {
+      if (!isCurrentGen(m)) return;
+      acceptShimKey(m.data, "content-shim");
     }
     function onContentAction(m) {
       if (!isCurrentGen(m)) return;
@@ -3938,6 +3957,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
       } catch (e) {}
     }
+    Services.mm.addMessageListener("ZenChord:Key:" + CHORD_GENERATION, onContentKey);
     Services.mm.addMessageListener("ZenChord:Action",      onContentAction);
     Services.mm.addMessageListener("ZenChord:Armed",       onContentArmed);
     Services.mm.addMessageListener("ZenChord:OpenView",    onContentOpenView);
@@ -4235,6 +4255,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function teardownChordEngines() {
       try { if (chromeEngine) chromeEngine.detach(); } catch (e) {}
+      try { if (chromeShim) chromeShim.detach(); } catch (e) {}
       // Hard-remove the warm overlay so its persistent popup browser
       // doesn't leak across an extension reload (soft-hide alone keeps
       // the DOM around).
@@ -4251,12 +4272,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const scripts = Services.mm.getDelayedFrameScripts();
         for (const entry of scripts) {
           const url = entry[0];
-          if (typeof url === "string" && url.indexOf("__engine.attach") !== -1 && url.indexOf("ZenChord") !== -1) {
+          if (
+            typeof url === "string" &&
+            (url.indexOf("__engine.attach") !== -1 || url.indexOf("__shim.attach") !== -1) &&
+            url.indexOf("ZenChord") !== -1
+          ) {
             try { Services.mm.removeDelayedFrameScript(url); } catch (e) {}
           }
         }
       } catch (e) {}
       contentEngineFrameScriptUrl = null;
+      try { Services.mm.removeMessageListener("ZenChord:Key:" + CHORD_GENERATION, onContentKey); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:Action",    onContentAction); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:Armed",     onContentArmed); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenChord:OpenView",  onContentOpenView); } catch (e) {}
