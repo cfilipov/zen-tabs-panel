@@ -3304,19 +3304,29 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function rowIndexFromDigitKey(keyData) {
-      if (!keyData || keyData.shiftKey) return null;
+      if (!keyData || keyData.shiftKey || keyData.altKey || keyData.ctrlKey || keyData.metaKey) return null;
       const raw = String(keyData.key || "");
       if (!/^[1-9]$/.test(raw)) return null;
       return Number.parseInt(raw, 10) - 1;
     }
 
+    const CHROME_OWNED_TAB_BRIDGE_VIEWS = new Set([
+      "child-tabs",
+      "sibling-tabs",
+      "parent-tabs",
+      "last-visited",
+      "unvisited-tabs",
+      "tabs-by-age",
+      "most-visited",
+    ]);
+
     function tryHandleChromeOwnedBridgeKey(keyData) {
-      if (activeBridgeView !== "last-visited") return false;
+      if (!CHROME_OWNED_TAB_BRIDGE_VIEWS.has(activeBridgeView)) return false;
       const rowIndex = rowIndexFromDigitKey(keyData);
       if (rowIndex == null) return false;
       try {
         tabIndex.start();
-        const win = tabIndex.getWindow("last-visited", 0, rowIndex + 1, {});
+        const win = tabIndex.getWindow(activeBridgeView, 0, rowIndex + 1, {});
         const row = win && Array.isArray(win.rows) ? win.rows[rowIndex] : null;
         if (!row || !row.domId) return false;
         chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
