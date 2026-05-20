@@ -2781,6 +2781,97 @@ this.zenWorkspaces = class extends ExtensionAPI {
       w.__zenTabsPanelTrace.push(Object.assign({ at: Date.now(), type }, data || {}));
     }
 
+    function cloneChordInspectorValue(value) {
+      if (value == null) return value;
+      try {
+        return JSON.parse(JSON.stringify(value));
+      } catch (e) {
+        return String(value);
+      }
+    }
+
+    function getChordStateSnapshot() {
+      const w = getWin();
+      const doc = w && w.document;
+      const overlay = doc && doc.getElementById(OVERLAY_ID);
+      const panel = doc && doc.getElementById(PANEL_ID);
+      const browser = doc && doc.getElementById(BROWSER_ID);
+      let chromeEngineState = null;
+      try {
+        chromeEngineState = chromeEngine
+          ? { armed: chromeEngine.isArmed(), path: chromeEngine.serializeState() }
+          : null;
+      } catch (e) {
+        chromeEngineState = { error: String(e) };
+      }
+
+      return cloneChordInspectorValue({
+        generation: CHORD_GENERATION,
+        chordDelayMs,
+        view: {
+          currentViewName,
+          currentViewParams,
+          popupReadyTargetView,
+          navStack,
+          currentDynamicSidebarWidth,
+          currentMeasuredResizeView,
+        },
+        overlay: {
+          exists: !!overlay,
+          closing: overlay && overlay.dataset ? overlay.dataset.closing || "" : "",
+          visibility: overlay && w ? w.getComputedStyle(overlay).visibility : null,
+          pendingReveal: !!pendingReveal,
+          explicitRevealToken,
+          explicitRevealView,
+          explicitRevealScheduledToken,
+          panelWidth: panel ? Math.round(panel.getBoundingClientRect().width) : 0,
+          panelHeight: panel ? Math.round(panel.getBoundingClientRect().height) : 0,
+          browserSrc: browser ? browser.getAttribute("src") || "" : "",
+          browserCurrentURI: browser && browser.currentURI ? String(browser.currentURI.spec || "") : "",
+          popupInstance,
+        },
+        bridge: {
+          active: bridgeBuffer != null,
+          buffered: Array.isArray(bridgeBuffer) ? bridgeBuffer.length : 0,
+          bridgeTimerActive: bridgeTimer != null,
+          revealTimerActive: revealTimer != null,
+          popupReady,
+          pendingStateSnapshot,
+          bridgingEngineKind,
+          revealBlocked,
+          revealDeferred,
+        },
+        replay: {
+          lastChordReplay,
+          currentChordReplay,
+          pretracedReplayKeys,
+        },
+        engine: chromeEngineState,
+        arm: {
+          lastLeaderArmAt,
+          chordArmSequence,
+          terminalDispatchArmSequence,
+        },
+      });
+    }
+
+    function installChordStateInspector() {
+      const w = getWin();
+      if (!w) return;
+      const inspector = () => getChordStateSnapshot();
+      inspector.__zenTabsPanelGeneration = CHORD_GENERATION;
+      w.__ztpChordState = inspector;
+      context.callOnClose({
+        close() {
+          try {
+            if (w.__ztpChordState && w.__ztpChordState.__zenTabsPanelGeneration === CHORD_GENERATION) {
+              delete w.__ztpChordState;
+            }
+          } catch (e) {}
+        },
+      });
+    }
+
     // Rearm-and-reveal helper. The warm popup is already mounted, so this
     // resolves to a rearm to the requested view followed by an immediate
     // reveal. Used by paths that bypass the chord-wait reveal timer
@@ -4270,6 +4361,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       try { Services.mm.removeMessageListener("ZenDuplicate:ContentLinkClick", onDuplicateContentLinkClick); } catch (e) {}
     }
 
+    installChordStateInspector();
     installChromeEngine();
     installContentEngineFrameScript();
     installDuplicateLinkIndicator();

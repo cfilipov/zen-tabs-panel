@@ -341,6 +341,13 @@ integration check for the extension/popup dispatch path, not a replacement for
 manual checks of the configurable browser command shortcut (`Cmd+.` by
 default). It leaves the palette hidden when it finishes.
 
+Do not use `tools/firefox-eval.py` to validate chord key delivery by
+dispatching DOM `KeyboardEvent`s. Those events are synthetic
+(`isTrusted === false`) and the chord engine intentionally ignores them in the
+real keydown path. Use `firefox-eval.py` for state inspection and chrome
+probes; use actual OS-level key delivery, or manual typing, for end-to-end
+leader/chord verification.
+
 2026-05-16 note: current Firefox/Zen can return DevTools `resultID` and the
 actual `evaluationResult` in the same RDP packet. `tools/firefox-eval.py` now
 checks the whole packet for a concrete result before waiting for a later one;
