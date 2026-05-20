@@ -45,6 +45,18 @@
         ]
       },
       {
+        "name": "activateViewRow",
+        "type": "function",
+        "async": true,
+        "description": "Resolve and activate a chrome-owned palette row by view and row index",
+        "parameters": [
+          { "name": "view", "type": "string" },
+          { "name": "index", "type": "integer" },
+          { "name": "source", "type": "string", "optional": true },
+          { "name": "switchToTarget", "type": "boolean", "optional": true }
+        ]
+      },
+      {
         "name": "goToPreviousTab",
         "type": "function",
         "async": true,

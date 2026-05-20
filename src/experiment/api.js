@@ -3352,6 +3352,70 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
     }
 
+    function activateChromeOwnedRowIntent(view, index, source, switchToTarget, options) {
+      const rowIndex = Number(index);
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) return false;
+      const destroy = !!(options && options.destroyOverlay);
+      try {
+        if (view === "move-to-workspace") {
+          const rows = getWorkspaceRows(false);
+          const row = rows[rowIndex];
+          if (!row || row.isActive) return false;
+          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "move-selected-tabs-to-workspace", workspaceId: row.uuid, switchToTarget: !!switchToTarget } });
+          void (async () => {
+            if (destroy) destroyOverlay();
+            await moveSelectedTabsToWorkspaceInternal(row.uuid, !!switchToTarget);
+          })();
+          return true;
+        }
+        if (view === "open-in-container") {
+          const rows = getContainerRows();
+          const row = rows[rowIndex];
+          if (!row || !row.userContextId) return false;
+          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "reopen-in-container", userContextId: row.userContextId } });
+          void (async () => {
+            if (destroy) destroyOverlay();
+            await reopenInContainerInternal(row.userContextId);
+          })();
+          return true;
+        }
+        if (view === "move-to-folder") {
+          const rows = getFolderRows();
+          const row = rows[rowIndex];
+          if (!row) return false;
+          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "move-tab-to-folder", folderId: row.id, switchToTarget: !!switchToTarget } });
+          void (async () => {
+            if (destroy) destroyOverlay();
+            await moveTabToFolderInternal(row.id, !!switchToTarget);
+          })();
+          return true;
+        }
+        if (view === "profiles") {
+          const rows = getProfileRows();
+          const row = rows[rowIndex];
+          if (!row || row.isCurrent) return false;
+          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "launch-profile", name: row.name } });
+          if (destroy) destroyOverlay();
+          launchProfileInternal(row.name);
+          return true;
+        }
+        if (view === "navigation") {
+          const history = getFilteredNavigationHistory();
+          const target = source === "shortcut"
+            ? navigationShortcutTarget(history, rowIndex)
+            : history?.entries?.[rowIndex]?.historyIndex ?? rowIndex;
+          if (target == null || target === history?.index) return false;
+          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "navigate-to-history-index", index: target } });
+          if (destroy) destroyOverlay();
+          navigateToHistoryIndexInternal(target);
+          return true;
+        }
+      } catch (e) {
+        return false;
+      }
+      return false;
+    }
+
     function tryHandleChromeOwnedBridgeKey(keyData) {
       if (activeBridgeView === "domains") {
         const rowIndex = rowIndexFromDigitKey(keyData);
@@ -3373,70 +3437,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (CHROME_OWNED_COMPACT_BRIDGE_VIEWS.has(activeBridgeView)) {
         const intent = bridgeRowIntentFromKey(keyData);
         if (!intent) return false;
-        try {
-          if (activeBridgeView === "move-to-workspace") {
-            const rows = getWorkspaceRows(false);
-            const row = rows[intent.index];
-            if (!row || row.isActive) return false;
-            chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "move-selected-tabs-to-workspace", workspaceId: row.uuid, switchToTarget: intent.switchToTarget } });
-            void (async () => {
-              destroyOverlay();
-              await moveSelectedTabsToWorkspaceInternal(row.uuid, intent.switchToTarget);
-            })();
-            return true;
-          }
-          if (activeBridgeView === "open-in-container") {
-            const rows = getContainerRows();
-            const row = rows[intent.index];
-            if (!row || !row.userContextId) return false;
-            chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "reopen-in-container", userContextId: row.userContextId } });
-            void (async () => {
-              destroyOverlay();
-              await reopenInContainerInternal(row.userContextId);
-            })();
-            return true;
-          }
-          if (activeBridgeView === "move-to-folder") {
-            const rows = getFolderRows();
-            const row = rows[intent.index];
-            if (!row) return false;
-            chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "move-tab-to-folder", folderId: row.id, switchToTarget: intent.switchToTarget } });
-            void (async () => {
-              destroyOverlay();
-              await moveTabToFolderInternal(row.id, intent.switchToTarget);
-            })();
-            return true;
-          }
-          if (activeBridgeView === "profiles") {
-            const rows = getProfileRows();
-            const row = rows[intent.index];
-            if (!row || row.isCurrent) return false;
-            chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "launch-profile", name: row.name } });
-            void (async () => {
-              destroyOverlay();
-              launchProfileInternal(row.name);
-            })();
-            return true;
-          }
-        } catch (e) {
-          return false;
-        }
+        return activateChromeOwnedRowIntent(activeBridgeView, intent.index, "shortcut", intent.switchToTarget, { destroyOverlay: true });
       }
 
       if (CHROME_OWNED_HISTORY_BRIDGE_VIEWS.has(activeBridgeView)) {
         const rowIndex = rowIndexFromDigitKey(keyData);
         if (rowIndex == null) return false;
-        try {
-          const history = getFilteredNavigationHistory();
-          const target = navigationShortcutTarget(history, rowIndex);
-          if (target == null) return false;
-          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "navigate-to-history-index", index: target } });
-          destroyOverlay();
-          navigateToHistoryIndexInternal(target);
-          return true;
-        } catch (e) {
-          return false;
-        }
+        return activateChromeOwnedRowIntent(activeBridgeView, rowIndex, "shortcut", false, { destroyOverlay: true });
       }
 
       if (!CHROME_OWNED_TAB_BRIDGE_VIEWS.has(activeBridgeView)) return false;
@@ -4768,6 +4775,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const tab = findTabByDomId(domId);
           if (!tab) return false;
           return activateNativeTab(tab);
+        },
+
+        async activateViewRow(view, index, source, switchToTarget) {
+          return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, { destroyOverlay: false });
         },
 
         // Go to previous tab using lastAccessed, filtering out the current

@@ -27,6 +27,15 @@ export function createPaletteEffects() {
     activateTab(domId: string) {
       fireMessage({ type: "activate-tab", domId });
     },
+    activateViewRow(view: ViewId, index: number, source: "selection" | "shortcut", switchToTarget = false) {
+      fireMessage({
+        type: "activate-view-row",
+        view,
+        index,
+        source,
+        ...(switchToTarget ? { switchToTarget: true } : {}),
+      });
+    },
     synthChordKey(chordKey: string, view: ViewId, activation = "keydown") {
       fireMessage({ type: "synth-chord-key", chordKey, view, activation });
     },

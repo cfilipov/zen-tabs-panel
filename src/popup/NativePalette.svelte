@@ -123,6 +123,13 @@
   const workspaceClient = createWorkspaceClient();
   const effects = createPaletteEffects();
   const actionSections = buildActionsMenuModel();
+  const CHROME_RESOLVED_ROW_VIEWS = new Set<ViewId>([
+    "navigation",
+    "move-to-workspace",
+    "open-in-container",
+    "move-to-folder",
+    "profiles",
+  ]);
 
   const paletteStore = createNativePaletteState();
   const palette = paletteStore.state;
@@ -444,6 +451,12 @@
     await applyViewActivation({ kind: "navigate-history-index", index });
   }
 
+  function activateChromeResolvedRow(index: number, source: "selection" | "shortcut", switchToTarget = false) {
+    markTerminalCommandDispatched();
+    revealController.clear();
+    effects.activateViewRow(palette.currentView, index, source, switchToTarget);
+  }
+
   function switchWorkspace(workspaceId: string) {
     markTerminalCommandDispatched();
     revealController.clear();
@@ -715,7 +728,14 @@
       return;
     }
 
-    await applyViewActivation(resolveSelectionActivation(viewActivationContext(), { switchToTarget }));
+    const activation = resolveSelectionActivation(viewActivationContext(), { switchToTarget });
+    if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
+      if (activation.kind === "none") return;
+      activateChromeResolvedRow(palette.selectedIndex, "selection", switchToTarget);
+      return;
+    }
+
+    await applyViewActivation(activation);
   }
 
   async function activateSelectedAndSwitch() {
@@ -724,7 +744,13 @@
 
   async function activateRow(index: number, switchToTarget = false) {
     traceReplayForListIndex(index, switchToTarget);
-    await applyViewActivation(resolveViewActivation(viewActivationContext(), index, "shortcut", { switchToTarget }));
+    const activation = resolveViewActivation(viewActivationContext(), index, "shortcut", { switchToTarget });
+    if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
+      if (activation.kind === "none") return;
+      activateChromeResolvedRow(index, "shortcut", switchToTarget);
+      return;
+    }
+    await applyViewActivation(activation);
   }
 
   async function activateRenderedRow(index: number, switchToTarget = false) {
@@ -733,7 +759,13 @@
     } else {
       traceReplayForListIndex(index, switchToTarget);
     }
-    await applyViewActivation(resolveViewActivation(viewActivationContext(), index, "selection", { switchToTarget }));
+    const activation = resolveViewActivation(viewActivationContext(), index, "selection", { switchToTarget });
+    if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
+      if (activation.kind === "none") return;
+      activateChromeResolvedRow(index, "selection", switchToTarget);
+      return;
+    }
+    await applyViewActivation(activation);
   }
 
   async function activateRowAndSwitch(index: number) {
