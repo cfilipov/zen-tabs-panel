@@ -1056,9 +1056,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // popup-side 400ms timer races against the destroy IPC chain and
     // sometimes wins → brief flash before destroy.
     let lastLeaderArmAt = 0;
-    let chordArmSequence = 0;
-    let terminalDispatchArmSequence = -1;
-
     // Mirror whatever theme Zen's URL-bar dropdown (Cmd+T) uses. The
     // chrome root's resolved `color-scheme` is the same signal that dialog
     // reads, and it disagrees with both the `zen-should-be-dark-mode`
@@ -2849,8 +2846,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         traversal: chordTraversalState,
         arm: {
           lastLeaderArmAt,
-          chordArmSequence,
-          terminalDispatchArmSequence,
+          chordArmSequence: chordSession ? chordSession.getStateSnapshot().armSequence : 0,
+          terminalDispatchArmSequence: chordSession ? chordSession.getStateSnapshot().terminalDispatchArmSequence : -1,
         },
       });
     }
@@ -3046,13 +3043,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!payload || !payload.type) return;
       if (
         (payload.type === "action" || payload.type === "switch-workspace" || payload.type === "open-extension-popup") &&
-        terminalDispatchArmSequence === chordArmSequence
+        chordSession &&
+        !chordSession.markTerminalDispatch()
       ) {
         debugChordTrace("terminal-duplicate-ignored", payload);
         return;
-      }
-      if (payload.type === "action" || payload.type === "switch-workspace" || payload.type === "open-extension-popup") {
-        terminalDispatchArmSequence = chordArmSequence;
       }
       trackChordTerminalAction(payload);
       disarmChordShims("terminal-action");
@@ -3529,8 +3524,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       try { chordSession.arm(); } catch (e) {}
       try { if (chromeShim) chromeShim.arm(); } catch (e) {}
-      chordArmSequence++;
-      terminalDispatchArmSequence = -1;
+      try { if (chordSession) chordSession.beginArm(); } catch (e) {}
       debugChordTrace("chrome-arm-called", {});
       const w = getWin();
       const tab = w && w.gBrowser && w.gBrowser.selectedTab;

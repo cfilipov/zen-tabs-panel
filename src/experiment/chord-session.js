@@ -95,6 +95,8 @@
     let bridgeBuffer = null;
     let bridgeTimer = null;
     let revealTimer = null;
+    let armSequence = 0;
+    let terminalDispatchArmSequence = -1;
     let currentNode = options && options.chordTree;
     let currentPath = [];
     let chordTimer = null;
@@ -470,6 +472,8 @@
         bridgeBufferLength: Array.isArray(bridgeBuffer) ? bridgeBuffer.length : null,
         bridgeTimerActive: bridgeTimer != null,
         revealTimerActive: revealTimer != null,
+        armSequence,
+        terminalDispatchArmSequence,
         recentTransitions,
       });
     }
@@ -603,6 +607,19 @@
       return revealTimer != null;
     }
 
+    function beginArm() {
+      armSequence++;
+      terminalDispatchArmSequence = -1;
+      recentTransitions.push({ at: Date.now(), from: state, to: state, why: "begin-arm", data: { armSequence } });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
+    function markTerminalDispatch() {
+      if (terminalDispatchArmSequence === armSequence) return false;
+      terminalDispatchArmSequence = armSequence;
+      return true;
+    }
+
     return {
       recordEvent,
       arm,
@@ -644,6 +661,8 @@
       clearRevealTimer,
       armRevealTimer,
       isRevealTimerActive,
+      beginArm,
+      markTerminalDispatch,
     };
   }
 
