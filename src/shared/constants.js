@@ -126,6 +126,7 @@ this.MSG = Object.freeze({
   UNVISITED_OLDEST:               "unvisited-oldest",
   MOVE_TAB_TO_FOLDER:             "move-tab-to-folder",
   REOPEN_IN_CONTAINER:            "reopen-in-container",
+  GET_CONTAINERS:                 "get-containers",
   GET_FOLDERS:                    "get-folders",
 
   // Replay the most recently fired chord-action (cmd+.,.). Background

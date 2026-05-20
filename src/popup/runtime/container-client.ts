@@ -1,3 +1,5 @@
+import { sendMessage } from "./ipc";
+
 export type ContainerRow = {
   cookieStoreId: string;
   userContextId: number;
@@ -8,15 +10,14 @@ export type ContainerRow = {
 
 type ContextualIdentity = {
   cookieStoreId?: string;
+  userContextId?: number;
   name?: string;
   colorCode?: string;
   iconUrl?: string;
 };
 
 type BrowserWithContainers = {
-  contextualIdentities?: {
-    query(details: Record<string, never>): Promise<ContextualIdentity[]>;
-  };
+  getContainers?: () => Promise<ContextualIdentity[]>;
 };
 
 function userContextIdFromCookieStore(cookieStoreId: string) {
@@ -28,7 +29,7 @@ export function normalizeContainer(row: ContextualIdentity): ContainerRow {
   const cookieStoreId = row.cookieStoreId || "";
   return {
     cookieStoreId,
-    userContextId: userContextIdFromCookieStore(cookieStoreId),
+    userContextId: Number(row.userContextId) || userContextIdFromCookieStore(cookieStoreId),
     name: row.name || "",
     colorCode: row.colorCode || "currentColor",
     iconUrl: row.iconUrl || "",
@@ -36,14 +37,11 @@ export function normalizeContainer(row: ContextualIdentity): ContainerRow {
 }
 
 export function createContainerClient(root: BrowserWithContainers | null = null) {
-  const globals = globalThis as typeof globalThis & {
-    browser?: BrowserWithContainers;
-    chrome?: BrowserWithContainers;
-  };
-  const api = root ?? globals.browser ?? globals.chrome ?? null;
   return {
     async getContainers() {
-      const rows = await api?.contextualIdentities?.query({}) ?? [];
+      const rows = root?.getContainers
+        ? await root.getContainers()
+        : await sendMessage<ContextualIdentity[]>({ type: "get-containers" });
       return rows.map(normalizeContainer);
     },
   };

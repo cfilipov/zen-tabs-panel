@@ -810,6 +810,13 @@
         ]
       },
       {
+        "name": "getContainers",
+        "type": "function",
+        "async": true,
+        "description": "List Firefox contextual identities (containers)",
+        "parameters": []
+      },
+      {
         "name": "reopenInContainer",
         "type": "function",
         "async": true,

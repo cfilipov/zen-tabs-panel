@@ -5283,6 +5283,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return moveTabToFolderInternal(folderId, switchToTarget);
         },
 
+        // List Firefox contextual identities (containers). Kept in chrome so
+        // hidden chords and visible rows resolve against the same model.
+        async getContainers() {
+          return getContainerRows();
+        },
+
         // Enumerate Firefox/Zen profiles from the toolkit profile service.
         // Same source `about:profiles` reads — rootDir is the unique key
         // (names can technically collide), so identity checks use it.

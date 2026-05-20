@@ -17,11 +17,9 @@ describe("container client", () => {
     });
   });
 
-  it("queries contextual identities when available", async () => {
+  it("queries container rows through the supplied model source", async () => {
     const client = createContainerClient({
-      contextualIdentities: {
-        query: async () => [{ cookieStoreId: "firefox-container-7", name: "Personal" }],
-      },
+      getContainers: async () => [{ cookieStoreId: "firefox-container-7", name: "Personal" }],
     });
 
     await expect(client.getContainers()).resolves.toMatchObject([
