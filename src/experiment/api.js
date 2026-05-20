@@ -5954,8 +5954,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         // Commit-on-action hook. Bg calls this for every popup-fired
-        // runtime action so chrome decides whether to promote the
-        // in-flight chord chain to lastChordReplay (cycling-capable
+        // runtime action so ChordSession decides whether to promote the
+        // in-flight chord chain to the replay trace (cycling-capable
         // replay) or commit a raw action. The blocklist inside
         // recordReplayFromPopupAction keeps the replay action itself
         // and the duplicate-prompt outcomes out of the trace.
