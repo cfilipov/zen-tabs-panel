@@ -2610,7 +2610,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       explicitRevealView = null;
       explicitRevealScheduledToken = 0;
       if (chordSession) {
-        if (silent && (bridgeBuffer || bridgingEngineKind != null)) {
+        if (silent && (bridgingEngineKind != null || pendingStateSnapshot != null)) {
           chordSession.transition("bridging-buffering", "destroyOverlay-silent", { hard, silent });
         } else if (!silent) {
           chordSession.transition("destroying", "destroyOverlay", { hard, silent });
@@ -2836,7 +2836,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           popupInstance,
         },
         bridge: {
-          active: bridgeBuffer != null,
+          active: bridgingEngineKind != null || pendingStateSnapshot != null,
           buffered: Array.isArray(bridgeBuffer) ? bridgeBuffer.length : 0,
           bridgeTimerActive: bridgeTimer != null,
           revealTimerActive: revealTimer != null,
@@ -2859,7 +2859,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function observeChordSession(why) {
       if (!chordSession) return;
-      try { chordSession.observeLegacyState(getChordStateSnapshot(), why); } catch (e) {}
+      chordSession.observeLegacyState(getChordStateSnapshot(), why);
     }
 
     function installChordStateInspector() {

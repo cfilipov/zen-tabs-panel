@@ -18,6 +18,7 @@ type ChordSession = {
   hasCurrentOpenViewReplay: () => boolean;
   transition: (to: string, why: string, data?: unknown) => void;
   observeLegacyState: (snapshot: unknown, why: string) => void;
+  assertInvariant: (snapshot?: unknown) => true;
   getStateSnapshot: () => {
     state: string;
     recentTransitions: Array<Record<string, unknown>>;
@@ -184,22 +185,23 @@ describe("chord-session replay recording", () => {
     });
   });
 
-  it("warns, but does not throw, when legacy state disagrees", () => {
+  it("throws when legacy state disagrees", () => {
     const session = makeSession();
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     session.acceptEngineEvent({ kind: "armed" });
 
-    session.observeLegacyState({
+    expect(() => session.observeLegacyState({
       bridge: { active: true, popupReady: false },
       overlay: { visibility: "hidden" },
       engine: { armed: true, path: [] },
-    }, "unit-test");
+    }, "unit-test")).toThrow("[ChordSession] state mismatch");
+  });
 
-    expect(warn).toHaveBeenCalledWith(
-      "[ChordSession] state mismatch:",
-      expect.objectContaining({ sessionState: "armed-root", legacyState: "bridging-buffering" }),
-    );
-    warn.mockRestore();
+  it("asserts impossible transition patterns", () => {
+    const session = makeSession();
+    session.transition("bridging-buffering", "test-buffer");
+    session.transition("visible", "test-visible");
+
+    expect(() => session.assertInvariant()).toThrow("[ChordSession] invalid transition");
   });
 
   it("records synthetic chord events without firing or committing actions", () => {

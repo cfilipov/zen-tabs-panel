@@ -46,6 +46,7 @@
       const engine = snapshot.engine || {};
       if (bridge.active && !bridge.popupReady) return "bridging-buffering";
       if (bridge.active && bridge.popupReady && overlay.visibility !== "visible") return "bridging-live";
+      if (bridge.revealBlocked && !bridge.active && !engine.armed) return "idle";
       if (overlay.visibility === "visible") return "visible";
       if (engine.armed && Array.isArray(engine.path) && engine.path.length > 0) return "armed-prefix";
       if (engine.armed) return "armed-root";
@@ -55,17 +56,27 @@
     function observeLegacyState(snapshot, why) {
       const derived = deriveLegacyState(snapshot);
       if (derived === state) return;
-      if (typeof console !== "undefined" && console && console.warn) {
-        try {
-          console.warn("[ChordSession] state mismatch:", {
-            why,
-            sessionState: state,
-            legacyState: derived,
-            snapshot: clonePlain(snapshot),
-            recentTransitions: clonePlain(recentTransitions),
-          });
-        } catch (e) {}
+      const error = new Error("[ChordSession] state mismatch");
+      error.details = {
+        why,
+        sessionState: state,
+        legacyState: derived,
+        snapshot: clonePlain(snapshot),
+        recentTransitions: clonePlain(recentTransitions),
+      };
+      throw error;
+    }
+
+    function assertInvariant(snapshot) {
+      if (snapshot) observeLegacyState(snapshot, "assertInvariant");
+      for (const transition of recentTransitions) {
+        if (transition.from === "bridging-buffering" && transition.to === "visible") {
+          const error = new Error("[ChordSession] invalid transition");
+          error.details = { transition: clonePlain(transition), recentTransitions: clonePlain(recentTransitions) };
+          throw error;
+        }
       }
+      return true;
     }
 
     function resetCurrentReplay() {
@@ -234,6 +245,7 @@
       hasCurrentOpenViewReplay,
       transition,
       observeLegacyState,
+      assertInvariant,
       getStateSnapshot,
       getReplayState,
     };
