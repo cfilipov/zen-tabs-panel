@@ -418,7 +418,7 @@
       if (r.kind === "open-view") {
         const keysCopy = Array.from(r.bridgeKeys || []);
         if (effects.debug) effects.debug("replay-open-view", { view: r.view, keys: keysCopy });
-        if (effects.enterBridgeFromOpenView) effects.enterBridgeFromOpenView(r.view, [], "chrome", "match");
+        if (effects.enterBridgeFromOpenView) effects.enterBridgeFromOpenView(r.view, "chrome", "match");
         if (effects.forwardKeyToPopup) {
           for (const k of keysCopy) {
             effects.forwardKeyToPopup(bridgeKeyFromReplayKey(k));

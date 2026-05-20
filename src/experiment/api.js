@@ -2928,7 +2928,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       },
       onOpenView: (view, snapshot, source) => {
         debugChordTrace("chrome-on-open-view", { view, snapshot, source });
-        enterBridgeFromOpenView(view, snapshot, "chrome", source);
+        enterBridgeFromOpenView(view, "chrome", source);
       },
       onStateChange: (snapshot) => {
         debugChordTrace("chrome-on-state-change", { snapshot });
@@ -3067,7 +3067,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     //     chording (more digits / drilling), the timer resets each key
     //     and UI never shows. If they pause, the timer fires and the
     //     popup is revealed at its current state.
-    function enterBridgeFromOpenView(view, _stateSnapshot, kind, source) {
+    function enterBridgeFromOpenView(view, kind, source) {
       // Stale pre-shim content scripts can still emit old open-view IPC after
       // an extension reload. The first bridge wins; later bridge opens are
       // ignored so they cannot destroy/recreate the live popup.
@@ -4000,7 +4000,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!isCurrentGen(m)) return;
       resetChromeEngineIfArmed();
       const data = m.data;
-      enterBridgeFromOpenView(data.view, data.snapshot, "content", data.source);
+      enterBridgeFromOpenView(data.view, "content", data.source);
     }
     function onContentCancel(m) {
       if (!isCurrentGen(m)) return;

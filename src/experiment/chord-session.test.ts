@@ -134,7 +134,7 @@ describe("chord-session replay recording", () => {
     session.recordEvent({ kind: "popup-action", message: { type: "activate-tab", tabId: 42 } });
 
     expect(session.replayLastChord({ enterBridgeFromOpenView, forwardKeyToPopup, debug })).toBe(true);
-    expect(enterBridgeFromOpenView).toHaveBeenCalledWith("last-visited", [], "chrome", "match");
+    expect(enterBridgeFromOpenView).toHaveBeenCalledWith("last-visited", "chrome", "match");
     expect(forwardKeyToPopup).toHaveBeenCalledWith({
       key: "2",
       code: "Digit2",
