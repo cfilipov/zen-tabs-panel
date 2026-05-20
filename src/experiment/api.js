@@ -980,12 +980,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // extension reload (Firefox provides no way to unload frame scripts on
     // extension teardown).
     const CHORD_GENERATION = String(Date.now()) + "_" + Math.random().toString(36).slice(2, 8);
-    // Chrome-side bridge buffer. Filled by either engine (chrome's engine
-    // pushes via its onBridgeKey callback; content engines push via the
-    // ZenChord:BridgeKey IPC). Drained by takeChordBridgeBuffer() when the
+    // Chrome-side bridge buffer. Filled by the chrome-side ChordSession from
+    // shim-forwarded keys and drained by takeChordBridgeBuffer() when the
     // popup signals POPUP_READY. After POPUP_READY, new bridge keys are
-    // forwarded directly to the popup browser's message manager rather
-    // than buffered — see forwardKeyToPopup().
+    // forwarded directly to the popup browser's message manager rather than
+    // buffered — see forwardKeyToPopup().
     let bridgeBuffer = null;
     let bridgeTimer = null;
     // Keep this comfortably above cold Svelte view startup in large tab
@@ -1003,10 +1002,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // chain. Before that, bridge keys are buffered. After, they are
     // delivered live via the popup browser's message manager.
     let popupReady = false;
-    // Which engine instance fired the open-view that triggered the active
-    // bridge — exit-bridge must be sent to it (and only it) when popup
-    // drains. "chrome" or "content"; null when no bridge active.
-    let bridgingEngineKind = null;
     let activeBridgeView = null;
     // ChordSession owns replay state. During Track A Phase 1 the existing
     // chrome/content chord engines still traverse the tree; they report their
@@ -2606,7 +2601,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       explicitRevealView = null;
       explicitRevealScheduledToken = 0;
       if (chordSession) {
-        if (silent && bridgingEngineKind != null) {
+        if (silent && activeBridgeView != null) {
           chordSession.transition("bridging-buffering", "destroyOverlay-silent", { hard, silent });
         } else if (!silent) {
           chordSession.transition("destroying", "destroyOverlay", { hard, silent });
@@ -2823,12 +2818,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
           popupInstance,
         },
         bridge: {
-          active: bridgingEngineKind != null,
+          active: activeBridgeView != null,
           buffered: Array.isArray(bridgeBuffer) ? bridgeBuffer.length : 0,
           bridgeTimerActive: bridgeTimer != null,
           revealTimerActive: revealTimer != null,
           popupReady,
-          bridgingEngineKind,
           activeBridgeView,
           revealBlocked,
           revealDeferred,
@@ -3091,7 +3085,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // this function wins. The second's IPC arrives slightly later — silently drop it
       // so we don't destroy-and-recreate the just-revealed popup or
       // double-fire the reveal animation.
-      if (bridgingEngineKind != null) return;
+      if (activeBridgeView != null) return;
 
       // Source="match" is a user-typed chord-key (cmd+.,r, etc.) — the
       // intentional chord. Source="timeout" is the menu opening because
@@ -3102,7 +3096,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       bridgeBuffer = [];
       void stateSnapshot;
-      bridgingEngineKind = kind;
       activeBridgeView = view || "actions";
       popupReady = false;
       if (chordSession) chordSession.transition("bridging-buffering", "enterBridgeFromOpenView", { view, kind, source });
@@ -3302,7 +3295,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       disarmChordShims("finish-bridge");
       // Compatibility for stale pre-shim content engines.
       try { Services.mm.broadcastAsyncMessage("ZenChord:ExitBridge"); } catch (e) {}
-      bridgingEngineKind = null;
       activeBridgeView = null;
       if (chordSession) chordSession.transition("idle", "finishBridge");
       observeChordSession("finishBridge");
@@ -4007,7 +3999,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // view. A late content-armed prerender must not rearm the warm popup
       // back to actions and make buffered drill keys replay in the wrong
       // view.
-      if (bridgingEngineKind != null) {
+      if (activeBridgeView != null) {
         debugChordTrace("content-armed-skip-bridging", {});
         return;
       }
@@ -5792,7 +5784,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // "popup is ready; buffer empty" — popupReady still flips true so
           // any subsequent bridge keys go live via DeliverKey rather than
           // queueing to a null buffer.
-          const wasBridging = bridgingEngineKind != null;
+          const wasBridging = activeBridgeView != null;
           const drained = bridgeBuffer || [];
           debugChordTrace("bridge-buffer-drain", { drained: drained.length, view: popupReadyTargetView || "actions" });
           // Reset the bridge buffer to an empty array so future bridge
@@ -6075,7 +6067,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // chord-opened popups (root timeout / bridge); toolbar-clicked
           // visible navigation is not itself replayable and must not
           // poison the previous leaf action.
-          if (bridgingEngineKind != null || chordSession.hasCurrentReplay()) {
+          if (activeBridgeView != null || chordSession.hasCurrentReplay()) {
             trackChordOpenView(view);
           }
           // Only swap browsers when crossing between our popup and a
