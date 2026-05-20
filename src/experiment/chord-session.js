@@ -92,6 +92,7 @@
     let activeBridgeView = null;
     let popupReady = false;
     let readyTargetView = null;
+    let bridgeBuffer = null;
     let currentNode = options && options.chordTree;
     let currentPath = [];
     let chordTimer = null;
@@ -464,6 +465,7 @@
         activeBridgeView,
         popupReady,
         readyTargetView,
+        bridgeBufferLength: Array.isArray(bridgeBuffer) ? bridgeBuffer.length : null,
         recentTransitions,
       });
     }
@@ -523,6 +525,40 @@
       return readyTargetView;
     }
 
+    function startBridgeBuffer(why) {
+      bridgeBuffer = [];
+      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { bridgeBufferLength: 0 } });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
+    function clearBridgeBuffer(why) {
+      bridgeBuffer = null;
+      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { bridgeBufferLength: null } });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
+    function hasBridgeBuffer() {
+      return Array.isArray(bridgeBuffer);
+    }
+
+    function getBridgeBufferLength() {
+      return Array.isArray(bridgeBuffer) ? bridgeBuffer.length : 0;
+    }
+
+    function pushBridgeKey(keyData) {
+      if (!Array.isArray(bridgeBuffer)) return null;
+      bridgeBuffer.push(keyData);
+      return bridgeBuffer.length;
+    }
+
+    function drainBridgeBuffer(why) {
+      const drained = Array.isArray(bridgeBuffer) ? bridgeBuffer : [];
+      bridgeBuffer = [];
+      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { drained: drained.length, bridgeBufferLength: 0 } });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+      return drained;
+    }
+
     return {
       recordEvent,
       arm,
@@ -552,6 +588,12 @@
       isPopupReady,
       setReadyTargetView,
       getReadyTargetView,
+      startBridgeBuffer,
+      clearBridgeBuffer,
+      hasBridgeBuffer,
+      getBridgeBufferLength,
+      pushBridgeKey,
+      drainBridgeBuffer,
     };
   }
 
