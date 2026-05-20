@@ -3410,6 +3410,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
           navigateToHistoryIndexInternal(target);
           return true;
         }
+        if (CHROME_OWNED_TAB_BRIDGE_VIEWS.has(view)) {
+          tabIndex.start();
+          const params = view === "domain-tabs" ? (currentViewParams || {}) : {};
+          const win = tabIndex.getWindow(view, rowIndex, 1, params);
+          const row = win && Array.isArray(win.rows) ? win.rows[0] : null;
+          if (!row || !row.domId) return false;
+          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
+          void (async () => {
+            if (destroy) destroyOverlay();
+            const tab = findTabByDomId(row.domId);
+            if (tab) await activateNativeTab(tab);
+          })();
+          return true;
+        }
       } catch (e) {
         return false;
       }
@@ -3449,22 +3463,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!CHROME_OWNED_TAB_BRIDGE_VIEWS.has(activeBridgeView)) return false;
       const rowIndex = rowIndexFromDigitKey(keyData);
       if (rowIndex == null) return false;
-      try {
-        tabIndex.start();
-        const params = activeBridgeView === "domain-tabs" ? (currentViewParams || {}) : {};
-        const win = tabIndex.getWindow(activeBridgeView, 0, rowIndex + 1, params);
-        const row = win && Array.isArray(win.rows) ? win.rows[rowIndex] : null;
-        if (!row || !row.domId) return false;
-        chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
-        void (async () => {
-          destroyOverlay();
-          const tab = findTabByDomId(row.domId);
-          if (tab) await activateNativeTab(tab);
-        })();
-        return true;
-      } catch (e) {
-        return false;
-      }
+      return activateChromeOwnedRowIntent(activeBridgeView, rowIndex, "shortcut", false, { destroyOverlay: true });
     }
 
     // ---- Chrome engine instance ----------------------------------------

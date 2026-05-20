@@ -125,6 +125,14 @@
   const actionSections = buildActionsMenuModel();
   const CHROME_RESOLVED_ROW_VIEWS = new Set<ViewId>([
     "navigation",
+    "child-tabs",
+    "sibling-tabs",
+    "parent-tabs",
+    "last-visited",
+    "unvisited-tabs",
+    "domain-tabs",
+    "tabs-by-age",
+    "most-visited",
     "move-to-workspace",
     "open-in-container",
     "move-to-folder",
