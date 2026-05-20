@@ -134,12 +134,6 @@ this.MSG = Object.freeze({
   // presses keep replaying the SAME prior action.
   REPLAY_LAST_CHORD:              "replay-last-chord",
 
-  // Popup → chrome trace for cmd+.,. replay tracking. Sent when the
-  // popup handles a chord-key (digit in a list view) that activates
-  // an item — chrome appends to its open-view bridgeKeys so the
-  // slow-typed chord (menu shown, then user types digit) is
-  // recorded the same as a fast-typed chord (engine-bridged).
-  TRACE_REPLAY_KEY:               "trace-replay-key",
   SYNTH_CHORD_KEY:                "synth-chord-key",
 
   // Duplicate-link intercept: popup-fired actions for the buttons

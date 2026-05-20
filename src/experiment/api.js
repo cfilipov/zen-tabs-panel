@@ -3231,9 +3231,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function forwardKeyToPopup(keyData) {
       // Pre-track engine/chrome-forwarded bridge keys so replay traces
       // commit deterministically even if the terminal popup action reaches
-      // background before the popup's trace-replay-key echo. The popup
-      // still traces slow visible keys; matching echoes for pre-tracked
-      // keys are ignored by trackChordBridgeKey.
+      // background before the popup's synthetic replay trace. Matching
+      // synthetic events for pre-tracked keys are ignored by ChordSession.
       trackChordBridgeKey(Object.assign({}, keyData, { __pretraced: true }));
       //
       // Any chord key after the initial leader means the user is committed
@@ -5777,18 +5776,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // back to its own popup-action recording if this returns false.
         async replayLastChord() {
           return replayLastChordTrace();
-        },
-
-        // Popup-side trace hook for slow-typed chord chains. When the
-        // popup processes a digit/letter that activates an item, it
-        // sends this so chrome records the key the same way it would
-        // have recorded an engine-bridged key (cmd+.,r,2 fast). Without
-        // this, slow typing (menu showed, then digit) wouldn't track
-        // and cmd+.,. would have nothing to replay.
-        async traceReplayKey(key) {
-          // Kept for stale popup code during the synthetic-chord transition.
-          // Current popup builds record replay through synthChordKey().
-          void key;
         },
 
         async synthChordKey(payload) {

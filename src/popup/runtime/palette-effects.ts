@@ -27,9 +27,6 @@ export function createPaletteEffects() {
     activateTab(domId: string) {
       fireMessage({ type: "activate-tab", domId });
     },
-    traceReplayKey(key: string) {
-      fireMessage({ type: "trace-replay-key", key });
-    },
     synthChordKey(chordKey: string, view: ViewId, activation = "keydown") {
       fireMessage({ type: "synth-chord-key", chordKey, view, activation });
     },

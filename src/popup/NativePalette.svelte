@@ -402,10 +402,9 @@
     effects.activateTab(row.domId);
   }
 
-  function traceReplayKey(key: string | null | undefined) {
+  function recordSyntheticChordKey(key: string | null | undefined) {
     if (!key) return;
     try {
-      effects.traceReplayKey(key);
       effects.synthChordKey(key, palette.currentView, "trace");
     } catch {
       // Replay tracing is best-effort; it must never block the command.
@@ -413,17 +412,17 @@
   }
 
   function traceReplayInput(input: BridgeKeyData) {
-    traceReplayKey(chordFromKey({ kind: "key", ...input }));
+    recordSyntheticChordKey(chordFromKey({ kind: "key", ...input }));
   }
 
   function traceReplayForListIndex(index: number, shifted = false) {
-    traceReplayKey(replayKeyForBadgeIndex(index, shifted));
+    recordSyntheticChordKey(replayKeyForBadgeIndex(index, shifted));
   }
 
   function traceReplayForSelection(shifted = false) {
     if (palette.currentView === "actions" || isNativePrefixView(palette.currentView)) return;
     if (palette.currentView === "navigation") {
-      traceReplayKey(replayKeyForNavigationIndex(palette.navigationHistory, palette.selectedIndex));
+      recordSyntheticChordKey(replayKeyForNavigationIndex(palette.navigationHistory, palette.selectedIndex));
       return;
     }
     traceReplayForListIndex(palette.selectedIndex, shifted);
@@ -447,7 +446,7 @@
   }
 
   function navigateToHistoryIndexWithTrace(index: number) {
-    traceReplayKey(replayKeyForNavigationIndex(palette.navigationHistory, index));
+    recordSyntheticChordKey(replayKeyForNavigationIndex(palette.navigationHistory, index));
     navigateToHistoryIndex(index);
   }
 

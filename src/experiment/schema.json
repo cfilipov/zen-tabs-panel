@@ -563,15 +563,6 @@
         "parameters": []
       },
       {
-        "name": "traceReplayKey",
-        "type": "function",
-        "async": true,
-        "description": "Popup-side trace hook: record a key as part of the in-flight chord chain so cmd+.,. can replay it. Called for digits/letters that activate items in a list view.",
-        "parameters": [
-          { "name": "key", "type": "string" }
-        ]
-      },
-      {
         "name": "synthChordKey",
         "type": "function",
         "async": true,
