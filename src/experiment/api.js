@@ -977,10 +977,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       buffer: null,
       bridgeTimer: null,
       revealTimer: null,
-      // View the popup should confirm on its next POPUP_READY reply. Kept
-      // separate from currentViewName because stale resize messages can update
-      // currentViewName after a warm-view swap.
-      readyTargetView: null,
     };
     // Keep this comfortably above cold Svelte view startup in large tab
     // profiles. Fast chains like cmd+.,q,1 buffer row-selection digits in
@@ -1022,6 +1018,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function isPopupReady() {
       try { return !!(chordSession && chordSession.isPopupReady()); } catch (e) { return false; }
+    }
+    function setReadyTargetView(view, why) {
+      try { if (chordSession) chordSession.setReadyTargetView(view || null, why); } catch (e) {}
+    }
+    function getReadyTargetView() {
+      try { return chordSession ? chordSession.getReadyTargetView() : null; } catch (e) { return null; }
     }
     // Popup-instance counter. Incremented in createOverlay; the popup
     // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
@@ -1783,7 +1785,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       currentDynamicSidebarWidth = 0;
       currentMeasuredResizeView = null;
       setPopupReady(false, "popup-ready-clear");
-      bridgeState.readyTargetView = viewName;
+      setReadyTargetView(viewName, "ready-target-view");
 
       const overlay = w.document.createElement("div");
       overlay.id = OVERLAY_ID;
@@ -1916,7 +1918,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       currentMeasuredResizeView = null;
 
       const viewName = view || "actions";
-      bridgeState.readyTargetView = viewName;
+      setReadyTargetView(viewName, "ready-target-view");
       const panel = w.document.getElementById(PANEL_ID);
       const br = w.document.getElementById(BROWSER_ID);
       const idleHidden = overlay.style.visibility === "hidden" && !pendingReveal;
@@ -2175,7 +2177,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!panel || !oldBrowser) return;
 
       const gen = ++morphGeneration;
-      bridgeState.readyTargetView = view || "actions";
+      setReadyTargetView(view || "actions", "ready-target-view");
       // For extension-popup view, prefer the cached natural size from a
       // previous open so we morph straight there. For the first open
       // of a given extension we have no idea what size the popup wants,
@@ -2544,7 +2546,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       navStack = [];
       currentViewName = "actions";
       currentViewParams = {};
-      bridgeState.readyTargetView = "actions";
+      setReadyTargetView("actions", "ready-target-view");
       setPopupReady(false, "popup-ready-clear");
       if (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions") {
         try {
@@ -2624,7 +2626,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       navStack = [];
       currentViewName = null;
       currentViewParams = {};
-      bridgeState.readyTargetView = null;
+      setReadyTargetView(null, "ready-target-view-clear");
 
       // Prerender that never revealed (chord cancelled, action fired, view
       // mismatch on timeout). Usually the overlay is invisible — skip the
@@ -2797,7 +2799,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         view: {
           currentViewName,
           currentViewParams,
-          popupReadyTargetView: bridgeState.readyTargetView,
+          popupReadyTargetView: getReadyTargetView(),
           navStack,
           currentDynamicSidebarWidth,
           currentMeasuredResizeView,
@@ -5716,14 +5718,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // queueing to a null buffer.
           const wasBridging = hasActiveBridge();
           const drained = bridgeState.buffer || [];
-          debugChordTrace("bridge-buffer-drain", { drained: drained.length, view: bridgeState.readyTargetView || "actions" });
+          debugChordTrace("bridge-buffer-drain", { drained: drained.length, view: getReadyTargetView() || "actions" });
           // Reset the bridge buffer to an empty array so future bridge keys
           // before the ready check don't NPE — after readiness is true they get
           // forwarded live, not buffered.
           bridgeState.buffer = [];
           setPopupReady(true, "popup-ready");
           if (wasBridging && chordSession) {
-            chordSession.transition("bridging-live", "takeChordBridgeBuffer", { drained: drained.length, view: bridgeState.readyTargetView || "actions" });
+            chordSession.transition("bridging-live", "takeChordBridgeBuffer", { drained: drained.length, view: getReadyTargetView() || "actions" });
             observeChordSession("takeChordBridgeBuffer");
           }
           // The chord chain may continue (popup invisible at this view,
@@ -5759,8 +5761,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // script wasn't registered yet. The popup's IIFE will see this
           // `view` in the reply and navigate before replaying buffered
           // keys, so chord-chain digits land at the right view.
-          const readyView = bridgeState.readyTargetView || "actions";
-          bridgeState.readyTargetView = null;
+          const readyView = getReadyTargetView() || "actions";
+          setReadyTargetView(null, "ready-target-view-clear");
           const replyView = readyView !== "actions" ? readyView : null;
           return {
             buffered: drained,

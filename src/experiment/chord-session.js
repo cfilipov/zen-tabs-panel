@@ -91,6 +91,7 @@
     let revealDeferred = false;
     let activeBridgeView = null;
     let popupReady = false;
+    let readyTargetView = null;
     let currentNode = options && options.chordTree;
     let currentPath = [];
     let chordTimer = null;
@@ -462,6 +463,7 @@
         revealDeferred,
         activeBridgeView,
         popupReady,
+        readyTargetView,
         recentTransitions,
       });
     }
@@ -511,6 +513,16 @@
       return popupReady;
     }
 
+    function setReadyTargetView(view, why) {
+      readyTargetView = view || null;
+      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { readyTargetView } });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
+    function getReadyTargetView() {
+      return readyTargetView;
+    }
+
     return {
       recordEvent,
       arm,
@@ -538,6 +550,8 @@
       hasActiveBridge,
       setPopupReady,
       isPopupReady,
+      setReadyTargetView,
+      getReadyTargetView,
     };
   }
 
