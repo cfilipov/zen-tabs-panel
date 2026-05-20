@@ -99,7 +99,7 @@ export function resolveViewActivation(
   }
 
   if (context.view === "duplicates") {
-    const row = source === "selection" ? context.duplicateTabs[index] : null;
+    const row = context.duplicateTabs[index];
     return row ? { kind: "activate-tab", row } : { kind: "none" };
   }
 

@@ -134,6 +134,7 @@
     "domain-tabs",
     "tabs-by-age",
     "most-visited",
+    "duplicates",
     "move-to-workspace",
     "open-in-container",
     "move-to-folder",

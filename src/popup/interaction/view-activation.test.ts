@@ -119,7 +119,7 @@ describe("view activation resolver", () => {
     expect(resolveSelectionActivation(context({ view: "duplicates", selectedIndex: 0, duplicateTabs: [tabRow] })))
       .toEqual({ kind: "activate-tab", row: tabRow });
     expect(resolveViewActivation(context({ view: "duplicates", duplicateTabs: [tabRow] }), 0, "shortcut"))
-      .toEqual({ kind: "none" });
+      .toEqual({ kind: "activate-tab", row: tabRow });
     expect(resolveViewActivation(context({ view: "duplicate-prompt" }), 0, "shortcut"))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-switch" });
     expect(resolveSelectionActivation(context({ view: "duplicate-prompt", selectedIndex: 1 })))

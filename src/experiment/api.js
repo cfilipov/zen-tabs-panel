@@ -3321,6 +3321,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "domain-tabs",
       "tabs-by-age",
       "most-visited",
+      "duplicates",
     ]);
 
     const CHROME_OWNED_COMPACT_BRIDGE_VIEWS = new Set([
@@ -3423,6 +3424,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
           chordSession.recordEvent({ kind: "popup-action", message: { type: "navigate-to-history-index", index: target } });
           if (destroy) destroyOverlay();
           navigateToHistoryIndexInternal(target);
+          return true;
+        }
+        if (view === "duplicates") {
+          tabIndex.start();
+          if (expectedListVersion != null && tabIndex.getVersion() !== expectedListVersion) return false;
+          const groups = tabIndex.getDuplicateGroups(currentViewParams || {});
+          const tabs = groups.flatMap((group) => Array.isArray(group.tabs) ? group.tabs : []);
+          const row = tabs[rowIndex];
+          if (!row || !row.domId) return false;
+          if (expectedDomId && row.domId !== expectedDomId) return false;
+          chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
+          void (async () => {
+            if (destroy) destroyOverlay();
+            const tab = findTabByDomId(row.domId);
+            if (tab) await activateNativeTab(tab);
+          })();
           return true;
         }
         if (CHROME_OWNED_TAB_BRIDGE_VIEWS.has(view)) {
