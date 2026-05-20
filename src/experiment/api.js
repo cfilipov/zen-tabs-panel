@@ -3310,6 +3310,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return Number.parseInt(raw, 10) - 1;
     }
 
+    function rowIndexFromShiftedDigitKey(keyData) {
+      if (!keyData || !keyData.shiftKey || keyData.altKey || keyData.ctrlKey || keyData.metaKey) return null;
+      const code = String(keyData.code || "");
+      if (!/^Digit[1-9]$/.test(code)) return null;
+      return Number.parseInt(code.slice("Digit".length), 10) - 1;
+    }
+
+    function bridgeRowIntentFromKey(keyData) {
+      const shiftedIndex = rowIndexFromShiftedDigitKey(keyData);
+      if (shiftedIndex != null) return { index: shiftedIndex, switchToTarget: true };
+      const index = rowIndexFromDigitKey(keyData);
+      return index == null ? null : { index, switchToTarget: false };
+    }
+
     const CHROME_OWNED_TAB_BRIDGE_VIEWS = new Set([
       "child-tabs",
       "sibling-tabs",
@@ -3320,7 +3334,55 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "most-visited",
     ]);
 
+    const CHROME_OWNED_COMPACT_BRIDGE_VIEWS = new Set([
+      "move-to-workspace",
+      "move-to-folder",
+      "profiles",
+    ]);
+
     function tryHandleChromeOwnedBridgeKey(keyData) {
+      if (CHROME_OWNED_COMPACT_BRIDGE_VIEWS.has(activeBridgeView)) {
+        const intent = bridgeRowIntentFromKey(keyData);
+        if (!intent) return false;
+        try {
+          if (activeBridgeView === "move-to-workspace") {
+            const rows = getWorkspaceRows(false);
+            const row = rows[intent.index];
+            if (!row || row.isActive) return false;
+            chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "move-selected-tabs-to-workspace", workspaceId: row.uuid, switchToTarget: intent.switchToTarget } });
+            void (async () => {
+              destroyOverlay();
+              await moveSelectedTabsToWorkspaceInternal(row.uuid, intent.switchToTarget);
+            })();
+            return true;
+          }
+          if (activeBridgeView === "move-to-folder") {
+            const rows = getFolderRows();
+            const row = rows[intent.index];
+            if (!row) return false;
+            chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "move-tab-to-folder", folderId: row.id, switchToTarget: intent.switchToTarget } });
+            void (async () => {
+              destroyOverlay();
+              await moveTabToFolderInternal(row.id, intent.switchToTarget);
+            })();
+            return true;
+          }
+          if (activeBridgeView === "profiles") {
+            const rows = getProfileRows();
+            const row = rows[intent.index];
+            if (!row || row.isCurrent) return false;
+            chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "launch-profile", name: row.name } });
+            void (async () => {
+              destroyOverlay();
+              launchProfileInternal(row.name);
+            })();
+            return true;
+          }
+        } catch (e) {
+          return false;
+        }
+      }
+
       if (!CHROME_OWNED_TAB_BRIDGE_VIEWS.has(activeBridgeView)) return false;
       const rowIndex = rowIndexFromDigitKey(keyData);
       if (rowIndex == null) return false;
@@ -4307,6 +4369,198 @@ this.zenWorkspaces = class extends ExtensionAPI {
       try { Services.mm.removeMessageListener("ZenDuplicate:ContentLinkClick", onDuplicateContentLinkClick); } catch (e) {}
     }
 
+    function getWorkspaceRows(includeIcons) {
+      const w = getWin();
+      if (!w || !w.gZenWorkspaces) return [];
+      const workspaces = w.gZenWorkspaces.getWorkspaces();
+      const activeId = w.gZenWorkspaces.activeWorkspace;
+      return Array.from(workspaces || []).map((ws) => ({
+        uuid: ws.uuid,
+        name: ws.name,
+        svgContent: includeIcons && ws.icon ? null : "",
+        icon: includeIcons ? ws.icon || "" : "",
+        isActive: ws.uuid === activeId,
+      }));
+    }
+
+    async function getWorkspacesWithIconContent() {
+      const w = getWin();
+      if (!w) return [];
+      const rows = getWorkspaceRows(true);
+      for (const row of rows) {
+        row.svgContent = "";
+        if (row.icon) {
+          try {
+            const resp = await w.fetch(row.icon);
+            row.svgContent = await resp.text();
+          } catch (e) {}
+        }
+        delete row.icon;
+      }
+      return rows;
+    }
+
+    function getFolderRows() {
+      const w = getWin();
+      if (!w?.gBrowser?.getAllTabGroups) return [];
+      try {
+        const groups = w.gBrowser.getAllTabGroups() || [];
+        return groups.map((g) => ({
+          id: g.id || "",
+          name: g.label || g.name || "Folder",
+          workspaceId: g.getAttribute?.("zen-workspace-id") || null,
+        }));
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function getProfileRows() {
+      const ps = Cc["@mozilla.org/toolkit/profile-service;1"]
+        .getService(Ci.nsIToolkitProfileService);
+      const current = ps.currentProfile;
+      const def = ps.defaultProfile;
+      const out = [];
+      for (const p of ps.profiles) {
+        out.push({
+          name: p.name,
+          rootPath: p.rootDir.path,
+          isCurrent: current ? p.rootDir.equals(current.rootDir) : false,
+          isDefault: def ? p.rootDir.equals(def.rootDir) : false,
+        });
+      }
+      return out;
+    }
+
+    function launchProfileInternal(name) {
+      const ps = Cc["@mozilla.org/toolkit/profile-service;1"]
+        .getService(Ci.nsIToolkitProfileService);
+      for (const p of ps.profiles) {
+        if (p.name === name) {
+          Services.startup.createInstanceWithProfile(p);
+          return true;
+        }
+      }
+      throw new Error(`Profile not found: ${name}`);
+    }
+
+    async function moveSelectedTabsToWorkspaceInternal(workspaceId, switchToTarget) {
+      const w = getWin();
+      if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
+
+      const tabs = w.gBrowser.selectedTabs.filter(t => !t.hasAttribute("zen-essential"));
+      if (tabs.length === 0) return false;
+
+      const activeTab = w.gBrowser.selectedTab;
+      const activeWorkspace = w.gZenWorkspaces.activeWorkspace;
+      if (workspaceId === activeWorkspace && tabs.every((tab) => tab.getAttribute("zen-workspace-id") === workspaceId)) {
+        return true;
+      }
+      const movingActive = tabs.some(t => t === activeTab);
+      const targetTab = movingActive ? activeTab : tabs[0];
+
+      if (movingActive && !switchToTarget) {
+        const allTabs = getAllTabElements();
+        const visibleDomIds = new Set([activeTab.id]);
+        if (w.gZenViewSplitter?._data) {
+          const currentGroup = w.gZenViewSplitter._data.find(
+            (g) => g.tabs && g.tabs.some((t) => t.id === activeTab.id)
+          );
+          if (currentGroup) {
+            for (const tab of currentGroup.tabs) visibleDomIds.add(tab.id);
+          }
+        }
+        for (const t of tabs) visibleDomIds.add(t.id);
+
+        const candidates = allTabs
+          .filter((t) => !visibleDomIds.has(t.id) && !isNewTabElement(t))
+          .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+        if (candidates.length > 0) {
+          await activateNativeTab(candidates[0]);
+        }
+      }
+
+      await w.gZenWorkspaces.moveTabsToWorkspace(tabs, workspaceId);
+
+      for (let i = tabs.length - 1; i >= 0; i--) {
+        const tab = tabs[i];
+        const container = tab.parentNode;
+        if (!container) continue;
+        const firstUnpinned = Array.from(container.children).find(
+          t => t.matches && t.matches(".tabbrowser-tab") && !t.pinned
+        );
+        if (firstUnpinned && firstUnpinned !== tab) {
+          container.insertBefore(tab, firstUnpinned);
+        }
+      }
+      if (switchToTarget && targetTab) {
+        await activateNativeTab(targetTab);
+      }
+      return true;
+    }
+
+    async function moveTabToFolderInternal(folderId, switchToTarget) {
+      const w = getWin();
+      if (!w?.gBrowser) return false;
+      const group = w.gBrowser.getTabGroupById?.(folderId);
+      if (!group || !w.gBrowser.moveTabToExistingGroup) return false;
+      const tabs = getActionTargetTabs();
+      if (tabs.length === 0) return false;
+      const activeTab = w.gBrowser.selectedTab;
+      const targetTab = tabs.includes(activeTab) ? activeTab : tabs[0];
+      const targetWorkspace = group.getAttribute?.("zen-workspace-id") || null;
+      const activeWorkspace = w.gZenWorkspaces?.activeWorkspace || null;
+      const movingActive = tabs.includes(activeTab);
+      const movesAcrossWorkspace = targetWorkspace && tabs.some(
+        (tab) => tab.getAttribute("zen-workspace-id") !== targetWorkspace
+      );
+
+      if (movingActive && !switchToTarget && movesAcrossWorkspace && targetWorkspace !== activeWorkspace) {
+        const allTabs = getAllTabElements();
+        const visibleDomIds = new Set([activeTab.id]);
+        if (w.gZenViewSplitter?._data) {
+          const currentGroup = w.gZenViewSplitter._data.find(
+            (g) => g.tabs && g.tabs.some((t) => t.id === activeTab.id)
+          );
+          if (currentGroup) {
+            for (const tab of currentGroup.tabs) visibleDomIds.add(tab.id);
+          }
+        }
+        for (const tab of tabs) visibleDomIds.add(tab.id);
+        const candidates = allTabs
+          .filter((tab) => !visibleDomIds.has(tab.id) && !isNewTabElement(tab))
+          .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+        if (candidates.length > 0) {
+          await activateNativeTab(candidates[0]);
+        }
+      }
+
+      if (movesAcrossWorkspace && w.gZenWorkspaces?.moveTabsToWorkspace) {
+        await w.gZenWorkspaces.moveTabsToWorkspace(tabs, targetWorkspace);
+      }
+
+      for (const tab of tabs) {
+        try { w.gBrowser.moveTabToExistingGroup(tab, group); } catch (e) {}
+        if (targetWorkspace) {
+          try {
+            tab.owner = null;
+            tab.setAttribute("zen-workspace-id", targetWorkspace);
+            const glanceTab = tab.querySelector?.(".tabbrowser-tab[zen-glance-tab]");
+            if (glanceTab) {
+              glanceTab.setAttribute("zen-workspace-id", targetWorkspace);
+            }
+          } catch (e) {}
+        }
+      }
+      if (targetWorkspace) {
+        try { w.gBrowser.tabContainer._invalidateCachedTabs(); } catch (e) {}
+      }
+      if (switchToTarget && targetTab) {
+        await activateNativeTab(targetTab);
+      }
+      return true;
+    }
+
     installChordStateInspector();
     installChromeEngine();
     installContentEngineFrameScript();
@@ -4864,114 +5118,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // Folders are tab groups under gBrowser; gZenFolders adds the
         // workspace-aware UI on top, but the data lives on gBrowser.
         async getFolders() {
-          const w = getWin();
-          if (!w?.gBrowser?.getAllTabGroups) return [];
-          try {
-            const groups = w.gBrowser.getAllTabGroups() || [];
-            return groups.map((g) => ({
-              id: g.id || "",
-              name: g.label || g.name || "Folder",
-              workspaceId: g.getAttribute?.("zen-workspace-id") || null,
-            }));
-          } catch (e) { return []; }
+          return getFolderRows();
         },
 
         async moveTabToFolder(folderId, switchToTarget) {
-          const w = getWin();
-          if (!w?.gBrowser) return false;
-          const group = w.gBrowser.getTabGroupById?.(folderId);
-          if (!group || !w.gBrowser.moveTabToExistingGroup) return false;
-          const tabs = getActionTargetTabs();
-          if (tabs.length === 0) return false;
-          const activeTab = w.gBrowser.selectedTab;
-          const targetTab = tabs.includes(activeTab) ? activeTab : tabs[0];
-          const targetWorkspace = group.getAttribute?.("zen-workspace-id") || null;
-          const activeWorkspace = w.gZenWorkspaces?.activeWorkspace || null;
-          const movingActive = tabs.includes(activeTab);
-          const movesAcrossWorkspace = targetWorkspace && tabs.some(
-            (tab) => tab.getAttribute("zen-workspace-id") !== targetWorkspace
-          );
-
-          if (movingActive && !switchToTarget && movesAcrossWorkspace && targetWorkspace !== activeWorkspace) {
-            const allTabs = getAllTabElements();
-            const visibleDomIds = new Set([activeTab.id]);
-            if (w.gZenViewSplitter?._data) {
-              const currentGroup = w.gZenViewSplitter._data.find(
-                (g) => g.tabs && g.tabs.some((t) => t.id === activeTab.id)
-              );
-              if (currentGroup) {
-                for (const tab of currentGroup.tabs) {
-                  visibleDomIds.add(tab.id);
-                }
-              }
-            }
-            for (const tab of tabs) visibleDomIds.add(tab.id);
-            const candidates = allTabs
-              .filter((tab) => !visibleDomIds.has(tab.id) && !isNewTabElement(tab))
-              .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-            if (candidates.length > 0) {
-              await activateNativeTab(candidates[0]);
-            }
-          }
-
-          if (movesAcrossWorkspace && w.gZenWorkspaces?.moveTabsToWorkspace) {
-            await w.gZenWorkspaces.moveTabsToWorkspace(tabs, targetWorkspace);
-          }
-
-          for (const tab of tabs) {
-            try { w.gBrowser.moveTabToExistingGroup(tab, group); } catch (e) {}
-            if (targetWorkspace) {
-              try {
-                tab.owner = null;
-                tab.setAttribute("zen-workspace-id", targetWorkspace);
-                const glanceTab = tab.querySelector?.(".tabbrowser-tab[zen-glance-tab]");
-                if (glanceTab) {
-                  glanceTab.setAttribute("zen-workspace-id", targetWorkspace);
-                }
-              } catch (e) {}
-            }
-          }
-          if (targetWorkspace) {
-            try { w.gBrowser.tabContainer._invalidateCachedTabs(); } catch (e) {}
-          }
-          if (switchToTarget && targetTab) {
-            await activateNativeTab(targetTab);
-          }
-          return true;
+          return moveTabToFolderInternal(folderId, switchToTarget);
         },
 
         // Enumerate Firefox/Zen profiles from the toolkit profile service.
         // Same source `about:profiles` reads — rootDir is the unique key
         // (names can technically collide), so identity checks use it.
         async getProfiles() {
-          const ps = Cc["@mozilla.org/toolkit/profile-service;1"]
-            .getService(Ci.nsIToolkitProfileService);
-          const current = ps.currentProfile;
-          const def = ps.defaultProfile;
-          const out = [];
-          for (const p of ps.profiles) {
-            out.push({
-              name: p.name,
-              rootPath: p.rootDir.path,
-              isCurrent: current ? p.rootDir.equals(current.rootDir) : false,
-              isDefault: def ? p.rootDir.equals(def.rootDir) : false,
-            });
-          }
-          return out;
+          return getProfileRows();
         },
 
         // Launch a new Zen instance against the given profile — same call the
         // "Launch profile in new browser" button on about:profiles uses.
         async launchProfile(name) {
-          const ps = Cc["@mozilla.org/toolkit/profile-service;1"]
-            .getService(Ci.nsIToolkitProfileService);
-          for (const p of ps.profiles) {
-            if (p.name === name) {
-              Services.startup.createInstanceWithProfile(p);
-              return true;
-            }
-          }
-          throw new Error(`Profile not found: ${name}`);
+          return launchProfileInternal(name);
         },
 
         // Reopen each selected tab in the given contextual identity
@@ -5472,92 +5636,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         // Get workspaces with inline SVG icon content
         async getWorkspacesWithIcons() {
-          const w = getWin();
-          if (!w || !w.gZenWorkspaces) return [];
-          const workspaces = w.gZenWorkspaces.getWorkspaces();
-          const activeId = w.gZenWorkspaces.activeWorkspace;
-          const results = [];
-          for (const ws of workspaces) {
-            let svgContent = "";
-            if (ws.icon) {
-              try {
-                const resp = await w.fetch(ws.icon);
-                svgContent = await resp.text();
-              } catch (e) {}
-            }
-            results.push({ uuid: ws.uuid, name: ws.name, svgContent, isActive: ws.uuid === activeId });
-          }
-          return results;
+          return getWorkspacesWithIconContent();
         },
 
         // Move gBrowser.selectedTabs to the given workspace, placed at top
         async moveSelectedTabsToWorkspace(workspaceId, switchToTarget) {
-          const w = getWin();
-          if (!w || !w.gBrowser || !w.gZenWorkspaces) return;
-
-          const tabs = w.gBrowser.selectedTabs.filter(t => !t.hasAttribute("zen-essential"));
-          if (tabs.length === 0) return;
-
-          // If the active tab is being moved, activate the previous tab first
-          const activeTab = w.gBrowser.selectedTab;
-          const activeWorkspace = w.gZenWorkspaces.activeWorkspace;
-          if (workspaceId === activeWorkspace && tabs.every((tab) => tab.getAttribute("zen-workspace-id") === workspaceId)) {
-            return true;
-          }
-          const movingActive = tabs.some(t => t === activeTab);
-          const targetTab = movingActive ? activeTab : tabs[0];
-
-          if (movingActive && !switchToTarget) {
-            // Reuse goToPreviousTab logic: find the most recently accessed non-visible tab
-            const allTabs = getAllTabElements();
-            const visibleDomIds = new Set();
-            visibleDomIds.add(activeTab.id);
-            if (w.gZenViewSplitter?._data) {
-              const currentGroup = w.gZenViewSplitter._data.find(
-                (g) => g.tabs && g.tabs.some((t) => t.id === activeTab.id)
-              );
-              if (currentGroup) {
-                for (const tab of currentGroup.tabs) {
-                  visibleDomIds.add(tab.id);
-                }
-              }
-            }
-            // Also exclude all tabs being moved
-            for (const t of tabs) visibleDomIds.add(t.id);
-
-            const candidates = allTabs
-              .filter((t) => !visibleDomIds.has(t.id) && !isNewTabElement(t))
-              .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-            if (candidates.length > 0) {
-              await activateNativeTab(candidates[0]);
-            }
-          }
-
-          // Use Zen's built-in moveTabsToWorkspace to handle all the
-          // internal bookkeeping (split views, glance tabs, containers,
-          // cached tab invalidation, etc.), then reorder to top.
-          await w.gZenWorkspaces.moveTabsToWorkspace(tabs, workspaceId);
-
-          // Move each tab to the top of its container (unpinned section).
-          // moveTabsToWorkspace places them at the end — we want the top.
-          // The tabs are now in the target workspace's DOM area. Access
-          // the container from the tab element's parentNode.
-          // Reverse iterate so the original order is preserved at the top.
-          for (let i = tabs.length - 1; i >= 0; i--) {
-            const tab = tabs[i];
-            const container = tab.parentNode;
-            if (!container) continue;
-            // Find the first unpinned tab in this container as insertion point
-            const firstUnpinned = Array.from(container.children).find(
-              t => t.matches && t.matches(".tabbrowser-tab") && !t.pinned
-            );
-            if (firstUnpinned && firstUnpinned !== tab) {
-              container.insertBefore(tab, firstUnpinned);
-            }
-          }
-          if (switchToTarget && targetTab) {
-            await activateNativeTab(targetTab);
-          }
+          return moveSelectedTabsToWorkspaceInternal(workspaceId, switchToTarget);
         },
 
         // Drain the chord-bridge buffer (keys captured during the gap
