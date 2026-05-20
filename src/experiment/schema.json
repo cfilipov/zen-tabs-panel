@@ -572,6 +572,15 @@
         ]
       },
       {
+        "name": "bridgeDispatchSettled",
+        "type": "function",
+        "async": true,
+        "description": "Popup-side bridge dispatch hook. Called after hidden buffered/live bridge keys finish processing so chrome can own the pre-visible reveal timer.",
+        "parameters": [
+          { "name": "inst", "type": "any", "optional": true }
+        ]
+      },
+      {
         "name": "recordReplayContext",
         "type": "function",
         "async": true,

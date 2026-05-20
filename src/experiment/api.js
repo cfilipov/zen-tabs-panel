@@ -5788,6 +5788,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
           });
         },
 
+        async bridgeDispatchSettled(inst) {
+          if (typeof inst === "number" && inst !== popupInstance) return;
+          if (revealBlocked || !pendingReveal) return;
+          armRevealTimer();
+        },
+
         // Commit-on-action hook. Bg calls this for every popup-fired
         // runtime action so chrome decides whether to promote the
         // in-flight chord chain to lastChordReplay (cycling-capable

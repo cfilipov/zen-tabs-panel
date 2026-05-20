@@ -30,6 +30,9 @@ export function createPaletteEffects() {
     synthChordKey(chordKey: string, view: ViewId, activation = "keydown") {
       fireMessage({ type: "synth-chord-key", chordKey, view, activation });
     },
+    bridgeDispatchSettled(inst: number | null) {
+      fireMessage({ type: "bridge-dispatch-settled", inst });
+    },
     navigateToHistoryIndex(index: number) {
       fireMessage({ type: "navigate-to-history-index", index });
     },

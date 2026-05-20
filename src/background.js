@@ -618,6 +618,7 @@ const SYNC_HANDLERS = Object.freeze({
   [MSG.OPEN_EXTENSION_POPUP]: (m) => api.openExtensionPopup(m.extensionId),
   [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view, m.height, m.dynamicSidebarWidth, m.inst),
   [MSG.SYNTH_CHORD_KEY]:      (m) => api.synthChordKey({ chordKey: m.chordKey, view: m.view, activation: m.activation }),
+  [MSG.BRIDGE_DISPATCH_SETTLED]: (m) => api.bridgeDispatchSettled(m.inst),
 });
 
 // Hide palette, then run an action. Used by the message handler to keep

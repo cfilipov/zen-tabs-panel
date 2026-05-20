@@ -136,7 +136,8 @@
   });
   const bridgeDispatch = createBridgeDispatchController({
     dispatchKey: handleKeyInput,
-    armRevealTimer: revealController.arm,
+    armBridgeRevealTimer: () => effects.bridgeDispatchSettled(revealController.inst),
+    armVisibleRevealTimer: revealController.arm,
     clearRevealTimer: revealController.clear,
   });
 

@@ -16,8 +16,14 @@ export type BridgeDispatchController = {
 
 type BridgeDispatchOptions = {
   dispatchKey: (input: BridgeKeyData) => MaybePromise<void>;
-  armRevealTimer: () => void;
+  armBridgeRevealTimer: () => void;
+  armVisibleRevealTimer: () => void;
   clearRevealTimer: () => void;
+};
+
+type QueuedInput = {
+  input: BridgeKeyData;
+  origin: "bridge" | "visible";
 };
 
 function replyBuffered(reply: BridgeReply | null) {
@@ -34,7 +40,7 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
   let liveDispatchGeneration = 0;
   let warmGeneration = 0;
   const heldLiveKeys: BridgeKeyData[] = [];
-  const liveDispatchQueue: BridgeKeyData[] = [];
+  const liveDispatchQueue: QueuedInput[] = [];
 
   const isCurrentWarmGeneration = (generation: number) => generation === warmGeneration;
 
@@ -44,11 +50,14 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
     const generation = liveDispatchGeneration;
     try {
       while (generation === liveDispatchGeneration && liveDispatchQueue.length > 0) {
-        const input = liveDispatchQueue.shift();
-        if (!input) continue;
-        await options.dispatchKey(input);
+        const queued = liveDispatchQueue.shift();
+        if (!queued) continue;
+        await options.dispatchKey(queued.input);
         if (generation !== liveDispatchGeneration) return;
-        if (liveDispatchQueue.length === 0) options.armRevealTimer();
+        if (liveDispatchQueue.length === 0) {
+          if (queued.origin === "visible") options.armVisibleRevealTimer();
+          else options.armBridgeRevealTimer();
+        }
       }
     } finally {
       if (generation === liveDispatchGeneration) {
@@ -57,8 +66,8 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
     }
   }
 
-  function enqueue(input: BridgeKeyData) {
-    liveDispatchQueue.push(input);
+  function enqueue(input: BridgeKeyData, origin: QueuedInput["origin"]) {
+    liveDispatchQueue.push({ input, origin });
     void runLiveDispatchQueue();
   }
 
@@ -74,7 +83,7 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       return;
     }
     options.clearRevealTimer();
-    enqueue(input);
+    enqueue(input, "bridge");
   }
 
   async function dispatchDrained(inputs: BridgeKeyData[], generation?: number) {
@@ -84,7 +93,7 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       if (generation !== undefined && !isCurrentWarmGeneration(generation)) return false;
       await options.dispatchKey(input);
       if (generation !== undefined && !isCurrentWarmGeneration(generation)) return false;
-      if (isLastPendingInput) options.armRevealTimer();
+      if (isLastPendingInput) options.armBridgeRevealTimer();
     }
     return true;
   }
@@ -104,7 +113,7 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
     visibleKeydownInput(input) {
       ready = true;
       options.clearRevealTimer();
-      enqueue(input);
+      enqueue(input, "visible");
       return { preventDefault: true, stopPropagation: true };
     },
     resetForWarmRearm() {
@@ -124,16 +133,16 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       if (!(await dispatchDrained(drained, generation))) return;
       if (generation !== undefined && !isCurrentWarmGeneration(generation)) return;
       ready = true;
-      if (drained.length === 0 && reply?.armRevealTimer !== false) {
-        options.armRevealTimer();
-      }
+      void reply;
     },
     forceReady(data) {
       const buffered = forceBuffered(data);
       const held = heldLiveKeys.splice(0);
       ready = true;
       options.clearRevealTimer();
-      liveDispatchQueue.unshift(...buffered, ...held);
+      liveDispatchQueue.unshift(
+        ...buffered.concat(held).map((input) => ({ input, origin: "bridge" as const }))
+      );
       void runLiveDispatchQueue();
     },
   };

@@ -12,7 +12,8 @@ function createHarness() {
     dispatchKey: (input) => {
       events.push(`key:${input.key}`);
     },
-    armRevealTimer: () => events.push("arm"),
+    armBridgeRevealTimer: () => events.push("bridge-arm"),
+    armVisibleRevealTimer: () => events.push("visible-arm"),
     clearRevealTimer: () => events.push("clear"),
   });
   return { controller, events };
@@ -31,7 +32,7 @@ describe("bridge dispatch controller", () => {
     await controller.drainReply({ buffered: [key("b")] });
 
     expect(controller.ready).toBe(true);
-    expect(events).toEqual(["key:b", "key:h", "arm"]);
+    expect(events).toEqual(["key:b", "key:h", "bridge-arm"]);
   });
 
   it("serializes live keys after the bridge is ready", async () => {
@@ -42,7 +43,7 @@ describe("bridge dispatch controller", () => {
     controller.queueOrHold(key("b"));
     await flushDispatchQueue();
 
-    expect(events).toEqual(["arm", "clear", "key:a", "clear", "key:b", "arm"]);
+    expect(events).toEqual(["clear", "key:a", "clear", "key:b", "bridge-arm"]);
   });
 
   it("does not arm the reveal timer for an idle warm-prerender ready reply", async () => {
@@ -69,7 +70,7 @@ describe("bridge dispatch controller", () => {
     await flushDispatchQueue();
 
     expect(controller.ready).toBe(true);
-    expect(events).toEqual(["clear", "key: ", "arm"]);
+    expect(events).toEqual(["clear", "key: ", "visible-arm"]);
   });
 
   it("stops stale warm-rearm drains before marking ready", async () => {
@@ -82,7 +83,8 @@ describe("bridge dispatch controller", () => {
           release = resolve;
         });
       },
-      armRevealTimer: () => events.push("arm"),
+      armBridgeRevealTimer: () => events.push("bridge-arm"),
+      armVisibleRevealTimer: () => events.push("visible-arm"),
       clearRevealTimer: () => events.push("clear"),
     });
 
@@ -105,7 +107,7 @@ describe("bridge dispatch controller", () => {
     await flushDispatchQueue();
 
     expect(controller.ready).toBe(true);
-    expect(events).toEqual(["clear", "key:buffered", "key:held", "arm"]);
+    expect(events).toEqual(["clear", "key:buffered", "key:held", "bridge-arm"]);
   });
 
   it("force-ready waits for the active visible dispatch before forced keys", async () => {
@@ -120,7 +122,8 @@ describe("bridge dispatch controller", () => {
           });
         }
       },
-      armRevealTimer: () => events.push("arm"),
+      armBridgeRevealTimer: () => events.push("bridge-arm"),
+      armVisibleRevealTimer: () => events.push("visible-arm"),
       clearRevealTimer: () => events.push("clear"),
     });
 
@@ -130,11 +133,11 @@ describe("bridge dispatch controller", () => {
     controller.forceReady({ buffered: [key("forced")] });
     await flushDispatchQueue();
 
-    expect(events).toEqual(["arm", "clear", "key:stale", "clear"]);
+    expect(events).toEqual(["clear", "key:stale", "clear"]);
     release();
     await flushDispatchQueue();
 
-    expect(events).toEqual(["arm", "clear", "key:stale", "clear", "key:forced", "arm"]);
+    expect(events).toEqual(["clear", "key:stale", "clear", "key:forced", "bridge-arm"]);
   });
 
   it("warm rearm cancels a stale live dispatch before visible popup keys", async () => {
@@ -149,7 +152,8 @@ describe("bridge dispatch controller", () => {
           });
         }
       },
-      armRevealTimer: () => events.push("arm"),
+      armBridgeRevealTimer: () => events.push("bridge-arm"),
+      armVisibleRevealTimer: () => events.push("visible-arm"),
       clearRevealTimer: () => events.push("clear"),
     });
 
@@ -160,11 +164,11 @@ describe("bridge dispatch controller", () => {
     controller.visibleKeydownInput(key("visible"));
     await flushDispatchQueue();
 
-    expect(events).toEqual(["arm", "clear", "key:stale", "clear", "clear", "key:visible", "arm"]);
+    expect(events).toEqual(["clear", "key:stale", "clear", "clear", "key:visible", "visible-arm"]);
     release();
     await flushDispatchQueue();
 
-    expect(events).toEqual(["arm", "clear", "key:stale", "clear", "clear", "key:visible", "arm"]);
+    expect(events).toEqual(["clear", "key:stale", "clear", "clear", "key:visible", "visible-arm"]);
   });
 
   it("arms reveal only after a single async buffered key finishes", async () => {
@@ -178,7 +182,8 @@ describe("bridge dispatch controller", () => {
         });
         events.push(`finish:${input.key}`);
       },
-      armRevealTimer: () => events.push("arm"),
+      armBridgeRevealTimer: () => events.push("bridge-arm"),
+      armVisibleRevealTimer: () => events.push("visible-arm"),
       clearRevealTimer: () => events.push("clear"),
     });
 
@@ -189,7 +194,7 @@ describe("bridge dispatch controller", () => {
     release();
     await drain;
 
-    expect(events).toEqual(["start:1", "finish:1", "arm"]);
+    expect(events).toEqual(["start:1", "finish:1", "bridge-arm"]);
   });
 
   it("does not arm reveal while an intermediate buffered drill key is running", async () => {
@@ -205,7 +210,8 @@ describe("bridge dispatch controller", () => {
         }
         events.push(`finish:${input.key}`);
       },
-      armRevealTimer: () => events.push("arm"),
+      armBridgeRevealTimer: () => events.push("bridge-arm"),
+      armVisibleRevealTimer: () => events.push("visible-arm"),
       clearRevealTimer: () => events.push("clear"),
     });
 
@@ -216,6 +222,6 @@ describe("bridge dispatch controller", () => {
     release();
     await drain;
 
-    expect(events).toEqual(["start:1", "finish:1", "start:2", "finish:2", "arm"]);
+    expect(events).toEqual(["start:1", "finish:1", "start:2", "finish:2", "bridge-arm"]);
   });
 });

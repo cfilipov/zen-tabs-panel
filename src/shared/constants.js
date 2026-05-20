@@ -135,6 +135,7 @@ this.MSG = Object.freeze({
   REPLAY_LAST_CHORD:              "replay-last-chord",
 
   SYNTH_CHORD_KEY:                "synth-chord-key",
+  BRIDGE_DISPATCH_SETTLED:        "bridge-dispatch-settled",
 
   // Duplicate-link intercept: popup-fired actions for the buttons
   // in the duplicate-prompt view. Excluded from chord-replay tracking —
