@@ -5,7 +5,7 @@
   type Props = {
     rows: WorkspaceRow[];
     selectedIndex?: number;
-    onactivate?: (row: WorkspaceRow, switchToTarget?: boolean) => void;
+    onactivate?: (index: number, switchToTarget?: boolean) => void;
   };
 
   let { rows, selectedIndex = -1, onactivate }: Props = $props();

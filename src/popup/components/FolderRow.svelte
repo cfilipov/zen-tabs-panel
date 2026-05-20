@@ -9,7 +9,7 @@
     selectedIndex?: number;
     badge?: string | null;
     workspaceName?: string | null;
-    onactivate?: (row: FolderRow, switchToTarget?: boolean) => void;
+    onactivate?: (index: number, switchToTarget?: boolean) => void;
   };
 
   let { row, index = -1, selectedIndex = -1, badge = null, workspaceName = null, onactivate }: Props = $props();
@@ -21,7 +21,7 @@
   class="list-item"
   class:selected
   data-folder-id={row.id}
-  onclick={(event) => onactivate?.(row, event.shiftKey)}
+  onclick={(event) => onactivate?.(index, event.shiftKey)}
 >
   <span class="item-icon-placeholder">{@html iconHtml("svg:folder")}</span>
   <span class="item-text">

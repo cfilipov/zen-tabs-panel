@@ -5,7 +5,7 @@
   type Props = {
     rows: ContainerRow[];
     selectedIndex?: number;
-    onactivate?: (row: ContainerRow) => void;
+    onactivate?: (index: number) => void;
   };
 
   let { rows, selectedIndex = -1, onactivate }: Props = $props();

@@ -15,14 +15,9 @@
   import WorkspaceList from "./WorkspaceList.svelte";
   import type { ActionMenuItem, ActionSection } from "./actions-model";
   import type { DuplicatePromptAction } from "../interaction/duplicate-prompt-options";
-  import type { ContainerRow } from "../runtime/container-client";
   import type { ExtensionRow } from "../runtime/extension-client";
-  import type { FolderRow } from "../runtime/folder-client";
-  import type { RecentlyClosedRow } from "../runtime/history-client";
-  import type { ProfileRow } from "../runtime/profile-client";
   import type { HistoryVisit, TabInfo } from "../runtime/tab-info-client";
   import type { DomainIndexRow, DuplicateGroupRow, TabIndexRow } from "../runtime/tab-index-client";
-  import type { WorkspaceRow } from "../runtime/workspace-client";
   import type { NativePaletteState } from "../store/native-palette-state.svelte";
   import { isNativePrefixView, isNativeTabView } from "../view-loaders/view-registry";
 
@@ -41,12 +36,8 @@
     previewTabLike: (row: { domId: string }) => void;
     clearPreview: () => void;
     navigateToHistoryIndexWithTrace: (index: number) => void;
-    restoreClosedTabWithTrace: (row: RecentlyClosedRow) => void;
-    restoreClosedTabKeepOpen: (row: RecentlyClosedRow) => void;
-    moveToWorkspaceWithTrace: (row: WorkspaceRow, switchToTarget?: boolean) => void;
-    reopenInContainerWithTrace: (row: ContainerRow) => void;
-    moveToFolderWithTrace: (row: FolderRow, switchToTarget?: boolean) => void;
-    launchProfileWithTrace: (row: ProfileRow) => void;
+    activateRow: (index: number, switchToTarget?: boolean) => void | Promise<void>;
+    restoreClosedTabKeepOpen: (row: NativePaletteState["recentlyClosedRows"][number]) => void;
     activateTab: (row: { domId: string }) => void;
     closeDuplicateTab: (row: TabIndexRow) => void;
     closeDuplicatePromptTab: (row: TabIndexRow) => void;
@@ -76,12 +67,8 @@
     previewTabLike,
     clearPreview,
     navigateToHistoryIndexWithTrace,
-    restoreClosedTabWithTrace,
+    activateRow,
     restoreClosedTabKeepOpen,
-    moveToWorkspaceWithTrace,
-    reopenInContainerWithTrace,
-    moveToFolderWithTrace,
-    launchProfileWithTrace,
     activateTab,
     closeDuplicateTab,
     closeDuplicatePromptTab,
@@ -142,33 +129,33 @@
       <RecentlyClosedList
         rows={palette.recentlyClosedRows}
         selectedIndex={palette.selectedIndex}
-        onactivate={restoreClosedTabWithTrace}
+        onactivate={activateRow}
         onrestore={restoreClosedTabKeepOpen}
       />
     {:else if palette.currentView === "move-to-workspace"}
       <WorkspaceList
         rows={palette.workspaceRows}
         selectedIndex={palette.selectedIndex}
-        onactivate={moveToWorkspaceWithTrace}
+        onactivate={activateRow}
       />
     {:else if palette.currentView === "open-in-container"}
       <ContainerList
         rows={palette.containerRows}
         selectedIndex={palette.selectedIndex}
-        onactivate={reopenInContainerWithTrace}
+        onactivate={activateRow}
       />
     {:else if palette.currentView === "move-to-folder"}
       <FolderList
         rows={palette.folderRows}
         workspaces={palette.folderWorkspaces}
         selectedIndex={palette.selectedIndex}
-        onactivate={moveToFolderWithTrace}
+        onactivate={activateRow}
       />
     {:else if palette.currentView === "profiles"}
       <ProfileList
         rows={palette.profileRows}
         selectedIndex={palette.selectedIndex}
-        onactivate={launchProfileWithTrace}
+        onactivate={activateRow}
       />
     {:else if palette.currentView === "duplicates"}
       <DuplicateGroups

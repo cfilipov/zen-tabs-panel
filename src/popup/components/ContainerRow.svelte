@@ -7,7 +7,7 @@
     index?: number;
     selectedIndex?: number;
     badge?: string | null;
-    onactivate?: (row: ContainerRow) => void;
+    onactivate?: (index: number) => void;
   };
 
   let { row, index = -1, selectedIndex = -1, badge = null, onactivate }: Props = $props();
@@ -19,7 +19,7 @@
   class="list-item"
   class:selected
   data-user-context-id={row.userContextId}
-  onclick={() => onactivate?.(row)}
+  onclick={() => onactivate?.(index)}
 >
   {#if row.iconUrl}
     <span

@@ -5,7 +5,7 @@
   type Props = {
     rows: ProfileRow[];
     selectedIndex?: number;
-    onactivate?: (row: ProfileRow) => void;
+    onactivate?: (index: number) => void;
   };
 
   let { rows, selectedIndex = -1, onactivate }: Props = $props();

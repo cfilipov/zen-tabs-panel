@@ -7,7 +7,7 @@
     index?: number;
     selectedIndex?: number;
     badge?: string | null;
-    onactivate?: (row: WorkspaceRow, switchToTarget?: boolean) => void;
+    onactivate?: (index: number, switchToTarget?: boolean) => void;
   };
 
   let { row, index = -1, selectedIndex = -1, badge = null, onactivate }: Props = $props();
@@ -22,7 +22,7 @@
   data-workspace-id={row.uuid}
   disabled={row.isActive}
   onclick={(event) => {
-    if (!row.isActive) onactivate?.(row, event.shiftKey);
+    if (!row.isActive) onactivate?.(index, event.shiftKey);
   }}
 >
   {#if row.svgContent}

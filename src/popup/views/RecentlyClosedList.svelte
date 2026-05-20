@@ -5,7 +5,7 @@
   type Props = {
     rows: RecentlyClosedRow[];
     selectedIndex?: number;
-    onactivate?: (row: RecentlyClosedRow) => void;
+    onactivate?: (index: number) => void;
     onrestore?: (row: RecentlyClosedRow) => void;
   };
 

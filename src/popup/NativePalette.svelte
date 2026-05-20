@@ -58,9 +58,9 @@
     canRestoreInView,
     isWorkspaceFilterView,
   } from "./interaction/view-capabilities";
-  import { createContainerClient, type ContainerRow } from "./runtime/container-client";
+  import { createContainerClient } from "./runtime/container-client";
   import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
-  import { createFolderClient, type FolderRow } from "./runtime/folder-client";
+  import { createFolderClient } from "./runtime/folder-client";
   import { createHistoryClient, type RecentlyClosedRow } from "./runtime/history-client";
   import { createNativePaletteLoaders } from "./runtime/native-palette-loaders";
   import { createNativePalettePanelController, usesFitContentHeight } from "./runtime/native-palette-panel";
@@ -72,7 +72,7 @@
     snapshotKeyEvent,
   } from "./runtime/palette-dom";
   import { createPaletteRevealController } from "./runtime/palette-reveal";
-  import { createProfileClient, type ProfileRow } from "./runtime/profile-client";
+  import { createProfileClient } from "./runtime/profile-client";
   import { createTabInfoClient } from "./runtime/tab-info-client";
   import { createViewLoadController } from "./runtime/view-load-controller";
   import {
@@ -80,7 +80,7 @@
     type DomainIndexRow,
     type TabIndexRow,
   } from "./runtime/tab-index-client";
-  import { createWorkspaceClient, type WorkspaceRow } from "./runtime/workspace-client";
+  import { createWorkspaceClient } from "./runtime/workspace-client";
   import type { NativeListRow } from "./view-loaders/list-loader";
   import {
     isNativeListView,
@@ -455,56 +455,6 @@
     if (!keepOpen) markTerminalCommandDispatched();
     if (!keepOpen) revealController.clear();
     effects.restoreClosedTab(row.sessionId, keepOpen);
-  }
-
-  function restoreClosedTabWithTrace(row: RecentlyClosedRow) {
-    traceReplayForRowIndex(palette.recentlyClosedRows, row);
-    restoreClosedTab(row);
-  }
-
-  function moveToWorkspace(row: WorkspaceRow, switchToTarget = false) {
-    markTerminalCommandDispatched();
-    revealController.clear();
-    effects.moveSelectedTabsToWorkspace(row.uuid, switchToTarget);
-  }
-
-  function moveToWorkspaceWithTrace(row: WorkspaceRow, switchToTarget = false) {
-    traceReplayForRowIndex(palette.workspaceRows, row, switchToTarget);
-    moveToWorkspace(row, switchToTarget);
-  }
-
-  function reopenInContainer(row: ContainerRow) {
-    markTerminalCommandDispatched();
-    revealController.clear();
-    effects.reopenInContainer(row.userContextId);
-  }
-
-  function reopenInContainerWithTrace(row: ContainerRow) {
-    traceReplayForRowIndex(palette.containerRows, row);
-    reopenInContainer(row);
-  }
-
-  function moveToFolder(row: FolderRow, switchToTarget = false) {
-    markTerminalCommandDispatched();
-    revealController.clear();
-    effects.moveTabToFolder(row.id, switchToTarget);
-  }
-
-  function moveToFolderWithTrace(row: FolderRow, switchToTarget = false) {
-    traceReplayForRowIndex(palette.folderRows, row, switchToTarget);
-    moveToFolder(row, switchToTarget);
-  }
-
-  function launchProfile(row: ProfileRow) {
-    if (row.isCurrent) return;
-    markTerminalCommandDispatched();
-    revealController.clear();
-    effects.launchProfile(row.name);
-  }
-
-  function launchProfileWithTrace(row: ProfileRow) {
-    traceReplayForRowIndex(palette.profileRows, row);
-    launchProfile(row);
   }
 
   function switchWorkspace(workspaceId: string) {
@@ -1080,12 +1030,8 @@
     {previewTabLike}
     {clearPreview}
     {navigateToHistoryIndexWithTrace}
-    {restoreClosedTabWithTrace}
+    {activateRow}
     restoreClosedTabKeepOpen={(row) => restoreClosedTab(row, true)}
-    {moveToWorkspaceWithTrace}
-    {reopenInContainerWithTrace}
-    {moveToFolderWithTrace}
-    {launchProfileWithTrace}
     {activateTab}
     {closeDuplicateTab}
     {closeDuplicatePromptTab}

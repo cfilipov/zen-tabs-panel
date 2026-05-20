@@ -7,7 +7,7 @@
     rows: FolderRow[];
     workspaces?: WorkspaceRow[];
     selectedIndex?: number;
-    onactivate?: (row: FolderRow, switchToTarget?: boolean) => void;
+    onactivate?: (index: number, switchToTarget?: boolean) => void;
   };
 
   let { rows, workspaces = [], selectedIndex = -1, onactivate }: Props = $props();

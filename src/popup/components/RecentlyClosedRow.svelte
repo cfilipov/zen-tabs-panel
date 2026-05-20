@@ -9,7 +9,7 @@
     index?: number;
     selectedIndex?: number;
     badge?: string | null;
-    onactivate?: (row: RecentlyClosedRow) => void;
+    onactivate?: (index: number) => void;
     onrestore?: (row: RecentlyClosedRow) => void;
   };
 
@@ -21,7 +21,7 @@
   function activateFromKeyboard(event: KeyboardEvent) {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    onactivate?.(row);
+    onactivate?.(index);
   }
 
   function restoreFromKeyboard(event: KeyboardEvent) {
@@ -38,7 +38,7 @@
   class="list-item tab-list-row"
   class:selected
   data-session-id={row.sessionId}
-  onclick={() => onactivate?.(row)}
+  onclick={() => onactivate?.(index)}
   onkeydown={activateFromKeyboard}
 >
   {#if row.favIconUrl}

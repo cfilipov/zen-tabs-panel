@@ -8,7 +8,7 @@
     index?: number;
     selectedIndex?: number;
     badge?: string | null;
-    onactivate?: (row: ProfileRow) => void;
+    onactivate?: (index: number) => void;
   };
 
   let { row, index = -1, selectedIndex = -1, badge = null, onactivate }: Props = $props();
@@ -25,7 +25,7 @@
   aria-disabled={row.isCurrent}
   data-profile-name={row.name}
   onclick={() => {
-    if (!row.isCurrent) onactivate?.(row);
+    if (!row.isCurrent) onactivate?.(index);
   }}
 >
   <span class="item-icon-placeholder">{@html iconHtml("svg:user")}</span>
