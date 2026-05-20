@@ -212,7 +212,7 @@ describe("chord-session replay recording", () => {
     expect(() => session.observeLegacyState({
       bridge: { active: true, popupReady: false },
       overlay: { visibility: "hidden" },
-      engine: { armed: true, path: [] },
+      traversal: { armed: true, path: [] },
     }, "unit-test")).toThrow("[ChordSession] state mismatch");
   });
 
@@ -225,7 +225,7 @@ describe("chord-session replay recording", () => {
     expect(() => session.observeLegacyState({
       bridge: { active: true, popupReady: true },
       overlay: { visibility: "visible", pendingReveal: true },
-      engine: { armed: true, path: [] },
+      traversal: { armed: true, path: [] },
     }, "unit-test")).not.toThrow();
   });
 

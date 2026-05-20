@@ -2819,7 +2819,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         replay: chordSession ? chordSession.getReplayState() : null,
         session: chordSession ? chordSession.getStateSnapshot() : null,
         traversal: chordTraversalState,
-        engine: chordTraversalState,
         arm: {
           lastLeaderArmAt,
           chordArmSequence,
@@ -5642,8 +5641,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
           try {
             const outerWindowID = tab.linkedBrowser?.outerWindowID;
             if (outerWindowID) {
-              const info = await ChromeUtils.requestProcInfo();
-              for (const child of info.children) {
+              const procInfo = ChromeUtils.requestProcInfo();
+              const timeout = new Promise((resolve) => {
+                try { w.setTimeout(() => resolve(null), 750); } catch (e) { resolve(null); }
+              });
+              const info = await Promise.race([procInfo, timeout]);
+              for (const child of (info?.children || [])) {
                 for (const win of (child.windows || [])) {
                   if (win.outerWindowId === outerWindowID) {
                     memory = child.memory;

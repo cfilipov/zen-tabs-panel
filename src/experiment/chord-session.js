@@ -102,7 +102,7 @@
       if (!snapshot) return "idle";
       const bridge = snapshot.bridge || {};
       const overlay = snapshot.overlay || {};
-      const traversal = snapshot.traversal || snapshot.engine || {};
+      const traversal = snapshot.traversal || {};
       if (bridge.active && !bridge.popupReady) return "bridging-buffering";
       if (bridge.active && bridge.popupReady && overlay.pendingReveal) return "bridging-live";
       if (bridge.active && bridge.popupReady && overlay.visibility !== "visible") return "bridging-live";
