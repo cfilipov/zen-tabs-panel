@@ -1013,6 +1013,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // bridge — exit-bridge must be sent to it (and only it) when popup
     // drains. "chrome" or "content"; null when no bridge active.
     let bridgingEngineKind = null;
+    let activeBridgeView = null;
     // ChordSession owns replay state. During Track A Phase 1 the existing
     // chrome/content chord engines still traverse the tree; they report their
     // interpreted outcomes through chordSession.acceptEngineEvent().
@@ -2837,6 +2838,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           revealTimerActive: revealTimer != null,
           popupReady,
           bridgingEngineKind,
+          activeBridgeView,
           revealBlocked,
           revealDeferred,
         },
@@ -3074,6 +3076,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       bridgeBuffer = [];
       void stateSnapshot;
       bridgingEngineKind = kind;
+      activeBridgeView = view || "actions";
       popupReady = false;
       if (chordSession) chordSession.transition("bridging-buffering", "enterBridgeFromOpenView", { view, kind, source });
       observeChordSession("enterBridgeFromOpenView");
@@ -3228,6 +3231,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // background before the popup's synthetic replay trace. Matching
       // synthetic events for pre-tracked keys are ignored by ChordSession.
       trackChordBridgeKey(Object.assign({}, keyData, { __pretraced: true }));
+      if (tryHandleChromeOwnedBridgeKey(keyData)) return;
       //
       // Any chord key after the initial leader means the user is committed
       // to a chord chain — kill chrome's reveal timer so the menu doesn't
@@ -3275,8 +3279,37 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Compatibility for stale pre-shim content engines.
       try { Services.mm.broadcastAsyncMessage("ZenChord:ExitBridge"); } catch (e) {}
       bridgingEngineKind = null;
+      activeBridgeView = null;
       if (chordSession) chordSession.transition("idle", "finishBridge");
       observeChordSession("finishBridge");
+    }
+
+    function rowIndexFromDigitKey(keyData) {
+      if (!keyData || keyData.shiftKey) return null;
+      const raw = String(keyData.key || "");
+      if (!/^[1-9]$/.test(raw)) return null;
+      return Number.parseInt(raw, 10) - 1;
+    }
+
+    function tryHandleChromeOwnedBridgeKey(keyData) {
+      if (activeBridgeView !== "last-visited") return false;
+      const rowIndex = rowIndexFromDigitKey(keyData);
+      if (rowIndex == null) return false;
+      try {
+        tabIndex.start();
+        const win = tabIndex.getWindow("last-visited", 0, rowIndex + 1, {});
+        const row = win && Array.isArray(win.rows) ? win.rows[rowIndex] : null;
+        if (!row || !row.domId) return false;
+        chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
+        void (async () => {
+          destroyOverlay();
+          const tab = findTabByDomId(row.domId);
+          if (tab) await activateNativeTab(tab);
+        })();
+        return true;
+      } catch (e) {
+        return false;
+      }
     }
 
     // ---- Chrome engine instance ----------------------------------------
