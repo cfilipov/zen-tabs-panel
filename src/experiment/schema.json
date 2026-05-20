@@ -494,7 +494,7 @@
         "name": "showPalette",
         "type": "function",
         "async": true,
-        "description": "Toggle the command palette overlay. Without args, arms the chord engine until the configured chord delay elapses, then opens the main menu on timeout. Pass a view name string or {view, skipChord} object to open immediately. Returns a discriminated object: {kind:'opened'|'closed'|'chord-action'|'chord-cancelled', actionId?: string}.",
+        "description": "Toggle the command palette overlay. Without args, arms ChordSession and the key-capture shims until the configured chord delay elapses, then opens the main menu on timeout. Pass a view name string or {view, skipChord} object to open immediately. Returns a discriminated object: {kind:'opened'|'closed'|'chord-action'|'chord-cancelled', actionId?: string}.",
         "parameters": [
           { "name": "viewOrOpts", "type": "any", "optional": true }
         ]
@@ -571,7 +571,7 @@
         "name": "replayLastChord",
         "type": "function",
         "async": true,
-        "description": "Re-fire the last engine-fired chord chain. Returns true if a chord was replayed; false if nothing has fired this session.",
+        "description": "Re-fire the last ChordSession-recorded chord chain. Returns true if a chord was replayed; false if nothing has fired this session.",
         "parameters": []
       },
       {
@@ -605,7 +605,7 @@
         "name": "armChord",
         "type": "function",
         "async": true,
-        "description": "Force-arm the chord engines from an external trigger (e.g. user-customized commands shortcut). Chrome engine arms locally; the selected tab's content engine arms via a targeted message.",
+        "description": "Force-arm ChordSession and the key-capture shims from an external trigger (e.g. user-customized commands shortcut). The chrome shim arms locally; the selected tab's content shim arms via a targeted message.",
         "parameters": []
       },
       {

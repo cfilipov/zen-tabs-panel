@@ -2853,7 +2853,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Rearm-and-reveal helper. The warm popup is already mounted, so this
     // resolves to a rearm to the requested view followed by an immediate
     // reveal. Used by paths that bypass the chord-wait reveal timer
-    // (toolbar-icon clicks, engine root/prefix timeout when prerender
+    // (toolbar-icon clicks, ChordSession root/prefix timeout when prerender
     // is at the wrong view, etc.).
     function openOverlayWithView(view) {
       createOverlay(view || null, null);
@@ -3097,7 +3097,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       if (source === "timeout") {
         // User-paused open: reveal at the requested view. Reuse the
-        // prerender if it already matches — engine root timer (no
+        // prerender if it already matches — ChordSession root timer (no
         // requestedView, prerender is at actions) or prefix timer
         // (requestedView equals the prefix's onTimeout view, which
         // prerenderPrefixView swapped to on descent). Otherwise
@@ -3231,7 +3231,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // forwards typed key data into the Svelte bridge module. Before
     // POPUP_READY, queue in bridgeState.buffer (drained on POPUP_READY).
     function forwardKeyToPopup(keyData) {
-      // Pre-track engine/chrome-forwarded bridge keys so replay traces
+      // Pre-track ChordSession/chrome-forwarded bridge keys so replay traces
       // commit deterministically even if the terminal popup action reaches
       // background before the popup's synthetic replay trace. Matching
       // synthetic events for pre-tracked keys are ignored by ChordSession.
@@ -3820,7 +3820,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  forwardKey: function(k){ try { sendAsyncMessage('ZenChord:Key:' + __GEN, tag(k)); } catch(e){} },\n" +
         "});\n" +
         "var __shutdown = false;\n" +
-        // Default-group capture listener. The system-group engine listener
+        // Default-group capture listener. The system-group shim listener
         // alone can't suppress custom page handlers (e.g. Reddit's bare-q
         // sidebar toggle): system-group preventDefault stops the default
         // browser action (character insertion) but doesn't reach
@@ -3829,7 +3829,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // default-group capture so it fires before any page listener on
         // document/body/etc.; stopPropagation here keeps the event from
         // reaching those inner nodes. Same-node system-group listeners
-        // (our engine) still fire — propagation-stop only blocks travel
+        // (our shim) still fire — propagation-stop only blocks travel
         // to OTHER nodes, not other listeners on the same node.
         "function blockDefaultGroup(e){\n" +
         "  if (__shutdown) return;\n" +
@@ -3899,7 +3899,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    // the content chord shim; otherwise cmd+.,p leaks there and the\n" +
         "    // root timer only opens the main menu.\n" +
         "    // The same remote browser can be reused after a regular page, so also\n" +
-        "    // detach any blocker/engine left from the prior document.\n" +
+        "    // detach any blocker/shim left from the prior document.\n" +
         "    if (isOverlayBrowser()) { try { __shim.disarm('overlay'); __shim.detach(); } catch(_) {} return; }\n" +
         "    __shim.attach(content);\n" +
         "    // Detach-then-attach the default-group blocker so duplicate\n" +

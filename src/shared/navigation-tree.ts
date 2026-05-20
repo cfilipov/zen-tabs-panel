@@ -6,7 +6,7 @@
 //
 // Hotkey notation:
 //   "P"        bare key
-//   "Shift+T"  shifted form — the chord engine matches this exact form
+//   "Shift+T"  shifted form — ChordSession matches this exact form
 //              (popup converts to "⇧T" only at display time)
 //   ","        literal punctuation
 //

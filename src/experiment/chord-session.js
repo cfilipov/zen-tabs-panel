@@ -102,14 +102,14 @@
       if (!snapshot) return "idle";
       const bridge = snapshot.bridge || {};
       const overlay = snapshot.overlay || {};
-      const engine = snapshot.engine || {};
+      const traversal = snapshot.traversal || snapshot.engine || {};
       if (bridge.active && !bridge.popupReady) return "bridging-buffering";
       if (bridge.active && bridge.popupReady && overlay.pendingReveal) return "bridging-live";
       if (bridge.active && bridge.popupReady && overlay.visibility !== "visible") return "bridging-live";
-      if (bridge.revealBlocked && !bridge.active && !engine.armed) return "idle";
+      if (bridge.revealBlocked && !bridge.active && !traversal.armed) return "idle";
       if (overlay.visibility === "visible" && !overlay.pendingReveal) return "visible";
-      if (engine.armed && Array.isArray(engine.path) && engine.path.length > 0) return "armed-prefix";
-      if (engine.armed) return "armed-root";
+      if (traversal.armed && Array.isArray(traversal.path) && traversal.path.length > 0) return "armed-prefix";
+      if (traversal.armed) return "armed-root";
       return "idle";
     }
 
@@ -192,7 +192,7 @@
       // ChordSession-fired chord actions (cmd+.,p, cmd+.,w,n, ...) commit via
       // trackTerminalAction at chord-fire time, then the action routes
       // through bg's runChordAction -> recordChordAction -> here for the
-      // same action. Without this skip we'd overwrite the engine's
+      // same action. Without this skip we'd overwrite the chord trace's
       // kind:"action" record with kind:"action-msg".
       if (lastChordReplay && lastChordReplay.kind === "action" && lastChordReplay.actionId === message.type) {
         currentChordReplay = null;
