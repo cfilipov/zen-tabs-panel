@@ -3077,14 +3077,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
     //     chording (more digits / drilling), the timer resets each key
     //     and UI never shows. If they pause, the timer fires and the
     //     popup is revealed at its current state.
-    function enterBridgeFromOpenView(view, stateSnapshot, kind, source) {
-      // Dual-engine race: chrome + content engines arm in parallel for
-      // each chord arm and both run independent timers. When both fire
-      // for the same open-view (typically cmd+. + pause: each engine's
-      // root timer pops at the configured chord delay), the first one through
-      // this function wins. The second's IPC arrives slightly later — silently drop it
-      // so we don't destroy-and-recreate the just-revealed popup or
-      // double-fire the reveal animation.
+    function enterBridgeFromOpenView(view, _stateSnapshot, kind, source) {
+      // Stale pre-shim content engines can still emit old open-view IPC after
+      // an extension reload. The first bridge wins; later bridge opens are
+      // ignored so they cannot destroy/recreate the live popup.
       if (activeBridgeView != null) return;
 
       // Source="match" is a user-typed chord-key (cmd+.,r, etc.) — the
@@ -3095,7 +3091,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (source === "match") trackChordOpenView(view);
 
       bridgeBuffer = [];
-      void stateSnapshot;
       activeBridgeView = view || "actions";
       popupReady = false;
       if (chordSession) chordSession.transition("bridging-buffering", "enterBridgeFromOpenView", { view, kind, source });
@@ -5778,16 +5773,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // ZenChord:DeliverKey messages. The bridge itself stays alive
         // for the rest of the chord chain.
         //
-        // Returns { buffered, stateSnapshot } — the popup replays the
-        // buffered keys via dispatchKey before processing live input.
-        // stateSnapshot is a legacy empty array kept for popup API
-        // compatibility; the popup no longer consumes chrome engine paths.
+        // Returns { buffered } — the popup replays the buffered keys via
+        // dispatchKey before processing live input.
         async takeChordBridgeBuffer(inst) {
           // Stale POPUP_READY from a popup we've since destroyed (prerender
           // swap during a chord chain). Ignore it — otherwise we drain the
           // bridge buffer that the live popup is waiting for.
           if (typeof inst === "number" && inst !== popupInstance) {
-            return { buffered: [], stateSnapshot: [], stale: true };
+            return { buffered: [], stale: true };
           }
           // Warm popup may send POPUP_READY when no bridge is active (initial
           // pre-create, or rearm-without-chord-key-yet). Treat that as
@@ -5845,7 +5838,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const replyView = readyView !== "actions" ? readyView : null;
           return {
             buffered: drained,
-            stateSnapshot: [],
             view: replyView,
             armRevealTimer: wasBridging || drained.length > 0,
           };

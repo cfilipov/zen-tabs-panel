@@ -503,7 +503,7 @@
         "name": "takeChordBridgeBuffer",
         "type": "function",
         "async": true,
-        "description": "Drain the chord-bridge buffer (keys captured during the brief gap between a chord engine firing open-view and the popup's keyboard listener attaching) and release the bridge. The popup calls this on init to replay buffered keys before processing live input. Returns { buffered, stateSnapshot } where buffered is the array of captured key descriptors {key, code, shiftKey, altKey, ctrlKey, metaKey} and stateSnapshot is a legacy empty array kept for popup API compatibility.",
+        "description": "Drain the chord-bridge buffer (keys captured during the brief gap between a chord open-view transition and the popup's keyboard listener attaching) and release the bridge. The popup calls this on init to replay buffered keys before processing live input. Returns { buffered } where buffered is the array of captured key descriptors {key, code, shiftKey, altKey, ctrlKey, metaKey}.",
         "parameters": [
           { "name": "inst", "type": "any", "optional": true }
         ]
