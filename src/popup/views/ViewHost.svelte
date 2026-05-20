@@ -15,7 +15,6 @@
   import WorkspaceList from "./WorkspaceList.svelte";
   import type { ActionMenuItem, ActionSection } from "./actions-model";
   import type { DuplicatePromptAction } from "../interaction/duplicate-prompt-options";
-  import type { ExtensionRow } from "../runtime/extension-client";
   import type { HistoryVisit, TabInfo } from "../runtime/tab-info-client";
   import type { DomainIndexRow, DuplicateGroupRow, TabIndexRow } from "../runtime/tab-index-client";
   import type { NativePaletteState } from "../store/native-palette-state.svelte";
@@ -32,7 +31,7 @@
     selectedDomain: string | null;
     activeWorkspaceId: string | null;
     activateAction: (item: ActionMenuItem) => void | Promise<void>;
-    openExtensionPopup: (extension: ExtensionRow) => void;
+    openExtensionPopup: (index: number) => void | Promise<void>;
     previewTabLike: (row: { domId: string }) => void;
     clearPreview: () => void;
     activateRenderedRow: (index: number, switchToTarget?: boolean) => void | Promise<void>;

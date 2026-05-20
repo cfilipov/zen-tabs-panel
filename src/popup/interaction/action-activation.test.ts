@@ -21,6 +21,7 @@ describe("action item activation", () => {
     expect(resolveActionItemActivation(item({
       kind: "workspace-switch",
       workspaceId: "ws-1",
+      workspaceIndex: 0,
       disabled: true,
     }))).toEqual({ kind: "none" });
   });
@@ -35,8 +36,8 @@ describe("action item activation", () => {
     expect(resolveActionItemActivation(item({ kind: "prefix", view: "reorder-tabs", isView: true })))
       .toEqual({ kind: "open-view", view: "reorder-tabs" });
 
-    expect(resolveActionItemActivation(item({ kind: "workspace-switch", workspaceId: "ws-1" })))
-      .toEqual({ kind: "switch-workspace", workspaceId: "ws-1" });
+    expect(resolveActionItemActivation(item({ kind: "workspace-switch", workspaceId: "ws-1", workspaceIndex: 0 })))
+      .toEqual({ kind: "switch-workspace-index", index: 0 });
   });
 
   it("returns none for incomplete workspace or view items", () => {

@@ -13,7 +13,7 @@
     workspaces?: WorkspaceRow[];
     skipAnimations?: boolean;
     onactivate?: (item: ActionMenuItem) => void;
-    onextension?: (extension: ExtensionRow) => void;
+    onextension?: (index: number) => void;
     onpreview?: (domId: string) => void;
     onclearpreview?: () => void;
   };

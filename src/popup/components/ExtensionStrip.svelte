@@ -4,7 +4,7 @@
 
   type Props = {
     extensions?: ExtensionRow[];
-    onactivate?: (extension: ExtensionRow) => void;
+    onactivate?: (index: number) => void;
   };
 
   let { extensions = [], onactivate }: Props = $props();
@@ -18,7 +18,7 @@
         class="extension-icon-button"
         title={extension.name}
         data-extension-id={extension.id}
-        onclick={() => onactivate?.(extension)}
+        onclick={() => onactivate?.(index)}
       >
         <span class="extension-icon-wrap">
           {#if extension.iconDataUrl}

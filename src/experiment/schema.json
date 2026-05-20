@@ -873,6 +873,24 @@
         ]
       },
       {
+        "name": "openExtensionPopupByIndex",
+        "type": "function",
+        "async": true,
+        "description": "Open the extension popup at the given chrome-owned list index.",
+        "parameters": [
+          { "name": "index", "type": "integer" }
+        ]
+      },
+      {
+        "name": "switchWorkspaceByIndex",
+        "type": "function",
+        "async": true,
+        "description": "Switch to the workspace at the given chrome-owned workspace list index.",
+        "parameters": [
+          { "name": "index", "type": "integer" }
+        ]
+      },
+      {
         "name": "setExtensionPopupIntercept",
         "type": "function",
         "async": true,

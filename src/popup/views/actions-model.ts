@@ -23,6 +23,7 @@ export type ActionMenuItem = {
   kind: "action" | "open-view" | "prefix" | "workspace-switch";
   view?: string;
   workspaceId?: string;
+  workspaceIndex?: number;
   workspaceIconHtml?: string;
   count?: number;
   label: string;
@@ -153,6 +154,7 @@ export function appendWorkspaceSwitchItems(
       id: `workspace-switch:${workspace.uuid}`,
       kind: "workspace-switch",
       workspaceId: workspace.uuid,
+      workspaceIndex: index,
       workspaceIconHtml: workspace.svgContent,
       label: workspace.name,
       hotkey: index < 9 ? String(index + 1) : "",

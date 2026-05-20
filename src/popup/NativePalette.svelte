@@ -59,7 +59,7 @@
     isWorkspaceFilterView,
   } from "./interaction/view-capabilities";
   import { createContainerClient } from "./runtime/container-client";
-  import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
+  import { createExtensionClient } from "./runtime/extension-client";
   import { createFolderClient } from "./runtime/folder-client";
   import { createHistoryClient, type RecentlyClosedRow } from "./runtime/history-client";
   import { createNativePaletteLoaders } from "./runtime/native-palette-loaders";
@@ -386,9 +386,9 @@
       effects.runAction(activation.actionId);
       return;
     }
-    if (activation.kind === "switch-workspace") {
+    if (activation.kind === "switch-workspace-index") {
       markTerminalCommandDispatched();
-      switchWorkspace(activation.workspaceId);
+      await switchWorkspaceByIndex(activation.index);
       return;
     }
     if (activation.kind === "open-view") {
@@ -404,8 +404,8 @@
   async function activateAction(item: ActionMenuItem) {
     const activation = resolveActionItemActivation(item);
     if (activation.kind === "none") return;
-    if (activation.kind === "switch-workspace") {
-      switchWorkspace(activation.workspaceId);
+    if (activation.kind === "switch-workspace-index") {
+      await switchWorkspaceByIndex(activation.index);
       return;
     }
 
@@ -517,28 +517,16 @@
     }
   }
 
-  function switchWorkspace(workspaceId: string) {
+  async function switchWorkspaceByIndex(index: number) {
     markTerminalCommandDispatched();
     revealController.clear();
-    effects.switchWorkspace(workspaceId);
+    await effects.switchWorkspaceByIndex(index);
   }
 
-  function openExtensionPopup(extension: ExtensionRow) {
+  async function openExtensionByIndex(index: number) {
     markTerminalCommandDispatched();
     revealController.clear();
-    effects.openExtensionPopup(extension.id);
-  }
-
-  function switchWorkspaceByIndex(index: number) {
-    const workspace = palette.actionsWorkspaces[index];
-    if (!workspace || workspace.isActive) return;
-    switchWorkspace(workspace.uuid);
-  }
-
-  function openExtensionByIndex(index: number) {
-    const extension = palette.actionExtensions[index];
-    if (!extension) return;
-    openExtensionPopup(extension);
+    await effects.openExtensionPopupByIndex(index);
   }
 
   function closeDuplicateTab(row: TabIndexRow) {
@@ -1104,7 +1092,7 @@
     {selectedDomain}
     {activeWorkspaceId}
     {activateAction}
-    {openExtensionPopup}
+    openExtensionPopup={openExtensionByIndex}
     {previewTabLike}
     {clearPreview}
     {activateRenderedRow}

@@ -66,6 +66,7 @@ this.MSG = Object.freeze({
   COPY_URL_MARKDOWN:              "copy-url-markdown",
   RESTORE_LAST_CLOSED_TAB:        "restore-last-closed-tab",
   RESTORE_CLOSED_TAB:             "restore-closed-tab",
+  RESTORE_CLOSED_TAB_BY_INDEX:    "restore-closed-tab-by-index",
   RESTORE_CLOSED_TAB_KEEP_OPEN:   "restore-closed-tab-keep-open",
   NAVIGATE_TO_HISTORY_INDEX:      "navigate-to-history-index",
 
@@ -84,6 +85,7 @@ this.MSG = Object.freeze({
   GO_TO_NEXT_WORKSPACE:           "go-to-next-workspace",
   GO_TO_PREV_WORKSPACE:           "go-to-prev-workspace",
   SWITCH_WORKSPACE:               "switch-workspace",
+  SWITCH_WORKSPACE_BY_INDEX:      "switch-workspace-by-index",
   MOVE_SELECTED_TABS_TO_WORKSPACE: "move-selected-tabs-to-workspace",
 
   // Split view
@@ -159,6 +161,7 @@ this.MSG = Object.freeze({
   // Foreign extension popup hosting
   LIST_EXTENSIONS:                "list-extensions",
   OPEN_EXTENSION_POPUP:           "open-extension-popup",
+  OPEN_EXTENSION_POPUP_BY_INDEX:  "open-extension-popup-by-index",
 
   // Chord -> popup key bridge: popup sends this once its keydown listener is
   // attached; background replies with the array of keys ChordSession buffered

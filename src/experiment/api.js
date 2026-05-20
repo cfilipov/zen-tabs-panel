@@ -1539,7 +1539,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         extensionListCache = await buildExtensionList();
       }
       const found = extensionListCache.find((x) => x.id === extensionId);
-      if (!found) return;
+      if (!found) return false;
       const popupUrl = getBrowserActionPopupUrl(extensionId) || found.popupUrl;
       if (!isOverlayOpen()) {
         openOverlayWithView(null);
@@ -1548,6 +1548,34 @@ this.zenWorkspaces = class extends ExtensionAPI {
       currentViewName = "extension-popup";
       currentViewParams = { popupUrl, extensionId };
       morphToView("extension-popup", { popupUrl, extensionId });
+      return true;
+    }
+
+    async function openExtensionPopupByIndexInternal(index) {
+      const rowIndex = Number(index);
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) return false;
+      if (!extensionListCache) {
+        extensionListCache = await buildExtensionList();
+      }
+      const found = extensionListCache[rowIndex];
+      if (!found?.id) return false;
+      return openExtensionPopupInternal(found.id);
+    }
+
+    function switchWorkspaceByIndexInternal(index) {
+      const rowIndex = Number(index);
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) return false;
+      const w = getWin();
+      if (!w?.gZenWorkspaces) return false;
+      const list = w.gZenWorkspaces.getWorkspaces();
+      const workspace = Array.isArray(list) ? list[rowIndex] : null;
+      if (!workspace?.uuid || workspace.uuid === w.gZenWorkspaces.activeWorkspace) return false;
+      try {
+        w.gZenWorkspaces.changeWorkspaceWithID(workspace.uuid);
+        return true;
+      } catch (err) {
+        return false;
+      }
     }
 
     // -----------------------------------------------------------------------
@@ -3059,14 +3087,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return;
       }
       if (payload.type === "switch-workspace") {
-        const w = getWin();
-        if (w?.gZenWorkspaces) {
-          const list = w.gZenWorkspaces.getWorkspaces();
-          const ws = Array.isArray(list) ? list[payload.index] : null;
-          if (ws?.uuid) {
-            try { w.gZenWorkspaces.changeWorkspaceWithID(ws.uuid); } catch (err) {}
-          }
-        }
+        switchWorkspaceByIndexInternal(payload.index);
         return;
       }
       if (payload.type === "open-extension-popup") {
@@ -3451,7 +3472,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
         if (view === "recently-closed") {
           if (!paletteRequestFire) return false;
-          chordSession.recordEvent({ kind: "popup-action", message: { type: "restore-recently-closed-by-index", index: rowIndex } });
+          chordSession.recordEvent({ kind: "popup-action", message: { type: MSG.RESTORE_CLOSED_TAB_BY_INDEX, index: rowIndex } });
           if (destroy) destroyOverlay();
           paletteRequestFire.async({
             kind: "restore-recently-closed-index",
@@ -6137,7 +6158,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // the overlay first if it isn't already open so the chord
         // shortcut path can use the same entry point.
         async openExtensionPopup(extensionId) {
-          await openExtensionPopupInternal(extensionId);
+          return openExtensionPopupInternal(extensionId);
+        },
+
+        async openExtensionPopupByIndex(index) {
+          return openExtensionPopupByIndexInternal(index);
+        },
+
+        async switchWorkspaceByIndex(index) {
+          return switchWorkspaceByIndexInternal(index);
         },
 
         // Toggle the Services.ww.openWindow monkey-patch. Background.js

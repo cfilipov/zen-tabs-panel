@@ -86,11 +86,11 @@ export function createPaletteEffects() {
     launchProfile(name: string) {
       fireMessage({ type: "launch-profile", name });
     },
-    switchWorkspace(workspaceId: string) {
-      fireMessage({ type: "switch-workspace", workspaceId });
+    switchWorkspaceByIndex(index: number) {
+      return sendMessage<boolean>({ type: "switch-workspace-by-index", index });
     },
-    openExtensionPopup(extensionId: string) {
-      fireMessage({ type: "open-extension-popup", extensionId });
+    openExtensionPopupByIndex(index: number) {
+      return sendMessage<boolean>({ type: "open-extension-popup-by-index", index });
     },
     closeTab(domId: string) {
       fireMessage({ type: "close-tab", domId });

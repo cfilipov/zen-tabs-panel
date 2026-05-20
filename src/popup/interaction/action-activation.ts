@@ -7,13 +7,13 @@ export type ActionItemActivation =
   | { kind: "none" }
   | { kind: "fire-action"; actionId: ActionEffectId }
   | { kind: "open-view"; view: ViewId }
-  | { kind: "switch-workspace"; workspaceId: string };
+  | { kind: "switch-workspace-index"; index: number };
 
 export function resolveActionItemActivation(item: ActionMenuItem): ActionItemActivation {
   if (item.disabled) return { kind: "none" };
   if (item.kind === "workspace-switch") {
-    return item.workspaceId
-      ? { kind: "switch-workspace", workspaceId: item.workspaceId }
+    return typeof item.workspaceIndex === "number"
+      ? { kind: "switch-workspace-index", index: item.workspaceIndex }
       : { kind: "none" };
   }
   if (item.kind === "action") {

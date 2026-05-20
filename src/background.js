@@ -505,6 +505,7 @@ const ACTIONS = Object.freeze({
   [MSG.GO_TO_NEXT_VERTICAL_TAB]:          ()  => api.goToNextVerticalTab(),
   [MSG.GO_TO_PREV_VERTICAL_TAB]:          ()  => api.goToPrevVerticalTab(),
   [MSG.RESTORE_CLOSED_TAB]:               (m) => restoreClosedSession(m.sessionId),
+  [MSG.RESTORE_CLOSED_TAB_BY_INDEX]:      (m) => restoreRecentlyClosedByIndex(m.index, m.expectedRowId),
   [MSG.NAVIGATE_TO_HISTORY_INDEX]:        (m) => api.navigateToHistoryIndex(m.index),
   [MSG.SWITCH_WORKSPACE]:                 (m) => api.switchTo(m.workspaceId),
   [MSG.MOVE_SELECTED_TABS_TO_WORKSPACE]:  (m) => api.moveSelectedTabsToWorkspace(m.workspaceId, !!m.switchToTarget),
@@ -623,11 +624,20 @@ const SYNC_HANDLERS = Object.freeze({
     await api.focusPalette().catch(() => {});
   },
   [MSG.OPEN_EXTENSION_POPUP]: (m) => api.openExtensionPopup(m.extensionId),
+  [MSG.OPEN_EXTENSION_POPUP_BY_INDEX]: (m) => api.openExtensionPopupByIndex(m.index),
+  [MSG.SWITCH_WORKSPACE_BY_INDEX]: async (m) => {
+    const ok = await api.switchWorkspaceByIndex(m.index);
+    if (ok) {
+      recordChordAction(m);
+      await api.hidePalette();
+    }
+    return ok;
+  },
   [MSG.ACTIVATE_VIEW_ROW]: async (m) => {
     if (m.view === "recently-closed") {
       const ok = await restoreRecentlyClosedByIndex(m.index, m.expectedRowId);
       if (ok) {
-        recordChordAction({ type: "restore-recently-closed-by-index", index: m.index, expectedRowId: m.expectedRowId });
+        recordChordAction({ type: MSG.RESTORE_CLOSED_TAB_BY_INDEX, index: m.index, expectedRowId: m.expectedRowId });
         await api.hidePalette();
       }
       return ok;
