@@ -862,9 +862,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return COMPACT_MEASURED_VIEWS.has(view);
     }
 
-    // Chord core + capture shim. The chord tree is traversed once in chrome;
+    // Chord tree helpers + capture shim. The chord tree is traversed once in chrome;
     // chrome/content key listeners are capture-only shims that suppress
-    // local keydowns and forward normalized keys into that single traverser.
+    // local keydowns and forward normalized keys into ChordSession.
     const engineScope = {};
     Services.scriptloader.loadSubScript(
       context.extension.getURL("shared/keybindings.js"),
@@ -875,7 +875,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       engineScope
     );
     Services.scriptloader.loadSubScript(
-      context.extension.getURL("shared/chord-engine.js"),
+      context.extension.getURL("shared/chord-tree.js"),
       engineScope
     );
     Services.scriptloader.loadSubScript(
@@ -1519,7 +1519,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     // Open a foreign extension's popup, creating the overlay first if
     // needed. Both the in-palette icon click (via openExtensionPopup
-    // API method) and the chord-engine shortcut path route through here.
+    // API method) and the chord shortcut path route through here.
     async function openExtensionPopupInternal(extensionId) {
       if (!extensionListCache) {
         extensionListCache = await buildExtensionList();
@@ -2740,28 +2740,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     // -----------------------------------------------------------------------
-    // Chord engine wiring — dual autonomous instances
+    // Chord capture wiring — shims feed one chrome-side session
     // -----------------------------------------------------------------------
     //
-    // We instantiate the same shared/chord-engine.js state machine TWICE:
-    // once in this chrome process (handles keys delivered to chrome targets
-    // like the URL bar) and once per content process (handles keys
-    // delivered to content documents). Each engine has its own local state.
-    // Both are armed in parallel by armChord (a commands.onCommand for any
-    // of the open-palette shortcuts triggers it). When either engine fires
-    // a terminal/transition event, the other is reset via cross-process
-    // IPC so its stale root timer can't pop a menu after the action.
+    // Chrome and content each install a capture-only shim. Both are armed
+    // in parallel by armChord (a commands.onCommand for any open-palette
+    // shortcut triggers it). Whichever process sees the next plain key
+    // suppresses locally and forwards the normalized key to ChordSession,
+    // which is the only chord-tree traverser.
     //
     // Partitioning is by `e.target`:
-    //   - Chrome engine: filterEvent rejects events whose target is a
+    //   - Chrome shim: filterEvent rejects events whose target is a
     //     <browser> element (those are content's responsibility).
-    //   - Content engine: only sees keys delivered to its own document.
+    //   - Content shim: only sees keys delivered to its own document.
     //
-    // This dual-engine design preserves chord-from-URL-bar (chrome engine)
-    // and races NOWHERE for the leak case (content engine runs synchronously
-    // in the content process that's about to dispatch the keystroke to the
-    // editor). The leak comes from cross-process state projection; we no
-    // longer project state across the boundary, so there is no race.
+    // This preserves chord-from-URL-bar and fixes content key leaks without
+    // duplicating chord progression across processes.
     //
     // See CHORD_LEAK_HANDOFF.md for the full investigation log.
 
@@ -2903,7 +2897,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     // Dispatch a chord action coming from EITHER engine (chrome direct call
-    // or content via the ZenChord:Action IPC). Same routing either way —
+    // or content via stale pre-shim ZenChord:Action IPC). Same routing either way —
     // payload shape is { type: "action" | "switch-workspace" | "open-extension-popup", ...}.
 
     // The replay-last-chord action's id. Hoisted here because the
@@ -2925,8 +2919,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     chordSession = chordSessionScope.createChordSession({
       replayActionId: MSG_REPLAY_LAST_CHORD,
       replayRecordBlocklist: Array.from(REPLAY_RECORD_BLOCKLIST),
-      createChordEngine: engineScope.createChordEngine,
       chordTree: CHORD_TREE,
+      chordKeyFor: engineScope.chordKeyFor,
       constants: CHORD_CONSTANTS,
       setTimeoutFn: (fn, ms) => {
         const w = getWin();
@@ -3673,7 +3667,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  if (__shutdown) return;\n" +
         "  bridgeEvent('go-to-actions', {});\n" +
         "});\n" +
-        // The chord-engine path runs only on non-extension pages. The popup
+        // The chord-shim path runs only on non-extension pages. The popup
         // and foreign extension popups own their own keybindings.
         // Mutable constants object — chrome's setChordDelay broadcasts
         // ZenChord:SetDelay to mutate these at runtime.
@@ -4271,7 +4265,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       try { destroyOverlay({ hard: true }); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Shutdown"); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
-      // Remove every delayed chord-engine frame script we (or a prior
+      // Remove every delayed chord frame script we (or a prior
       // extension load) ever registered. Firefox doesn't unload frame
       // scripts from existing content processes, but at least we can
       // stop them from auto-loading into new ones. Without this, every

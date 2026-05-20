@@ -172,10 +172,8 @@ this.MSG = Object.freeze({
   REVEAL_PALETTE:                 "reveal-palette",
 });
 
-// Chord-engine timing constants. Defined here so the engine module
-// (shared/chord-engine.js) can read them from a single source whether it's
-// instantiated in chrome (loadSubScript), the per-content-process actor
-// child (loadSubScript), or the popup (<script>).
+// Chord timing constants. Defined here so chrome, the per-content-process
+// capture shim, and the popup agree on the same delay model.
 //
 //   CHORD_ROOT_TIMEOUT_MS   — after the engine arms (commands.onCommand for
 //                             an open-palette shortcut), how long to wait

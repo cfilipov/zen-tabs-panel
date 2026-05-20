@@ -1,8 +1,8 @@
 "use strict";
 
 // ChordSession is the chrome-side owner for chord progression, bridge state
-// diagnostics, and replay recording. It may host the single chrome chord-tree
-// traverser internally; per-process shims only capture and forward keys.
+// diagnostics, and replay recording. Per-process shims only capture and
+// forward keys.
 (function (scope) {
   function clonePlain(value) {
     if (value == null) return value;
@@ -31,7 +31,9 @@
     let currentChordReplay = null;
     let pretracedReplayKeys = [];
     const syntheticReplayEvents = [];
-    let engine = null;
+    let currentNode = options && options.chordTree;
+    let currentPath = [];
+    let chordTimer = null;
 
     function transition(to, why, data) {
       const from = state;
@@ -182,85 +184,164 @@
       }
     }
 
-    function ensureEngine() {
-      if (engine || !options || typeof options.createChordEngine !== "function") return engine;
-      engine = options.createChordEngine({
-        chordTree: options.chordTree,
-        constants: options.constants,
-        filterEvent: () => true,
-        setTimeoutFn: options.setTimeoutFn,
-        clearTimeoutFn: options.clearTimeoutFn,
-        onArmed: () => {
-          acceptEngineEvent({ kind: "armed" });
-          if (typeof options.onArmed === "function") options.onArmed();
-        },
-        onAction: (payload) => {
-          if (typeof options.onAction === "function") options.onAction(payload);
-        },
-        onOpenView: (view, snapshot, source) => {
-          if (typeof options.onOpenView === "function") options.onOpenView(view, snapshot, source);
-        },
-        onStateChange: (snapshot) => {
-          if (typeof options.onStateChange === "function") options.onStateChange(snapshot);
-        },
-        onCancel: () => {
-          if (typeof options.onCancel === "function") options.onCancel();
-        },
-        onBridgeKey: (keyData) => {
-          if (typeof options.onBridgeKey === "function") options.onBridgeKey(keyData);
-        },
-      });
-      return engine;
+    function clearChordTimer() {
+      if (chordTimer !== null && options && typeof options.clearTimeoutFn === "function") {
+        try { options.clearTimeoutFn(chordTimer); } catch (e) {}
+      }
+      chordTimer = null;
+    }
+
+    function setChordTimer(fn, ms) {
+      clearChordTimer();
+      if (!options || typeof options.setTimeoutFn !== "function") return;
+      chordTimer = options.setTimeoutFn(fn, ms);
+    }
+
+    function callOption(name /*, ...args */) {
+      const fn = options && options[name];
+      if (typeof fn !== "function") return;
+      try { fn.apply(null, Array.prototype.slice.call(arguments, 1)); } catch (e) {}
+    }
+
+    function resetTraversal(nextState) {
+      clearChordTimer();
+      currentNode = options && options.chordTree;
+      currentPath = [];
+      if (nextState) transition(nextState, "traversal-reset");
+    }
+
+    function rootTimeout() {
+      chordTimer = null;
+      const snapshot = currentPath.slice();
+      transition("bridging-buffering", "root-timeout", { snapshot });
+      callOption("onOpenView", null, snapshot, "timeout");
+    }
+
+    function prefixTimeout() {
+      chordTimer = null;
+      const snapshot = currentPath.slice();
+      const onTo = currentNode && currentNode.onTimeout;
+      const view = onTo && onTo.type === "open-view" ? onTo.view : null;
+      transition("bridging-buffering", "prefix-timeout", { view, snapshot });
+      callOption("onOpenView", view, snapshot, "timeout");
     }
 
     function arm() {
-      const e = ensureEngine();
-      if (e && typeof e.arm === "function") e.arm();
+      clearChordTimer();
+      currentNode = options && options.chordTree;
+      currentPath = [];
+      acceptEngineEvent({ kind: "armed" });
+      callOption("onArmed");
+      const constants = options && options.constants || {};
+      setChordTimer(rootTimeout, constants.CHORD_ROOT_TIMEOUT_MS || 500);
+    }
+
+    function descend(key, node) {
+      currentNode = node;
+      currentPath = currentPath.concat([key]);
+      transition("armed-prefix", "descend", { path: currentPath });
+      callOption("onStateChange", currentPath.slice());
+      const constants = options && options.constants || {};
+      setChordTimer(prefixTimeout, node.timeoutMs || constants.CHORD_PREFIX_TIMEOUT_MS || 500);
+    }
+
+    function cancelTraversal() {
+      const wasArmed = isEngineArmed();
+      resetTraversal("idle");
+      if (wasArmed) callOption("onCancel");
     }
 
     function handleKey(keyData) {
-      const e = ensureEngine();
-      if (!e || !keyData || keyData.kind !== "key") return;
-      e.handleKey({
-        key: keyData.key,
-        code: keyData.code,
-        shiftKey: !!keyData.shiftKey,
-        altKey: !!keyData.altKey,
-        ctrlKey: !!keyData.ctrlKey,
-        metaKey: !!keyData.metaKey,
-        isTrusted: keyData.isTrusted !== false,
-        timeStamp: keyData.shimTs,
-        target: keyData.target || null,
-        preventDefault: typeof keyData.preventDefault === "function" ? keyData.preventDefault : function () {},
-        stopPropagation: typeof keyData.stopPropagation === "function" ? keyData.stopPropagation : function () {},
-      });
+      if (!keyData || keyData.kind !== "key") return;
+      if (keyData.isTrusted === false) return;
+      if (keyData.key === "Meta" || keyData.key === "Control" || keyData.key === "Alt" || keyData.key === "Shift") return;
+      if (keyData.metaKey || keyData.ctrlKey || keyData.altKey) return;
+      if (!isEngineArmed()) return;
+
+      if (state === "bridging-buffering" || state === "bridging-live") {
+        try { if (typeof keyData.preventDefault === "function") keyData.preventDefault(); } catch (e) {}
+        try { if (typeof keyData.stopPropagation === "function") keyData.stopPropagation(); } catch (e) {}
+        callOption("onBridgeKey", {
+          key: keyData.key,
+          code: keyData.code,
+          shiftKey: !!keyData.shiftKey,
+          altKey: !!keyData.altKey,
+          ctrlKey: !!keyData.ctrlKey,
+          metaKey: !!keyData.metaKey,
+          shimSeq: keyData.shimSeq,
+          shimTs: keyData.shimTs,
+        });
+        return;
+      }
+
+      const chordKey = options && typeof options.chordKeyFor === "function"
+        ? options.chordKeyFor(keyData)
+        : replayKeyFromBridgeKey(keyData);
+      if (chordKey == null) return;
+
+      try { if (typeof keyData.preventDefault === "function") keyData.preventDefault(); } catch (e) {}
+      try { if (typeof keyData.stopPropagation === "function") keyData.stopPropagation(); } catch (e) {}
+
+      if (chordKey === "Escape") {
+        cancelTraversal();
+        return;
+      }
+
+      const child = currentNode && currentNode.children && currentNode.children[chordKey];
+      if (!child) {
+        cancelTraversal();
+        return;
+      }
+
+      if (child.type === "action") {
+        const payload = { type: "action", actionId: child.actionId };
+        resetTraversal("idle");
+        callOption("onAction", payload);
+        return;
+      }
+      if (child.type === "switch-workspace") {
+        const payload = { type: "switch-workspace", index: child.index };
+        resetTraversal("idle");
+        callOption("onAction", payload);
+        return;
+      }
+      if (child.type === "open-extension-popup") {
+        const payload = { type: "open-extension-popup", extensionId: child.extensionId };
+        resetTraversal("idle");
+        callOption("onAction", payload);
+        return;
+      }
+      if (child.type === "open-view") {
+        const snapshot = currentPath.concat([chordKey]);
+        currentPath = snapshot;
+        clearChordTimer();
+        transition("bridging-buffering", "open-view-match", { view: child.view, snapshot });
+        callOption("onOpenView", child.view, snapshot, "match");
+        return;
+      }
+      if (child.type === "prefix") {
+        descend(chordKey, child);
+      }
     }
 
     function resetEngine() {
-      const e = ensureEngine();
-      if (e && typeof e.reset === "function") e.reset();
+      resetTraversal("idle");
     }
 
     function exitBridge() {
-      const e = ensureEngine();
-      if (e && typeof e.exitBridge === "function") e.exitBridge();
+      if (state === "bridging-buffering" || state === "bridging-live") resetTraversal("idle");
     }
 
     function detachEngine() {
-      if (engine && typeof engine.detach === "function") engine.detach();
-      engine = null;
+      resetTraversal("idle");
     }
 
     function isEngineArmed() {
-      const e = ensureEngine();
-      return !!(e && typeof e.isArmed === "function" && e.isArmed());
+      return state === "armed-root" || state === "armed-prefix" || state === "bridging-buffering" || state === "bridging-live";
     }
 
     function getEngineState() {
-      const e = ensureEngine();
-      return e
-        ? { armed: !!e.isArmed(), path: e.serializeState ? e.serializeState() : [] }
-        : { armed: false, path: [] };
+      return { armed: isEngineArmed(), path: currentPath.slice() };
     }
 
     function replayLastChord(effects) {
