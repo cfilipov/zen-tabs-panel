@@ -865,30 +865,30 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Chord tree helpers + capture shim. The chord tree is traversed once in chrome;
     // chrome/content key listeners are capture-only shims that suppress
     // local keydowns and forward normalized keys into ChordSession.
-    const engineScope = {};
+    const chordSupportScope = {};
     Services.scriptloader.loadSubScript(
       context.extension.getURL("shared/keybindings.js"),
-      engineScope
+      chordSupportScope
     );
     Services.scriptloader.loadSubScript(
       context.extension.getURL("shared/constants.js"),
-      engineScope
+      chordSupportScope
     );
     Services.scriptloader.loadSubScript(
       context.extension.getURL("shared/chord-tree.js"),
-      engineScope
+      chordSupportScope
     );
     Services.scriptloader.loadSubScript(
       context.extension.getURL("shared/chord-shim.js"),
-      engineScope
+      chordSupportScope
     );
     const chordSessionScope = {};
     Services.scriptloader.loadSubScript(
       context.extension.getURL("experiment/chord-session.js"),
       chordSessionScope
     );
-    const KEYBINDINGS = engineScope.ZEN_KEYBINDINGS || [];
-    const WORKSPACE_DIGIT_CHORDS = engineScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
+    const KEYBINDINGS = chordSupportScope.ZEN_KEYBINDINGS || [];
+    const WORKSPACE_DIGIT_CHORDS = chordSupportScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
     const tabIndexScope = {};
     Services.scriptloader.loadSubScript(
       context.extension.getURL("experiment/tab-index.js"),
@@ -915,9 +915,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // applyChordDelay below mutates the same object and broadcasts the
     // new value to content frame scripts.
     const CHORD_CONSTANTS = {
-      CHORD_ROOT_TIMEOUT_MS:   engineScope.CHORD_ROOT_TIMEOUT_MS   || 500,
-      CHORD_PREFIX_TIMEOUT_MS: engineScope.CHORD_PREFIX_TIMEOUT_MS || 500,
-      CHORD_REVEAL_TIMEOUT_MS: engineScope.CHORD_REVEAL_TIMEOUT_MS || 500,
+      CHORD_ROOT_TIMEOUT_MS:   chordSupportScope.CHORD_ROOT_TIMEOUT_MS   || 500,
+      CHORD_PREFIX_TIMEOUT_MS: chordSupportScope.CHORD_PREFIX_TIMEOUT_MS || 500,
+      CHORD_REVEAL_TIMEOUT_MS: chordSupportScope.CHORD_REVEAL_TIMEOUT_MS || 500,
     };
     // Current chord delay (for getPaletteURL's ?delay=N param, etc.).
     let chordDelayMs = CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS;
@@ -935,7 +935,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // buildExtensionList below) can be appended after the static tree is
     // built. ChordSession reads from this reference at match time, so
     // mutations take effect immediately for chrome-side traversal.
-    const CHORD_TREE = engineScope.buildChordTree(
+    const CHORD_TREE = chordSupportScope.buildChordTree(
       KEYBINDINGS,
       WORKSPACE_DIGIT_CHORDS,
       CHORD_CONSTANTS
@@ -2908,7 +2908,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       replayActionId: MSG_REPLAY_LAST_CHORD,
       replayRecordBlocklist: Array.from(REPLAY_RECORD_BLOCKLIST),
       chordTree: CHORD_TREE,
-      chordKeyFor: engineScope.chordKeyFor,
+      chordKeyFor: chordSupportScope.chordKeyFor,
       constants: CHORD_CONSTANTS,
       setTimeoutFn: (fn, ms) => {
         const w = getWin();
@@ -3516,7 +3516,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return code === "Period" || key === ".";
     }
 
-    chromeShim = engineScope.createChordShim({
+    chromeShim = chordSupportScope.createChordShim({
       filterEvent: (e) => {
         if (e && e.__zenTabsPanelFallbackHandled) return false;
         const t = e && e.target;
@@ -3625,7 +3625,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           debugChordTrace("fallback-skip-default-prevented", { key: e.key });
           return;
         }
-        const chordKey = engineScope.chordKeyFor ? engineScope.chordKeyFor(e) : null;
+        const chordKey = chordSupportScope.chordKeyFor ? chordSupportScope.chordKeyFor(e) : null;
         if (name === "browser") {
           if (t && t.id === BROWSER_ID) {
             debugChordTrace("fallback-skip-popup-browser", { key: e.key });
