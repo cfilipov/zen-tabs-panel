@@ -459,10 +459,24 @@
     await applyViewActivation({ kind: "navigate-history-index", index });
   }
 
-  function activateChromeResolvedRow(index: number, source: "selection" | "shortcut", switchToTarget = false) {
+  function expectedDomIdForActivation(activation: ViewActivation) {
+    return activation.kind === "activate-tab" ? activation.row.domId : undefined;
+  }
+
+  function activateChromeResolvedRow(index: number, source: "selection" | "shortcut", switchToTarget = false, activation: ViewActivation) {
     markTerminalCommandDispatched();
     revealController.clear();
-    effects.activateViewRow(palette.currentView, index, source, switchToTarget, palette.listVersion);
+    const chromeIndex = source === "shortcut" && isNativeListView(palette.currentView)
+      ? palette.offset + index
+      : index;
+    effects.activateViewRow(
+      palette.currentView,
+      chromeIndex,
+      source,
+      switchToTarget,
+      palette.listVersion,
+      expectedDomIdForActivation(activation),
+    );
   }
 
   function switchWorkspace(workspaceId: string) {
@@ -739,7 +753,7 @@
     const activation = resolveSelectionActivation(viewActivationContext(), { switchToTarget });
     if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
       if (activation.kind === "none") return;
-      activateChromeResolvedRow(palette.selectedIndex, "selection", switchToTarget);
+      activateChromeResolvedRow(palette.selectedIndex, "selection", switchToTarget, activation);
       return;
     }
 
@@ -755,7 +769,7 @@
     const activation = resolveViewActivation(viewActivationContext(), index, "shortcut", { switchToTarget });
     if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
       if (activation.kind === "none") return;
-      activateChromeResolvedRow(index, "shortcut", switchToTarget);
+      activateChromeResolvedRow(index, "shortcut", switchToTarget, activation);
       return;
     }
     await applyViewActivation(activation);
@@ -770,7 +784,7 @@
     const activation = resolveViewActivation(viewActivationContext(), index, "selection", { switchToTarget });
     if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
       if (activation.kind === "none") return;
-      activateChromeResolvedRow(index, "selection", switchToTarget);
+      activateChromeResolvedRow(index, "selection", switchToTarget, activation);
       return;
     }
     await applyViewActivation(activation);

@@ -3343,6 +3343,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const expectedListVersion = options && Number.isInteger(options.listVersion) && options.listVersion > 0
         ? options.listVersion
         : null;
+      const expectedDomId = options && typeof options.expectedDomId === "string" && options.expectedDomId
+        ? options.expectedDomId
+        : null;
       try {
         if (view === "move-to-workspace") {
           const rows = getWorkspaceRows(false);
@@ -3404,6 +3407,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const win = tabIndex.getWindow(view, rowIndex, 1, params);
           const row = win && Array.isArray(win.rows) ? win.rows[0] : null;
           if (!row || !row.domId) return false;
+          if (expectedDomId && row.domId !== expectedDomId) return false;
           chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
           void (async () => {
             if (destroy) destroyOverlay();
@@ -4757,10 +4761,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return activateNativeTab(tab);
         },
 
-        async activateViewRow(view, index, source, switchToTarget, listVersion) {
+        async activateViewRow(view, index, source, switchToTarget, listVersion, expectedDomId) {
           return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, {
             destroyOverlay: false,
             listVersion,
+            expectedDomId,
           });
         },
 

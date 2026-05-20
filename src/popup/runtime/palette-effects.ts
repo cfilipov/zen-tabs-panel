@@ -27,7 +27,14 @@ export function createPaletteEffects() {
     activateTab(domId: string) {
       fireMessage({ type: "activate-tab", domId });
     },
-    activateViewRow(view: ViewId, index: number, source: "selection" | "shortcut", switchToTarget = false, listVersion?: number) {
+    activateViewRow(
+      view: ViewId,
+      index: number,
+      source: "selection" | "shortcut",
+      switchToTarget = false,
+      listVersion?: number,
+      expectedDomId?: string,
+    ) {
       fireMessage({
         type: "activate-view-row",
         view,
@@ -35,6 +42,7 @@ export function createPaletteEffects() {
         source,
         ...(switchToTarget ? { switchToTarget: true } : {}),
         ...(typeof listVersion === "number" && listVersion > 0 ? { listVersion } : {}),
+        ...(expectedDomId ? { expectedDomId } : {}),
       });
     },
     synthChordKey(chordKey: string, view: ViewId, activation = "keydown") {
