@@ -1087,6 +1087,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       catch (e) { return match[1]; }
     }
 
+    function isOwnPaletteBrowser(br) {
+      const spec = String(br?.currentURI?.spec || br?.getAttribute?.("src") || "");
+      return spec.startsWith(context.extension.getURL("popup/popup.html"));
+    }
+
     function getViewSize(view) {
       return VIEW_SIZES[view] || VIEW_SIZES["actions"];
     }
@@ -1977,7 +1982,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // turn as this message, and deferred explicit opens need a reveal
       // closure available when that happens.
       const mm = browserMessageManager(br);
-      if (idleHidden && viewName === "actions" && paletteURLView(br) !== "actions") {
+      if (idleHidden && viewName === "actions" && (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions")) {
         try {
           br.setAttribute("src", getPaletteURL(null, params || null));
           scheduleBrowserLoadKicks(w, br);
@@ -2265,7 +2270,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       currentViewName = view || "actions";
       panel.dataset.view = currentViewName;
       if (!view || view === "actions") currentViewParams = {};
-      if (view === "actions" && paletteURLView(br) !== "actions") {
+      if (view === "actions" && (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions")) {
         morphToView("actions", {});
         return;
       }
@@ -2547,7 +2552,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       currentViewParams = {};
       popupReadyTargetView = "actions";
       popupReady = false;
-      if (paletteURLView(br) !== "actions") {
+      if (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions") {
         try {
           br.setAttribute("src", getPaletteURL(null, null));
           scheduleBrowserLoadKicks(w, br);

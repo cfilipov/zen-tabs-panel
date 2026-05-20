@@ -104,9 +104,10 @@
       const overlay = snapshot.overlay || {};
       const engine = snapshot.engine || {};
       if (bridge.active && !bridge.popupReady) return "bridging-buffering";
+      if (bridge.active && bridge.popupReady && overlay.pendingReveal) return "bridging-live";
       if (bridge.active && bridge.popupReady && overlay.visibility !== "visible") return "bridging-live";
       if (bridge.revealBlocked && !bridge.active && !engine.armed) return "idle";
-      if (overlay.visibility === "visible") return "visible";
+      if (overlay.visibility === "visible" && !overlay.pendingReveal) return "visible";
       if (engine.armed && Array.isArray(engine.path) && engine.path.length > 0) return "armed-prefix";
       if (engine.armed) return "armed-root";
       return "idle";

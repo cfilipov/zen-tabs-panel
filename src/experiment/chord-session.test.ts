@@ -216,6 +216,19 @@ describe("chord-session replay recording", () => {
     }, "unit-test")).toThrow("[ChordSession] state mismatch");
   });
 
+  it("treats opacity-hidden pending reveal overlays as bridging-live", () => {
+    const session = makeSession();
+    session.acceptEngineEvent({ kind: "armed" });
+    session.acceptEngineEvent({ kind: "open-view", view: null });
+    session.transition("bridging-live", "unit-ready");
+
+    expect(() => session.observeLegacyState({
+      bridge: { active: true, popupReady: true },
+      overlay: { visibility: "visible", pendingReveal: true },
+      engine: { armed: true, path: [] },
+    }, "unit-test")).not.toThrow();
+  });
+
   it("asserts impossible transition patterns", () => {
     const session = makeSession();
     session.transition("bridging-buffering", "test-buffer");
