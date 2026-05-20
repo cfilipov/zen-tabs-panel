@@ -467,6 +467,17 @@ async function restoreClosedSession(sessionId) {
   return restored;
 }
 
+async function restoreRecentlyClosedByIndex(index, expectedSessionId) {
+  const rowIndex = Number(index);
+  if (!Number.isInteger(rowIndex) || rowIndex < 0) return false;
+  const rows = await getRecentlyClosed().catch(() => []);
+  const row = rows[rowIndex];
+  if (!row || !row.sessionId) return false;
+  if (expectedSessionId && row.sessionId !== expectedSessionId) return false;
+  await restoreClosedSession(row.sessionId);
+  return true;
+}
+
 const ACTIONS = Object.freeze({
   [MSG.OPEN_OPTIONS]:                     ()  => openOptions(),
   [MSG.REPLAY_LAST_CHORD]:                ()  => replayLastChord(),
@@ -613,6 +624,14 @@ const SYNC_HANDLERS = Object.freeze({
   },
   [MSG.OPEN_EXTENSION_POPUP]: (m) => api.openExtensionPopup(m.extensionId),
   [MSG.ACTIVATE_VIEW_ROW]: async (m) => {
+    if (m.view === "recently-closed") {
+      const ok = await restoreRecentlyClosedByIndex(m.index, m.expectedRowId);
+      if (ok) {
+        recordChordAction({ type: "restore-recently-closed-by-index", index: m.index, expectedRowId: m.expectedRowId });
+        await api.hidePalette();
+      }
+      return ok;
+    }
     const result = await api.activateViewRow(m.view, m.index, m.source, !!m.switchToTarget, m.listVersion, m.expectedDomId, m.expectedRowId);
     if (result && typeof result === "object" && result.kind === "open-view") {
       return result;
@@ -691,6 +710,8 @@ async function replayLastChord() {
 async function handleChordResult(result) {
   if (result && result.kind === "chord-action") {
     await runChordAction(result.actionId);
+  } else if (result && result.kind === "restore-recently-closed-index") {
+    await restoreRecentlyClosedByIndex(result.index, result.expectedSessionId);
   } else if (result && result.kind === "duplicate-content-link") {
     if (typeof result.tabId !== "number" || typeof result.url !== "string" || typeof result.dupDomId !== "string") {
       return;

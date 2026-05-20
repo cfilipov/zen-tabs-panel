@@ -125,6 +125,7 @@
   const actionSections = buildActionsMenuModel();
   const CHROME_RESOLVED_ROW_VIEWS = new Set<ViewId>([
     "navigation",
+    "recently-closed",
     "domains",
     "child-tabs",
     "sibling-tabs",
@@ -468,6 +469,7 @@
   function expectedRowIdForActivation(activation: ViewActivation) {
     if (activation.kind === "activate-domain") return activation.row.domain;
     if (activation.kind === "navigate-history-index") return String(activation.index);
+    if (activation.kind === "restore-closed-tab") return activation.row.sessionId;
     if (activation.kind === "move-to-workspace") return activation.row.uuid;
     if (activation.kind === "reopen-in-container") return String(activation.row.userContextId);
     if (activation.kind === "move-to-folder") return activation.row.id;

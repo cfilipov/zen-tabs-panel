@@ -3335,6 +3335,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "navigation",
     ]);
 
+    const BACKGROUND_OWNED_BRIDGE_VIEWS = new Set([
+      "recently-closed",
+    ]);
+
     function switchHiddenBridgeView(view, params, previousView, previousParams) {
       if (pendingReveal) destroyOverlay({ silent: true });
       createOverlay(view, params || {});
@@ -3426,6 +3430,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
           navigateToHistoryIndexInternal(target);
           return true;
         }
+        if (view === "recently-closed") {
+          if (!paletteRequestFire) return false;
+          chordSession.recordEvent({ kind: "popup-action", message: { type: "restore-recently-closed-by-index", index: rowIndex } });
+          if (destroy) destroyOverlay();
+          paletteRequestFire.async({
+            kind: "restore-recently-closed-index",
+            index: rowIndex,
+            expectedSessionId: expectedRowId || null,
+          });
+          return true;
+        }
         if (view === "duplicates") {
           tabIndex.start();
           if (expectedListVersion != null && tabIndex.getVersion() !== expectedListVersion) return false;
@@ -3489,6 +3504,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
 
       if (CHROME_OWNED_HISTORY_BRIDGE_VIEWS.has(getActiveBridgeView())) {
+        const rowIndex = rowIndexFromDigitKey(keyData);
+        if (rowIndex == null) return false;
+        return activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, { destroyOverlay: true });
+      }
+
+      if (BACKGROUND_OWNED_BRIDGE_VIEWS.has(getActiveBridgeView())) {
         const rowIndex = rowIndexFromDigitKey(keyData);
         if (rowIndex == null) return false;
         return activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, { destroyOverlay: true });
