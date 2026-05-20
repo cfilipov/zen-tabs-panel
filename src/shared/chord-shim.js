@@ -4,7 +4,7 @@
 //
 // The shim owns no chord-tree state. When armed, it synchronously suppresses
 // non-modifier keydowns in its process and forwards a normalized key payload
-// to chrome. Chord progression lives in the chrome-side session/engine.
+// to chrome. Chord progression lives in the chrome-side ChordSession.
 (function (scope) {
   function isModifierKey(e) {
     return e && (e.key === "Meta" || e.key === "Control" || e.key === "Alt" || e.key === "Shift");

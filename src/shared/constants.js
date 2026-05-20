@@ -160,10 +160,10 @@ this.MSG = Object.freeze({
   LIST_EXTENSIONS:                "list-extensions",
   OPEN_EXTENSION_POPUP:           "open-extension-popup",
 
-  // Chord → popup key bridge: popup sends this once its keydown listener is
-  // attached; background replies with the array of keys the chord engine
-  // buffered during the chrome-to-popup handoff (so the popup can replay them
-  // in order before processing any live keys it queued during the handshake).
+  // Chord -> popup key bridge: popup sends this once its keydown listener is
+  // attached; background replies with the array of keys ChordSession buffered
+  // during the chrome-to-popup handoff (so the popup can replay them in order
+  // before processing any live keys it queued during the handshake).
   POPUP_READY:                    "popup-ready",
 
   // Popup asks chrome to reveal the (currently hidden) overlay. Used when
@@ -177,7 +177,7 @@ this.MSG = Object.freeze({
 // Chord timing constants. Defined here so chrome, the per-content-process
 // capture shim, and the popup agree on the same delay model.
 //
-//   CHORD_ROOT_TIMEOUT_MS   — after the engine arms (commands.onCommand for
+//   CHORD_ROOT_TIMEOUT_MS   — after ChordSession arms (commands.onCommand for
 //                             an open-palette shortcut), how long to wait
 //                             for the first chord key before opening the
 //                             menu by default.
@@ -224,8 +224,8 @@ this.STORAGE_DEFAULTS = Object.freeze({
   // timeout (after descending into a prefix node), and reveal timeout
   // (after an open-view chord match before the menu shows). 0 means
   // "show the menu immediately on arm" — the menu itself becomes the
-  // chord HUD. Pushed to the chrome engine, content engines (via
-  // ZenChord:SetDelay), and the popup (via ?delay=N URL param).
+  // chord HUD. Pushed to ChordSession/content shims where needed and the
+  // popup (via ?delay=N URL param).
   chordDelayMs: 500,
   // Intercept link clicks that would open / navigate to a URL already
   // open in another tab, and show a Switch / Open anyway / Cancel

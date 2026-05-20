@@ -554,15 +554,10 @@ const ACTIONS = Object.freeze({
 // the result. Must NOT include a hide-palette prelude (hiding the palette
 // destroys the caller's content browser before it can read the response).
 const QUERIES = Object.freeze({
-  // Popup signals it has wired its document keydown listener. The reply
-  // is { buffered, stateSnapshot } where:
-  //   - buffered:      array of keys captured during the engine-bridge gap
-  //                    (chord triggered open-view → popup keyboard.js attached).
-  //                    Popup replays them before processing live input.
-  //   - stateSnapshot: chord-tree path the engine was at when bridging
-  //                    began (e.g. ["O"] for the Reorder prefix). The popup's
-  //                    chord engine initializes at that node so further chord
-  //                    keys resume the in-flight chord rather than restart at root.
+  // Popup signals it has wired its document keydown listener. The reply is
+  // { buffered, view, armRevealTimer }: buffered contains any keys captured
+  // while the hidden popup was loading, and the popup replays them before
+  // processing live input.
   [MSG.POPUP_READY]:                   (m) => api.takeChordBridgeBuffer(m && typeof m.inst === "number" ? m.inst : null),
   [MSG.REVEAL_PALETTE]:                (m) => api.revealPalette(m && typeof m.inst === "number" ? m.inst : null),
   [MSG.GET_DEFAULT_CLOSE_TARGET]:      ()  => api.getDefaultCloseTargetDomId(),
@@ -651,11 +646,10 @@ function recordChordAction(message) {
     message.type === MSG.DUPLICATE_OPEN_AND_CLOSE_OTHERS
   ) return;
   lastChordAction = message;
-  // Let chrome decide whether this terminal action commits a chord
-  // chain (open-view + bridge keys → cycling replay) or just gets
-  // recorded as a plain action. Bridges the bg/chrome split:
-  // chord-chain state lives in chrome's engine layer, action dispatch
-  // happens here in bg.
+  // Let chrome decide whether this terminal action commits a chord chain
+  // (open-view + bridge keys -> cycling replay) or just gets recorded as a
+  // plain action. Chord-chain state lives in ChordSession; runtime action
+  // dispatch still happens here in background.
   try { api.recordReplayContext(message).catch(() => {}); } catch (e) {}
 }
 
@@ -671,10 +665,10 @@ async function runChordAction(actionId) {
 }
 
 // Replay-last-chord (cmd+.,.). Re-runs the most recent chord. Prefers
-// chrome's engine-level trace (so cmd+.,r,2 cycles through recents
-// instead of re-activating the same now-active tab) and falls back to
-// bg's runtime-action record for click-driven cases that never went
-// through the chord engine.
+// ChordSession's trace (so cmd+.,r,2 cycles through recents instead of
+// re-activating the same now-active tab) and falls back to bg's
+// runtime-action record for click-driven cases that never reached the
+// chord session.
 async function replayLastChord() {
   try {
     const ok = await api.replayLastChord();
@@ -720,18 +714,17 @@ async function handleChordResult(result) {
 //   open-palette-2  cmd+option+.
 //   open-palette-3  (unset)
 //   open-palette-4  (unset)
-// armChord arms the chrome engine synchronously and sends a targeted
-// message to the focused tab's content engine. There's a small IPC race
-// (next chord key typed <~10ms after the leader could arrive at an idle
-// content engine), but typical chord typing speed leaves enough margin.
+// armChord arms ChordSession plus the chrome/content capture shims. Content
+// keys are suppressed in-process by the shim and forwarded to chrome for
+// traversal.
 browser.commands.onCommand.addListener((command) => {
   if (command.startsWith("open-palette")) {
     api.armChord().catch(() => {});
   }
 });
 
-// The chord engines (in experiment/api.js and frame script) fire chord
-// results back via this event. We dispatch the resulting action (if any).
+// ChordSession fires terminal chord results back via this event. We dispatch
+// the resulting action (if any).
 api.onPaletteRequest.addListener(handleChordResult);
 
 // ---------------------------------------------------------------------------

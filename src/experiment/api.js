@@ -910,8 +910,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       },
     });
     // Mutable so the user's chordDelayMs setting can override at runtime.
-    // The engine reads `constants.CHORD_*_TIMEOUT_MS` on each timer set,
-    // so mutations apply to the next chord without rebuilding the engine.
+    // ChordSession reads `constants.CHORD_*_TIMEOUT_MS` on each timer set,
+    // so mutations apply to the next chord without rebuilding the session.
     // applyChordDelay below mutates the same object and broadcasts the
     // new value to content frame scripts.
     const CHORD_CONSTANTS = {
@@ -933,9 +933,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     // Mutable so the dynamic Shift+1..9 extension-popup chords (added by
     // buildExtensionList below) can be appended after the static tree is
-    // built. The chrome engine reads from this reference at match time, so
-    // mutations take effect immediately for the chrome side. Frame-script
-    // engines receive these dynamic entries via broadcast (see below).
+    // built. ChordSession reads from this reference at match time, so
+    // mutations take effect immediately for chrome-side traversal.
     const CHORD_TREE = engineScope.buildChordTree(
       KEYBINDINGS,
       WORKSPACE_DIGIT_CHORDS,
@@ -959,7 +958,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let morphGeneration = 0;
     // Set by createOverlay to the function that flips the (initially hidden)
     // overlay to visible and starts the in animations. Stays non-null until
-    // the overlay is revealed or destroyed. When the chord engine prerenders
+    // the overlay is revealed or destroyed. When ChordSession prerenders
     // during its wait window (via onArmed), this is what enterBridgeFromOpenView
     // / revealOverlay surface to display the already-loaded popup with no
     // further delay.
@@ -973,7 +972,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // by installContentEngineFrameScript() below.
     let contentEngineFrameScriptUrl = null;
     // Unique generation tag for this extension-load instance. Embedded into
-    // the frame script body so each content-process engine knows its own
+    // the frame script body so each content-process shim knows its own
     // generation. Chrome ignores incoming ZenChord:* messages whose gen
     // doesn't match — this filters out keystrokes from stale frame scripts
     // that Firefox left running in content processes after a prior
@@ -1003,9 +1002,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // delivered live via the popup browser's message manager.
     let popupReady = false;
     let activeBridgeView = null;
-    // ChordSession owns replay state. During Track A Phase 1 the existing
-    // chrome/content chord engines still traverse the tree; they report their
-    // interpreted outcomes through chordSession.acceptEngineEvent().
+    // ChordSession owns traversal and replay state. The acceptEngineEvent name
+    // remains for compatibility with stale pre-shim frame-script IPC and for
+    // recording popup-visible events.
     let chordSession = null;
     // Popup-instance counter. Incremented in createOverlay; the popup
     // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
@@ -1479,11 +1478,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       items.sort((a, b) => a.name.localeCompare(b.name));
       // Mirror the popup's Shift+1..9 quick-launch into the chord tree
       // so the same shortcut works from outside an open palette
-      // (leader chord → Shift+N opens the Nth extension's popup directly,
-      // just like clicking the icon does). Inject into the chrome-side
-      // CHORD_TREE (the chrome engine reads from it at match time) AND
-      // broadcast to every content-process frame script so their local
-      // tree copies stay in sync.
+      // (leader chord -> Shift+N opens the Nth extension's popup directly,
+      // just like clicking the icon does). ChordSession reads CHORD_TREE at
+      // match time; AddChord broadcasts remain only for stale pre-shim frame
+      // scripts that may still be alive after extension reload.
       //
       // Clear any prior entries first — the extension set can change as
       // the user installs/uninstalls add-ons. Replacing the whole 1..9
@@ -1694,7 +1692,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // checked but have no effect — better than crashing the addon.
     }
 
-    // Build the overlay DOM hidden. The chord engine calls this to
+    // Build the overlay DOM hidden. ChordSession calls this to
     // prerender during its wait window; openOverlayWithView and
     // showPalette call it for immediate opens. Either way the caller
     // flips the visibility on via revealOverlay() (or, if the chord
@@ -3068,7 +3066,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
     }
 
-    // Bridge entry: an engine fired open-view. Two distinct paths:
+    // Bridge entry: ChordSession fired open-view. Two distinct paths:
     //   source="timeout": user passively let the chord wait expire.
     //     Reveal the popup now at the requested view. Existing UX —
     //     same speed as before (root timeout fires → menu appears).
@@ -3078,7 +3076,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     //     and UI never shows. If they pause, the timer fires and the
     //     popup is revealed at its current state.
     function enterBridgeFromOpenView(view, _stateSnapshot, kind, source) {
-      // Stale pre-shim content engines can still emit old open-view IPC after
+      // Stale pre-shim content scripts can still emit old open-view IPC after
       // an extension reload. The first bridge wins; later bridge opens are
       // ignored so they cannot destroy/recreate the live popup.
       if (activeBridgeView != null) return;
@@ -3288,7 +3286,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       popupReady = false;
       try { chordSession.exitBridge(); } catch (e) {}
       disarmChordShims("finish-bridge");
-      // Compatibility for stale pre-shim content engines.
+      // Compatibility for stale pre-shim content scripts.
       try { Services.mm.broadcastAsyncMessage("ZenChord:ExitBridge"); } catch (e) {}
       activeBridgeView = null;
       if (chordSession) chordSession.transition("idle", "finishBridge");
@@ -3461,7 +3459,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return activateChromeOwnedRowIntent(activeBridgeView, rowIndex, "shortcut", false, { destroyOverlay: true });
     }
 
-    // ---- Chrome engine instance ----------------------------------------
+    // ---- Chrome chord-session + shim instance ---------------------------
     function armChordFromLeader() {
       const now = Date.now();
       if (now - lastLeaderArmAt < 80) {
@@ -3476,7 +3474,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Leader-shortcut routing while the menu is visible:
       //   - on actions   -> dismiss (toggle off).
       //   - on submenu   -> navigate back to actions (regardless of depth).
-      //   - menu hidden  -> arm the chord engines.
+      //   - menu hidden  -> arm ChordSession and capture shims.
       if (isOverlayVisible()) {
         if (!currentViewName || currentViewName === "actions") {
           debugChordTrace("arm-visible-destroy", {});
@@ -3552,12 +3550,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       chromeShim.attach(w);
 
       // Intra-window focus shifts: when the user clicks between URL bar
-      // and content (or vice versa) mid-chord, the chord engine that was
-      // armed needs to know its domain just lost focus. The chrome
+      // and content (or vice versa) mid-chord, the chrome shim/session needs
+      // to know its domain just lost focus. The chrome
       // window's `blur` event only fires on whole-window blur, not on
       // sub-element focus shifts — so we hook `focus` events (which DO
-      // bubble) and cancel chrome's engine when focus moves to a
-      // <browser>. Content engines handle their own blur via their own
+      // bubble) and cancel chrome-side traversal when focus moves to a
+      // <browser>. Content shims handle their own blur via their own
       // content-window blur listener.
       w.addEventListener("focus", (e) => {
         if (!chordSession.isEngineArmed()) return;
@@ -3694,16 +3692,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const constantsURL = context.extension.getURL("shared/constants.js");
       // The frame-script body runs in EVERY content process. Two paths:
       //
-      //   1. Non-extension pages (websites): instantiate the chord engine
+      //   1. Non-extension pages (websites): instantiate the capture shim
       //      attached to `content`. Armed externally by ZenChord:Arm IPC
       //      (sent from chrome when a commands.onCommand for one of the
-      //      open-palette shortcuts fires). Once armed, detects chord
-      //      keys, fires open-view/action/cancel/bridge-key IPC to chrome.
-      //      The engine is the source of truth for chord state in this
-      //      process.
+      //      open-palette shortcuts fires). Once armed, it suppresses chord
+      //      keys in-process and forwards normalized keys to ChordSession.
       //
       //   2. Extension pages (moz-extension:// — our popup and foreign-
-      //      extension popups): do NOT attach the engine (their content
+      //      extension popups): do NOT attach the shim (their content
       //      handles its own keys via the popup runtime). But DO listen
       //      for ZenChord:* bridge messages from chrome and forward them
       //      as typed bridge payloads to the Svelte app. This is how
@@ -3718,7 +3714,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // load in armChordFromLeader can race in a fresh content process;
         // if the marker is only written after loadSubScript, both copies
         // can pass the guard and install duplicate key/action listeners.
-        // Duplicate content engines make terminal actions fire twice
+        // Duplicate content shims make forwarded keys fire twice
         // (cmd+.,p goes previous, then immediately back).
         "  if (content && content.__zenTabsPanelChordEngineGen === __GEN) return;\n" +
         "  if (content) content.__zenTabsPanelChordEngineGen = __GEN;\n" +
@@ -3908,7 +3904,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    try { content.removeEventListener('click', onDuplicateLinkClick, { capture: true }); } catch(_) {}\n" +
         "    // The palette/hosted-popup browser owns its own key handling.\n" +
         "    // Regular moz-extension:// pages opened in normal tabs still need\n" +
-        "    // the content chord engine; otherwise cmd+.,p leaks there and the\n" +
+        "    // the content chord shim; otherwise cmd+.,p leaks there and the\n" +
         "    // root timer only opens the main menu.\n" +
         "    // The same remote browser can be reused after a regular page, so also\n" +
         "    // detach any blocker/engine left from the prior document.\n" +
@@ -3933,7 +3929,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  try { __shim.arm(); } catch(e){}\n" +
         "});\n" +
         // Shutdown signal: extension reload broadcasts this. We detach the
-        // engine and stop responding so a stale frame script (which Firefox
+        // shim and stop responding so a stale frame script (which Firefox
         // doesn't unload on extension reload) doesn't double-fire alongside
         // the freshly-loaded frame script in the same content process.
         "addMessageListener('ZenChord:Shutdown', function(){\n" +
@@ -3968,18 +3964,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Each handler gates on the generation tag: frame scripts loaded by a
     // PRIOR extension load (Firefox doesn't unload them on reload) send
     // messages tagged with their old generation. Chrome only processes
-    // messages tagged with the current CHORD_GENERATION; everything else
-    // is silently dropped. This prevents stale engines from double-firing
-    // actions alongside the current engine.
+    // messages tagged with the current CHORD_GENERATION; everything else is
+    // silently dropped. This prevents stale shims/adapters from double-firing.
     function isCurrentGen(m) {
       const data = m && m.data;
       return data && data.__gen === CHORD_GENERATION;
     }
-    // Whenever a CONTENT engine fires a chord outcome, the chrome engine
-    // (if armed in parallel via armChord) is now stale — its root timer
-    // would fire later and pop an unwanted menu. Reset it. The reverse
-    // (chrome engine firing while content armed) is handled by content
-    // engines themselves via the ZenChord:Reset broadcast.
+    // Compatibility path for stale pre-shim frame scripts. If one of those
+    // scripts reports an interpreted outcome, reset the current ChordSession
+    // traversal before honoring it so a parallel arm cannot later reveal an
+    // unwanted menu.
     function resetChromeEngineIfArmed() {
       try { if (chordSession && chordSession.isEngineArmed()) chordSession.resetEngine(); } catch (e) {}
     }
@@ -4004,10 +3998,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         debugChordTrace("content-armed-skip-bridging", {});
         return;
       }
-      // Content engine just self-armed. Clear the in-flight trace
-      // (same as chrome engine's onArmed) and prerender the popup
-      // so it's ready if the chord chain involves a view, or if the
-      // reveal timer fires (no further chord keys typed).
+      // Stale pre-shim content script just self-armed. Clear the in-flight
+      // trace and prerender the popup so it's ready if the chord chain
+      // involves a view, or if the reveal timer fires.
       chordSession.acceptEngineEvent({ kind: "armed" });
       createOverlay();
     }
@@ -4028,11 +4021,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function onContentStateChange(m) {
       if (!isCurrentGen(m)) return;
-      // Content engine descended into a prefix. The chrome engine
-      // (armed in parallel via armChord) needs to be reset; otherwise
-      // its root timer fires before the content engine's arm arrives
-      // prefix timer and pops the default actions view before the
-      // intended prefix view can take over.
+      // Stale pre-shim content script descended into a prefix. Keep this
+      // adapter so old frame scripts can still drive the matching prerender
+      // instead of leaving the user at the default actions view.
       resetChromeEngineIfArmed();
       const data = m.data;
       prerenderPrefixView(data && data.snapshot);
@@ -4106,7 +4097,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Frame scripts loaded via Services.mm.loadFrameScript persist in
     // existing content processes across extension reloads (Firefox doesn't
     // give us a way to forcibly unload them). On extension unload we
-    // broadcast ZenChord:Shutdown — content-side engines listening for
+    // broadcast ZenChord:Shutdown — content-side shims listening for
     // this stop processing keys, so a stale frame script from a previous
     // extension load doesn't double-fire alongside the new code's frame
     // script. We also removeDelayedFrameScript so new content processes
@@ -5766,9 +5757,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         // Drain the chord-bridge buffer (keys captured during the gap
-        // between an engine firing open-view and the popup's keyboard
+        // between ChordSession firing open-view and the popup's keyboard
         // handler attaching) and mark the popup as ready. Subsequent
-        // chord keys arriving from the content engine are no longer
+        // chord keys arriving from content shims are no longer
         // buffered — they're forwarded live to the popup browser via
         // ZenChord:DeliverKey messages. The bridge itself stays alive
         // for the rest of the chord chain.
@@ -5878,10 +5869,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
             }
           }
 
-          // A chord might be in flight (engine armed/bridging) when this
+          // A chord might be in flight (session armed/bridging) when this
           // is invoked by an external path (toolbar icon click). Tear
-          // down any in-flight chord state
-          // in both engines so we open cleanly.
+          // down any in-flight chord state so we open cleanly.
           if (chordSession && chordSession.isEngineArmed()) chordSession.resetEngine();
           try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
 
@@ -6020,14 +6010,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
 
-        // Force-arm the chord engines from an external trigger — used by
+        // Force-arm ChordSession and capture shims from an external trigger — used by
         // background.js's commands.onCommand handler so the configurable
         // open-palette shortcut (default cmd+.) acts as a chord leader
-        // rather than just opening the palette. We arm the chrome engine
-        // synchronously and send a targeted message to the currently-
-        // focused tab's content process so its engine arms too — without
-        // this the user's next chord key would reach an idle content
-        // engine and leak through to the page.
+        // rather than just opening the palette. We arm the chrome shim
+        // synchronously and send a targeted message to the currently focused
+        // tab's content process so its shim arms too — without this the user's
+        // next chord key would leak through to the page.
         async armChord() {
           armChordFromLeader();
         },
@@ -6209,7 +6198,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         // User-facing single delay for chord timeouts. Background
         // pushes this from the chordDelayMs setting. applyChordDelay
-        // updates the chrome engine's constants and broadcasts to
+        // updates ChordSession's constants and broadcasts to
         // content frame scripts. The popup picks it up from its URL
         // ?delay=N param at load time.
         async setChordDelay(ms) {
