@@ -988,6 +988,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       popupReady: false,
       activeView: null,
       revealDeferred: false,
+      revealBlocked: false,
     };
     let bridgeTimer = null;
     // Keep this comfortably above cold Svelte view startup in large tab
@@ -1020,7 +1021,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // destroy round-trip completes) is suppressed. Without this, the
     // popup-side 400ms timer races against the destroy IPC chain and
     // sometimes wins → brief flash before destroy.
-    let revealBlocked = false;
     let lastLeaderArmAt = 0;
     let chordArmSequence = 0;
     let terminalDispatchArmSequence = -1;
@@ -1720,7 +1720,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       popupInstance++;
       // A new popup is being constructed — any reveal-block from the
       // previous destroy is no longer relevant.
-      revealBlocked = false;
+      bridgeState.revealBlocked = false;
 
       // Always refresh contents so CSS changes take effect on the next
       // open after an extension reload (otherwise the cached <style> from
@@ -1895,7 +1895,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // initial popup-load IIFE (which uses the URL's ?inst=N) and orphan
       // the popup with chordBridgeReady=false if the user chords during
       // extension load.
-      revealBlocked = false;
+      bridgeState.revealBlocked = false;
       // Popup will signal ready again after it processes WarmRearm; any
       // chord-chain keys that land in this window are buffered (just like
       // the cold-create case).
@@ -2565,7 +2565,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // (see armPopupRevealTimer in keyboard.js). With the warm popup
       // there's no pagehide to auto-clear that timer when we soft-hide,
       // so a stale timer from the now-dismissed menu would fire after the
-      // chord delay, race past revealBlocked once the next chord arm clears
+      // chord delay, race past the reveal block once the next chord arm clears
       // it, and re-reveal the just-armed popup at the wrong moment.
       // Tell the popup to clear its timer right now.
       const _br = w.document.getElementById(BROWSER_ID);
@@ -2586,7 +2586,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // still in flight — without this block, revealPalette would see
       // pendingReveal still set and unhide the overlay right before we
       // remove it, producing a flash.
-      revealBlocked = true;
+      bridgeState.revealBlocked = true;
       explicitRevealToken++;
       explicitRevealView = null;
       explicitRevealScheduledToken = 0;
@@ -2815,7 +2815,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           popupReady: bridgeState.popupReady,
           activeView: bridgeState.activeView,
           activeBridgeView: bridgeState.activeView,
-          revealBlocked,
+          revealBlocked: bridgeState.revealBlocked,
           revealDeferred: bridgeState.revealDeferred,
         },
         replay: chordSession ? chordSession.getReplayState() : null,
@@ -3770,7 +3770,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "});\n" +
         // Cancel-reveal: chrome dismisses the overlay and needs the popup
         // to drop any in-flight reveal-on-pause timer before the next
-        // chord arm clears revealBlocked. Without this, the stale timer
+        // chord arm clears the reveal block. Without this, the stale timer
         // fires after the next rearm and re-reveals the popup (the
         // "menu stays open after cmd+.,p" bug).
         "addMessageListener('ZenChord:CancelReveal:' + __GEN, function(){\n" +
@@ -5987,7 +5987,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         async bridgeDispatchSettled(inst) {
           if (typeof inst === "number" && inst !== popupInstance) return;
-          if (revealBlocked || !pendingReveal) return;
+          if (bridgeState.revealBlocked || !pendingReveal) return;
           armRevealTimer();
         },
 
@@ -6022,7 +6022,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // unexpectedly revealing its replacement.
         async revealPalette(inst) {
           if (typeof inst === "number" && inst !== popupInstance) return;
-          if (revealBlocked) return;
+          if (bridgeState.revealBlocked) return;
           if (pendingReveal) revealOverlay();
         },
 

@@ -192,8 +192,8 @@ this.MSG = Object.freeze({
 //
 // Sized to feel snappy. Risk floor is a flash on a chord chain where
 // the user types the next key right at the boundary — but the
-// revealBlocked flag on destroyOverlay and the revealDeferred-on-
-// popup-not-ready guard catch the common race cases.
+// the destroy-time reveal block and the popup-not-ready deferred reveal guard
+// catch the common race cases.
 // Initial defaults — overridden at runtime by the chordDelayMs setting
 // (see api.js applyChordDelay, the ZenChord:SetDelay IPC for frame
 // scripts, and the popup's reading of ?delay=N from its URL).
