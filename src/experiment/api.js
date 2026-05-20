@@ -5786,9 +5786,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // this, slow typing (menu showed, then digit) wouldn't track
         // and cmd+.,. would have nothing to replay.
         async traceReplayKey(key) {
-          if (typeof key === "string" && key.length > 0) {
-            trackChordBridgeKey({ key });
-          }
+          // Kept for stale popup code during the synthetic-chord transition.
+          // Current popup builds record replay through synthChordKey().
+          void key;
         },
 
         async synthChordKey(payload) {

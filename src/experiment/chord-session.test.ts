@@ -214,4 +214,17 @@ describe("chord-session replay recording", () => {
       ],
     });
   });
+
+  it("uses synthetic chord events as replay bridge keys", () => {
+    const session = makeSession();
+    session.acceptEngineEvent({ kind: "open-view", view: "last-visited" });
+    session.acceptEngineEvent({ kind: "synthetic-key", chordKey: "3", view: "last-visited", activation: "trace" });
+    session.acceptEngineEvent({ kind: "popup-action", message: { type: "activate-tab", tabId: 42 } });
+
+    expect(session.getReplayState().lastChordReplay).toMatchObject({
+      kind: "open-view",
+      view: "last-visited",
+      bridgeKeys: ["3"],
+    });
+  });
 });

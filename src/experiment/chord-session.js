@@ -166,6 +166,7 @@
           activation: event.activation || null,
         });
         if (syntheticReplayEvents.length > 50) syntheticReplayEvents.shift();
+        trackBridgeKey({ key: event.chordKey });
       }
     }
 
