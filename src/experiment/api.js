@@ -1000,8 +1000,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // If no chord key arrives within CHORD_REVEAL_TIMEOUT_MS, the popup
     // is revealed at its current view+context. Reset on every forwarded
     // key (user is still actively chording).
-    // ChordSession owns traversal and replay state. Its old acceptEngineEvent
-    // alias remains only for stale pre-shim frame-script IPC compatibility.
+    // ChordSession owns traversal and replay state. Stale pre-shim frame
+    // scripts are handled by the IPC adapters below, not by duplicate session
+    // entry points.
     let chordSession = null;
     // Popup-instance counter. Incremented in createOverlay; the popup
     // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.

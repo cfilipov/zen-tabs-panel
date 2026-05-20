@@ -459,18 +459,13 @@
 
     return {
       recordEvent,
-      acceptEngineEvent: recordEvent,
       arm,
       handleKey,
       resetChordTraversal,
-      resetEngine: resetChordTraversal,
       exitBridge,
       detachChordTraversal,
-      detachEngine: detachChordTraversal,
       isChordTraversalArmed,
-      isEngineArmed: isChordTraversalArmed,
       getChordTraversalState,
-      getEngineState: getChordTraversalState,
       resetCurrentReplay,
       replayLastChord,
       hasCurrentReplay,
