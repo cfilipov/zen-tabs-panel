@@ -36,6 +36,8 @@ export type NativePaletteState = {
   tabInfoWorkspaces: WorkspaceRow[];
   duplicatePromptUrl: string;
   duplicatePromptDomId: string | null;
+  duplicatePromptGroup: DuplicateGroupRow | null;
+  duplicatePromptWorkspaces: WorkspaceRow[];
   domainsSortAlpha: boolean;
   tabsByAgeNewestFirst: boolean;
   sidebarWorkspaces: WorkspaceRow[];
@@ -75,6 +77,8 @@ function defaultNativePaletteState(): NativePaletteState {
     tabInfoWorkspaces: [],
     duplicatePromptUrl: "",
     duplicatePromptDomId: null,
+    duplicatePromptGroup: null,
+    duplicatePromptWorkspaces: [],
     domainsSortAlpha: false,
     tabsByAgeNewestFirst: false,
     sidebarWorkspaces: [],
@@ -151,6 +155,8 @@ export function createNativePaletteState() {
     state.tabInfoWorkspaces = [];
     state.duplicatePromptUrl = "";
     state.duplicatePromptDomId = null;
+    state.duplicatePromptGroup = null;
+    state.duplicatePromptWorkspaces = [];
     state.sidebarWorkspaces = [];
     state.selectedIndex = -1;
     state.error = null;
@@ -338,14 +344,22 @@ export function createNativePaletteState() {
   function commitDuplicatePrompt(result: DuplicatePromptData) {
     state.duplicatePromptUrl = result.url;
     state.duplicatePromptDomId = result.domId;
+    state.duplicatePromptGroup = result.group;
+    state.duplicatePromptWorkspaces = result.workspaces;
     state.selectedIndex = result.selectedIndex;
   }
 
   function failDuplicatePrompt(message: string) {
     state.duplicatePromptUrl = "";
     state.duplicatePromptDomId = null;
+    state.duplicatePromptGroup = null;
+    state.duplicatePromptWorkspaces = [];
     state.selectedIndex = -1;
     state.error = message;
+  }
+
+  function replaceDuplicatePromptGroup(group: DuplicateGroupRow | null) {
+    state.duplicatePromptGroup = group;
   }
 
   return {
@@ -388,6 +402,7 @@ export function createNativePaletteState() {
     commitTabInfo,
     failTabInfo,
     replaceTabInfoDuplicates,
+    replaceDuplicatePromptGroup,
     commitDuplicatePrompt,
     failDuplicatePrompt,
   };

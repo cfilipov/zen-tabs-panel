@@ -18,6 +18,46 @@ describe("sidebar model", () => {
     }).hints.map((hint) => hint.id)).toEqual(["restore"]);
   });
 
+  it("shows duplicate close hint only after a row is selected", () => {
+    const empty = buildSidebarModel({
+      view: "duplicates",
+      selectedIndex: -1,
+      domainsSortAlpha: false,
+      tabsByAgeNewestFirst: false,
+    });
+    const selected = buildSidebarModel({
+      view: "duplicates",
+      selectedIndex: 0,
+      domainsSortAlpha: false,
+      tabsByAgeNewestFirst: false,
+    });
+
+    expect(empty.hints).toMatchObject([{ id: "close", hidden: true }]);
+    expect(selected.hints).toMatchObject([{ id: "close", hidden: false }]);
+  });
+
+  it("shows duplicate prompt close hint only when a duplicate row is selected", () => {
+    const actionSelected = buildSidebarModel({
+      view: "duplicate-prompt",
+      selectedIndex: 0,
+      closeSelectionAvailable: false,
+      domainsSortAlpha: false,
+      tabsByAgeNewestFirst: false,
+    });
+    const rowSelected = buildSidebarModel({
+      view: "duplicate-prompt",
+      selectedIndex: 4,
+      closeSelectionAvailable: true,
+      domainsSortAlpha: false,
+      tabsByAgeNewestFirst: false,
+    });
+
+    expect(actionSelected.hidden).toBe(true);
+    expect(actionSelected.hints).toMatchObject([{ id: "close", hidden: true }]);
+    expect(rowSelected.hidden).toBe(false);
+    expect(rowSelected.hints).toMatchObject([{ id: "close", hidden: false }]);
+  });
+
   it("keeps recently closed as hints-only and hides it until a row is selected", () => {
     const empty = buildSidebarModel({
       view: "recently-closed",

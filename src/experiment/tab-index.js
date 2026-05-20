@@ -461,12 +461,13 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
   function duplicateGroups(params) {
     const groups = new Map();
     for (const row of filteredRows("all", params)) {
+      if (params?.url && row.url !== params.url) continue;
       const group = groups.get(row.url);
       if (group) group.push(row);
       else groups.set(row.url, [row]);
     }
     return [...groups.values()]
-      .filter((group) => group.length > 1)
+      .filter((group) => params?.includeSingleton ? group.length > 0 : group.length > 1)
       .sort((a, b) => b.length - a.length)
       .map((tabs) => {
         const sample = tabs[0];

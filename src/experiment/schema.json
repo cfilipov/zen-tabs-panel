@@ -616,10 +616,12 @@
         "name": "resizePanel",
         "type": "function",
         "async": true,
-        "description": "Resize the panel/browser. Width comes from VIEW_SIZES[view]. The optional `height` is the popup's measured natural content height; chrome caps it to VIEW_SIZES[view].height (acts as a max). Omit `height` to use the preset.",
+        "description": "Resize the panel/browser. Width comes from VIEW_SIZES[view], plus optional dynamicSidebarWidth for transient sidebars that should expand rather than compress the view. The optional `inst` gates stale resize messages from destroyed popup instances. The optional `height` is the popup's measured natural content height; chrome caps it to VIEW_SIZES[view].height (acts as a max). Omit `height` to use the preset.",
         "parameters": [
           { "name": "view", "type": "string" },
-          { "name": "height", "type": "number", "optional": true }
+          { "name": "height", "type": "number", "optional": true },
+          { "name": "dynamicSidebarWidth", "type": "number", "optional": true },
+          { "name": "inst", "type": "integer", "optional": true }
         ]
       },
       {

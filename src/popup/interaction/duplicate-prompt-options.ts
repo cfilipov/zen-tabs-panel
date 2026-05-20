@@ -12,9 +12,9 @@ export type DuplicatePromptOption = {
 };
 
 export const DUPLICATE_PROMPT_OPTIONS: readonly DuplicatePromptOption[] = [
-  { label: "Switch to existing tab", hotkey: "S", action: "duplicate-switch", icon: "svg:arrow-right" },
+  { label: "Switch to existing tab", hotkey: "1", action: "duplicate-switch", icon: "svg:arrow-right" },
   { label: "Open anyway", hotkey: "O", action: "duplicate-open-anyway", icon: "svg:plus" },
-  { label: "Open and close others", hotkey: "W", action: "duplicate-open-and-close-others", icon: "svg:x-circle" },
+  { label: "Open and close others", hotkey: "W", action: "duplicate-open-and-close-others", icon: "svg:copy" },
   { label: "Cancel", hotkey: "C", action: "hide-palette", icon: "svg:x-circle" },
 ];
 

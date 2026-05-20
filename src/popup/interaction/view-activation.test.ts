@@ -38,6 +38,8 @@ function context(overrides: Partial<ViewActivationContext> = {}): ViewActivation
     containerRows: [],
     folderRows: [],
     profileRows: [],
+    duplicateTabs: [],
+    duplicatePromptTabs: [],
     ...overrides,
   };
 }
@@ -108,9 +110,19 @@ describe("view activation resolver", () => {
       .toEqual({ kind: "move-to-folder", row: folder });
     expect(resolveViewActivation(context({ view: "profiles", profileRows: [profile] }), 0, "shortcut"))
       .toEqual({ kind: "launch-profile", row: profile });
-    expect(resolveViewActivation(context({ view: "duplicate-prompt" }), 1, "shortcut"))
+    expect(resolveSelectionActivation(context({ view: "duplicates", selectedIndex: 0, duplicateTabs: [tabRow] })))
+      .toEqual({ kind: "activate-tab", row: tabRow });
+    expect(resolveViewActivation(context({ view: "duplicates", duplicateTabs: [tabRow] }), 0, "shortcut"))
+      .toEqual({ kind: "none" });
+    expect(resolveViewActivation(context({ view: "duplicate-prompt" }), 0, "shortcut"))
+      .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-switch" });
+    expect(resolveSelectionActivation(context({ view: "duplicate-prompt", selectedIndex: 1 })))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-anyway" });
-    expect(resolveViewActivation(context({ view: "duplicate-prompt" }), 2, "shortcut"))
+    expect(resolveSelectionActivation(context({ view: "duplicate-prompt", selectedIndex: 2 })))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-and-close-others" });
+    expect(resolveSelectionActivation(context({ view: "duplicate-prompt", selectedIndex: 4, duplicatePromptTabs: [tabRow] })))
+      .toEqual({ kind: "activate-tab", row: tabRow });
+    expect(resolveViewActivation(context({ view: "duplicate-prompt", duplicatePromptTabs: [tabRow, { ...tabRow, domId: "tab-2" }] }), 1, "shortcut"))
+      .toEqual({ kind: "activate-tab", row: { ...tabRow, domId: "tab-2" } });
   });
 });

@@ -13,6 +13,8 @@ import {
 
 export type InteractionContext = {
   view: ViewId;
+  selectedIndex?: number;
+  duplicatePromptActionCount?: number;
   treePath?: string[];
 };
 
@@ -128,6 +130,7 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
     id: "back",
     resolve: (input, context) => {
       if (input.key !== "Backspace") return noCommand;
+      if (context.view === "duplicate-prompt") return { kind: "cancel" };
       return context.view === "actions" ? { kind: "cancel" } : { kind: "back" };
     },
   },
@@ -139,6 +142,7 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
     id: "move-left-or-back",
     resolve: (input, context) => {
       if (input.key !== "ArrowLeft") return noCommand;
+      if (context.view === "duplicate-prompt") return { kind: "cancel" };
       if (context.view === "actions" || context.view === "reorder-tabs" || context.view === "close-and-select") {
         return { kind: "move-selection-directional", delta: -1 };
       }
@@ -175,14 +179,6 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
     resolve: (input) => commandWhen(input.key === "Enter", { kind: "activate-selection" }),
   },
   {
-    id: "duplicate-prompt-action",
-    resolve: (input, context) => {
-      if (!plainKey(input) || input.shiftKey || context.view !== "duplicate-prompt") return noCommand;
-      const action = duplicatePromptActionForHotkey(upperKey(input));
-      return action ? { kind: "duplicate-prompt-action", action } : noCommand;
-    },
-  },
-  {
     id: "navigation-history-delta",
     resolve: (input, context) => {
       if (!plainKey(input) || input.shiftKey || context.view !== "navigation") return noCommand;
@@ -195,9 +191,21 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
     id: "close",
     resolve: (input, context) => {
       if (!plainKey(input) || upperKey(input) !== "W") return noCommand;
+      if (context.view === "duplicate-prompt") {
+        const actionCount = context.duplicatePromptActionCount ?? 0;
+        return !input.shiftKey && (context.selectedIndex ?? -1) >= actionCount ? { kind: "close-selection" } : noCommand;
+      }
       if (input.shiftKey && canCloseAllInView(context.view)) return { kind: "close-all" };
       if (!input.shiftKey && isCloseableView(context.view)) return { kind: "close-selection" };
       return noCommand;
+    },
+  },
+  {
+    id: "duplicate-prompt-action",
+    resolve: (input, context) => {
+      if (!plainKey(input) || input.shiftKey || context.view !== "duplicate-prompt") return noCommand;
+      const action = duplicatePromptActionForHotkey(upperKey(input));
+      return action ? { kind: "duplicate-prompt-action", action } : noCommand;
     },
   },
   {

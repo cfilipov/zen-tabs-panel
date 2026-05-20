@@ -12,6 +12,8 @@ describe("view capabilities", () => {
   it("keeps tab-list close capability shared by sidebar and keyboard handling", () => {
     expect(isCloseableView("last-visited")).toBe(true);
     expect(isCloseableView("domain-tabs")).toBe(true);
+    expect(isCloseableView("duplicates")).toBe(true);
+    expect(isCloseableView("duplicate-prompt")).toBe(true);
     expect(isCloseableView("recently-closed")).toBe(false);
   });
 

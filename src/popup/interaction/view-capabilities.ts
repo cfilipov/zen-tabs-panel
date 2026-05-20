@@ -2,7 +2,7 @@ import { hasViewCapability } from "../../shared/navigation-tree";
 import type { ViewId } from "../../shared/types";
 
 export function isCloseableView(view: ViewId) {
-  return hasViewCapability(view, "closeSelection");
+  return view === "duplicate-prompt" || hasViewCapability(view, "closeSelection");
 }
 
 export function canCloseAllInView(view: ViewId) {

@@ -945,6 +945,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let navStack = [];
     let currentViewName = null;
     let currentViewParams = {};
+    let currentDynamicSidebarWidth = 0;
+    let currentMeasuredResizeView = null;
     // The view the popup should confirm on its next POPUP_READY reply.
     // Keep this separate from currentViewName: resizePanelToView updates
     // currentViewName from popup-side measurements, and a stale resize from
@@ -960,6 +962,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // further delay.
     let pendingReveal = null;
     let explicitRevealToken = 0;
+    let explicitRevealView = null;
+    let explicitRevealScheduledToken = 0;
 
     // Chrome engine instance is constructed later in this getAPI body once
     // the helpers it depends on (createOverlay, runChordAction, etc.) are
@@ -1105,8 +1109,31 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return VIEW_SIZES[view] || VIEW_SIZES["actions"];
     }
 
+    function initialViewSize(view) {
+      const size = getViewSize(view);
+      return view === "duplicate-prompt"
+        ? { ...size, height: 245 }
+        : size;
+    }
+
     function panelSizeTransition() {
       return skipOverlayAnimations ? "none" : "width 0.15s ease-out, height 0.15s ease-out";
+    }
+
+    function clearPanelAnimations(overlay, panel) {
+      if (overlay) overlay.style.animation = "none";
+      if (panel) panel.style.animation = "none";
+    }
+
+    function applyPanelRevealAnimation(overlay, panel) {
+      if (skipOverlayAnimations) {
+        clearPanelAnimations(overlay, panel);
+        return;
+      }
+      if (overlay) overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
+      if (panel) {
+        panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
+      }
     }
 
     function browserMessageManager(br) {
@@ -1701,7 +1728,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const existing = w.document.getElementById(OVERLAY_ID);
       if (existing) {
         const existingBrowser = w.document.getElementById(BROWSER_ID);
-        if (browserMessageManager(existingBrowser) && browserHasCurrentGeneration(existingBrowser)) {
+        if (
+          !existing.dataset.closing &&
+          browserMessageManager(existingBrowser) &&
+          browserHasCurrentGeneration(existingBrowser)
+        ) {
           return rearmExistingOverlay(view, params, existing);
         }
         existing.remove();
@@ -1762,11 +1793,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         `;
 
       const viewName = view || "actions";
-      const size = getViewSize(viewName);
+      const initialSize = initialViewSize(viewName);
 
       navStack = [];
       currentViewName = viewName;
-      currentViewParams = {};
+      currentViewParams = params || {};
+      currentDynamicSidebarWidth = 0;
+      currentMeasuredResizeView = null;
+      popupReady = false;
       popupReadyTargetView = viewName;
 
       const overlay = w.document.createElement("div");
@@ -1796,9 +1830,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       const panel = w.document.createElement("div");
       panel.id = PANEL_ID;
+      panel.dataset.view = viewName;
       panel.style.cssText = [
-        "width: " + size.width + "px",
-        "height: " + size.height + "px",
+        "width: " + initialSize.width + "px",
+        "height: " + initialSize.height + "px",
         "background: var(--arrowpanel-background, light-dark(rgb(244, 244, 244), rgb(31, 31, 31)))",
         "border-radius: 12px",
         "border: 1px solid var(--zen-colors-border, light-dark(rgba(0,0,0,0.15), rgba(255,255,255,0.08)))",
@@ -1813,7 +1848,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "transition: none",
       ].join(";");
 
-      const br = createBrowserElement(w, size, { view, params });
+      const br = createBrowserElement(w, initialSize, { view, params });
       br.style.transition = "none";
       panel.appendChild(br);
       overlay.appendChild(panel);
@@ -1834,10 +1869,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         overlay.style.visibility = "visible";
         overlay.style.opacity = "1";
         overlay.style.pointerEvents = "auto";
-        if (!skipOverlayAnimations) {
-          overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
-          panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
-        }
+        applyPanelRevealAnimation(overlay, panel);
         // Restore size transitions after the hidden first measurement has
         // snapped into place. Subsequent in-popup view changes should still
         // animate smoothly unless the user opted out of animations.
@@ -1858,6 +1890,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const existing = w && w.document.getElementById(OVERLAY_ID);
       if (existing) {
         destroyOverlay({ hard: true, silent: true });
+        // hard destroy normally removes immediately when the overlay is
+        // hidden, but visible overlays take the animated close path. Direct
+        // opens (duplicate prompt, explicit external popup captures) need a
+        // genuinely fresh panel so the new view cannot inherit and animate
+        // from the old panel's dimensions.
+        if (existing.isConnected) existing.remove();
       }
       return createOverlay(view, params);
     }
@@ -1892,6 +1930,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       navStack = [];
       currentViewName = view || "actions";
       currentViewParams = {};
+      currentDynamicSidebarWidth = 0;
+      currentMeasuredResizeView = null;
 
       const viewName = view || "actions";
       popupReadyTargetView = viewName;
@@ -1931,10 +1971,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         overlay.style.visibility = "visible";
         overlay.style.opacity = "1";
         overlay.style.pointerEvents = "auto";
-        if (!skipOverlayAnimations) {
-          overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
-          if (panel) panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
-        }
+        applyPanelRevealAnimation(overlay, panel);
         // Restore the width/height transition that rearm suppressed,
         // unless the user opted out of palette animations.
         // Defer one frame so any final size assignment from the rearm
@@ -1942,8 +1979,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (panel) {
           const w2 = getWin();
           if (w2) w2.requestAnimationFrame(() => {
-            panel.style.transition = panelSizeTransition();
-            if (br) br.style.transition = panelSizeTransition();
+            const transition = panelSizeTransition();
+            panel.style.transition = transition;
+            if (br) br.style.transition = transition;
           });
         }
         if (br) br.focus();
@@ -2000,10 +2038,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         const panel = w.document.getElementById(PANEL_ID);
         const br = w.document.getElementById(BROWSER_ID);
-        if (!skipOverlayAnimations) {
-          overlay.style.animation = "ztt-overlay-in 0.10s ease-out";
-          if (panel) panel.style.animation = "ztt-panel-in 0.10s cubic-bezier(0.25, 1, 0.5, 1)";
-        }
+        applyPanelRevealAnimation(overlay, panel);
         if (panel) {
           w.requestAnimationFrame(() => {
             const transition = panelSizeTransition();
@@ -2025,17 +2060,85 @@ this.zenWorkspaces = class extends ExtensionAPI {
       overlay.style.visibility = "visible";
       overlay.style.opacity = "1";
       overlay.style.pointerEvents = "auto";
+      if (skipOverlayAnimations) clearPanelAnimations(overlay, w.document.getElementById(PANEL_ID));
       if (br) {
         try { br.focus(); } catch (e) {}
       }
+    }
+
+    function revealExplicitViewIfReady(view) {
+      const viewName = view || "actions";
+      if (explicitRevealView !== viewName || !pendingReveal) return false;
+
+      const w = getWin();
+      if (!w) return false;
+      const overlay = w.document.getElementById(OVERLAY_ID);
+      const br = w.document.getElementById(BROWSER_ID);
+      if (!overlay || overlay.dataset.closing || !br) return false;
+      if (currentViewName !== viewName) return false;
+      if (overlay.style.visibility !== "hidden" && overlay.style.opacity !== "0") return false;
+
+      const targetSize = getViewSize(viewName);
+      const width = Math.round(Number.parseFloat(br.style.width || "0"));
+      const height = Math.round(Number.parseFloat(br.style.height || "0"));
+      const isMeasuredView = isCompactMeasuredView(viewName);
+      const widthReady = width >= targetSize.width;
+      const heightReady = !isMeasuredView || (currentMeasuredResizeView === viewName && height > 0 && height < targetSize.height);
+      if (!widthReady || !heightReady) return false;
+
+      const token = explicitRevealToken;
+      if (explicitRevealScheduledToken === token) return true;
+      explicitRevealScheduledToken = token;
+      const commitReveal = () => {
+        if (token !== explicitRevealToken || explicitRevealScheduledToken !== token) return;
+        const w2 = getWin();
+        if (!w2) return;
+        const overlay2 = w2.document.getElementById(OVERLAY_ID);
+        if (!overlay2 || overlay2.dataset.closing) return;
+        if (currentViewName !== viewName) return;
+        explicitRevealScheduledToken = 0;
+        explicitRevealView = null;
+        revealDeferred = false;
+        if (pendingReveal) revealOverlay();
+        else forceRevealOverlay();
+      };
+      if (skipOverlayAnimations) {
+        w.requestAnimationFrame(() => w.requestAnimationFrame(commitReveal));
+        w.setTimeout(commitReveal, 0);
+      } else {
+        w.setTimeout(commitReveal, 120);
+      }
+      return true;
     }
 
     function scheduleExplicitViewReveal(view) {
       const token = ++explicitRevealToken;
       const w = getWin();
       if (!w) return;
-      const targetWidth = getViewSize(view || "actions").width;
+      explicitRevealView = view || "actions";
       const startedAt = Date.now();
+      let revealScheduled = false;
+
+      const revealAfterLayoutSettles = () => {
+        if (revealScheduled) return;
+        revealScheduled = true;
+        const w2 = getWin();
+        if (!w2) return;
+        w2.requestAnimationFrame(() => {
+          w2.requestAnimationFrame(() => {
+            if (token !== explicitRevealToken) return;
+            const w3 = getWin();
+            if (!w3) return;
+            const overlay = w3.document.getElementById(OVERLAY_ID);
+            if (!overlay || overlay.dataset.closing) return;
+            if (currentViewName !== (view || "actions")) return;
+            explicitRevealView = null;
+            revealDeferred = false;
+            if (pendingReveal) revealOverlay();
+            else forceRevealOverlay();
+          });
+        });
+      };
 
       const tryReveal = () => {
         if (token !== explicitRevealToken) return;
@@ -2047,15 +2150,27 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (currentViewName !== (view || "actions")) return;
         if (overlay.style.visibility !== "hidden" && overlay.style.opacity !== "0") return;
 
+        const viewName = view || "actions";
+        const targetWidth = getViewSize(viewName).width + currentDynamicSidebarWidth;
         const width = Math.round(Number.parseFloat(br?.style?.width || "0"));
-        if (width === targetWidth) {
-          if (pendingReveal) revealOverlay();
-          else forceRevealOverlay();
+        const isMeasuredView = isCompactMeasuredView(viewName);
+        const heightReady = !isMeasuredView || currentMeasuredResizeView === viewName;
+        const retryBounceWindowPassed = !isMeasuredView || Date.now() - startedAt >= 380;
+        const viewReady = isMeasuredView ? heightReady && retryBounceWindowPassed : popupReady;
+        if (revealExplicitViewIfReady(viewName)) {
+          return;
+        }
+        if (viewReady && width === targetWidth && heightReady) {
+          revealAfterLayoutSettles();
           return;
         }
 
         if (Date.now() - startedAt < 2000) {
           w2.setTimeout(tryReveal, 100);
+        } else if (pendingReveal) {
+          explicitRevealView = null;
+          revealDeferred = false;
+          revealOverlay();
         }
       };
 
@@ -2156,7 +2271,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // VIEW_SIZES[view].height (which acts as a max) so list-y views with
     // many rows stay bounded and scroll internally; short menus
     // (reorder, split, etc.) shrink to fit their content.
-    function resizePanelToView(view, measuredHeight) {
+    function resizePanelToView(view, measuredHeight, dynamicSidebarWidth, options = {}) {
       const w = getWin();
       if (!w) return;
       const panel = w.document.getElementById(PANEL_ID);
@@ -2164,20 +2279,35 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!panel || !br) return;
       const previousView = currentViewName;
       currentViewName = view || "actions";
+      panel.dataset.view = currentViewName;
       if (!view || view === "actions") currentViewParams = {};
       if (view === "actions" && paletteURLView(br) !== "actions") {
         morphToView("actions", {});
         return;
       }
+      if (typeof dynamicSidebarWidth === "number" && Number.isFinite(dynamicSidebarWidth)) {
+        currentDynamicSidebarWidth = Math.max(0, Math.ceil(dynamicSidebarWidth));
+      }
       const targetSize = getViewSize(view);
+      const width = targetSize.width + currentDynamicSidebarWidth;
       const canUseMeasuredHeight = isCompactMeasuredView(view);
       const height = (canUseMeasuredHeight && typeof measuredHeight === "number" && measuredHeight > 0)
         ? Math.min(Math.ceil(measuredHeight) + 2, targetSize.height)
         : targetSize.height;
-      panel.style.width = targetSize.width + "px";
+      const measuredPastInitialSize = canUseMeasuredHeight &&
+        typeof measuredHeight === "number" &&
+        measuredHeight > 0 &&
+        height > initialViewSize(view).height &&
+        height < targetSize.height;
+      const allowExplicitReveal = options.allowExplicitReveal !== false || (view === "duplicate-prompt" && measuredPastInitialSize);
+      if (allowExplicitReveal && canUseMeasuredHeight && typeof measuredHeight === "number" && measuredHeight > 0 && height < targetSize.height) {
+        currentMeasuredResizeView = currentViewName;
+      }
+      panel.style.width = width + "px";
       panel.style.height = height + "px";
-      br.style.width = targetSize.width + "px";
+      br.style.width = width + "px";
       br.style.height = height + "px";
+      if (allowExplicitReveal) revealExplicitViewIfReady(view);
       if (previousView !== view && isCompactMeasuredView(view)) {
         scheduleNativePopupContentResize(view);
       }
@@ -2196,6 +2326,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function measureNativePopupContentResize(view) {
       const w = getWin();
       if (!w || currentViewName !== (view || "actions")) return;
+      if (popupReady) return;
       const br = w.document.getElementById(BROWSER_ID);
       const mm = browserMessageManager(br);
       if (!br || !mm || !String(br.currentURI?.spec || "").includes("/popup/popup.html")) return;
@@ -2209,10 +2340,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
         w.clearTimeout(timeout);
         try { mm.removeMessageListener(name, handler); } catch (e) {}
         if (currentViewName !== (view || "actions")) return;
+        if (popupReady) return;
         const height = Number(msg.data && msg.data.height);
         if (height > 0) {
-          resizePanelToView(view, height);
-          if (revealDeferred && pendingReveal && (!bridgeBuffer || bridgeBuffer.length === 0)) {
+          resizePanelToView(view, height, undefined, { allowExplicitReveal: false });
+          if (!explicitRevealView && revealDeferred && pendingReveal && (!bridgeBuffer || bridgeBuffer.length === 0)) {
             revealDeferred = false;
             const w2 = getWin();
             if (w2) w2.setTimeout(() => { if (pendingReveal) revealOverlay(); }, 0);
@@ -2482,6 +2614,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // remove it, producing a flash.
       revealBlocked = true;
       explicitRevealToken++;
+      explicitRevealView = null;
+      explicitRevealScheduledToken = 0;
 
       // Bridge mode can't outlive the chord chain it was driving. If a
       // bridge is active when the overlay is being destroyed, tear it down
@@ -3377,8 +3511,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  try { if (content && content.__zenTabsPanelChordEngineGen === __GEN) content.__zenTabsPanelChordEngineGen = null; } catch(e){}\n" +
         "  return;\n" +
         "}\n" +
+        "var __PALETTE_BROWSER_ID = " + JSON.stringify(BROWSER_ID) + ";\n" +
         "function isExtensionPage(){\n" +
         "  try { return String(content && content.location && content.location.href || '').startsWith('moz-extension://'); } catch (e) { return false; }\n" +
+        "}\n" +
+        "function isOverlayBrowser(){\n" +
+        "  try {\n" +
+        "    var handler = content && content.docShell && content.docShell.chromeEventHandler;\n" +
+        "    return !!(handler && handler.id === __PALETTE_BROWSER_ID);\n" +
+        "  } catch (e) { return false; }\n" +
         "}\n" +
         "function tag(data){ var o = data || {}; o.__gen = __GEN; return o; }\n" +
         "function bridgeEvent(type, data){\n" +
@@ -3550,10 +3691,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    try { content.removeEventListener('keydown', blockDefaultGroup, { capture: true }); } catch(_) {}\n" +
         "    try { content.removeEventListener('mouseover', onDuplicateLinkMouseover, { capture: true }); } catch(_) {}\n" +
         "    try { content.removeEventListener('click', onDuplicateLinkClick, { capture: true }); } catch(_) {}\n" +
-        "    // Extension pages skip engine attachment — they have their own keybindings.\n" +
+        "    // The palette/hosted-popup browser owns its own key handling.\n" +
+        "    // Regular moz-extension:// pages opened in normal tabs still need\n" +
+        "    // the content chord engine; otherwise cmd+.,p leaks there and the\n" +
+        "    // root timer only opens the main menu.\n" +
         "    // The same remote browser can be reused after a regular page, so also\n" +
         "    // detach any blocker/engine left from the prior document.\n" +
-        "    if (isExtensionPage()) { try { __engine.reset(); __engine.detach(); } catch(_) {} return; }\n" +
+        "    if (isOverlayBrowser()) { try { __engine.reset(); __engine.detach(); } catch(_) {} return; }\n" +
         "    __engine.attach(content);\n" +
         "    // Detach-then-attach the default-group blocker so duplicate\n" +
         "    // DOMWindowCreated firings don't stack listeners.\n" +
@@ -3841,6 +3985,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function openDuplicatePromptOverlay(url, domId) {
       revealDeferred = true;
+      const w = getWin();
+      const overlay = w?.document?.getElementById(OVERLAY_ID);
+      if (
+        overlay &&
+        !overlay.dataset.closing &&
+        currentViewName === "duplicate-prompt" &&
+        currentViewParams?.url === url
+      ) {
+        scheduleExplicitViewReveal("duplicate-prompt");
+        return;
+      }
       createFreshOverlayForDirectOpen("duplicate-prompt", { url, domId });
       scheduleExplicitViewReveal("duplicate-prompt");
     }
@@ -5283,7 +5438,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // pause case the user wanted UI for, not a fast chain),
           // reveal now. For the buffered-keys case the user is in a
           // chord chain and the popup will decide reveal timing.
-          if (revealDeferred) {
+          if (!explicitRevealView && revealDeferred) {
             revealDeferred = false;
             if (drained.length === 0 && pendingReveal) {
               // Defer one tick so the popup's init() has time to
@@ -5545,10 +5700,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         },
 
-        async resizePanel(view, height) {
+        async resizePanel(view, height, dynamicSidebarWidth, inst) {
           if (!isOverlayOpen()) return;
-          resizePanelToView(view, height);
-          if (revealDeferred && pendingReveal && (!bridgeBuffer || bridgeBuffer.length === 0)) {
+          if (typeof inst === "number" && inst !== popupInstance) return;
+          resizePanelToView(view, height, dynamicSidebarWidth);
+          if (!explicitRevealView && revealDeferred && pendingReveal && (!bridgeBuffer || bridgeBuffer.length === 0)) {
             revealDeferred = false;
             const w = getWin();
             if (w) w.setTimeout(() => { if (pendingReveal) revealOverlay(); }, 0);
@@ -5624,10 +5780,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
           skipOverlayAnimations = !!skip;
           const w = getWin();
           const panel = w && w.document.getElementById(PANEL_ID);
+          const overlay = w && w.document.getElementById(OVERLAY_ID);
           const br = w && w.document.getElementById(BROWSER_ID);
           const transition = panelSizeTransition();
           if (panel) panel.style.transition = transition;
           if (br) br.style.transition = transition;
+          if (skipOverlayAnimations) clearPanelAnimations(overlay, panel);
           const mm = browserMessageManager(br);
           if (mm) {
             try {

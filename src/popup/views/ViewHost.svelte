@@ -49,6 +49,7 @@
     launchProfileWithTrace: (row: ProfileRow) => void;
     activateTab: (row: { domId: string }) => void;
     closeDuplicateTab: (row: TabIndexRow) => void;
+    closeDuplicatePromptTab: (row: TabIndexRow) => void;
     previewTab: (row: TabIndexRow) => void;
     closeTabInfoDuplicate: (row: TabIndexRow) => void;
     closeOtherTabInfoDuplicates: () => void;
@@ -83,6 +84,7 @@
     launchProfileWithTrace,
     activateTab,
     closeDuplicateTab,
+    closeDuplicatePromptTab,
     previewTab,
     closeTabInfoDuplicate,
     closeOtherTabInfoDuplicates,
@@ -172,6 +174,7 @@
       <DuplicateGroups
         groups={palette.duplicateGroups}
         workspaces={palette.duplicateWorkspaces}
+        selectedIndex={palette.selectedIndex}
         onactivate={activateTab}
         onclose={closeDuplicateTab}
         onpreview={previewTab}
@@ -194,7 +197,11 @@
         url={palette.duplicatePromptUrl}
         existingDomId={palette.duplicatePromptDomId}
         selectedIndex={palette.selectedIndex}
+        group={palette.duplicatePromptGroup}
+        workspaces={palette.duplicatePromptWorkspaces}
         onactivate={runDuplicatePromptAction}
+        ontabactivate={activateTab}
+        onclose={closeDuplicatePromptTab}
         onpreview={(domId) => previewTabLike({ domId })}
         onclearpreview={clearPreview}
       />

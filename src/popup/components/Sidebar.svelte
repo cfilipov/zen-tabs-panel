@@ -18,6 +18,7 @@
     workspaces?: WorkspaceRow[];
     workspaceFilter?: string;
     activeWorkspaceId?: string | null;
+    element?: HTMLDivElement;
     onSort?: () => void;
     onWorkspaceFilter?: (workspaceId: string) => void;
   };
@@ -30,6 +31,7 @@
     workspaces = [],
     workspaceFilter = "all",
     activeWorkspaceId = null,
+    element = $bindable(),
     onSort,
     onWorkspaceFilter,
   }: Props = $props();
@@ -44,7 +46,7 @@
   }
 </script>
 
-<div id="sidebar" class:hidden class:sidebar-hints-only={hintsOnly}>
+<div id="sidebar" class:hidden class:sidebar-hints-only={hintsOnly} bind:this={element}>
   {#each hints as hint (hint.id)}
     <button
       type="button"

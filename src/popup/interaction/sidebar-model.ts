@@ -19,6 +19,7 @@ export type SidebarHintModel = {
 export type SidebarModelContext = {
   view: ViewId;
   selectedIndex: number;
+  closeSelectionAvailable?: boolean;
   domainsSortAlpha: boolean;
   tabsByAgeNewestFirst: boolean;
 };
@@ -34,9 +35,10 @@ export function buildSidebarModel(context: SidebarModelContext): SidebarModel {
   const hintsOnly = context.view === "recently-closed";
   const sortLabel = sidebarSortLabel(context);
   const hints = sidebarHints(context);
+  const visibleHints = hints.filter((hint) => !hint.hidden);
   const hidden = hintsOnly
     ? context.selectedIndex < 0
-    : !isWorkspaceFilterView(context.view) && hints.length === 0 && !sortLabel;
+    : !isWorkspaceFilterView(context.view) && visibleHints.length === 0 && !sortLabel;
 
   return { hidden, hints, hintsOnly, sortLabel };
 }
@@ -50,11 +52,12 @@ function sidebarSortLabel(context: SidebarModelContext) {
 function sidebarHints(context: SidebarModelContext): SidebarHintModel[] {
   const hints: SidebarHintModel[] = [];
   if (isCloseableView(context.view)) {
+    const available = context.closeSelectionAvailable ?? context.selectedIndex >= 0;
     hints.push({
       id: "close",
       label: "Close tab",
       badge: "W",
-      hidden: context.selectedIndex < 0,
+      hidden: !available,
     });
   }
   if (canCloseAllInView(context.view)) {

@@ -45,7 +45,7 @@ export const NAVIGATION_TREE = [
   { id: "unvisited-tabs",  kind: "open-view", chord: "N",       view: "unvisited-tabs",  label: "New tabs",        icon: "svg:circle-dot",    needsUnvisited: true, viewCapabilities: TAB_LIST_CAPABILITIES },
   { id: "last-visited",    kind: "open-view", chord: "R",       view: "last-visited",    label: "Recent",          icon: "svg:clock", viewCapabilities: TAB_LIST_CAPABILITIES },
   { id: "recently-closed", kind: "open-view", chord: "X",       view: "recently-closed", label: "Recently closed", icon: "svg:rotate-ccw",    needsRecentlyClosed: true, viewCapabilities: ["restoreSelection"] },
-  { id: "duplicates",      kind: "open-view", chord: "D",       view: "duplicates",      label: "Duplicates",      icon: "svg:copy",          needsDuplicates: true, viewCapabilities: ["workspaceFilter"] },
+  { id: "duplicates",      kind: "open-view", chord: "D",       view: "duplicates",      label: "Duplicates",      icon: "svg:copy",          needsDuplicates: true, viewCapabilities: ["closeSelection", "workspaceFilter"] },
   { id: "tab-info",        kind: "open-view", chord: "I",       view: "tab-info",        label: "Tab info",        icon: "svg:info" },
   { id: "domains",         kind: "open-view", chord: "Q",       view: "domains",         label: "Domains",         icon: "svg:globe", viewCapabilities: ["sort", "workspaceFilter"] },
   { id: "tabs-by-age",     kind: "open-view", chord: "A",       view: "tabs-by-age",     label: "Tabs by age",     icon: "svg:calendar-clock", viewCapabilities: SORTABLE_TAB_LIST_CAPABILITIES },

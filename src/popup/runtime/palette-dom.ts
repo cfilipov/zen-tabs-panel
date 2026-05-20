@@ -56,7 +56,7 @@ export function scrollSelectedItemIntoView(
   raf: (callback: FrameRequestCallback) => number = requestAnimationFrame,
 ) {
   raf(() => {
-    const selected = doc.querySelector<HTMLElement>(".list-item.selected");
+    const selected = doc.querySelector<HTMLElement>(".list-item.selected, .duplicate-tab-row.selected");
     const list = doc.getElementById("list");
     if (!selected || !list) return;
 

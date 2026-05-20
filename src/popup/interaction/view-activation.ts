@@ -20,6 +20,8 @@ export type ViewActivationContext = {
   containerRows: readonly ContainerRow[];
   folderRows: readonly FolderRow[];
   profileRows: readonly ProfileRow[];
+  duplicateTabs: readonly TabIndexRow[];
+  duplicatePromptTabs: readonly TabIndexRow[];
 };
 
 export type ViewActivation =
@@ -94,7 +96,21 @@ export function resolveViewActivation(
     return row ? { kind: "launch-profile", row } : { kind: "none" };
   }
 
+  if (context.view === "duplicates") {
+    const row = source === "selection" ? context.duplicateTabs[index] : null;
+    return row ? { kind: "activate-tab", row } : { kind: "none" };
+  }
+
   if (context.view === "duplicate-prompt") {
+    if (source === "shortcut") {
+      if (index === 0) return { kind: "duplicate-prompt-action", action: "duplicate-switch" };
+      const row = context.duplicatePromptTabs[index];
+      return row ? { kind: "activate-tab", row } : { kind: "none" };
+    }
+    if (index >= DUPLICATE_PROMPT_ACTIONS.length) {
+      const row = context.duplicatePromptTabs[index - DUPLICATE_PROMPT_ACTIONS.length];
+      return row ? { kind: "activate-tab", row } : { kind: "none" };
+    }
     const action = DUPLICATE_PROMPT_ACTIONS[index];
     return action ? { kind: "duplicate-prompt-action", action } : { kind: "none" };
   }

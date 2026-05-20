@@ -343,18 +343,15 @@ html, body {
   background: var(--ztt-bg-selected);
 }
 
-/* Duplicate-prompt: the intercepted URL preview at the top of the
-   prompt view. Renders as a single line with the URL truncated. */
-.duplicate-prompt-url {
-  padding: 8px 12px 10px;
-  font-size: 12px;
-  color: var(--ztt-text-muted);
-  border-bottom: 1px solid color-mix(in srgb, var(--ztt-text-muted) 25%, transparent);
-  margin: 0 4px 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  user-select: text;
+.duplicate-prompt-divider {
+  height: 1px;
+  background: var(--ztt-border);
+  margin: 8px 12px 4px;
+}
+
+.duplicate-prompt-group {
+  padding-bottom: 2px;
+  contain: layout paint;
 }
 
 /* Activation flash: distinct from .selected (gray arrow-key cursor). Uses
@@ -799,6 +796,7 @@ html, body {
 /* Duplicate groups view */
 .dup-group {
   padding: 0 6px;
+  contain: layout paint;
 }
 
 .dup-group + .dup-group {
@@ -854,6 +852,65 @@ html, body {
   text-overflow: ellipsis;
 }
 
+.duplicate-tab-grid {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0 10px;
+  contain: layout paint;
+}
+
+.duplicate-tab-row {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: var(--ztt-item-radius);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  width: 100%;
+  cursor: pointer;
+  transition: background 0.08s ease;
+}
+
+.duplicate-tab-row:hover {
+  background: var(--ztt-bg-hover);
+}
+
+.duplicate-tab-row.selected {
+  background: var(--ztt-bg-selected);
+}
+
+.duplicate-tab-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 34px;
+}
+
+.duplicate-tab-row:hover .item-badge-stack .item-close,
+.duplicate-tab-row.selected .item-badge-stack .item-close {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.duplicate-tab-row:hover .item-badge-stack .item-badge,
+.duplicate-tab-row:hover .item-badge-stack .item-badge-placeholder,
+.duplicate-tab-row.selected .item-badge-stack .item-badge,
+.duplicate-tab-row.selected .item-badge-stack .item-badge-placeholder {
+  pointer-events: none;
+}
+
+.duplicate-tab-row:hover .item-badge-stack .item-badge,
+.duplicate-tab-row.selected .item-badge-stack .item-badge {
+  opacity: 0;
+}
+
 .item-arrow {
   font-size: 12px;
   color: var(--ztt-text-muted);
@@ -876,7 +933,9 @@ html, body {
 
 .info-duplicate-row.tab-pending .dup-index,
 .info-duplicate-row.tab-pending .dup-workspace,
-.info-duplicate-row.tab-pending .dup-age {
+.info-duplicate-row.tab-pending .dup-age,
+.duplicate-tab-row.tab-pending .dup-workspace,
+.duplicate-tab-row.tab-pending .dup-age {
   filter: grayscale(1);
   opacity: 0.5;
 }

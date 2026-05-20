@@ -25,7 +25,12 @@
     visibleRangeRequest,
   } from "./interaction/list-window";
   import { replayKeyForBadgeIndex, replayKeyForNavigationIndex } from "./interaction/replay-trace";
-  import { duplicatePromptPreviewDomId, nextSelectionIndex, type SelectionContext } from "./interaction/selection";
+  import {
+    duplicatePromptPreviewDomId,
+    nextDuplicatePromptSectionIndex,
+    nextSelectionIndex,
+    type SelectionContext,
+  } from "./interaction/selection";
   import {
     keepOnlyTabInfoDuplicate,
     removeRecentlyClosedRow,
@@ -51,6 +56,7 @@
   import {
     canDrillSelectionInView,
     canRestoreInView,
+    isWorkspaceFilterView,
   } from "./interaction/view-capabilities";
   import { createContainerClient, type ContainerRow } from "./runtime/container-client";
   import { createExtensionClient, type ExtensionRow } from "./runtime/extension-client";
@@ -122,6 +128,7 @@
   const palette = paletteStore.state;
   let pageAlive = true;
   let skipAnimations = $state(new URLSearchParams(location.search).get("skipAnimations") === "1");
+  let suppressViewTransition = $state(true);
   let terminalCommandDispatched = false;
   let terminalCommandDispatchedAt = 0;
   const revealController = createPaletteRevealController({
@@ -179,7 +186,7 @@
     isAlive: () => pageAlive,
     getElementById: (id) => document.getElementById(id),
     setTimeout: (fn, ms) => window.setTimeout(fn, ms),
-    resizePanel: (view, height) => effects.resizePanel(view, height).catch(() => {}),
+    resizePanel: (view, height, width) => effects.resizePanel(view, height, width, revealController.inst).catch(() => {}),
   });
   const renderedActionSections = $derived(
     applyActionMetadata(
@@ -211,11 +218,23 @@
   const selectedDomainRow = $derived(isDomainRow(selectedRow) ? selectedRow : null);
   const tabRows = $derived(palette.rows.filter(isTabRow));
   const domainRows = $derived(palette.rows.filter(isDomainRow));
+  const duplicateTabs = $derived(palette.duplicateGroups.flatMap((group) => group.tabs));
+  const duplicatePromptTabs = $derived((palette.duplicatePromptGroup?.tabs ?? []).slice(0, 9));
   const selectedRowDomId = $derived(selectedTabRow?.domId ?? null);
+  const selectedDuplicateTabRow = $derived(
+    palette.currentView === "duplicates" ? duplicateTabs[palette.selectedIndex] ?? null : null,
+  );
+  const selectedDuplicatePromptTabRow = $derived(
+    palette.currentView === "duplicate-prompt" && palette.selectedIndex >= DUPLICATE_PROMPT_ACTIONS.length
+      ? duplicatePromptTabs[palette.selectedIndex - DUPLICATE_PROMPT_ACTIONS.length] ?? null
+      : null,
+  );
   const selectedDuplicatePromptDomId = $derived(duplicatePromptPreviewDomId(
     palette.currentView,
     palette.selectedIndex,
     palette.duplicatePromptDomId,
+    duplicatePromptTabs.map((tab) => tab.domId),
+    DUPLICATE_PROMPT_ACTIONS.length,
   ));
   const selectedDomain = $derived(selectedDomainRow?.domain ?? null);
   const navigationEntries = $derived(palette.navigationHistory?.entries ?? []);
@@ -223,6 +242,7 @@
   const sidebarModel = $derived(buildSidebarModel({
     view: palette.currentView,
     selectedIndex: palette.selectedIndex,
+    closeSelectionAvailable: palette.currentView === "duplicate-prompt" ? !!selectedDuplicatePromptTabRow : undefined,
     domainsSortAlpha: palette.domainsSortAlpha,
     tabsByAgeNewestFirst: palette.tabsByAgeNewestFirst,
   }));
@@ -233,6 +253,7 @@
     onclick: sidebarHintAction(hint.id),
   })));
   const sidebarHidden = $derived(sidebarModel.hidden);
+  const dynamicSidebarWidth = $derived(!sidebarHidden && !isWorkspaceFilterView(palette.currentView));
   const interactionRuntime = createNativePaletteInteractionRuntime({
     fireActionEffect: (actionId) => performActionItemActivation({ kind: "fire-action", actionId }),
     activateVisibleAction: async (actionId) => {
@@ -519,10 +540,34 @@
 
   function closeDuplicateTab(row: TabIndexRow) {
     effects.closeTab(row.domId);
-    paletteStore.replaceDuplicateGroups(removeTabFromDuplicateGroups(palette.duplicateGroups, row.domId));
+    const groups = removeTabFromDuplicateGroups(palette.duplicateGroups, row.domId);
+    paletteStore.replaceDuplicateGroups(groups);
+    if (palette.currentView === "duplicates") {
+      const count = groups.reduce((sum, group) => sum + group.tabs.length, 0);
+      paletteStore.selectIndex(count <= 0 ? -1 : Math.min(palette.selectedIndex, count - 1));
+    }
+  }
+
+  function closeDuplicatePromptTab(row: TabIndexRow) {
+    effects.closeTab(row.domId);
+    if (!palette.duplicatePromptGroup) return;
+    const tabs = palette.duplicatePromptGroup.tabs.filter((tab) => tab.domId !== row.domId);
+    paletteStore.replaceDuplicatePromptGroup(tabs.length ? { ...palette.duplicatePromptGroup, tabs } : null);
+    const nextIndex = tabs.length
+      ? Math.min(palette.selectedIndex, DUPLICATE_PROMPT_ACTIONS.length + tabs.length - 1)
+      : -1;
+    paletteStore.selectIndex(nextIndex);
   }
 
   function closeSelectedTabRow() {
+    if (palette.currentView === "duplicates" && selectedDuplicateTabRow) {
+      closeDuplicateTab(selectedDuplicateTabRow);
+      return;
+    }
+    if (palette.currentView === "duplicate-prompt" && selectedDuplicatePromptTabRow) {
+      closeDuplicatePromptTab(selectedDuplicatePromptTabRow);
+      return;
+    }
     const row = selectedTabRow;
     if (!row) return;
     effects.closeTab(row.domId);
@@ -629,6 +674,10 @@
   }
 
   async function goBack() {
+    if (palette.currentView === "duplicate-prompt") {
+      effects.hidePalette();
+      return;
+    }
     const previous = await effects.navigateBack().catch(() => null);
     if (previous?.view && previous.view !== "actions") {
       clearPreview();
@@ -678,7 +727,9 @@
       containerCount: palette.containerRows.length,
       folderCount: palette.folderRows.length,
       profileRows: palette.profileRows,
-      duplicatePromptCount: DUPLICATE_PROMPT_ACTIONS.length,
+      duplicateTabCount: duplicateTabs.length,
+      duplicatePromptCount: DUPLICATE_PROMPT_ACTIONS.length + duplicatePromptTabs.length,
+      duplicatePromptActionCount: DUPLICATE_PROMPT_ACTIONS.length,
       rowCount: isNativeListView(palette.currentView) ? palette.total : palette.rows.length,
       isPrefixView: isNativePrefixView(palette.currentView),
     };
@@ -697,6 +748,14 @@
   }
 
   function jumpSection(delta: 1 | -1) {
+    if (palette.currentView === "duplicate-prompt") {
+      const nextIndex = nextDuplicatePromptSectionIndex(selectionContext(), delta);
+      if (nextIndex !== null) {
+        paletteStore.selectIndex(nextIndex);
+        scrollCurrentSelectionIntoView();
+      }
+      return;
+    }
     if (!isCurrentActionsView()) return;
     const nextIndex = nextActionSectionIndex({
       sections: renderedActionSections,
@@ -746,6 +805,8 @@
       containerRows: palette.containerRows,
       folderRows: palette.folderRows,
       profileRows: palette.profileRows,
+      duplicateTabs,
+      duplicatePromptTabs,
     };
   }
 
@@ -828,7 +889,15 @@
       return false;
     }
     const actionNodes = palette.currentView === "actions" ? allActionNodes : isNativePrefixView(palette.currentView) ? prefixNodes : [];
-    const command = interpretVisibleInput({ kind: "key", ...input }, { view: palette.currentView }, actionNodes);
+    const command = interpretVisibleInput(
+      { kind: "key", ...input },
+      {
+        view: palette.currentView,
+        selectedIndex: palette.selectedIndex,
+        duplicatePromptActionCount: DUPLICATE_PROMPT_ACTIONS.length,
+      },
+      actionNodes,
+    );
     if (command.kind === "none") {
       return false;
     }
@@ -883,12 +952,15 @@
     await requestPanelResize(palette.currentView);
     const reply = await signalPopupReady();
     await drainBridge(reply);
+    await tick();
+    suppressViewTransition = false;
   }
 
   async function handleWarmRearm(data: { inst?: number; view?: ViewId; params?: Record<string, unknown>; skipAnimations?: boolean }) {
     const generation = bridgeDispatch.resetForWarmRearm();
     revealController.updateInst(data.inst);
     skipAnimations = !!data.skipAnimations;
+    suppressViewTransition = true;
     clearPreview();
 
     const view = data.view || "actions";
@@ -898,6 +970,8 @@
     if (!bridgeDispatch.isCurrentWarmGeneration(generation)) return;
     const reply = await signalPopupReady();
     await drainBridge(reply, generation);
+    await tick();
+    if (bridgeDispatch.isCurrentWarmGeneration(generation)) suppressViewTransition = false;
   }
 
   function handleForceReady(data: ForceReadyPayload) {
@@ -945,8 +1019,12 @@
   $effect(() => {
     if (selectedTabRow) {
       previewTab(selectedTabRow);
+    } else if (selectedDuplicateTabRow) {
+      previewTab(selectedDuplicateTabRow);
     } else if (selectedDuplicatePromptDomId) {
       previewTabLike({ domId: selectedDuplicatePromptDomId });
+    } else if (palette.currentView === "duplicates") {
+      clearPreview();
     } else if (palette.currentView === "duplicate-prompt") {
       clearPreview();
     } else if (palette.currentView === "actions") {
@@ -970,6 +1048,7 @@
   {pageCount}
   currentPage={palette.currentPage}
   {fitContentHeight}
+  {dynamicSidebarWidth}
   onSidebarSort={toggleCurrentSort}
   onWorkspaceFilter={setWorkspaceFilter}
   onPage={setActionsPage}
@@ -977,7 +1056,7 @@
 >
   <ViewHost
     {palette}
-    {skipAnimations}
+    skipAnimations={skipAnimations || suppressViewTransition}
     actionSections={actionSectionsForRender}
     prefixItems={prefixItemsForRender}
     {tabRows}
@@ -998,6 +1077,7 @@
     {launchProfileWithTrace}
     {activateTab}
     {closeDuplicateTab}
+    {closeDuplicatePromptTab}
     {previewTab}
     {closeTabInfoDuplicate}
     {closeOtherTabInfoDuplicates}

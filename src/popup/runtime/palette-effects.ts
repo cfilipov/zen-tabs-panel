@@ -75,8 +75,14 @@ export function createPaletteEffects() {
     sendViewCommand(message: Record<string, unknown>) {
       fireMessage(message);
     },
-    resizePanel(view: ViewId, height: number) {
-      return sendMessage({ type: "resize-panel", view, height });
+    resizePanel(view: ViewId, height: number, dynamicSidebarWidth?: number, inst?: number | null) {
+      return sendMessage({
+        type: "resize-panel",
+        view,
+        height,
+        dynamicSidebarWidth,
+        ...(typeof inst === "number" ? { inst } : {}),
+      });
     },
     popupReady<T>(message: unknown) {
       return sendMessage<T>(message);

@@ -50,18 +50,24 @@ describe("interaction interpreter", () => {
       .toEqual({ kind: "back" });
     expect(interpretVisibleInput({ kind: "key", key: "Backspace" }, { view: "actions" }, fixtureTree))
       .toEqual({ kind: "cancel" });
+    expect(interpretVisibleInput({ kind: "key", key: "Backspace" }, { view: "duplicate-prompt" }, fixtureTree))
+      .toEqual({ kind: "cancel" });
     expect(interpretVisibleInput({ kind: "key", key: " " }, { view: "actions" }, fixtureTree))
       .toEqual({ kind: "cycle-page", delta: 1 });
     expect(interpretVisibleInput({ kind: "key", key: "ArrowRight" }, { view: "actions" }, fixtureTree))
       .toEqual({ kind: "move-selection-directional", delta: 1 });
     expect(interpretVisibleInput({ kind: "key", key: "ArrowLeft" }, { view: "reorder-tabs" }, fixtureTree))
       .toEqual({ kind: "move-selection-directional", delta: -1 });
+    expect(interpretVisibleInput({ kind: "key", key: "ArrowLeft" }, { view: "duplicate-prompt" }, fixtureTree))
+      .toEqual({ kind: "cancel" });
     expect(interpretVisibleInput({ kind: "key", key: "3" }, { view: "last-visited" }, fixtureTree))
       .toEqual({ kind: "activate-row", index: 2 });
   });
 
   it("keeps list augmentation keys in the interpreter", () => {
     expect(interpretVisibleInput({ kind: "key", key: "w" }, { view: "last-visited" }, []))
+      .toEqual({ kind: "close-selection" });
+    expect(interpretVisibleInput({ kind: "key", key: "w" }, { view: "duplicates" }, []))
       .toEqual({ kind: "close-selection" });
     expect(interpretVisibleInput({ kind: "key", key: "W", shiftKey: true }, { view: "child-tabs" }, []))
       .toEqual({ kind: "close-all" });
@@ -94,12 +100,19 @@ describe("interaction interpreter", () => {
       .toEqual({ kind: "navigate-history-delta", delta: -1 });
     expect(interpretVisibleInput({ kind: "key", key: "f" }, { view: "navigation" }, []))
       .toEqual({ kind: "navigate-history-delta", delta: 1 });
-    expect(interpretVisibleInput({ kind: "key", key: "s" }, { view: "duplicate-prompt" }, []))
+    expect(interpretVisibleInput({ kind: "key", key: "1" }, { view: "duplicate-prompt" }, []))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-switch" });
+    expect(interpretVisibleInput({ kind: "key", key: "s" }, { view: "duplicate-prompt" }, []))
+      .toEqual({ kind: "none" });
     expect(interpretVisibleInput({ kind: "key", key: "o" }, { view: "duplicate-prompt" }, []))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-anyway" });
     expect(interpretVisibleInput({ kind: "key", key: "w" }, { view: "duplicate-prompt" }, []))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-and-close-others" });
+    expect(interpretVisibleInput(
+      { kind: "key", key: "w" },
+      { view: "duplicate-prompt", selectedIndex: 4, duplicatePromptActionCount: 4 },
+      [],
+    )).toEqual({ kind: "close-selection" });
     expect(interpretVisibleInput({ kind: "key", key: "c" }, { view: "duplicate-prompt" }, []))
       .toEqual({ kind: "duplicate-prompt-action", action: "hide-palette" });
   });

@@ -616,7 +616,7 @@ const SYNC_HANDLERS = Object.freeze({
     await api.focusPalette().catch(() => {});
   },
   [MSG.OPEN_EXTENSION_POPUP]: (m) => api.openExtensionPopup(m.extensionId),
-  [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view, m.height),
+  [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view, m.height, m.dynamicSidebarWidth, m.inst),
   [MSG.TRACE_REPLAY_KEY]:     (m) => api.traceReplayKey(m.key),
 });
 

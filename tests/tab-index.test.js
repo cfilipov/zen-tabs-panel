@@ -159,6 +159,23 @@ test("tab index duplicate groups respect workspace filters", () => {
   ]);
 });
 
+test("tab index can return a singleton duplicate group for prompt previews", () => {
+  const index = makeIndex([
+    fakeTab("tab-1", "https://example.test/a", "ws-1"),
+    fakeTab("tab-2", "https://example.test/b", "ws-1"),
+    fakeTab("tab-3", "https://example.test/b", "ws-2"),
+  ]);
+
+  const groups = index.getDuplicateGroups({
+    url: "https://example.test/a",
+    includeSingleton: true,
+  });
+
+  assert.deepEqual(groups.map((group) => [group.url, group.tabs.length]), [
+    ["https://example.test/a", 1],
+  ]);
+});
+
 test("tab index returns active rows and requested DOM-id rows without a full transfer", () => {
   const index = makeIndex([
     fakeTab("tab-1", "https://example.test/a", "ws-1"),

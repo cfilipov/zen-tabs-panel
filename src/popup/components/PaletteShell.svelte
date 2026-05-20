@@ -28,10 +28,11 @@
     pageCount?: number;
     currentPage?: number;
     fitContentHeight?: boolean;
+    dynamicSidebarWidth?: boolean;
     onSidebarSort?: () => void;
     onWorkspaceFilter?: (workspaceId: string) => void;
     onPage?: (page: number) => void;
-    onheightchange?: (height: number) => void;
+    onheightchange?: (height: number, dynamicSidebarWidth?: number) => void;
   };
 
   let {
@@ -51,6 +52,7 @@
     pageCount = 1,
     currentPage = 1,
     fitContentHeight = false,
+    dynamicSidebarWidth = false,
     onSidebarSort,
     onWorkspaceFilter,
     onPage,
@@ -58,6 +60,7 @@
   }: Props = $props();
 
   let paletteHeight = $state(0);
+  let sidebarElement = $state<HTMLDivElement | undefined>();
   let paletteElement = $state<HTMLDivElement | undefined>();
   let listElement = $state<HTMLDivElement | undefined>();
   const pages = $derived(Array.from({ length: Math.max(0, pageCount) }, (_, index) => index + 1));
@@ -67,7 +70,12 @@
     const height = fitContentHeight
       ? Math.max(paletteElement.scrollHeight, paletteElement.getBoundingClientRect().height)
       : paletteElement.clientHeight;
-    if (height > 0) onheightchange?.(height);
+    if (height > 0) {
+      const width = dynamicSidebarWidth && !sidebarHidden
+        ? Math.ceil(sidebarElement?.getBoundingClientRect().width ?? 0)
+        : 0;
+      onheightchange?.(height, width);
+    }
   }
 
   $effect(() => {
@@ -76,6 +84,8 @@
 
   $effect(() => {
     fitContentHeight;
+    dynamicSidebarWidth;
+    sidebarHidden;
     if (!paletteElement) return;
 
     let frame: number | null = null;
@@ -89,6 +99,7 @@
     const observer = new ResizeObserver(scheduleReport);
     observer.observe(paletteElement);
     if (listElement) observer.observe(listElement);
+    if (sidebarElement) observer.observe(sidebarElement);
     scheduleReport();
 
     return () => {
@@ -112,6 +123,7 @@
       workspaces={sidebarWorkspaces}
       {workspaceFilter}
       {activeWorkspaceId}
+      bind:element={sidebarElement}
       onSort={onSidebarSort}
       {onWorkspaceFilter}
     />

@@ -197,7 +197,7 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
       controller: viewLoad,
       view: "duplicate-prompt",
       loading: false,
-      load: async () => loadDuplicatePromptView(params),
+      load: () => loadDuplicatePromptView(deps.tabIndexClient, deps.workspaceClient, params),
       commit: paletteStore.commitDuplicatePrompt,
       fail: paletteStore.failDuplicatePrompt,
     });
