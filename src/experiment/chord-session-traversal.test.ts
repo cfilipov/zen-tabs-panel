@@ -42,10 +42,10 @@ const sessionScope = loadScope("src/experiment/chord-session.js") as {
   createChordSession: (options: Record<string, unknown>) => {
     arm: () => void;
     handleKey: (event: EventLike) => void;
-    resetEngine: () => void;
+    resetChordTraversal: () => void;
     exitBridge: () => void;
-    isEngineArmed: () => boolean;
-    getEngineState: () => { armed: boolean; path: string[] };
+    isChordTraversalArmed: () => boolean;
+    getChordTraversalState: () => { armed: boolean; path: string[] };
   };
 };
 
@@ -178,8 +178,8 @@ describe("ChordSession traversal", () => {
   it("arms at root and starts the root timer", () => {
     const { session, clock, events } = makeSession();
     session.arm();
-    expect(session.isEngineArmed()).toBe(true);
-    expect(session.getEngineState().path).toEqual([]);
+    expect(session.isChordTraversalArmed()).toBe(true);
+    expect(session.getChordTraversalState().path).toEqual([]);
     expect(events.armed).toHaveBeenCalledTimes(1);
     expect(clock.pendingCount()).toBe(1);
   });
@@ -193,7 +193,7 @@ describe("ChordSession traversal", () => {
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(event.stopPropagation).toHaveBeenCalledTimes(1);
     expect(events.action).toHaveBeenCalledWith({ type: "action", actionId: "previous-tab" });
-    expect(session.isEngineArmed()).toBe(false);
+    expect(session.isChordTraversalArmed()).toBe(false);
     expect(clock.pendingCount()).toBe(0);
   });
 
@@ -203,7 +203,7 @@ describe("ChordSession traversal", () => {
     session.handleKey(key("2"));
 
     expect(events.action).toHaveBeenCalledWith({ type: "switch-workspace", index: 1 });
-    expect(session.isEngineArmed()).toBe(false);
+    expect(session.isChordTraversalArmed()).toBe(false);
   });
 
   it("opens an explicit view and enters bridge mode", () => {
@@ -212,8 +212,8 @@ describe("ChordSession traversal", () => {
     session.handleKey(key("r"));
 
     expect(events.openView).toHaveBeenCalledWith("last-visited", ["R"], "match");
-    expect(session.isEngineArmed()).toBe(true);
-    expect(session.getEngineState().path).toEqual(["R"]);
+    expect(session.isChordTraversalArmed()).toBe(true);
+    expect(session.getChordTraversalState().path).toEqual(["R"]);
   });
 
   it("descends through a prefix, emits state, and then fires a child action", () => {
@@ -222,12 +222,12 @@ describe("ChordSession traversal", () => {
     session.handleKey(key("o"));
 
     expect(events.stateChange).toHaveBeenCalledWith(["O"]);
-    expect(session.getEngineState().path).toEqual(["O"]);
+    expect(session.getChordTraversalState().path).toEqual(["O"]);
     expect(clock.pendingCount()).toBe(1);
 
     session.handleKey(key("d"));
     expect(events.action).toHaveBeenCalledWith({ type: "action", actionId: "reorder-by-domain" });
-    expect(session.isEngineArmed()).toBe(false);
+    expect(session.isChordTraversalArmed()).toBe(false);
   });
 
   it("supports nested prefixes", () => {
@@ -279,7 +279,7 @@ describe("ChordSession traversal", () => {
 
     expect(events.cancel).toHaveBeenCalledTimes(1);
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
-    expect(session.isEngineArmed()).toBe(false);
+    expect(session.isChordTraversalArmed()).toBe(false);
   });
 
   it("cancels and eats unknown chord keys", () => {
@@ -290,7 +290,7 @@ describe("ChordSession traversal", () => {
 
     expect(events.cancel).toHaveBeenCalledTimes(1);
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
-    expect(session.isEngineArmed()).toBe(false);
+    expect(session.isChordTraversalArmed()).toBe(false);
   });
 
   it("passes through unarmed keys", () => {
@@ -310,7 +310,7 @@ describe("ChordSession traversal", () => {
 
     expect(event.preventDefault).not.toHaveBeenCalled();
     expect(events.action).not.toHaveBeenCalled();
-    expect(session.isEngineArmed()).toBe(true);
+    expect(session.isChordTraversalArmed()).toBe(true);
   });
 
   it("ignores untrusted key events", () => {
@@ -329,6 +329,6 @@ describe("ChordSession traversal", () => {
 
     expect(events.bridgeKey).not.toHaveBeenCalled();
     expect(events.action).not.toHaveBeenCalledWith({ type: "action", actionId: "previous-tab" });
-    expect(session.isEngineArmed()).toBe(false);
+    expect(session.isChordTraversalArmed()).toBe(false);
   });
 });

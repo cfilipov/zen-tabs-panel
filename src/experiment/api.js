@@ -90,7 +90,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Clean up on extension unload
     context.callOnClose({
       close() {
-        try { teardownChordEngines(); } catch (e) {}
+        try { teardownChordRuntime(); } catch (e) {}
         try { teardownDuplicateLinkIndicator(); } catch (e) {}
         try { teardownDuplicateLinkInterceptor(); } catch (e) {}
         try { cancelSyncDuplicates(); } catch (e) {}
@@ -2772,11 +2772,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const overlay = doc && doc.getElementById(OVERLAY_ID);
       const panel = doc && doc.getElementById(PANEL_ID);
       const browser = doc && doc.getElementById(BROWSER_ID);
-      let chromeEngineState = null;
+      let chordTraversalState = null;
       try {
-        chromeEngineState = chordSession ? chordSession.getEngineState() : null;
+        chordTraversalState = chordSession ? chordSession.getChordTraversalState() : null;
       } catch (e) {
-        chromeEngineState = { error: String(e) };
+        chordTraversalState = { error: String(e) };
       }
 
       return cloneChordInspectorValue({
@@ -2817,7 +2817,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
         replay: chordSession ? chordSession.getReplayState() : null,
         session: chordSession ? chordSession.getStateSnapshot() : null,
-        engine: chromeEngineState,
+        traversal: chordTraversalState,
+        engine: chordTraversalState,
         arm: {
           lastLeaderArmAt,
           chordArmSequence,
@@ -2858,7 +2859,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       revealOverlay();
     }
 
-    // Engine descended into a prefix node — eagerly prerender the prefix's
+    // ChordSession descended into a prefix node — eagerly prerender the prefix's
     // view (the one that would open on prefix-timeout) so it's loaded by
     // the time the timer fires. Without this, cmd+., o pauses for the
     // prefix timeout AND THEN starts the popup load + reveal, which feels
@@ -2959,7 +2960,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       chordSession.recordEvent({ kind: "popup-action", message });
     }
 
-    // Replay the last completed chord. Engine actions dispatch directly;
+    // Replay the last completed chord. ChordSession actions dispatch directly;
     // open-view chord chains re-enter bridge and re-forward their
     // recorded bridge keys so the popup re-fires its handlers with
     // freshly resolved data (e.g. "2nd recent" cycles through recents
@@ -2983,7 +2984,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function replayLastChordFromRepeatedLeader() {
       debugChordTrace("leader-repeat-as-replay", {});
-      try { if (chordSession) chordSession.resetEngine(); } catch (e) {}
+      try { if (chordSession) chordSession.resetChordTraversal(); } catch (e) {}
       try { if (chromeShim) chromeShim.disarm("replay"); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Disarm:" + CHORD_GENERATION); } catch (e) {}
@@ -3459,7 +3460,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       lastLeaderArmAt = now;
       debugChordTrace("arm-leader", {
         overlayVisible: isOverlayVisible(),
-        chromeArmed: !!(chordSession && chordSession.isEngineArmed()),
+        chromeArmed: !!(chordSession && chordSession.isChordTraversalArmed()),
       });
       // Leader-shortcut routing while the menu is visible:
       //   - on actions   -> dismiss (toggle off).
@@ -3534,7 +3535,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       forwardKey: (keyData) => acceptShimKey(keyData, "chrome-shim"),
     });
 
-    function installChromeEngine() {
+    function installChromeShim() {
       const w = getWin();
       if (!w) return;
       chromeShim.attach(w);
@@ -3548,13 +3549,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // <browser>. Content shims handle their own blur via their own
       // content-window blur listener.
       w.addEventListener("focus", (e) => {
-        if (!chordSession.isEngineArmed()) return;
+        if (!chordSession.isChordTraversalArmed()) return;
         const t = e && e.target;
         if (!t) return;
         const name = (t.tagName || t.nodeName || "").toLowerCase();
         if (name === "browser" && Date.now() - lastLeaderArmAt > CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS) {
           debugChordTrace("chrome-reset-focus-browser", { since: Date.now() - lastLeaderArmAt });
-          chordSession.resetEngine();
+          chordSession.resetChordTraversal();
           try { if (chromeShim) chromeShim.disarm("focus-browser"); } catch (e) {}
         }
       }, true);
@@ -3567,7 +3568,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // while Command is still held. That second keydown is reported as
         // another Cmd+. leader shortcut, not as a plain "." chord key, so
         // translate it to the repeat action while the root chord is armed.
-        if (!isOverlayVisible() && chordSession && chordSession.isEngineArmed()) {
+        if (!isOverlayVisible() && chordSession && chordSession.isChordTraversalArmed()) {
           lastLeaderArmAt = Date.now();
           replayLastChordFromRepeatedLeader();
           return;
@@ -3616,7 +3617,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           try { e.stopImmediatePropagation(); } catch (_) {}
           return;
         }
-        if (!chordSession.isEngineArmed()) {
+        if (!chordSession.isChordTraversalArmed()) {
           debugChordTrace("fallback-skip-not-armed", { key: e.key, target: e.target && e.target.localName });
           return;
         }
@@ -3964,8 +3965,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // scripts reports an interpreted outcome, reset the current ChordSession
     // traversal before honoring it so a parallel arm cannot later reveal an
     // unwanted menu.
-    function resetChromeEngineIfArmed() {
-      try { if (chordSession && chordSession.isEngineArmed()) chordSession.resetEngine(); } catch (e) {}
+    function resetChordTraversalIfArmed() {
+      try { if (chordSession && chordSession.isChordTraversalArmed()) chordSession.resetChordTraversal(); } catch (e) {}
     }
     function onContentKey(m) {
       if (!isCurrentGen(m)) return;
@@ -3973,7 +3974,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function onContentAction(m) {
       if (!isCurrentGen(m)) return;
-      resetChromeEngineIfArmed();
+      resetChordTraversalIfArmed();
       dispatchChordAction(m.data);
     }
     function onContentArmed(m) {
@@ -3996,13 +3997,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function onContentOpenView(m) {
       if (!isCurrentGen(m)) return;
-      resetChromeEngineIfArmed();
+      resetChordTraversalIfArmed();
       const data = m.data;
       enterBridgeFromOpenView(data.view, "content", data.source);
     }
     function onContentCancel(m) {
       if (!isCurrentGen(m)) return;
-      resetChromeEngineIfArmed();
+      resetChordTraversalIfArmed();
       if (pendingReveal) destroyOverlay();
     }
     function onContentBridgeKey(m) {
@@ -4014,7 +4015,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Stale pre-shim content script descended into a prefix. Keep this
       // adapter so old frame scripts can still drive the matching prerender
       // instead of leaving the user at the default actions view.
-      resetChromeEngineIfArmed();
+      resetChordTraversalIfArmed();
       const data = m.data;
       prerenderPrefixView(data && data.snapshot);
     }
@@ -4367,8 +4368,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       pendingDuplicate = null;
     }
 
-    function teardownChordEngines() {
-      try { if (chordSession) chordSession.detachEngine(); } catch (e) {}
+    function teardownChordRuntime() {
+      try { if (chordSession) chordSession.detachChordTraversal(); } catch (e) {}
       try { if (chromeShim) chromeShim.detach(); } catch (e) {}
       // Hard-remove the warm overlay so its persistent popup browser
       // doesn't leak across an extension reload (soft-hide alone keeps
@@ -4694,7 +4695,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     installChordStateInspector();
-    installChromeEngine();
+    installChromeShim();
     installContentShimFrameScript();
     installDuplicateLinkIndicator();
     installDuplicateLinkInterceptor();
@@ -5861,7 +5862,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // A chord might be in flight (session armed/bridging) when this
           // is invoked by an external path (toolbar icon click). Tear
           // down any in-flight chord state so we open cleanly.
-          if (chordSession && chordSession.isEngineArmed()) chordSession.resetEngine();
+          if (chordSession && chordSession.isChordTraversalArmed()) chordSession.resetChordTraversal();
           try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
 
           if (view) {

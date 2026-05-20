@@ -189,7 +189,7 @@
     function recordPopupAction(message) {
       if (!message || !message.type) return;
       if (replayRecordBlocklist.has(message.type)) return;
-      // Engine-fired chord actions (cmd+.,p, cmd+.,w,n, ...) commit via
+      // ChordSession-fired chord actions (cmd+.,p, cmd+.,w,n, ...) commit via
       // trackTerminalAction at chord-fire time, then the action routes
       // through bg's runChordAction -> recordChordAction -> here for the
       // same action. Without this skip we'd overwrite the engine's
@@ -303,7 +303,7 @@
     }
 
     function cancelTraversal() {
-      const wasArmed = isEngineArmed();
+      const wasArmed = isChordTraversalArmed();
       resetTraversal("idle");
       if (wasArmed) callOption("onCancel");
     }
@@ -313,7 +313,7 @@
       if (keyData.isTrusted === false) return;
       if (keyData.key === "Meta" || keyData.key === "Control" || keyData.key === "Alt" || keyData.key === "Shift") return;
       if (keyData.metaKey || keyData.ctrlKey || keyData.altKey) return;
-      if (!isEngineArmed()) return;
+      if (!isChordTraversalArmed()) return;
 
       if (state === "bridging-buffering" || state === "bridging-live") {
         try { if (typeof keyData.preventDefault === "function") keyData.preventDefault(); } catch (e) {}
@@ -381,7 +381,7 @@
       }
     }
 
-    function resetEngine() {
+    function resetChordTraversal() {
       resetTraversal("idle");
     }
 
@@ -389,16 +389,16 @@
       if (state === "bridging-buffering" || state === "bridging-live") resetTraversal("idle");
     }
 
-    function detachEngine() {
+    function detachChordTraversal() {
       resetTraversal("idle");
     }
 
-    function isEngineArmed() {
+    function isChordTraversalArmed() {
       return state === "armed-root" || state === "armed-prefix" || state === "bridging-buffering" || state === "bridging-live";
     }
 
-    function getEngineState() {
-      return { armed: isEngineArmed(), path: currentPath.slice() };
+    function getChordTraversalState() {
+      return { armed: isChordTraversalArmed(), path: currentPath.slice() };
     }
 
     function replayLastChord(effects) {
@@ -462,11 +462,15 @@
       acceptEngineEvent: recordEvent,
       arm,
       handleKey,
-      resetEngine,
+      resetChordTraversal,
+      resetEngine: resetChordTraversal,
       exitBridge,
-      detachEngine,
-      isEngineArmed,
-      getEngineState,
+      detachChordTraversal,
+      detachEngine: detachChordTraversal,
+      isChordTraversalArmed,
+      isEngineArmed: isChordTraversalArmed,
+      getChordTraversalState,
+      getEngineState: getChordTraversalState,
       resetCurrentReplay,
       replayLastChord,
       hasCurrentReplay,
