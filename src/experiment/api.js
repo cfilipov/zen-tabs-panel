@@ -3332,11 +3332,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const expectedDomId = options && typeof options.expectedDomId === "string" && options.expectedDomId
         ? options.expectedDomId
         : null;
+      const expectedRowId = options && typeof options.expectedRowId === "string" && options.expectedRowId
+        ? options.expectedRowId
+        : null;
       try {
         if (view === "move-to-workspace") {
           const rows = getWorkspaceRows(false);
           const row = rows[rowIndex];
           if (!row || row.isActive) return false;
+          if (expectedRowId && row.uuid !== expectedRowId) return false;
           chordSession.recordEvent({ kind: "popup-action", message: { type: "move-selected-tabs-to-workspace", workspaceId: row.uuid, switchToTarget: !!switchToTarget } });
           void (async () => {
             if (destroy) destroyOverlay();
@@ -3348,6 +3352,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const rows = getContainerRows();
           const row = rows[rowIndex];
           if (!row || !row.userContextId) return false;
+          if (expectedRowId && String(row.userContextId) !== expectedRowId) return false;
           chordSession.recordEvent({ kind: "popup-action", message: { type: "reopen-in-container", userContextId: row.userContextId } });
           void (async () => {
             if (destroy) destroyOverlay();
@@ -3359,6 +3364,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const rows = getFolderRows();
           const row = rows[rowIndex];
           if (!row) return false;
+          if (expectedRowId && row.id !== expectedRowId) return false;
           chordSession.recordEvent({ kind: "popup-action", message: { type: "move-tab-to-folder", folderId: row.id, switchToTarget: !!switchToTarget } });
           void (async () => {
             if (destroy) destroyOverlay();
@@ -3370,6 +3376,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const rows = getProfileRows();
           const row = rows[rowIndex];
           if (!row || row.isCurrent) return false;
+          if (expectedRowId && row.name !== expectedRowId) return false;
           chordSession.recordEvent({ kind: "popup-action", message: { type: "launch-profile", name: row.name } });
           if (destroy) destroyOverlay();
           launchProfileInternal(row.name);
@@ -3381,6 +3388,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             ? navigationShortcutTarget(history, rowIndex)
             : history?.entries?.[rowIndex]?.historyIndex ?? rowIndex;
           if (target == null || target === history?.index) return false;
+          if (expectedRowId && String(target) !== expectedRowId) return false;
           chordSession.recordEvent({ kind: "popup-action", message: { type: "navigate-to-history-index", index: target } });
           if (destroy) destroyOverlay();
           navigateToHistoryIndexInternal(target);
@@ -4654,11 +4662,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return activateNativeTab(tab);
         },
 
-        async activateViewRow(view, index, source, switchToTarget, listVersion, expectedDomId) {
+        async activateViewRow(view, index, source, switchToTarget, listVersion, expectedDomId, expectedRowId) {
           return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, {
             destroyOverlay: false,
             listVersion,
             expectedDomId,
+            expectedRowId,
           });
         },
 

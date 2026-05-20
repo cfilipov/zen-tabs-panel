@@ -463,6 +463,15 @@
     return activation.kind === "activate-tab" ? activation.row.domId : undefined;
   }
 
+  function expectedRowIdForActivation(activation: ViewActivation) {
+    if (activation.kind === "navigate-history-index") return String(activation.index);
+    if (activation.kind === "move-to-workspace") return activation.row.uuid;
+    if (activation.kind === "reopen-in-container") return String(activation.row.userContextId);
+    if (activation.kind === "move-to-folder") return activation.row.id;
+    if (activation.kind === "launch-profile") return activation.row.name;
+    return undefined;
+  }
+
   function activateChromeResolvedRow(index: number, source: "selection" | "shortcut", switchToTarget = false, activation: ViewActivation) {
     markTerminalCommandDispatched();
     revealController.clear();
@@ -476,6 +485,7 @@
       switchToTarget,
       palette.listVersion,
       expectedDomIdForActivation(activation),
+      expectedRowIdForActivation(activation),
     );
   }
 

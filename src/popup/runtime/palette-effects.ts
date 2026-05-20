@@ -34,6 +34,7 @@ export function createPaletteEffects() {
       switchToTarget = false,
       listVersion?: number,
       expectedDomId?: string,
+      expectedRowId?: string,
     ) {
       fireMessage({
         type: "activate-view-row",
@@ -43,6 +44,7 @@ export function createPaletteEffects() {
         ...(switchToTarget ? { switchToTarget: true } : {}),
         ...(typeof listVersion === "number" && listVersion > 0 ? { listVersion } : {}),
         ...(expectedDomId ? { expectedDomId } : {}),
+        ...(expectedRowId ? { expectedRowId } : {}),
       });
     },
     synthChordKey(chordKey: string, view: ViewId, activation = "keydown") {
