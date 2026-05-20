@@ -3330,17 +3330,49 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "parent-tabs",
       "last-visited",
       "unvisited-tabs",
+      "domain-tabs",
       "tabs-by-age",
       "most-visited",
     ]);
 
     const CHROME_OWNED_COMPACT_BRIDGE_VIEWS = new Set([
       "move-to-workspace",
+      "open-in-container",
       "move-to-folder",
       "profiles",
     ]);
 
+    const CHROME_OWNED_HISTORY_BRIDGE_VIEWS = new Set([
+      "navigation",
+    ]);
+
+    function switchHiddenBridgeView(view, params, previousView, previousParams) {
+      if (pendingReveal) destroyOverlay({ silent: true });
+      createOverlay(view, params || {});
+      activeBridgeView = view;
+      if (previousView) {
+        navStack = [{ view: previousView, params: previousParams || {} }];
+      }
+    }
+
     function tryHandleChromeOwnedBridgeKey(keyData) {
+      if (activeBridgeView === "domains") {
+        const rowIndex = rowIndexFromDigitKey(keyData);
+        if (rowIndex == null) return false;
+        try {
+          tabIndex.start();
+          const params = currentViewParams || {};
+          const win = tabIndex.getWindow("domains", 0, rowIndex + 1, params);
+          const row = win && Array.isArray(win.rows) ? win.rows[rowIndex] : null;
+          if (!row || !row.domain) return false;
+          const nextParams = { domain: row.domain };
+          switchHiddenBridgeView("domain-tabs", nextParams, "domains", params);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
       if (CHROME_OWNED_COMPACT_BRIDGE_VIEWS.has(activeBridgeView)) {
         const intent = bridgeRowIntentFromKey(keyData);
         if (!intent) return false;
@@ -3353,6 +3385,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
             void (async () => {
               destroyOverlay();
               await moveSelectedTabsToWorkspaceInternal(row.uuid, intent.switchToTarget);
+            })();
+            return true;
+          }
+          if (activeBridgeView === "open-in-container") {
+            const rows = getContainerRows();
+            const row = rows[intent.index];
+            if (!row || !row.userContextId) return false;
+            chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "reopen-in-container", userContextId: row.userContextId } });
+            void (async () => {
+              destroyOverlay();
+              await reopenInContainerInternal(row.userContextId);
             })();
             return true;
           }
@@ -3383,12 +3426,29 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
       }
 
+      if (CHROME_OWNED_HISTORY_BRIDGE_VIEWS.has(activeBridgeView)) {
+        const rowIndex = rowIndexFromDigitKey(keyData);
+        if (rowIndex == null) return false;
+        try {
+          const history = getFilteredNavigationHistory();
+          const target = navigationShortcutTarget(history, rowIndex);
+          if (target == null) return false;
+          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "navigate-to-history-index", index: target } });
+          destroyOverlay();
+          navigateToHistoryIndexInternal(target);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
       if (!CHROME_OWNED_TAB_BRIDGE_VIEWS.has(activeBridgeView)) return false;
       const rowIndex = rowIndexFromDigitKey(keyData);
       if (rowIndex == null) return false;
       try {
         tabIndex.start();
-        const win = tabIndex.getWindow(activeBridgeView, 0, rowIndex + 1, {});
+        const params = activeBridgeView === "domain-tabs" ? (currentViewParams || {}) : {};
+        const win = tabIndex.getWindow(activeBridgeView, 0, rowIndex + 1, params);
         const row = win && Array.isArray(win.rows) ? win.rows[rowIndex] : null;
         if (!row || !row.domId) return false;
         chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
@@ -4432,6 +4492,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return out;
     }
 
+    function getContainerRows() {
+      try {
+        const { ContextualIdentityService } = ChromeUtils.importESModule(
+          "resource://gre/modules/ContextualIdentityService.sys.mjs"
+        );
+        const rows = ContextualIdentityService.getPublicIdentities?.() || [];
+        return Array.from(rows || []).map((row) => ({
+          cookieStoreId: row.cookieStoreId || `firefox-container-${row.userContextId || 0}`,
+          userContextId: Number(row.userContextId) || 0,
+          name: row.name || "",
+          colorCode: row.colorCode || row.color || "currentColor",
+          iconUrl: row.iconUrl || row.icon || "",
+        }));
+      } catch (e) {
+        return [];
+      }
+    }
+
     function launchProfileInternal(name) {
       const ps = Cc["@mozilla.org/toolkit/profile-service;1"]
         .getService(Ci.nsIToolkitProfileService);
@@ -4442,6 +4520,57 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
       }
       throw new Error(`Profile not found: ${name}`);
+    }
+
+    function isNavigationNewTabUrl(url) {
+      return !url || url === "about:newtab" || url === "about:blank" || url === "about:home";
+    }
+
+    function getRawNavigationHistory() {
+      const w = getWin();
+      if (!w || !w.gBrowser) return null;
+      const tab = w.gBrowser.selectedTab;
+      if (!tab) return null;
+      try {
+        const sh = tab.linkedBrowser.browsingContext?.sessionHistory;
+        if (!sh) return null;
+        const entries = [];
+        for (let i = 0; i < sh.count; i++) {
+          const entry = sh.getEntryAtIndex(i);
+          entries.push({
+            url: entry.URI?.spec || "",
+            title: entry.title || "",
+          });
+        }
+        return { entries, index: sh.index };
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function getFilteredNavigationHistory() {
+      const history = getRawNavigationHistory();
+      if (!history) return null;
+      const entries = history.entries
+        .map((entry, historyIndex) => ({ ...entry, historyIndex }))
+        .filter((entry) => !isNavigationNewTabUrl(entry.url));
+      const index = entries.findIndex((entry) => entry.historyIndex === history.index);
+      return { entries, index };
+    }
+
+    function navigationShortcutTarget(history, shortcutIndex) {
+      if (!history || !Array.isArray(history.entries)) return null;
+      const target = history.entries
+        .map((entry, navIndex) => ({ entry, navIndex }))
+        .filter((candidate) => candidate.navIndex !== history.index)[shortcutIndex];
+      return target ? target.entry.historyIndex ?? target.navIndex : null;
+    }
+
+    function navigateToHistoryIndexInternal(index) {
+      const w = getWin();
+      if (!w || !w.gBrowser) return false;
+      w.gBrowser.gotoIndex(index);
+      return true;
     }
 
     async function moveSelectedTabsToWorkspaceInternal(workspaceId, switchToTarget) {
@@ -4495,6 +4624,30 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
       if (switchToTarget && targetTab) {
         await activateNativeTab(targetTab);
+      }
+      return true;
+    }
+
+    async function reopenInContainerInternal(userContextId) {
+      const w = getWin();
+      if (!w?.gBrowser) return false;
+      const tabs = getActionTargetTabs();
+      if (tabs.length === 0) return false;
+      const wasActive = w.gBrowser.selectedTab;
+      let activeReplacement = null;
+      for (const oldTab of tabs) {
+        try {
+          const url = oldTab.linkedBrowser?.currentURI?.spec || "about:newtab";
+          const newTab = w.gBrowser.addTab(url, {
+            userContextId,
+            triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+          });
+          if (oldTab === wasActive) activeReplacement = newTab;
+          w.gBrowser.removeTab(oldTab);
+        } catch (e) {}
+      }
+      if (activeReplacement) {
+        try { w.gBrowser.selectedTab = activeReplacement; } catch (e) {}
       }
       return true;
     }
@@ -5143,27 +5296,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // at the same URL, then remove the old. The previously-active
         // tab's replacement becomes the new active tab.
         async reopenInContainer(userContextId) {
-          const w = getWin();
-          if (!w?.gBrowser) return false;
-          const tabs = getActionTargetTabs();
-          if (tabs.length === 0) return false;
-          const wasActive = w.gBrowser.selectedTab;
-          let activeReplacement = null;
-          for (const oldTab of tabs) {
-            try {
-              const url = oldTab.linkedBrowser?.currentURI?.spec || "about:newtab";
-              const newTab = w.gBrowser.addTab(url, {
-                userContextId,
-                triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
-              });
-              if (oldTab === wasActive) activeReplacement = newTab;
-              w.gBrowser.removeTab(oldTab);
-            } catch (e) {}
-          }
-          if (activeReplacement) {
-            try { w.gBrowser.selectedTab = activeReplacement; } catch (e) {}
-          }
-          return true;
+          return reopenInContainerInternal(userContextId);
         },
 
         // Close a tab by DOM id — works cross-workspace.
@@ -5587,31 +5720,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         async getNavigationHistory() {
-          const w = getWin();
-          if (!w || !w.gBrowser) return null;
-          const tab = w.gBrowser.selectedTab;
-          if (!tab) return null;
-          try {
-            const sh = tab.linkedBrowser.browsingContext?.sessionHistory;
-            if (!sh) return null;
-            const entries = [];
-            for (let i = 0; i < sh.count; i++) {
-              const entry = sh.getEntryAtIndex(i);
-              entries.push({
-                url: entry.URI?.spec || "",
-                title: entry.title || "",
-              });
-            }
-            return { entries, index: sh.index };
-          } catch (e) {
-            return null;
-          }
+          return getRawNavigationHistory();
         },
 
         async navigateToHistoryIndex(index) {
-          const w = getWin();
-          if (!w || !w.gBrowser) return;
-          w.gBrowser.gotoIndex(index);
+          return navigateToHistoryIndexInternal(index);
         },
 
         async scrollCurrentTabIntoView() {

@@ -137,13 +137,33 @@ describe("chord-session replay recording", () => {
     expect(enterBridgeFromOpenView).toHaveBeenCalledWith("last-visited", [], "chrome", "match");
     expect(forwardKeyToPopup).toHaveBeenCalledWith({
       key: "2",
-      code: "",
+      code: "Digit2",
       shiftKey: false,
       altKey: false,
       ctrlKey: false,
       metaKey: false,
     });
     expect(debug).toHaveBeenCalledWith("replay-open-view", { view: "last-visited", keys: ["2"] });
+  });
+
+  it("replays shifted row keys as real shifted digit events", () => {
+    const session = makeSession();
+    const enterBridgeFromOpenView = vi.fn();
+    const forwardKeyToPopup = vi.fn();
+
+    session.acceptEngineEvent({ kind: "open-view", view: "move-to-workspace" });
+    session.acceptEngineEvent({ kind: "bridge-key", keyData: { key: "!", code: "Digit1", shiftKey: true } });
+    session.acceptEngineEvent({ kind: "popup-action", message: { type: "move-selected-tabs-to-workspace", workspaceId: "ws-2", switchToTarget: true } });
+
+    expect(session.replayLastChord({ enterBridgeFromOpenView, forwardKeyToPopup })).toBe(true);
+    expect(forwardKeyToPopup).toHaveBeenCalledWith({
+      key: "Shift+1",
+      code: "Digit1",
+      shiftKey: true,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+    });
   });
 
   it("replays direct actions through the supplied dispatcher", () => {

@@ -21,6 +21,62 @@
     return keyData.key;
   }
 
+  function bridgeKeyFromReplayKey(key) {
+    const raw = String(key || "");
+    const shiftedDigit = /^Shift\+([1-9])$/.exec(raw);
+    if (shiftedDigit) {
+      return {
+        key: raw,
+        code: "Digit" + shiftedDigit[1],
+        shiftKey: true,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      };
+    }
+    const shiftedLetter = /^Shift\+([A-Z])$/.exec(raw);
+    if (shiftedLetter) {
+      return {
+        key: shiftedLetter[1],
+        code: "Key" + shiftedLetter[1],
+        shiftKey: true,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      };
+    }
+    const letter = /^[A-Z]$/.exec(raw);
+    if (letter) {
+      return {
+        key: raw.toLowerCase(),
+        code: "Key" + raw,
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      };
+    }
+    const digit = /^[1-9]$/.exec(raw);
+    if (digit) {
+      return {
+        key: raw,
+        code: "Digit" + raw,
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      };
+    }
+    return {
+      key: raw,
+      code: "",
+      shiftKey: false,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+    };
+  }
+
   function createChordSession(options) {
     const replayActionId = options && options.replayActionId;
     const replayRecordBlocklist = new Set((options && options.replayRecordBlocklist) || []);
@@ -364,7 +420,7 @@
         if (effects.enterBridgeFromOpenView) effects.enterBridgeFromOpenView(r.view, [], "chrome", "match");
         if (effects.forwardKeyToPopup) {
           for (const k of keysCopy) {
-            effects.forwardKeyToPopup({ key: k, code: "", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false });
+            effects.forwardKeyToPopup(bridgeKeyFromReplayKey(k));
           }
         }
         return true;
