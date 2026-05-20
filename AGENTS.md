@@ -44,27 +44,26 @@ In code this means: there is one source tree in `src/shared/navigation-tree.ts`.
 
 UI-augmentation keys are explicitly **not** part of the chord set — Space (paginate the actions menu), Tab (jump section), Arrow keys (navigate selection), Enter (activate), Escape (close), Backspace (back/close). These only make sense when the menu is visible and live in `src/popup/interaction/interpreter.ts`. The chord-tree keys (letters, digits, Shift+digit) ARE chord keys and behave identically in all three timing windows.
 
-### How the leader arms the engine
+### How the leader arms the session and shims
 
 The configurable leader shortcuts are modifier-key combos, so Firefox's keyset matches them at chrome level and routes via `browser.commands.onCommand`. The handler in `background.js` calls `api.armChord()`, which:
 
-1. Arms the chrome engine synchronously (`chromeEngine.arm()`).
-2. Sends a targeted `ZenChord:Arm` message to the currently-focused tab's content `messageManager` so its engine arms too.
+1. Arms the chrome-side `ChordSession` (`src/experiment/chord-session.js`), which owns tree traversal, replay, bridge state, and chord timers.
+2. Arms the chrome key-capture shim synchronously.
+3. Sends a targeted `ZenChord:Arm` message to the currently-focused tab's content `messageManager` so its content shim arms too.
 
-Either engine handles the next chord key, depending on focus. The IPC race window is ~10ms (only ultra-fast typing immediately after the leader would beat the content engine into being armed). When either engine fires a terminal/transition event, the other is reset to prevent stale-root-timer "menu after action" desync — chrome's `onContentAction`/`OpenView`/`Cancel` handlers reset the chrome engine if armed, and the chrome engine's callbacks broadcast `ZenChord:Reset` to all content engines.
+The shims do not traverse the chord tree. While armed, they synchronously suppress capturable keys in their own process and forward normalized key data to the one chrome-side session. When the session reaches a terminal action or cancel state, chrome broadcasts `ZenChord:Disarm:<gen>` so every shim drops back to idle.
 
-### Dual chord engines (the chrome+content split)
+### Key-capture shims (the chrome+content split)
 
 In Firefox e10s, the chrome process cannot synchronously suppress a content-routed keystroke via standard `preventDefault` from a chrome-window listener — the IPC forwarding the event to the content process has already shipped by the time the chrome-side listener runs. To make `cmd+., p` typed fast in a focused content input not leak `p`, the chord state machine has to run **in the same process as the content keydown dispatch**.
 
-The solution is two instances of the same generated state machine — `dist/shared/chord-engine.js` built from `src/shared/chord-engine.js`:
+The current solution is one chrome-side state machine plus two lightweight shims:
 
-1. **Chrome engine** in `src/experiment/api.js`. Listens on the chrome window (capture phase + `mozSystemGroup`). `filterEvent` rejects events whose target is a `<browser>` element, so it only acts on chrome-routed keystrokes (URL bar, browser chrome). For chrome targets, `preventDefault` works locally — no race.
-2. **Content engine** loaded via a per-content-process frame script (`Services.mm.loadFrameScript`). The frame-script body is constructed in `installContentEngineFrameScript()` in `src/experiment/api.js` as a data: URL that `loadSubScript`s the same generated `shared/chord-engine.js` and instantiates an engine attached to `content`. Skips activation for `moz-extension://` documents (our popup and foreign-extension popups handle their own keys). For content keys, `preventDefault` from the engine runs in the content process before the editor's default action — no race.
+1. **Chrome shim** in `src/experiment/api.js`. Listens on the chrome window (capture phase + `mozSystemGroup`). For chrome targets, `preventDefault` works locally and the normalized key is passed directly into `ChordSession.acceptKey`.
+2. **Content shim** loaded via a per-content-process frame script (`Services.mm.loadFrameScript`). The frame-script body is constructed in `installContentShimFrameScript()` in `src/experiment/api.js`, loads `shared/chord-shim.js`, and attaches to `content`. It skips the palette/hosted-popup browser so those views own their own keys. For content keys, `preventDefault` runs in the content process before the editor's default action, then the normalized key is sent as `ZenChord:Key:<gen>`.
 
-Both engines are armed in parallel by `armChord` (see above) — chrome synchronously, content via a targeted IPC. The first engine to see a non-modifier keydown processes it; the other gets reset when chrome receives that engine's output IPC.
-
-Output IPC from the content engine: `ZenChord:Action` / `ZenChord:OpenView` / `ZenChord:Cancel` / `ZenChord:Armed` / `ZenChord:BridgeKey`. Chrome receives and dispatches. The IPC never gates a synchronous chord-key decision (the engine acts on its local state alone), so it can never race against subsequent keystrokes.
+Both shims are armed in parallel by `armChord` (see above). The first shim to see the next non-modifier key suppresses it locally and forwards it to chrome. The session is the only chord-tree traverser, so there is no duplicated engine state to keep in sync.
 
 ### Why `<key>`/keysets do not work for plain letters
 
@@ -79,39 +78,39 @@ This is a deliberate Firefox property, not a bug. It's also why a chrome-side JS
 
 ### Bridge handshake
 
-When an engine fires `open-view`, it transitions to `bridging` state instead of going back to idle. While bridging, the engine captures non-modifier keys and forwards them: chrome's engine pushes to a local `bridgeBuffer`; content's engine sends `ZenChord:BridgeKey` to chrome which appends to the same buffer.
+When `ChordSession` matches an `open-view` chord, it transitions to bridge state instead of going back to idle. While bridging and hidden, armed shims keep forwarding non-modifier keys to the session. Chrome either resolves the key directly for chrome-owned row models or buffers it in the session's bridge buffer for the popup to drain.
 
-The popup is the **sole keyboard processor**. Chord chains stream keys into a popup that is created hidden (`visibility: hidden`) on chord arm. The popup's Svelte interaction runtime is the only place that knows what each key means in each view — chrome never duplicates view-specific logic. When the popup bridge finishes init and sends `MSG.POPUP_READY` to background, the reply is `{ buffered, stateSnapshot, stale? }`:
+The popup is still the keyboard/UI processor for visible interaction, but some row models are now chrome-owned so fast hidden chords can resolve without waiting for Svelte. Chord chains stream unresolved keys into a popup that is created hidden on chord arm. When the popup bridge finishes init and sends `MSG.POPUP_READY` to background, the reply is `{ buffered, stateSnapshot, stale? }`:
 
 - `buffered`: the captured keys, replayed via `dispatchKey(makeSyntheticKeyEvent(k))` into the popup.
-- `stateSnapshot`: the chord-tree path the originating engine was at when bridging began (e.g. `["O"]` for the Reorder prefix) — currently not used by the popup (the URL `?view=` param already drives the right view), but reserved for any future popup-side chord-engine instance.
+- `stateSnapshot`: the chord-tree path the session was at when bridging began (e.g. `["O"]` for the Reorder prefix). The URL `?view=` param usually drives the right view, but the snapshot remains available for diagnostics/future bridge use.
 - `stale: true`: chrome's `popupInstance` doesn't match the popup's `?inst=N` URL param. The popup bails out without draining or processing live keys — it's a soon-to-be-destroyed prerender.
 
-The popup's `chordBridgeReady` flag holds any live keys (delivered via `ZenChord:DeliverKey:<gen>` post-POPUP_READY) before the drain completes; they're replayed after the buffered ones, preserving order. After POPUP_READY, chrome forwards each subsequent bridge key live to the popup's frame script (`br.messageManager.sendAsyncMessage`), which dispatches a synthetic `KeyboardEvent` on `content.document`.
+The popup bridge controller holds any live keys (delivered via `ZenChord:DeliverKey:<gen>` post-POPUP_READY) before the drain completes; they're replayed after the buffered ones, preserving order. After POPUP_READY, chrome forwards subsequent unresolved bridge keys live to the popup's frame script (`br.messageManager.sendAsyncMessage`), which dispatches a synthetic `KeyboardEvent` on `content.document`.
 
 ### Reveal timing — chrome timer + popup timer + reveal-blocked flag
 
 The popup stays invisible during a chord chain. Two timers govern reveal:
 
-- **Chrome reveal timer** (in `experiment/api.js`) — armed on `enterBridgeFromOpenView`, cleared the moment any chord key is forwarded (`forwardKeyToPopup`). Fires only if the user pauses after `open-view` without typing another chord key (e.g., `cmd+., q [pause]`). If the popup hasn't drained yet when the timer fires, it sets `revealDeferred = true` and bails — `takeChordBridgeBuffer` consumes that flag and reveals one tick after POPUP_READY for empty drains.
+- **Chrome reveal timer** (owned by `ChordSession`, armed from `experiment/api.js`) — armed on `enterBridgeFromOpenView`, cleared the moment any chord key is forwarded (`forwardKeyToPopup`). Fires only if the user pauses after `open-view` without typing another chord key (e.g., `cmd+., q [pause]`). If the popup hasn't drained yet when the timer fires, it sets `revealDeferred = true` and bails — `takeChordBridgeBuffer` consumes that flag and reveals one tick after POPUP_READY for empty drains.
 - **Popup reveal timer** (in `src/popup/runtime/palette-reveal.ts`) — armed **after** each dispatched key handler completes (not at dispatch start). For drills, arming at dispatch start would fire mid-drill and reveal before the next chord-chain key could process. Each subsequent dispatch resets the timer; on pause, it sends `MSG.REVEAL_PALETTE` to chrome with its `inst`.
 
-To prevent the popup-side timer from racing the terminal-action destroy round-trip and revealing a popup that's already destroying, `destroyOverlay` sets a `revealBlocked` flag, cleared on the next `createOverlay`. `revealPalette` checks this flag — any stale timer firing during the destroy window is a no-op.
+To prevent the popup-side timer from racing the terminal-action destroy round-trip and revealing a popup that's already destroying, `destroyOverlay` sets `ChordSession`'s `revealBlocked` flag, cleared on the next `createOverlay`. `revealPalette` checks this flag — any stale timer firing during the destroy window is a no-op.
 
 Terminal-action helpers also clear the popup reveal timer before sending the message, as defense in depth against teardown losing the race.
 
 ### Default-group blocker — stopping page keybindings
 
-System-group `preventDefault` from the chord engine suppresses the **default browser action** (character insertion), which is enough to fix the `cmd+., p` character leak. It does NOT stop **custom page keydown handlers** registered by sites (e.g., Reddit's bare-`q` sidebar toggle). System group and default group propagate independently; `stopPropagation` from one doesn't reach the other.
+System-group `preventDefault` from the shim suppresses the **default browser action** (character insertion), which is enough to fix the `cmd+., p` character leak. It does NOT stop **custom page keydown handlers** registered by sites (e.g., Reddit's bare-`q` sidebar toggle). System group and default group propagate independently; `stopPropagation` from one doesn't reach the other.
 
-The fix is a second listener attached in **default group** capture phase at the window level (in the per-content-process frame script). When the engine is armed, it `stopPropagation`s — preventing the event from reaching page handlers on inner nodes (document/body/specific elements). Our system-group engine on the same window still fires (same node, different group); only travel to other nodes is stopped. Frame scripts run at `document_start` so this listener is registered before any page script can attach competing listeners.
+The fix is a second listener attached in **default group** capture phase at the window level (in the per-content-process frame script). When the shim is armed, it `stopPropagation`s — preventing the event from reaching page handlers on inner nodes (document/body/specific elements). Our system-group shim on the same window still fires (same node, different group); only travel to other nodes is stopped. Frame scripts run at `document_start` so this listener is registered before any page script can attach competing listeners.
 
 ### Frame-script accumulation gotcha
 
-Firefox does NOT unload frame scripts on extension reload. Every `disable+enable` cycle leaves the prior frame script registered in each content process AND in `Services.mm`'s delayed-script queue. Without mitigation, every reload adds a permanent stale engine that fires on every keystroke. Two defenses:
+Firefox does NOT unload frame scripts on extension reload. Every `disable+enable` cycle leaves the prior frame script registered in each content process AND in `Services.mm`'s delayed-script queue. Without mitigation, every reload adds a permanent stale shim that fires on every keystroke. Two defenses:
 
-1. **Generation tagging.** Each load mints a unique `CHORD_GENERATION` string. All engine-fired IPCs include `__gen`; chrome's `isCurrentGen` filters out stale generations' messages. The `ZenChord:DeliverKey:<gen>` IPC message **name** is also gen-tagged so stale `addMessageListener` registrations never fire (they're subscribed to old names).
-2. **Aggressive teardown.** `teardownChordEngines` (registered via `context.callOnClose`) iterates `Services.mm.getDelayedFrameScripts()` and removes every chord-engine entry — not just the current generation's URL. This stops new content processes from auto-loading stale scripts. Currently-loaded stale scripts in existing processes can't be fully unloaded; they receive `ZenChord:Shutdown` broadcast which detaches their engine and sets `__shutdown=true`. Pre-shutdown-handler versions can't be cleanly stopped — a Firefox restart is the only recovery.
+1. **Generation tagging.** Each load mints a unique `CHORD_GENERATION` string. Shim key IPC uses generation-tagged message names such as `ZenChord:Key:<gen>`, and chrome only listens to the current generation. `ZenChord:DeliverKey:<gen>` is also gen-tagged so stale popup/content listeners never fire.
+2. **Aggressive teardown.** `teardownChordShims` (registered via `context.callOnClose`) iterates `Services.mm.getDelayedFrameScripts()` and removes every chord-shim entry — not just the current generation's URL. This stops new content processes from auto-loading stale scripts. Currently-loaded stale scripts in existing processes can't be fully unloaded; they receive `ZenChord:Shutdown` broadcast which detaches their shim and sets `__shutdown=true`. Pre-shutdown-handler versions can't be cleanly stopped — a Firefox restart is the only recovery.
 
 ### Popup-instance gating
 
@@ -119,7 +118,7 @@ Each `createOverlay` increments `popupInstance` and bakes the value into the pop
 
 ### Silent prerender swap
 
-When chord arms (via `armChord`), chrome creates a hidden prerender at the default `actions` view so the popup loads during the chord wait. When the user types an `open-view` chord key, the requested view doesn't match the prerender — chrome calls `destroyOverlay({silent: true})` then a fresh `createOverlay(requestedView)`. The `silent` flag is critical: the regular destroy path calls `finishBridge` which broadcasts `ZenChord:ExitBridge`, resetting the engine's bridging state and discarding `bridgeBuffer`. For a swap, we want the bridge to survive — the new popup will drain it.
+When chord arms (via `armChord`), chrome creates a hidden prerender at the default `actions` view so the popup loads during the chord wait. When the user types an `open-view` chord key, the requested view doesn't match the prerender — chrome calls `destroyOverlay({silent: true})` then a fresh `createOverlay(requestedView)`. The `silent` flag is critical: the regular destroy path calls `finishBridge`, disarms shims, and clears the session bridge buffer. For a swap, we want the bridge to survive — the new popup will drain it.
 
 ## Companion Mods
 
