@@ -5791,6 +5791,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         },
 
+        async synthChordKey(payload) {
+          if (!payload || typeof payload.chordKey !== "string" || !payload.chordKey) return;
+          chordSession.acceptEngineEvent({
+            kind: "synthetic-key",
+            chordKey: payload.chordKey,
+            view: payload.view || null,
+            activation: payload.activation || null,
+          });
+        },
+
         // Commit-on-action hook. Bg calls this for every popup-fired
         // runtime action so chrome decides whether to promote the
         // in-flight chord chain to lastChordReplay (cycling-capable

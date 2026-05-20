@@ -30,6 +30,7 @@
     let lastChordReplay = null;
     let currentChordReplay = null;
     let pretracedReplayKeys = [];
+    const syntheticReplayEvents = [];
 
     function transition(to, why, data) {
       const from = state;
@@ -157,6 +158,14 @@
       } else if (event.kind === "armed") {
         resetCurrentReplay();
         transition("armed-root", "armed");
+      } else if (event.kind === "synthetic-key") {
+        syntheticReplayEvents.push({
+          at: Date.now(),
+          chordKey: event.chordKey || null,
+          view: event.view || null,
+          activation: event.activation || null,
+        });
+        if (syntheticReplayEvents.length > 50) syntheticReplayEvents.shift();
       }
     }
 
@@ -205,6 +214,7 @@
         lastChordReplay,
         currentChordReplay,
         pretracedReplayKeys,
+        syntheticReplayEvents,
       });
     }
 

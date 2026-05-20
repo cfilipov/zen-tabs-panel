@@ -26,6 +26,7 @@ type ChordSession = {
     lastChordReplay: unknown;
     currentChordReplay: unknown;
     pretracedReplayKeys: unknown[];
+    syntheticReplayEvents: unknown[];
   };
 };
 
@@ -199,5 +200,18 @@ describe("chord-session replay recording", () => {
       expect.objectContaining({ sessionState: "armed-root", legacyState: "bridging-buffering" }),
     );
     warn.mockRestore();
+  });
+
+  it("records synthetic chord events without firing or committing actions", () => {
+    const session = makeSession();
+    session.acceptEngineEvent({ kind: "synthetic-key", chordKey: "3", view: "last-visited", activation: "trace" });
+
+    expect(session.getReplayState()).toMatchObject({
+      lastChordReplay: null,
+      currentChordReplay: null,
+      syntheticReplayEvents: [
+        expect.objectContaining({ chordKey: "3", view: "last-visited", activation: "trace" }),
+      ],
+    });
   });
 });

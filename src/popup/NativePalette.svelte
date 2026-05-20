@@ -406,6 +406,7 @@
     if (!key) return;
     try {
       effects.traceReplayKey(key);
+      effects.synthChordKey(key, palette.currentView, "trace");
     } catch {
       // Replay tracing is best-effort; it must never block the command.
     }

@@ -140,6 +140,7 @@ this.MSG = Object.freeze({
   // slow-typed chord (menu shown, then user types digit) is
   // recorded the same as a fast-typed chord (engine-bridged).
   TRACE_REPLAY_KEY:               "trace-replay-key",
+  SYNTH_CHORD_KEY:                "synth-chord-key",
 
   // Duplicate-link intercept: popup-fired actions for the buttons
   // in the duplicate-prompt view. Excluded from chord-replay tracking —

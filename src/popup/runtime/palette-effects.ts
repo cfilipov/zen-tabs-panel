@@ -30,6 +30,9 @@ export function createPaletteEffects() {
     traceReplayKey(key: string) {
       fireMessage({ type: "trace-replay-key", key });
     },
+    synthChordKey(chordKey: string, view: ViewId, activation = "keydown") {
+      fireMessage({ type: "synth-chord-key", chordKey, view, activation });
+    },
     navigateToHistoryIndex(index: number) {
       fireMessage({ type: "navigate-to-history-index", index });
     },
