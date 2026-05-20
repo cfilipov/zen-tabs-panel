@@ -93,6 +93,8 @@
     let popupReady = false;
     let readyTargetView = null;
     let bridgeBuffer = null;
+    let bridgeTimer = null;
+    let revealTimer = null;
     let currentNode = options && options.chordTree;
     let currentPath = [];
     let chordTimer = null;
@@ -466,6 +468,8 @@
         popupReady,
         readyTargetView,
         bridgeBufferLength: Array.isArray(bridgeBuffer) ? bridgeBuffer.length : null,
+        bridgeTimerActive: bridgeTimer != null,
+        revealTimerActive: revealTimer != null,
         recentTransitions,
       });
     }
@@ -559,6 +563,46 @@
       return drained;
     }
 
+    function clearBridgeTimer(w) {
+      if (bridgeTimer !== null && w) {
+        try { w.clearTimeout(bridgeTimer); } catch (e) {}
+      }
+      bridgeTimer = null;
+    }
+
+    function armBridgeTimer(w, delay, callback) {
+      clearBridgeTimer(w);
+      if (!w) return;
+      bridgeTimer = w.setTimeout(() => {
+        bridgeTimer = null;
+        if (callback) callback();
+      }, delay);
+    }
+
+    function isBridgeTimerActive() {
+      return bridgeTimer != null;
+    }
+
+    function clearRevealTimer(w) {
+      if (revealTimer !== null && w) {
+        try { w.clearTimeout(revealTimer); } catch (e) {}
+      }
+      revealTimer = null;
+    }
+
+    function armRevealTimer(w, delay, callback) {
+      clearRevealTimer(w);
+      if (!w) return;
+      revealTimer = w.setTimeout(() => {
+        revealTimer = null;
+        if (callback) callback();
+      }, delay);
+    }
+
+    function isRevealTimerActive() {
+      return revealTimer != null;
+    }
+
     return {
       recordEvent,
       arm,
@@ -594,6 +638,12 @@
       getBridgeBufferLength,
       pushBridgeKey,
       drainBridgeBuffer,
+      clearBridgeTimer,
+      armBridgeTimer,
+      isBridgeTimerActive,
+      clearRevealTimer,
+      armRevealTimer,
+      isRevealTimerActive,
     };
   }
 

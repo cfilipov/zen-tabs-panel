@@ -969,13 +969,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // extension reload (Firefox provides no way to unload frame scripts on
     // extension teardown).
     const CHORD_GENERATION = String(Date.now()) + "_" + Math.random().toString(36).slice(2, 8);
-    // Chrome-side bridge timers. ChordSession owns the buffered key queue and
-    // readiness flags; api.js keeps timer handles because they are tied to the
-    // chrome window's setTimeout/clearTimeout APIs.
-    const bridgeState = {
-      bridgeTimer: null,
-      revealTimer: null,
-    };
     // Keep this comfortably above cold Svelte view startup in large tab
     // profiles. Fast chains like cmd+.,q,1 buffer row-selection digits in
     // chrome until POPUP_READY; timing out too early discards the digits and
@@ -1040,6 +1033,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function drainBridgeBuffer(why) {
       try { return chordSession ? chordSession.drainBridgeBuffer(why) : []; } catch (e) { return []; }
+    }
+    function isBridgeTimerActive() {
+      try { return !!(chordSession && chordSession.isBridgeTimerActive()); } catch (e) { return false; }
+    }
+    function isRevealTimerActive() {
+      try { return !!(chordSession && chordSession.isRevealTimerActive()); } catch (e) { return false; }
     }
     // Popup-instance counter. Incremented in createOverlay; the popup
     // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
@@ -2837,8 +2836,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         bridge: {
           active: hasActiveBridge(),
           buffered: getBridgeBufferLength(),
-          bridgeTimerActive: bridgeState.bridgeTimer != null,
-          revealTimerActive: bridgeState.revealTimer != null,
+          bridgeTimerActive: isBridgeTimerActive(),
+          revealTimerActive: isRevealTimerActive(),
           popupReady: isPopupReady(),
           activeView: getActiveBridgeView(),
           activeBridgeView: getActiveBridgeView(),
@@ -3110,10 +3109,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       clearBridgeTimer();
       clearRevealTimer();
-      bridgeState.bridgeTimer = w ? w.setTimeout(() => {
-        bridgeState.bridgeTimer = null;
+      if (chordSession) chordSession.armBridgeTimer(w, BRIDGE_TIMEOUT_MS, () => {
         finishBridge();
-      }, BRIDGE_TIMEOUT_MS) : null;
+      });
 
       const requestedView = view || null;
 
@@ -3159,18 +3157,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function clearBridgeTimer() {
       const w = getWin();
-      if (bridgeState.bridgeTimer !== null && w) {
-        try { w.clearTimeout(bridgeState.bridgeTimer); } catch (e) {}
-      }
-      bridgeState.bridgeTimer = null;
+      try { if (chordSession) chordSession.clearBridgeTimer(w); } catch (e) {}
     }
 
     function clearRevealTimer() {
       const w = getWin();
-      if (bridgeState.revealTimer !== null && w) {
-        try { w.clearTimeout(bridgeState.revealTimer); } catch (e) {}
-      }
-      bridgeState.revealTimer = null;
+      try { if (chordSession) chordSession.clearRevealTimer(w); } catch (e) {}
       // Reset any stale "fired-but-popup-wasn't-ready" flag. A new
       // chord chain starts fresh.
       setRevealDeferred(false, "reveal-deferred-clear");
@@ -3218,8 +3210,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       clearRevealTimer();
       if (!w) return;
-      bridgeState.revealTimer = w.setTimeout(() => {
-        bridgeState.revealTimer = null;
+      if (!chordSession) return;
+      chordSession.armRevealTimer(w, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700, () => {
         if (!pendingReveal) return;
         // Don't reveal an empty popup. If the popup hasn't drained yet
         // we'd just paint a blank panel for a beat before the popup's
@@ -3232,18 +3224,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return;
         }
         revealOverlay();
-      }, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700);
+      });
     }
 
     function armBufferedRevealTimer() {
       const w = getWin();
       clearRevealTimer();
       if (!w) return;
-      bridgeState.revealTimer = w.setTimeout(() => {
-        bridgeState.revealTimer = null;
+      if (!chordSession) return;
+      chordSession.armRevealTimer(w, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700, () => {
         if (!pendingReveal || isPopupReady()) return;
         revealOverlay();
-      }, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700);
+      });
     }
 
     // Forward a chord key to the popup's content process. If the popup
