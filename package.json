@@ -1,7 +1,7 @@
 {
   "name": "ergozen",
   "private": true,
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "Tab management command palette and utilities for Zen Browser",
   "scripts": {
     "build": "node scripts/build-extension.mjs",
