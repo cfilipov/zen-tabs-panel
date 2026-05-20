@@ -89,6 +89,7 @@
     const syntheticReplayEvents = [];
     let revealBlocked = false;
     let revealDeferred = false;
+    let activeBridgeView = null;
     let currentNode = options && options.chordTree;
     let currentPath = [];
     let chordTimer = null;
@@ -458,6 +459,7 @@
         state,
         revealBlocked,
         revealDeferred,
+        activeBridgeView,
         recentTransitions,
       });
     }
@@ -483,6 +485,20 @@
       return revealDeferred;
     }
 
+    function setActiveBridgeView(view, why) {
+      activeBridgeView = view || null;
+      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { activeBridgeView } });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
+    function getActiveBridgeView() {
+      return activeBridgeView;
+    }
+
+    function hasActiveBridge() {
+      return activeBridgeView != null;
+    }
+
     return {
       recordEvent,
       arm,
@@ -505,6 +521,9 @@
       isRevealBlocked,
       setRevealDeferred,
       isRevealDeferred,
+      setActiveBridgeView,
+      getActiveBridgeView,
+      hasActiveBridge,
     };
   }
 

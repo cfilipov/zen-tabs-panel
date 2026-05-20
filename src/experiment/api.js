@@ -982,7 +982,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // separate from currentViewName because stale resize messages can update
       // currentViewName after a warm-view swap.
       readyTargetView: null,
-      activeView: null,
     };
     // Keep this comfortably above cold Svelte view startup in large tab
     // profiles. Fast chains like cmd+.,q,1 buffer row-selection digits in
@@ -1009,6 +1008,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function isRevealDeferred() {
       try { return !!(chordSession && chordSession.isRevealDeferred()); } catch (e) { return false; }
+    }
+    function setActiveBridgeView(view, why) {
+      try { if (chordSession) chordSession.setActiveBridgeView(view || null, why); } catch (e) {}
+    }
+    function getActiveBridgeView() {
+      try { return chordSession ? chordSession.getActiveBridgeView() : null; } catch (e) { return null; }
+    }
+    function hasActiveBridge() {
+      try { return !!(chordSession && chordSession.hasActiveBridge()); } catch (e) { return false; }
     }
     // Popup-instance counter. Incremented in createOverlay; the popup
     // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
@@ -2587,7 +2595,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       explicitRevealView = null;
       explicitRevealScheduledToken = 0;
       if (chordSession) {
-        if (silent && bridgeState.activeView != null) {
+        if (silent && hasActiveBridge()) {
           chordSession.transition("bridging-buffering", "destroyOverlay-silent", { hard, silent });
         } else if (!silent) {
           chordSession.transition("destroying", "destroyOverlay", { hard, silent });
@@ -2804,13 +2812,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
           popupInstance,
         },
         bridge: {
-          active: bridgeState.activeView != null,
+          active: hasActiveBridge(),
           buffered: Array.isArray(bridgeState.buffer) ? bridgeState.buffer.length : 0,
           bridgeTimerActive: bridgeState.bridgeTimer != null,
           revealTimerActive: bridgeState.revealTimer != null,
           popupReady: bridgeState.popupReady,
-          activeView: bridgeState.activeView,
-          activeBridgeView: bridgeState.activeView,
+          activeView: getActiveBridgeView(),
+          activeBridgeView: getActiveBridgeView(),
           revealBlocked: isRevealBlocked(),
           revealDeferred: isRevealDeferred(),
         },
@@ -3062,7 +3070,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function enterBridgeFromOpenView(view, kind, source) {
       // The first bridge wins; later bridge opens from overlapping key/timer
       // edges are ignored so they cannot destroy/recreate the live popup.
-      if (bridgeState.activeView != null) return;
+      if (hasActiveBridge()) return;
 
       // Source="match" is a user-typed chord-key (cmd+.,r, etc.) — the
       // intentional chord. Source="timeout" is the menu opening because
@@ -3072,7 +3080,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (source === "match") trackChordOpenView(view);
 
       bridgeState.buffer = [];
-      bridgeState.activeView = view || "actions";
+      setActiveBridgeView(view || "actions", "enterBridgeFromOpenView");
       bridgeState.popupReady = false;
       if (chordSession) chordSession.transition("bridging-buffering", "enterBridgeFromOpenView", { view, kind, source });
       observeChordSession("enterBridgeFromOpenView");
@@ -3269,7 +3277,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       bridgeState.popupReady = false;
       try { chordSession.exitBridge(); } catch (e) {}
       disarmChordShims("finish-bridge");
-      bridgeState.activeView = null;
+      setActiveBridgeView(null, "finishBridge");
       if (chordSession) chordSession.transition("idle", "finishBridge");
       observeChordSession("finishBridge");
     }
@@ -3320,7 +3328,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function switchHiddenBridgeView(view, params, previousView, previousParams) {
       if (pendingReveal) destroyOverlay({ silent: true });
       createOverlay(view, params || {});
-      bridgeState.activeView = view;
+      setActiveBridgeView(view, "switchHiddenBridgeView");
       if (previousView) {
         navStack = [{ view: previousView, params: previousParams || {} }];
       }
@@ -3431,7 +3439,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function tryHandleChromeOwnedBridgeKey(keyData) {
-      if (bridgeState.activeView === "domains") {
+      if (getActiveBridgeView() === "domains") {
         const rowIndex = rowIndexFromDigitKey(keyData);
         if (rowIndex == null) return false;
         try {
@@ -3448,22 +3456,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
       }
 
-      if (CHROME_OWNED_COMPACT_BRIDGE_VIEWS.has(bridgeState.activeView)) {
+      if (CHROME_OWNED_COMPACT_BRIDGE_VIEWS.has(getActiveBridgeView())) {
         const intent = bridgeRowIntentFromKey(keyData);
         if (!intent) return false;
-        return activateChromeOwnedRowIntent(bridgeState.activeView, intent.index, "shortcut", intent.switchToTarget, { destroyOverlay: true });
+        return activateChromeOwnedRowIntent(getActiveBridgeView(), intent.index, "shortcut", intent.switchToTarget, { destroyOverlay: true });
       }
 
-      if (CHROME_OWNED_HISTORY_BRIDGE_VIEWS.has(bridgeState.activeView)) {
+      if (CHROME_OWNED_HISTORY_BRIDGE_VIEWS.has(getActiveBridgeView())) {
         const rowIndex = rowIndexFromDigitKey(keyData);
         if (rowIndex == null) return false;
-        return activateChromeOwnedRowIntent(bridgeState.activeView, rowIndex, "shortcut", false, { destroyOverlay: true });
+        return activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, { destroyOverlay: true });
       }
 
-      if (!CHROME_OWNED_TAB_BRIDGE_VIEWS.has(bridgeState.activeView)) return false;
+      if (!CHROME_OWNED_TAB_BRIDGE_VIEWS.has(getActiveBridgeView())) return false;
       const rowIndex = rowIndexFromDigitKey(keyData);
       if (rowIndex == null) return false;
-      return activateChromeOwnedRowIntent(bridgeState.activeView, rowIndex, "shortcut", false, { destroyOverlay: true });
+      return activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, { destroyOverlay: true });
     }
 
     // ---- Chrome chord-session + shim instance ---------------------------
@@ -5701,7 +5709,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // "popup is ready; buffer empty" — readiness still flips true so
           // any subsequent bridge keys go live via DeliverKey rather than
           // queueing to a null buffer.
-          const wasBridging = bridgeState.activeView != null;
+          const wasBridging = hasActiveBridge();
           const drained = bridgeState.buffer || [];
           debugChordTrace("bridge-buffer-drain", { drained: drained.length, view: bridgeState.readyTargetView || "actions" });
           // Reset the bridge buffer to an empty array so future bridge keys
@@ -5980,7 +5988,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // chord-opened popups (root timeout / bridge); toolbar-clicked
           // visible navigation is not itself replayable and must not
           // poison the previous leaf action.
-          if (bridgeState.activeView != null || chordSession.hasCurrentReplay()) {
+          if (hasActiveBridge() || chordSession.hasCurrentReplay()) {
             trackChordOpenView(view);
           }
           // Only swap browsers when crossing between our popup and a
