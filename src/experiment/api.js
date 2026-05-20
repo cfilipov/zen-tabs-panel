@@ -1009,10 +1009,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // chain. Before that, bridge keys are buffered. After, they are
     // delivered live via the popup browser's message manager.
     let popupReady = false;
-    // The chord-tree path the engine was at when it transitioned to
-    // bridging — passed to the popup on POPUP_READY so its engine
-    // resumes at the same node.
-    let pendingStateSnapshot = null;
     // Which engine instance fired the open-view that triggered the active
     // bridge — exit-bridge must be sent to it (and only it) when popup
     // drains. "chrome" or "content"; null when no bridge active.
@@ -2610,7 +2606,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       explicitRevealView = null;
       explicitRevealScheduledToken = 0;
       if (chordSession) {
-        if (silent && (bridgingEngineKind != null || pendingStateSnapshot != null)) {
+        if (silent && bridgingEngineKind != null) {
           chordSession.transition("bridging-buffering", "destroyOverlay-silent", { hard, silent });
         } else if (!silent) {
           chordSession.transition("destroying", "destroyOverlay", { hard, silent });
@@ -2627,7 +2623,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // bridge state was JUST set up by the caller and we want to keep it.
       if (bridgeBuffer && !silent) {
         bridgeBuffer = null;
-        pendingStateSnapshot = null;
         finishBridge();
       }
 
@@ -2836,12 +2831,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
           popupInstance,
         },
         bridge: {
-          active: bridgingEngineKind != null || pendingStateSnapshot != null,
+          active: bridgingEngineKind != null,
           buffered: Array.isArray(bridgeBuffer) ? bridgeBuffer.length : 0,
           bridgeTimerActive: bridgeTimer != null,
           revealTimerActive: revealTimer != null,
           popupReady,
-          pendingStateSnapshot,
           bridgingEngineKind,
           revealBlocked,
           revealDeferred,
@@ -3078,7 +3072,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (source === "match") trackChordOpenView(view);
 
       bridgeBuffer = [];
-      pendingStateSnapshot = stateSnapshot || [];
+      void stateSnapshot;
       bridgingEngineKind = kind;
       popupReady = false;
       if (chordSession) chordSession.transition("bridging-buffering", "enterBridgeFromOpenView", { view, kind, source });
@@ -3272,7 +3266,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       clearBridgeTimer();
       clearRevealTimer();
       bridgeBuffer = null;
-      pendingStateSnapshot = null;
       popupReady = false;
       // The single chrome traverser owns bridge state in the shim model.
       if (chromeEngine) {
@@ -5556,8 +5549,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         //
         // Returns { buffered, stateSnapshot } — the popup replays the
         // buffered keys via dispatchKey before processing live input.
-        // stateSnapshot is the chord-tree path the engine was at when
-        // bridging began (reserved for the popup; not currently consumed).
+        // stateSnapshot is a legacy empty array kept for popup API
+        // compatibility; the popup no longer consumes chrome engine paths.
         async takeChordBridgeBuffer(inst) {
           // Stale POPUP_READY from a popup we've since destroyed (prerender
           // swap during a chord chain). Ignore it — otherwise we drain the
@@ -5572,7 +5565,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // queueing to a null buffer.
           const wasBridging = bridgingEngineKind != null;
           const drained = bridgeBuffer || [];
-          const snapshot = pendingStateSnapshot || [];
           debugChordTrace("bridge-buffer-drain", { drained: drained.length, view: popupReadyTargetView || "actions" });
           // Reset the bridge buffer to an empty array so future bridge
           // keys from the engine (before forwardKeyToPopup checks
@@ -5622,7 +5614,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const replyView = readyView !== "actions" ? readyView : null;
           return {
             buffered: drained,
-            stateSnapshot: snapshot,
+            stateSnapshot: [],
             view: replyView,
             armRevealTimer: wasBridging || drained.length > 0,
           };
