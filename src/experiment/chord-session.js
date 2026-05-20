@@ -90,6 +90,7 @@
     let revealBlocked = false;
     let revealDeferred = false;
     let activeBridgeView = null;
+    let popupReady = false;
     let currentNode = options && options.chordTree;
     let currentPath = [];
     let chordTimer = null;
@@ -460,6 +461,7 @@
         revealBlocked,
         revealDeferred,
         activeBridgeView,
+        popupReady,
         recentTransitions,
       });
     }
@@ -499,6 +501,16 @@
       return activeBridgeView != null;
     }
 
+    function setPopupReady(value, why) {
+      popupReady = !!value;
+      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { popupReady } });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
+    function isPopupReady() {
+      return popupReady;
+    }
+
     return {
       recordEvent,
       arm,
@@ -524,6 +536,8 @@
       setActiveBridgeView,
       getActiveBridgeView,
       hasActiveBridge,
+      setPopupReady,
+      isPopupReady,
     };
   }
 

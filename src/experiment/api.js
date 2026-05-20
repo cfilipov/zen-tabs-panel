@@ -977,7 +977,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       buffer: null,
       bridgeTimer: null,
       revealTimer: null,
-      popupReady: false,
       // View the popup should confirm on its next POPUP_READY reply. Kept
       // separate from currentViewName because stale resize messages can update
       // currentViewName after a warm-view swap.
@@ -1017,6 +1016,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function hasActiveBridge() {
       try { return !!(chordSession && chordSession.hasActiveBridge()); } catch (e) { return false; }
+    }
+    function setPopupReady(value, why) {
+      try { if (chordSession) chordSession.setPopupReady(!!value, why); } catch (e) {}
+    }
+    function isPopupReady() {
+      try { return !!(chordSession && chordSession.isPopupReady()); } catch (e) { return false; }
     }
     // Popup-instance counter. Incremented in createOverlay; the popup
     // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
@@ -1777,7 +1782,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       currentViewParams = params || {};
       currentDynamicSidebarWidth = 0;
       currentMeasuredResizeView = null;
-      bridgeState.popupReady = false;
+      setPopupReady(false, "popup-ready-clear");
       bridgeState.readyTargetView = viewName;
 
       const overlay = w.document.createElement("div");
@@ -1903,7 +1908,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Popup will signal ready again after it processes WarmRearm; any
       // chord-chain keys that land in this window are buffered (just like
       // the cold-create case).
-      bridgeState.popupReady = false;
+      setPopupReady(false, "popup-ready-clear");
       navStack = [];
       currentViewName = view || "actions";
       currentViewParams = {};
@@ -2135,7 +2140,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const isMeasuredView = isCompactMeasuredView(viewName);
         const heightReady = !isMeasuredView || currentMeasuredResizeView === viewName;
         const retryBounceWindowPassed = !isMeasuredView || Date.now() - startedAt >= 380;
-        const viewReady = isMeasuredView ? heightReady && retryBounceWindowPassed : bridgeState.popupReady;
+        const viewReady = isMeasuredView ? heightReady && retryBounceWindowPassed : isPopupReady();
         if (revealExplicitViewIfReady(viewName)) {
           return;
         }
@@ -2305,7 +2310,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function measureNativePopupContentResize(view) {
       const w = getWin();
       if (!w || currentViewName !== (view || "actions")) return;
-      if (bridgeState.popupReady) return;
+      if (isPopupReady()) return;
       const br = w.document.getElementById(BROWSER_ID);
       const mm = browserMessageManager(br);
       if (!br || !mm || !String(br.currentURI?.spec || "").includes("/popup/popup.html")) return;
@@ -2319,7 +2324,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         w.clearTimeout(timeout);
         try { mm.removeMessageListener(name, handler); } catch (e) {}
         if (currentViewName !== (view || "actions")) return;
-        if (bridgeState.popupReady) return;
+        if (isPopupReady()) return;
         const height = Number(msg.data && msg.data.height);
         if (height > 0) {
           resizePanelToView(view, height, undefined, { allowExplicitReveal: false });
@@ -2540,7 +2545,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       currentViewName = "actions";
       currentViewParams = {};
       bridgeState.readyTargetView = "actions";
-      bridgeState.popupReady = false;
+      setPopupReady(false, "popup-ready-clear");
       if (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions") {
         try {
           br.setAttribute("src", getPaletteURL(null, null));
@@ -2816,7 +2821,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           buffered: Array.isArray(bridgeState.buffer) ? bridgeState.buffer.length : 0,
           bridgeTimerActive: bridgeState.bridgeTimer != null,
           revealTimerActive: bridgeState.revealTimer != null,
-          popupReady: bridgeState.popupReady,
+          popupReady: isPopupReady(),
           activeView: getActiveBridgeView(),
           activeBridgeView: getActiveBridgeView(),
           revealBlocked: isRevealBlocked(),
@@ -3081,7 +3086,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       bridgeState.buffer = [];
       setActiveBridgeView(view || "actions", "enterBridgeFromOpenView");
-      bridgeState.popupReady = false;
+      setPopupReady(false, "popup-ready-clear");
       if (chordSession) chordSession.transition("bridging-buffering", "enterBridgeFromOpenView", { view, kind, source });
       observeChordSession("enterBridgeFromOpenView");
       const w = getWin();
@@ -3111,7 +3116,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // menu now. There are no buffered chord keys to preserve here, and
           // waiting for a warm hidden popup to re-emit POPUP_READY can strand
           // the overlay invisible after reload/rearm races.
-          if (!bridgeState.popupReady) forcePopupBridgeReady();
+          if (!isPopupReady()) forcePopupBridgeReady();
           setRevealDeferred(false, "reveal-deferred-clear");
           revealOverlay();
         } else {
@@ -3166,7 +3171,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           scheduleDeferredRevealFallback();
           return;
         }
-        if (!bridgeState.popupReady) forcePopupBridgeReady();
+        if (!isPopupReady()) forcePopupBridgeReady();
         setRevealDeferred(false, "reveal-deferred-clear");
         revealOverlay();
       }, 250);
@@ -3175,7 +3180,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function forcePopupBridgeReady() {
       const drained = bridgeState.buffer || [];
       bridgeState.buffer = [];
-      bridgeState.popupReady = true;
+      setPopupReady(true, "popup-ready");
       if (chordSession) chordSession.transition("bridging-live", "forcePopupBridgeReady", { drained: drained.length });
       observeChordSession("forcePopupBridgeReady");
 
@@ -3204,7 +3209,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // first view rendered (visible flash). Defer the reveal — once
         // the popup signals POPUP_READY, takeChordBridgeBuffer reveals
         // immediately if it sees a "deferred" flag set here.
-        if (!bridgeState.popupReady) {
+        if (!isPopupReady()) {
           setRevealDeferred(true, "reveal-deferred");
           scheduleDeferredRevealFallback();
           return;
@@ -3219,7 +3224,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!w) return;
       bridgeState.revealTimer = w.setTimeout(() => {
         bridgeState.revealTimer = null;
-        if (!pendingReveal || bridgeState.popupReady) return;
+        if (!pendingReveal || isPopupReady()) return;
         revealOverlay();
       }, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700);
     }
@@ -3244,7 +3249,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // From this point the popup owns the reveal-on-pause decision via
       // its own setTimeout in keyboard.js.
       clearRevealTimer();
-      if (!bridgeState.popupReady) {
+      if (!isPopupReady()) {
         if (bridgeState.buffer) {
           bridgeState.buffer.push(keyData);
           debugChordTrace("forward-key-buffered", { key: keyData && keyData.key, buffered: bridgeState.buffer.length });
@@ -3274,7 +3279,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       clearBridgeTimer();
       clearRevealTimer();
       bridgeState.buffer = null;
-      bridgeState.popupReady = false;
+      setPopupReady(false, "popup-ready-clear");
       try { chordSession.exitBridge(); } catch (e) {}
       disarmChordShims("finish-bridge");
       setActiveBridgeView(null, "finishBridge");
@@ -5716,7 +5721,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // before the ready check don't NPE — after readiness is true they get
           // forwarded live, not buffered.
           bridgeState.buffer = [];
-          bridgeState.popupReady = true;
+          setPopupReady(true, "popup-ready");
           if (wasBridging && chordSession) {
             chordSession.transition("bridging-live", "takeChordBridgeBuffer", { drained: drained.length, view: bridgeState.readyTargetView || "actions" });
             observeChordSession("takeChordBridgeBuffer");
