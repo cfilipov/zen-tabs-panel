@@ -968,12 +968,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let explicitRevealView = null;
     let explicitRevealScheduledToken = 0;
 
-    // Chrome engine instance is constructed later in this getAPI body once
-    // the helpers it depends on (createOverlay, runChordAction, etc.) are
-    // declared. The variable is hoisted here so functions defined above the
-    // construction site (destroyOverlay etc.) can reference it for state
-    // queries.
-    let chromeEngine = null;
     let chromeShim = null;
     // Per-content-process frame script registration handle. Populated once
     // by installContentEngineFrameScript() below.
@@ -2799,9 +2793,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const browser = doc && doc.getElementById(BROWSER_ID);
       let chromeEngineState = null;
       try {
-        chromeEngineState = chromeEngine
-          ? { armed: chromeEngine.isArmed(), path: chromeEngine.serializeState() }
-          : null;
+        chromeEngineState = chordSession ? chordSession.getEngineState() : null;
       } catch (e) {
         chromeEngineState = { error: String(e) };
       }
@@ -2933,6 +2925,41 @@ this.zenWorkspaces = class extends ExtensionAPI {
     chordSession = chordSessionScope.createChordSession({
       replayActionId: MSG_REPLAY_LAST_CHORD,
       replayRecordBlocklist: Array.from(REPLAY_RECORD_BLOCKLIST),
+      createChordEngine: engineScope.createChordEngine,
+      chordTree: CHORD_TREE,
+      constants: CHORD_CONSTANTS,
+      setTimeoutFn: (fn, ms) => {
+        const w = getWin();
+        return w ? w.setTimeout(fn, ms) : null;
+      },
+      clearTimeoutFn: (id) => {
+        const w = getWin();
+        if (w && id != null) try { w.clearTimeout(id); } catch (e) {}
+      },
+      onArmed: () => {
+        createOverlay();
+      },
+      onAction: (payload) => {
+        debugChordTrace("chrome-on-action", payload);
+        dispatchChordAction(payload);
+      },
+      onOpenView: (view, snapshot, source) => {
+        debugChordTrace("chrome-on-open-view", { view, snapshot, source });
+        enterBridgeFromOpenView(view, snapshot, "chrome", source);
+      },
+      onStateChange: (snapshot) => {
+        debugChordTrace("chrome-on-state-change", { snapshot });
+        prerenderPrefixView(snapshot);
+      },
+      onCancel: () => {
+        debugChordTrace("chrome-on-cancel", {});
+        disarmChordShims("cancel");
+        if (pendingReveal) destroyOverlay();
+      },
+      onBridgeKey: (keyData) => {
+        debugChordTrace("chrome-on-bridge-key", keyData);
+        forwardKeyToPopup(keyData);
+      },
     });
 
     function trackChordTerminalAction(payload) {
@@ -2975,7 +3002,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function replayLastChordFromRepeatedLeader() {
       debugChordTrace("leader-repeat-as-replay", {});
-      try { if (chromeEngine) chromeEngine.reset(); } catch (e) {}
+      try { if (chordSession) chordSession.resetEngine(); } catch (e) {}
       try { if (chromeShim) chromeShim.disarm("replay"); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Disarm:" + CHORD_GENERATION); } catch (e) {}
@@ -2993,9 +3020,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function acceptShimKey(keyData, source) {
-      if (!chromeEngine || !keyData || keyData.kind !== "key") return;
+      if (!chordSession || !keyData || keyData.kind !== "key") return;
       debugChordTrace("shim-key", { source, key: keyData.key, seq: keyData.shimSeq, ts: keyData.shimTs });
-      chromeEngine.handleKey({
+      chordSession.handleKey({
+        kind: "key",
         key: keyData.key,
         code: keyData.code,
         shiftKey: !!keyData.shiftKey,
@@ -3271,10 +3299,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       clearRevealTimer();
       bridgeBuffer = null;
       popupReady = false;
-      // The single chrome traverser owns bridge state in the shim model.
-      if (chromeEngine) {
-        try { chromeEngine.exitBridge(); } catch (e) {}
-      }
+      try { chordSession.exitBridge(); } catch (e) {}
       disarmChordShims("finish-bridge");
       // Compatibility for stale pre-shim content engines.
       try { Services.mm.broadcastAsyncMessage("ZenChord:ExitBridge"); } catch (e) {}
@@ -3322,7 +3347,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       lastLeaderArmAt = now;
       debugChordTrace("arm-leader", {
         overlayVisible: isOverlayVisible(),
-        chromeArmed: !!(chromeEngine && chromeEngine.isArmed && chromeEngine.isArmed()),
+        chromeArmed: !!(chordSession && chordSession.isEngineArmed()),
       });
       // Leader-shortcut routing while the menu is visible:
       //   - on actions   -> dismiss (toggle off).
@@ -3351,7 +3376,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return;
       }
 
-      try { if (chromeEngine) chromeEngine.arm(); } catch (e) {}
+      try { chordSession.arm(); } catch (e) {}
       try { if (chromeShim) chromeShim.arm(); } catch (e) {}
       chordArmSequence++;
       terminalDispatchArmSequence = -1;
@@ -3378,48 +3403,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return code === "Period" || key === ".";
     }
 
-    chromeEngine = engineScope.createChordEngine({
-      chordTree: CHORD_TREE,
-      constants: CHORD_CONSTANTS,
-      filterEvent: () => true,
-      setTimeoutFn: (fn, ms) => {
-        const w = getWin();
-        return w ? w.setTimeout(fn, ms) : null;
-      },
-      clearTimeoutFn: (id) => {
-        const w = getWin();
-        if (w && id != null) try { w.clearTimeout(id); } catch (e) {}
-      },
-      onArmed: () => {
-        // Fresh chord arm — clear the in-flight trace so any nav/keys
-        // recorded for the previous chord chain don't bleed into this
-        // one. The committed previous chord is
-        // preserved for replay until something new commits over it.
-        chordSession.acceptEngineEvent({ kind: "armed" });
-        createOverlay();
-      },
-      onAction: (payload) => {
-        debugChordTrace("chrome-on-action", payload);
-        dispatchChordAction(payload);
-      },
-      onOpenView: (view, snapshot, source) => {
-        debugChordTrace("chrome-on-open-view", { view, snapshot, source });
-        enterBridgeFromOpenView(view, snapshot, "chrome", source);
-      },
-      onStateChange: (snapshot) => {
-        debugChordTrace("chrome-on-state-change", { snapshot });
-        prerenderPrefixView(snapshot);
-      },
-      onCancel: () => {
-        debugChordTrace("chrome-on-cancel", {});
-        disarmChordShims("cancel");
-        if (pendingReveal) destroyOverlay();
-      },
-      onBridgeKey: (k) => {
-        debugChordTrace("chrome-on-bridge-key", k);
-        forwardKeyToPopup(k);
-      },
-    });
     chromeShim = engineScope.createChordShim({
       filterEvent: (e) => {
         if (e && e.__zenTabsPanelFallbackHandled) return false;
@@ -3453,13 +3436,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // <browser>. Content engines handle their own blur via their own
       // content-window blur listener.
       w.addEventListener("focus", (e) => {
-        if (!chromeEngine.isArmed()) return;
+        if (!chordSession.isEngineArmed()) return;
         const t = e && e.target;
         if (!t) return;
         const name = (t.tagName || t.nodeName || "").toLowerCase();
         if (name === "browser" && Date.now() - lastLeaderArmAt > CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS) {
           debugChordTrace("chrome-reset-focus-browser", { since: Date.now() - lastLeaderArmAt });
-          chromeEngine.reset();
+          chordSession.resetEngine();
           try { if (chromeShim) chromeShim.disarm("focus-browser"); } catch (e) {}
         }
       }, true);
@@ -3472,7 +3455,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // while Command is still held. That second keydown is reported as
         // another Cmd+. leader shortcut, not as a plain "." chord key, so
         // translate it to the repeat action while the root chord is armed.
-        if (!isOverlayVisible() && chromeEngine && chromeEngine.isArmed && chromeEngine.isArmed()) {
+        if (!isOverlayVisible() && chordSession && chordSession.isEngineArmed()) {
           lastLeaderArmAt = Date.now();
           replayLastChordFromRepeatedLeader();
           return;
@@ -3521,7 +3504,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           try { e.stopImmediatePropagation(); } catch (_) {}
           return;
         }
-        if (!chromeEngine.isArmed()) {
+        if (!chordSession.isEngineArmed()) {
           debugChordTrace("fallback-skip-not-armed", { key: e.key, target: e.target && e.target.localName });
           return;
         }
@@ -3548,7 +3531,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           hasRootChild: !!(chordKey && CHORD_TREE && CHORD_TREE.children && CHORD_TREE.children[chordKey]),
         });
         try { Object.defineProperty(e, "__zenTabsPanelFallbackHandled", { value: true }); } catch (_) {}
-        chromeEngine.handleKey({
+        chordSession.handleKey({
+          kind: "key",
           key: e.key,
           code: e.code,
           shiftKey: !!e.shiftKey,
@@ -3873,7 +3857,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // (chrome engine firing while content armed) is handled by content
     // engines themselves via the ZenChord:Reset broadcast.
     function resetChromeEngineIfArmed() {
-      try { if (chromeEngine && chromeEngine.isArmed()) chromeEngine.reset(); } catch (e) {}
+      try { if (chordSession && chordSession.isEngineArmed()) chordSession.resetEngine(); } catch (e) {}
     }
     function onContentKey(m) {
       if (!isCurrentGen(m)) return;
@@ -4279,7 +4263,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function teardownChordEngines() {
-      try { if (chromeEngine) chromeEngine.detach(); } catch (e) {}
+      try { if (chordSession) chordSession.detachEngine(); } catch (e) {}
       try { if (chromeShim) chromeShim.detach(); } catch (e) {}
       // Hard-remove the warm overlay so its persistent popup browser
       // doesn't leak across an extension reload (soft-hide alone keeps
@@ -5692,7 +5676,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // is invoked by an external path (toolbar icon click). Tear
           // down any in-flight chord state
           // in both engines so we open cleanly.
-          if (chromeEngine && chromeEngine.isArmed()) chromeEngine.reset();
+          if (chordSession && chordSession.isEngineArmed()) chordSession.resetEngine();
           try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
 
           if (view) {

@@ -1,8 +1,8 @@
 "use strict";
 
-// ChordSession is the chrome-side owner for cross-engine chord bookkeeping.
-// Phase 1 owns replay recording only: the existing chrome/content chord
-// engines still traverse the tree and emit interpreted outcomes.
+// ChordSession is the chrome-side owner for chord progression, bridge state
+// diagnostics, and replay recording. It may host the single chrome chord-tree
+// traverser internally; per-process shims only capture and forward keys.
 (function (scope) {
   function clonePlain(value) {
     if (value == null) return value;
@@ -31,6 +31,7 @@
     let currentChordReplay = null;
     let pretracedReplayKeys = [];
     const syntheticReplayEvents = [];
+    let engine = null;
 
     function transition(to, why, data) {
       const from = state;
@@ -181,6 +182,87 @@
       }
     }
 
+    function ensureEngine() {
+      if (engine || !options || typeof options.createChordEngine !== "function") return engine;
+      engine = options.createChordEngine({
+        chordTree: options.chordTree,
+        constants: options.constants,
+        filterEvent: () => true,
+        setTimeoutFn: options.setTimeoutFn,
+        clearTimeoutFn: options.clearTimeoutFn,
+        onArmed: () => {
+          acceptEngineEvent({ kind: "armed" });
+          if (typeof options.onArmed === "function") options.onArmed();
+        },
+        onAction: (payload) => {
+          if (typeof options.onAction === "function") options.onAction(payload);
+        },
+        onOpenView: (view, snapshot, source) => {
+          if (typeof options.onOpenView === "function") options.onOpenView(view, snapshot, source);
+        },
+        onStateChange: (snapshot) => {
+          if (typeof options.onStateChange === "function") options.onStateChange(snapshot);
+        },
+        onCancel: () => {
+          if (typeof options.onCancel === "function") options.onCancel();
+        },
+        onBridgeKey: (keyData) => {
+          if (typeof options.onBridgeKey === "function") options.onBridgeKey(keyData);
+        },
+      });
+      return engine;
+    }
+
+    function arm() {
+      const e = ensureEngine();
+      if (e && typeof e.arm === "function") e.arm();
+    }
+
+    function handleKey(keyData) {
+      const e = ensureEngine();
+      if (!e || !keyData || keyData.kind !== "key") return;
+      e.handleKey({
+        key: keyData.key,
+        code: keyData.code,
+        shiftKey: !!keyData.shiftKey,
+        altKey: !!keyData.altKey,
+        ctrlKey: !!keyData.ctrlKey,
+        metaKey: !!keyData.metaKey,
+        isTrusted: keyData.isTrusted !== false,
+        timeStamp: keyData.shimTs,
+        target: keyData.target || null,
+        preventDefault: typeof keyData.preventDefault === "function" ? keyData.preventDefault : function () {},
+        stopPropagation: typeof keyData.stopPropagation === "function" ? keyData.stopPropagation : function () {},
+      });
+    }
+
+    function resetEngine() {
+      const e = ensureEngine();
+      if (e && typeof e.reset === "function") e.reset();
+    }
+
+    function exitBridge() {
+      const e = ensureEngine();
+      if (e && typeof e.exitBridge === "function") e.exitBridge();
+    }
+
+    function detachEngine() {
+      if (engine && typeof engine.detach === "function") engine.detach();
+      engine = null;
+    }
+
+    function isEngineArmed() {
+      const e = ensureEngine();
+      return !!(e && typeof e.isArmed === "function" && e.isArmed());
+    }
+
+    function getEngineState() {
+      const e = ensureEngine();
+      return e
+        ? { armed: !!e.isArmed(), path: e.serializeState ? e.serializeState() : [] }
+        : { armed: false, path: [] };
+    }
+
     function replayLastChord(effects) {
       if (!lastChordReplay || !effects) return false;
       const r = lastChordReplay;
@@ -239,6 +321,13 @@
 
     return {
       acceptEngineEvent,
+      arm,
+      handleKey,
+      resetEngine,
+      exitBridge,
+      detachEngine,
+      isEngineArmed,
+      getEngineState,
       resetCurrentReplay,
       replayLastChord,
       hasCurrentReplay,

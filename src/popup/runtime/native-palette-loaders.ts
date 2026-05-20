@@ -183,13 +183,22 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
   }
 
   async function loadTabInfo() {
-    await runViewLoad({
+    const committed = await runViewLoad({
       controller: viewLoad,
       view: "tab-info",
       load: () => loadTabInfoView(deps.tabIndexClient, deps.tabInfoClient, deps.workspaceClient),
       commit: paletteStore.commitTabInfo,
       fail: paletteStore.failTabInfo,
     });
+    if (!committed && palette.currentView === "tab-info" && palette.loading) {
+      await runViewLoad({
+        controller: viewLoad,
+        view: "tab-info",
+        load: () => loadTabInfoView(deps.tabIndexClient, deps.tabInfoClient, deps.workspaceClient),
+        commit: paletteStore.commitTabInfo,
+        fail: paletteStore.failTabInfo,
+      });
+    }
   }
 
   async function loadDuplicatePrompt(params: URLSearchParams | Record<string, unknown> = new URLSearchParams(location.search)) {
