@@ -5,7 +5,7 @@
   type Props = {
     rows: WorkspaceRow[];
     selectedIndex?: number;
-    onactivate?: (row: WorkspaceRow) => void;
+    onactivate?: (row: WorkspaceRow, switchToTarget?: boolean) => void;
   };
 
   let { rows, selectedIndex = -1, onactivate }: Props = $props();
@@ -23,4 +23,8 @@
       onactivate={onactivate}
     />
   {/each}
+  <div class="list-hint-divider"></div>
+  <div class="list-bottom-hint">
+    <span>⇧1-⇧9, ⇧Enter, or Shift-click moves the tab and switches to that workspace.</span>
+  </div>
 {/if}

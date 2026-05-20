@@ -4768,15 +4768,66 @@ this.zenWorkspaces = class extends ExtensionAPI {
           } catch (e) { return []; }
         },
 
-        async moveTabToFolder(folderId) {
+        async moveTabToFolder(folderId, switchToTarget) {
           const w = getWin();
           if (!w?.gBrowser) return false;
           const group = w.gBrowser.getTabGroupById?.(folderId);
           if (!group || !w.gBrowser.moveTabToExistingGroup) return false;
           const tabs = getActionTargetTabs();
           if (tabs.length === 0) return false;
+          const activeTab = w.gBrowser.selectedTab;
+          const targetTab = tabs.includes(activeTab) ? activeTab : tabs[0];
+          const targetWorkspace = group.getAttribute?.("zen-workspace-id") || null;
+          const activeWorkspace = w.gZenWorkspaces?.activeWorkspace || null;
+          const movingActive = tabs.includes(activeTab);
+          const movesAcrossWorkspace = targetWorkspace && tabs.some(
+            (tab) => tab.getAttribute("zen-workspace-id") !== targetWorkspace
+          );
+
+          if (movingActive && !switchToTarget && movesAcrossWorkspace && targetWorkspace !== activeWorkspace) {
+            const allTabs = getAllTabElements();
+            const visibleDomIds = new Set([activeTab.id]);
+            if (w.gZenViewSplitter?._data) {
+              const currentGroup = w.gZenViewSplitter._data.find(
+                (g) => g.tabs && g.tabs.some((t) => t.id === activeTab.id)
+              );
+              if (currentGroup) {
+                for (const tab of currentGroup.tabs) {
+                  visibleDomIds.add(tab.id);
+                }
+              }
+            }
+            for (const tab of tabs) visibleDomIds.add(tab.id);
+            const candidates = allTabs
+              .filter((tab) => !visibleDomIds.has(tab.id) && !isNewTabElement(tab))
+              .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+            if (candidates.length > 0) {
+              await activateNativeTab(candidates[0]);
+            }
+          }
+
+          if (movesAcrossWorkspace && w.gZenWorkspaces?.moveTabsToWorkspace) {
+            await w.gZenWorkspaces.moveTabsToWorkspace(tabs, targetWorkspace);
+          }
+
           for (const tab of tabs) {
             try { w.gBrowser.moveTabToExistingGroup(tab, group); } catch (e) {}
+            if (targetWorkspace) {
+              try {
+                tab.owner = null;
+                tab.setAttribute("zen-workspace-id", targetWorkspace);
+                const glanceTab = tab.querySelector?.(".tabbrowser-tab[zen-glance-tab]");
+                if (glanceTab) {
+                  glanceTab.setAttribute("zen-workspace-id", targetWorkspace);
+                }
+              } catch (e) {}
+            }
+          }
+          if (targetWorkspace) {
+            try { w.gBrowser.tabContainer._invalidateCachedTabs(); } catch (e) {}
+          }
+          if (switchToTarget && targetTab) {
+            await activateNativeTab(targetTab);
           }
           return true;
         },
@@ -4977,7 +5028,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         async getActionsSnapshot() {
-          return tabIndex.getActionsSnapshot();
+          const snapshot = tabIndex.getActionsSnapshot();
+          const w = getWin();
+          const browser = w?.gBrowser?.selectedBrowser;
+          const url = browser?.currentURI?.spec || "";
+          return {
+            ...snapshot,
+            currentTabCanReaderMode: !!(browser?.isArticle || url.startsWith("about:reader")),
+          };
         },
 
         // ---------------------------------------------------------------
@@ -5325,7 +5383,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         // Move gBrowser.selectedTabs to the given workspace, placed at top
-        async moveSelectedTabsToWorkspace(workspaceId) {
+        async moveSelectedTabsToWorkspace(workspaceId, switchToTarget) {
           const w = getWin();
           if (!w || !w.gBrowser || !w.gZenWorkspaces) return;
 
@@ -5334,9 +5392,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
           // If the active tab is being moved, activate the previous tab first
           const activeTab = w.gBrowser.selectedTab;
+          const activeWorkspace = w.gZenWorkspaces.activeWorkspace;
+          if (workspaceId === activeWorkspace && tabs.every((tab) => tab.getAttribute("zen-workspace-id") === workspaceId)) {
+            return true;
+          }
           const movingActive = tabs.some(t => t === activeTab);
+          const targetTab = movingActive ? activeTab : tabs[0];
 
-          if (movingActive) {
+          if (movingActive && !switchToTarget) {
             // Reuse goToPreviousTab logic: find the most recently accessed non-visible tab
             const allTabs = getAllTabElements();
             const visibleDomIds = new Set();
@@ -5383,6 +5446,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
             if (firstUnpinned && firstUnpinned !== tab) {
               container.insertBefore(tab, firstUnpinned);
             }
+          }
+          if (switchToTarget && targetTab) {
+            await activateNativeTab(targetTab);
           }
         },
 

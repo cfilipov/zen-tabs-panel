@@ -62,6 +62,12 @@ describe("interaction interpreter", () => {
       .toEqual({ kind: "cancel" });
     expect(interpretVisibleInput({ kind: "key", key: "3" }, { view: "last-visited" }, fixtureTree))
       .toEqual({ kind: "activate-row", index: 2 });
+    expect(interpretVisibleInput({ kind: "key", key: "Enter" }, { view: "move-to-workspace" }, fixtureTree))
+      .toEqual({ kind: "activate-selection" });
+    expect(interpretVisibleInput({ kind: "key", key: "Enter", shiftKey: true }, { view: "move-to-workspace" }, fixtureTree))
+      .toEqual({ kind: "activate-selection-and-switch" });
+    expect(interpretVisibleInput({ kind: "key", key: "!", code: "Digit1", shiftKey: true }, { view: "move-to-folder" }, fixtureTree))
+      .toEqual({ kind: "activate-row-and-switch", index: 0 });
   });
 
   it("keeps list augmentation keys in the interpreter", () => {

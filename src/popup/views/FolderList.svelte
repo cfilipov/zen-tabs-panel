@@ -7,7 +7,7 @@
     rows: FolderRow[];
     workspaces?: WorkspaceRow[];
     selectedIndex?: number;
-    onactivate?: (row: FolderRow) => void;
+    onactivate?: (row: FolderRow, switchToTarget?: boolean) => void;
   };
 
   let { rows, workspaces = [], selectedIndex = -1, onactivate }: Props = $props();
@@ -27,4 +27,8 @@
       onactivate={onactivate}
     />
   {/each}
+  <div class="list-hint-divider"></div>
+  <div class="list-bottom-hint">
+    <span>⇧1-⇧9, ⇧Enter, or Shift-click moves the tab and switches to the folder workspace.</span>
+  </div>
 {/if}

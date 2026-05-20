@@ -30,9 +30,9 @@ export type ViewActivation =
   | { kind: "activate-domain"; row: DomainIndexRow }
   | { kind: "navigate-history-index"; index: number }
   | { kind: "restore-closed-tab"; row: RecentlyClosedRow }
-  | { kind: "move-to-workspace"; row: WorkspaceRow }
+  | { kind: "move-to-workspace"; row: WorkspaceRow; switchToTarget?: boolean }
   | { kind: "reopen-in-container"; row: ContainerRow }
-  | { kind: "move-to-folder"; row: FolderRow }
+  | { kind: "move-to-folder"; row: FolderRow; switchToTarget?: boolean }
   | { kind: "launch-profile"; row: ProfileRow }
   | { kind: "duplicate-prompt-action"; action: DuplicatePromptAction };
 
@@ -65,6 +65,7 @@ export function resolveViewActivation(
   context: ViewActivationContext,
   index: number,
   source: "selection" | "shortcut",
+  options: { switchToTarget?: boolean } = {},
 ): ViewActivation {
   if (context.view === "navigation") {
     const navIndex = navigationIndexFor(context.navigationHistory, index, source);
@@ -78,7 +79,8 @@ export function resolveViewActivation(
 
   if (context.view === "move-to-workspace") {
     const row = context.workspaceRows[index];
-    return row ? { kind: "move-to-workspace", row } : { kind: "none" };
+    if (row?.isActive) return { kind: "none" };
+    return row ? { kind: "move-to-workspace", row, switchToTarget: options.switchToTarget } : { kind: "none" };
   }
 
   if (context.view === "open-in-container") {
@@ -88,7 +90,7 @@ export function resolveViewActivation(
 
   if (context.view === "move-to-folder") {
     const row = context.folderRows[index];
-    return row ? { kind: "move-to-folder", row } : { kind: "none" };
+    return row ? { kind: "move-to-folder", row, switchToTarget: options.switchToTarget } : { kind: "none" };
   }
 
   if (context.view === "profiles") {
@@ -121,6 +123,6 @@ export function resolveViewActivation(
   return { kind: "none" };
 }
 
-export function resolveSelectionActivation(context: ViewActivationContext) {
-  return resolveViewActivation(context, context.selectedIndex, "selection");
+export function resolveSelectionActivation(context: ViewActivationContext, options: { switchToTarget?: boolean } = {}) {
+  return resolveViewActivation(context, context.selectedIndex, "selection", options);
 }

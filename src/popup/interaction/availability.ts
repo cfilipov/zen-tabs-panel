@@ -7,6 +7,7 @@ export type AvailabilityContext = {
   recentlyClosedCount: number;
   navigationEntryCount: number;
   currentTabIsPinned: boolean;
+  currentTabCanReaderMode: boolean;
 };
 
 export const AVAILABILITY_PREDICATES = {
@@ -19,6 +20,7 @@ export const AVAILABILITY_PREDICATES = {
   needsRecentlyClosed: (ctx) => ctx.recentlyClosedCount > 0,
   needsHistory: (ctx) => ctx.navigationEntryCount > 1,
   needsPinnedTab: (ctx) => ctx.currentTabIsPinned,
+  needsReaderMode: (ctx) => ctx.currentTabCanReaderMode,
 } satisfies Record<AvailabilityPredicateId, (ctx: AvailabilityContext) => boolean>;
 
 function flatten(nodes: readonly NavNode[]): NavNode[] {

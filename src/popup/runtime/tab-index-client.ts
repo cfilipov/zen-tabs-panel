@@ -85,6 +85,7 @@ export type ActionsSnapshot = {
   version: number;
   currentTabHasParent: boolean;
   currentTabIsPinned: boolean;
+  currentTabCanReaderMode: boolean;
   childTabCount: number;
   siblingTabCount: number;
   parentTabCount: number;

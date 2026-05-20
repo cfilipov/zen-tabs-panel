@@ -269,7 +269,9 @@
     moveSelection,
     moveSelectionDirectional,
     activateSelection: activateSelected,
+    activateSelectionAndSwitch: activateSelectedAndSwitch,
     activateRow,
+    activateRowAndSwitch,
     cyclePage,
     jumpSection,
     closeSelection: closeSelectedTabRow,
@@ -413,22 +415,22 @@
     traceReplayKey(chordFromKey({ kind: "key", ...input }));
   }
 
-  function traceReplayForListIndex(index: number) {
-    traceReplayKey(replayKeyForBadgeIndex(index));
+  function traceReplayForListIndex(index: number, shifted = false) {
+    traceReplayKey(replayKeyForBadgeIndex(index, shifted));
   }
 
-  function traceReplayForSelection() {
+  function traceReplayForSelection(shifted = false) {
     if (palette.currentView === "actions" || isNativePrefixView(palette.currentView)) return;
     if (palette.currentView === "navigation") {
       traceReplayKey(replayKeyForNavigationIndex(palette.navigationHistory, palette.selectedIndex));
       return;
     }
-    traceReplayForListIndex(palette.selectedIndex);
+    traceReplayForListIndex(palette.selectedIndex, shifted);
   }
 
-  function traceReplayForRowIndex<T>(rows: readonly T[], row: T) {
+  function traceReplayForRowIndex<T>(rows: readonly T[], row: T, shifted = false) {
     const index = rows.indexOf(row);
-    traceReplayForListIndex(index);
+    traceReplayForListIndex(index, shifted);
   }
 
   async function activateDomain(row: DomainIndexRow) {
@@ -459,15 +461,15 @@
     restoreClosedTab(row);
   }
 
-  function moveToWorkspace(row: WorkspaceRow) {
+  function moveToWorkspace(row: WorkspaceRow, switchToTarget = false) {
     markTerminalCommandDispatched();
     revealController.clear();
-    effects.moveSelectedTabsToWorkspace(row.uuid);
+    effects.moveSelectedTabsToWorkspace(row.uuid, switchToTarget);
   }
 
-  function moveToWorkspaceWithTrace(row: WorkspaceRow) {
-    traceReplayForRowIndex(palette.workspaceRows, row);
-    moveToWorkspace(row);
+  function moveToWorkspaceWithTrace(row: WorkspaceRow, switchToTarget = false) {
+    traceReplayForRowIndex(palette.workspaceRows, row, switchToTarget);
+    moveToWorkspace(row, switchToTarget);
   }
 
   function reopenInContainer(row: ContainerRow) {
@@ -481,15 +483,15 @@
     reopenInContainer(row);
   }
 
-  function moveToFolder(row: FolderRow) {
+  function moveToFolder(row: FolderRow, switchToTarget = false) {
     markTerminalCommandDispatched();
     revealController.clear();
-    effects.moveTabToFolder(row.id);
+    effects.moveTabToFolder(row.id, switchToTarget);
   }
 
-  function moveToFolderWithTrace(row: FolderRow) {
-    traceReplayForRowIndex(palette.folderRows, row);
-    moveToFolder(row);
+  function moveToFolderWithTrace(row: FolderRow, switchToTarget = false) {
+    traceReplayForRowIndex(palette.folderRows, row, switchToTarget);
+    moveToFolder(row, switchToTarget);
   }
 
   function launchProfile(row: ProfileRow) {
@@ -770,8 +772,8 @@
     }
   }
 
-  async function activateSelected() {
-    traceReplayForSelection();
+  async function activateSelected(switchToTarget = false) {
+    traceReplayForSelection(switchToTarget);
 
     if (palette.currentView === "actions") {
       const item = visibleActionItems[palette.selectedIndex];
@@ -785,12 +787,20 @@
       return;
     }
 
-    await applyViewActivation(resolveSelectionActivation(viewActivationContext()));
+    await applyViewActivation(resolveSelectionActivation(viewActivationContext(), { switchToTarget }));
   }
 
-  async function activateRow(index: number) {
-    traceReplayForListIndex(index);
-    await applyViewActivation(resolveViewActivation(viewActivationContext(), index, "shortcut"));
+  async function activateSelectedAndSwitch() {
+    await activateSelected(true);
+  }
+
+  async function activateRow(index: number, switchToTarget = false) {
+    traceReplayForListIndex(index, switchToTarget);
+    await applyViewActivation(resolveViewActivation(viewActivationContext(), index, "shortcut", { switchToTarget }));
+  }
+
+  async function activateRowAndSwitch(index: number) {
+    await activateRow(index, true);
   }
 
   function viewActivationContext(): ViewActivationContext {

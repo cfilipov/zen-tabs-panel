@@ -44,7 +44,7 @@ export async function loadRecentlyClosedView(historyClient: HistoryClient) {
 export async function loadMoveToWorkspaceView(workspaceClient: WorkspaceClient) {
   const workspaces = await workspaceClient.getWorkspacesWithIcons();
   return {
-    rows: workspaces.filter((workspace) => !workspace.isActive),
+    rows: workspaces,
     selectedIndex: -1,
   };
 }

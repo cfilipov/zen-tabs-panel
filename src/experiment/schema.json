@@ -474,7 +474,8 @@
         "async": true,
         "description": "Move selected tabs to a workspace, placed at top position",
         "parameters": [
-          { "name": "workspaceId", "type": "string" }
+          { "name": "workspaceId", "type": "string" },
+          { "name": "switchToTarget", "type": "boolean", "optional": true }
         ]
       },
       {
@@ -795,7 +796,8 @@
         "async": true,
         "description": "Move the active tab into the specified folder (tab group)",
         "parameters": [
-          { "name": "folderId", "type": "string" }
+          { "name": "folderId", "type": "string" },
+          { "name": "switchToTarget", "type": "boolean", "optional": true }
         ]
       },
       {

@@ -15,6 +15,7 @@ const availableContext: AvailabilityContext = {
   recentlyClosedCount: 1,
   navigationEntryCount: 2,
   currentTabIsPinned: true,
+  currentTabCanReaderMode: true,
 };
 
 describe("availability predicates", () => {
@@ -26,6 +27,7 @@ describe("availability predicates", () => {
       "needsParent",
       "needsParentTabs",
       "needsPinnedTab",
+      "needsReaderMode",
       "needsRecentlyClosed",
       "needsSiblings",
       "needsUnvisited",
@@ -38,11 +40,13 @@ describe("availability predicates", () => {
       previewsById: {},
       counts: { ...availableContext.counts, "child-tabs": 0 },
       currentTabIsPinned: false,
+      currentTabCanReaderMode: false,
     });
 
     expect(unavailable.has("go-to-parent-tab")).toBe(true);
     expect(unavailable.has("child-tabs")).toBe(true);
     expect(unavailable.has("reset-pinned-tab")).toBe(true);
+    expect(unavailable.has("toggle-reader-mode")).toBe(true);
     expect(unavailable.has("reload-tab")).toBe(false);
   });
 
@@ -52,5 +56,6 @@ describe("availability predicates", () => {
     expect(unavailable.has("go-to-parent-tab")).toBe(false);
     expect(unavailable.has("child-tabs")).toBe(false);
     expect(unavailable.has("reset-pinned-tab")).toBe(false);
+    expect(unavailable.has("toggle-reader-mode")).toBe(false);
   });
 });

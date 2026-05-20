@@ -17,7 +17,9 @@ export type InteractionRuntimeHandlers = {
   moveSelection: (delta: 1 | -1) => MaybePromise<void>;
   moveSelectionDirectional: (delta: 1 | -1) => MaybePromise<void>;
   activateSelection: () => MaybePromise<void>;
+  activateSelectionAndSwitch: () => MaybePromise<void>;
   activateRow: (index: number) => MaybePromise<void>;
+  activateRowAndSwitch: (index: number) => MaybePromise<void>;
   cyclePage: (delta: 1 | -1) => MaybePromise<void>;
   jumpSection: (delta: 1 | -1) => MaybePromise<void>;
   closeSelection: () => MaybePromise<void>;
@@ -64,8 +66,14 @@ export async function applyInteractionCommand(
     case "activate-selection":
       await runtime.activateSelection();
       return;
+    case "activate-selection-and-switch":
+      await runtime.activateSelectionAndSwitch();
+      return;
     case "activate-row":
       await runtime.activateRow(command.index);
+      return;
+    case "activate-row-and-switch":
+      await runtime.activateRowAndSwitch(command.index);
       return;
     case "cycle-page":
       await runtime.cyclePage(command.delta);

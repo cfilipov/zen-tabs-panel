@@ -5,6 +5,7 @@ const emptySnapshot = {
   version: 1,
   currentTabHasParent: false,
   currentTabIsPinned: false,
+  currentTabCanReaderMode: false,
   childTabCount: 0,
   siblingTabCount: 0,
   parentTabCount: 0,
@@ -29,6 +30,7 @@ describe("actions loader", () => {
         getActionsSnapshot: async () => ({
           ...emptySnapshot,
           currentTabIsPinned: true,
+          currentTabCanReaderMode: true,
           childTabCount: 2,
           domainCount: 7,
           workspaceTabCounts: { a: 1, b: 2, c: 3 },
@@ -69,6 +71,7 @@ describe("actions loader", () => {
     expect(data.disabledIds.has("child-tabs")).toBe(false);
     expect(data.disabledIds.has("go-to-parent-tab")).toBe(true);
     expect(data.disabledIds.has("reset-pinned-tab")).toBe(false);
+    expect(data.disabledIds.has("toggle-reader-mode")).toBe(false);
     expect(data.extensions).toHaveLength(1);
   });
 
@@ -88,6 +91,7 @@ describe("actions loader", () => {
     expect(data.extensions).toEqual([]);
     expect(data.counts["move-to-workspace"]).toBe(0);
     expect(data.disabledIds.has("navigation")).toBe(true);
+    expect(data.disabledIds.has("toggle-reader-mode")).toBe(true);
   });
 
   it("does not use blank new-tab history entries for actions-menu previews", async () => {

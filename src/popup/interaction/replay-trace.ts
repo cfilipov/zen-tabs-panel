@@ -1,7 +1,9 @@
 import type { NavigationHistory } from "../runtime/history-client";
 
-export function replayKeyForBadgeIndex(index: number): string | null {
-  return Number.isInteger(index) && index >= 0 && index < 9 ? String(index + 1) : null;
+export function replayKeyForBadgeIndex(index: number, shifted = false): string | null {
+  if (!Number.isInteger(index) || index < 0 || index >= 9) return null;
+  const key = String(index + 1);
+  return shifted ? `Shift+${key}` : key;
 }
 
 export function replayKeyForNavigationIndex(history: NavigationHistory | null, index: number): string | null {
@@ -12,4 +14,3 @@ export function replayKeyForNavigationIndex(history: NavigationHistory | null, i
     .length;
   return replayKeyForBadgeIndex(badgeIndex);
 }
-

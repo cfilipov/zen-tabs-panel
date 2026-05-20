@@ -7,7 +7,7 @@
     index?: number;
     selectedIndex?: number;
     badge?: string | null;
-    onactivate?: (row: WorkspaceRow) => void;
+    onactivate?: (row: WorkspaceRow, switchToTarget?: boolean) => void;
   };
 
   let { row, index = -1, selectedIndex = -1, badge = null, onactivate }: Props = $props();
@@ -18,8 +18,12 @@
   type="button"
   class="list-item"
   class:selected
+  class:disabled={row.isActive}
   data-workspace-id={row.uuid}
-  onclick={() => onactivate?.(row)}
+  disabled={row.isActive}
+  onclick={(event) => {
+    if (!row.isActive) onactivate?.(row, event.shiftKey);
+  }}
 >
   {#if row.svgContent}
     <span class="workspace-icon">{@html row.svgContent}</span>
@@ -30,6 +34,9 @@
     <span class="item-title">{row.name}</span>
   </span>
   <span class="item-right">
+    {#if row.isActive}
+      <Badge value="Current" />
+    {/if}
     <Badge value={badge} />
   </span>
 </button>

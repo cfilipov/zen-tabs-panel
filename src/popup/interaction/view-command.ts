@@ -35,7 +35,11 @@ export function commandForViewActivation(activation: ViewActivation): ViewComman
       return {
         kind: "message",
         clearReveal: true,
-        message: { type: "move-selected-tabs-to-workspace", workspaceId: activation.row.uuid },
+        message: {
+          type: "move-selected-tabs-to-workspace",
+          workspaceId: activation.row.uuid,
+          ...(activation.switchToTarget ? { switchToTarget: true } : {}),
+        },
       };
     case "reopen-in-container":
       return {
@@ -47,7 +51,11 @@ export function commandForViewActivation(activation: ViewActivation): ViewComman
       return {
         kind: "message",
         clearReveal: true,
-        message: { type: "move-tab-to-folder", folderId: activation.row.id },
+        message: {
+          type: "move-tab-to-folder",
+          folderId: activation.row.id,
+          ...(activation.switchToTarget ? { switchToTarget: true } : {}),
+        },
       };
     case "launch-profile":
       if (activation.row.isCurrent) return { kind: "none" };

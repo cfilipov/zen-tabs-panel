@@ -17,7 +17,9 @@ export type NativePaletteRuntimeDeps = {
   moveSelection: (delta: 1 | -1) => Promise<void> | void;
   moveSelectionDirectional: (delta: 1 | -1) => Promise<void> | void;
   activateSelection: () => Promise<void> | void;
+  activateSelectionAndSwitch: () => Promise<void> | void;
   activateRow: (index: number) => Promise<void> | void;
+  activateRowAndSwitch: (index: number) => Promise<void> | void;
   cyclePage: (delta: 1 | -1) => Promise<void> | void;
   jumpSection: (delta: 1 | -1) => Promise<void> | void;
   closeSelection: () => Promise<void> | void;
@@ -57,7 +59,9 @@ export function createNativePaletteInteractionRuntime(deps: NativePaletteRuntime
     moveSelection: deps.moveSelection,
     moveSelectionDirectional: deps.moveSelectionDirectional,
     activateSelection: deps.activateSelection,
+    activateSelectionAndSwitch: deps.activateSelectionAndSwitch,
     activateRow: deps.activateRow,
+    activateRowAndSwitch: deps.activateRowAndSwitch,
     cyclePage: deps.cyclePage,
     jumpSection: deps.jumpSection,
     closeSelection: deps.closeSelection,

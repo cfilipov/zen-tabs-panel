@@ -117,6 +117,7 @@ export async function loadActionsMenuData(deps: LoadActionsDeps): Promise<Action
     recentlyClosedCount: recentlyClosed.length,
     navigationEntryCount: navHistory?.entries.length ?? 0,
     currentTabIsPinned: !!snapshot?.currentTabIsPinned,
+    currentTabCanReaderMode: !!snapshot?.currentTabCanReaderMode,
   });
   for (const id of [
     ...(!previewsById["go-to-previous-tab"] ? ["go-to-previous-tab"] : []),

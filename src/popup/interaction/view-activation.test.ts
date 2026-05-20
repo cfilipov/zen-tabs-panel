@@ -104,10 +104,16 @@ describe("view activation resolver", () => {
       .toEqual({ kind: "restore-closed-tab", row: closed });
     expect(resolveViewActivation(context({ view: "move-to-workspace", workspaceRows: [workspace] }), 0, "shortcut"))
       .toEqual({ kind: "move-to-workspace", row: workspace });
+    expect(resolveViewActivation(context({ view: "move-to-workspace", workspaceRows: [{ ...workspace, isActive: true }] }), 0, "shortcut"))
+      .toEqual({ kind: "none" });
+    expect(resolveViewActivation(context({ view: "move-to-workspace", workspaceRows: [workspace] }), 0, "shortcut", { switchToTarget: true }))
+      .toEqual({ kind: "move-to-workspace", row: workspace, switchToTarget: true });
     expect(resolveViewActivation(context({ view: "open-in-container", containerRows: [container] }), 0, "shortcut"))
       .toEqual({ kind: "reopen-in-container", row: container });
     expect(resolveViewActivation(context({ view: "move-to-folder", folderRows: [folder] }), 0, "shortcut"))
       .toEqual({ kind: "move-to-folder", row: folder });
+    expect(resolveSelectionActivation(context({ view: "move-to-folder", selectedIndex: 0, folderRows: [folder] }), { switchToTarget: true }))
+      .toEqual({ kind: "move-to-folder", row: folder, switchToTarget: true });
     expect(resolveViewActivation(context({ view: "profiles", profileRows: [profile] }), 0, "shortcut"))
       .toEqual({ kind: "launch-profile", row: profile });
     expect(resolveSelectionActivation(context({ view: "duplicates", selectedIndex: 0, duplicateTabs: [tabRow] })))

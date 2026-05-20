@@ -70,7 +70,7 @@ describe("basic view loaders", () => {
     expect(result.selectedIndex).toBe(-1);
   });
 
-  it("excludes the active workspace from move targets", async () => {
+  it("keeps the active workspace visible so row numbering matches the workspace list", async () => {
     const result = await loadMoveToWorkspaceView({
       getWorkspacesWithIcons: async () => [
         { uuid: "active", name: "Active", svgContent: "", isActive: true },
@@ -78,7 +78,7 @@ describe("basic view loaders", () => {
       ],
     });
 
-    expect(result.rows.map((row) => row.uuid)).toEqual(["other"]);
+    expect(result.rows.map((row) => row.uuid)).toEqual(["active", "other"]);
   });
 
   it("loads containers and profiles", async () => {

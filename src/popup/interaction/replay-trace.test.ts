@@ -4,6 +4,7 @@ import { replayKeyForBadgeIndex, replayKeyForNavigationIndex } from "./replay-tr
 describe("replay trace keys", () => {
   it("maps visible row badge indexes to replay keys", () => {
     expect(replayKeyForBadgeIndex(0)).toBe("1");
+    expect(replayKeyForBadgeIndex(0, true)).toBe("Shift+1");
     expect(replayKeyForBadgeIndex(8)).toBe("9");
     expect(replayKeyForBadgeIndex(9)).toBeNull();
     expect(replayKeyForBadgeIndex(-1)).toBeNull();
@@ -24,4 +25,3 @@ describe("replay trace keys", () => {
     expect(replayKeyForNavigationIndex(history, 2)).toBe("2");
   });
 });
-

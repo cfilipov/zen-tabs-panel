@@ -43,9 +43,9 @@
     navigateToHistoryIndexWithTrace: (index: number) => void;
     restoreClosedTabWithTrace: (row: RecentlyClosedRow) => void;
     restoreClosedTabKeepOpen: (row: RecentlyClosedRow) => void;
-    moveToWorkspaceWithTrace: (row: WorkspaceRow) => void;
+    moveToWorkspaceWithTrace: (row: WorkspaceRow, switchToTarget?: boolean) => void;
     reopenInContainerWithTrace: (row: ContainerRow) => void;
-    moveToFolderWithTrace: (row: FolderRow) => void;
+    moveToFolderWithTrace: (row: FolderRow, switchToTarget?: boolean) => void;
     launchProfileWithTrace: (row: ProfileRow) => void;
     activateTab: (row: { domId: string }) => void;
     closeDuplicateTab: (row: TabIndexRow) => void;

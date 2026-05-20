@@ -349,6 +349,19 @@ html, body {
   margin: 8px 12px 4px;
 }
 
+.list-hint-divider {
+  height: 1px;
+  background: var(--ztt-border);
+  margin: 8px 12px 6px;
+}
+
+.list-bottom-hint {
+  color: var(--ztt-text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 0 12px 4px;
+}
+
 .duplicate-prompt-group {
   padding-bottom: 2px;
   contain: layout paint;
@@ -583,6 +596,7 @@ html, body {
 
 .item-badge.badge-wide {
   min-width: 32px;
+  padding-inline: 8px;
 }
 
 .item-badge-placeholder {

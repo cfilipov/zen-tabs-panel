@@ -47,6 +47,7 @@ describe("tab index client", () => {
           version: 1,
           currentTabHasParent: false,
           currentTabIsPinned: false,
+          currentTabCanReaderMode: false,
           childTabCount: 0,
           siblingTabCount: 0,
           parentTabCount: 0,

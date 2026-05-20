@@ -16,7 +16,9 @@ function createRuntime(calls: string[]): InteractionRuntimeHandlers {
     moveSelection: (delta) => record(`move:${delta}`),
     moveSelectionDirectional: (delta) => record(`move-directional:${delta}`),
     activateSelection: () => record("activate-selection"),
+    activateSelectionAndSwitch: () => record("activate-selection-switch"),
     activateRow: (index) => record(`activate-row:${index}`),
+    activateRowAndSwitch: (index) => record(`activate-row-switch:${index}`),
     cyclePage: (delta) => record(`page:${delta}`),
     jumpSection: (delta) => record(`section:${delta}`),
     closeSelection: () => record("close-selection"),
@@ -50,7 +52,9 @@ function createNativeRuntime(
     moveSelection: (delta) => record(`move:${delta}`),
     moveSelectionDirectional: (delta) => record(`move-directional:${delta}`),
     activateSelection: () => record("activate-selection"),
+    activateSelectionAndSwitch: () => record("activate-selection-switch"),
     activateRow: (index) => record(`activate-row:${index}`),
+    activateRowAndSwitch: (index) => record(`activate-row-switch:${index}`),
     cyclePage: (delta) => record(`page:${delta}`),
     jumpSection: (delta) => record(`section:${delta}`),
     closeSelection: () => record("close-selection"),
@@ -89,7 +93,9 @@ describe("interaction runtime", () => {
     await applyInteractionCommand({ kind: "navigate-history-delta", delta: -1 }, runtime);
     await applyInteractionCommand({ kind: "move-selection", delta: 1 }, runtime);
     await applyInteractionCommand({ kind: "move-selection-directional", delta: -1 }, runtime);
+    await applyInteractionCommand({ kind: "activate-selection-and-switch" }, runtime);
     await applyInteractionCommand({ kind: "activate-row", index: 2 }, runtime);
+    await applyInteractionCommand({ kind: "activate-row-and-switch", index: 3 }, runtime);
     await applyInteractionCommand({ kind: "filter-workspace-index", index: 4 }, runtime);
     await applyInteractionCommand({ kind: "open-extension-index", index: 1 }, runtime);
     await applyInteractionCommand({ kind: "none" }, runtime);
@@ -98,7 +104,9 @@ describe("interaction runtime", () => {
       "history:-1",
       "move:1",
       "move-directional:-1",
+      "activate-selection-switch",
       "activate-row:2",
+      "activate-row-switch:3",
       "filter-workspace:4",
       "extension:1",
     ]);

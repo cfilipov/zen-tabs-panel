@@ -31,7 +31,9 @@ export type InteractionCommand =
   | { kind: "move-selection-directional"; delta: 1 | -1 }
   | { kind: "jump-section"; delta: 1 | -1 }
   | { kind: "activate-selection" }
+  | { kind: "activate-selection-and-switch" }
   | { kind: "activate-row"; index: number }
+  | { kind: "activate-row-and-switch"; index: number }
   | { kind: "cycle-page"; delta: 1 | -1 }
   | { kind: "close-selection" }
   | { kind: "close-all" }
@@ -176,7 +178,11 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
   },
   {
     id: "activate-selection",
-    resolve: (input) => commandWhen(input.key === "Enter", { kind: "activate-selection" }),
+    resolve: (input, context) => {
+      if (input.key !== "Enter") return noCommand;
+      if (input.shiftKey && isMoveAndSwitchView(context.view)) return { kind: "activate-selection-and-switch" };
+      return { kind: "activate-selection" };
+    },
   },
   {
     id: "navigation-history-delta",
@@ -246,6 +252,14 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
     },
   },
   {
+    id: "activate-row-index-and-switch",
+    resolve: (input, context) => {
+      if (!plainKey(input) || !isMoveAndSwitchView(context.view)) return noCommand;
+      const index = shiftedDigitCodeIndex(input);
+      return index === null ? noCommand : { kind: "activate-row-and-switch", index };
+    },
+  },
+  {
     id: "switch-workspace-index",
     resolve: (input, context) => {
       if (context.view !== "actions" || input.shiftKey) return noCommand;
@@ -262,6 +276,10 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
     },
   },
 ];
+
+function isMoveAndSwitchView(view: ViewId) {
+  return view === "move-to-workspace" || view === "move-to-folder";
+}
 
 export function interpretStructuralKey(
   input: InteractionInput,

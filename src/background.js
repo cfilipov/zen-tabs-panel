@@ -496,7 +496,7 @@ const ACTIONS = Object.freeze({
   [MSG.RESTORE_CLOSED_TAB]:               (m) => restoreClosedSession(m.sessionId),
   [MSG.NAVIGATE_TO_HISTORY_INDEX]:        (m) => api.navigateToHistoryIndex(m.index),
   [MSG.SWITCH_WORKSPACE]:                 (m) => api.switchTo(m.workspaceId),
-  [MSG.MOVE_SELECTED_TABS_TO_WORKSPACE]:  (m) => api.moveSelectedTabsToWorkspace(m.workspaceId),
+  [MSG.MOVE_SELECTED_TABS_TO_WORKSPACE]:  (m) => api.moveSelectedTabsToWorkspace(m.workspaceId, !!m.switchToTarget),
 
   // Close-and-select submenu — all dispatch through closeAndSelect(actionId).
   [MSG.CLOSE_AND_SELECT_DEFAULT]:         (m) => closeAndSelect(m.type),
@@ -542,7 +542,7 @@ const ACTIONS = Object.freeze({
   [MSG.COPY_URL]:                         ()  => api.copyCurrentUrl(),
   [MSG.UNVISITED_NEWEST]:                 ()  => api.activateUnvisitedNewest(),
   [MSG.UNVISITED_OLDEST]:                 ()  => api.activateUnvisitedOldest(),
-  [MSG.MOVE_TAB_TO_FOLDER]:               (m) => api.moveTabToFolder(m.folderId),
+  [MSG.MOVE_TAB_TO_FOLDER]:               (m) => api.moveTabToFolder(m.folderId, !!m.switchToTarget),
   [MSG.REOPEN_IN_CONTAINER]:              (m) => api.reopenInContainer(m.userContextId),
 
   // Profiles

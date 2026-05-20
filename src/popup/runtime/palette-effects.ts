@@ -39,14 +39,22 @@ export function createPaletteEffects() {
         sessionId,
       });
     },
-    moveSelectedTabsToWorkspace(workspaceId: string) {
-      fireMessage({ type: "move-selected-tabs-to-workspace", workspaceId });
+    moveSelectedTabsToWorkspace(workspaceId: string, switchToTarget = false) {
+      fireMessage({
+        type: "move-selected-tabs-to-workspace",
+        workspaceId,
+        ...(switchToTarget ? { switchToTarget: true } : {}),
+      });
     },
     reopenInContainer(userContextId: number) {
       fireMessage({ type: "reopen-in-container", userContextId });
     },
-    moveTabToFolder(folderId: string) {
-      fireMessage({ type: "move-tab-to-folder", folderId });
+    moveTabToFolder(folderId: string, switchToTarget = false) {
+      fireMessage({
+        type: "move-tab-to-folder",
+        folderId,
+        ...(switchToTarget ? { switchToTarget: true } : {}),
+      });
     },
     launchProfile(name: string) {
       fireMessage({ type: "launch-profile", name });

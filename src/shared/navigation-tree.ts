@@ -72,7 +72,7 @@ export const NAVIGATION_TREE = [
   { id: "reload-tab",         kind: "action", chord: "Shift+R", label: "Reload",            icon: "svg:rotate-ccw",       page: 2 },
   { id: "reload-skip-cache",  kind: "action", chord: "Shift+L", label: "Hard reload",       icon: "svg:rotate-ccw",       page: 2 },
   { id: "duplicate-tab",      kind: "action", chord: "Shift+D", label: "Duplicate",         icon: "svg:copy",             page: 2 },
-  { id: "toggle-reader-mode", kind: "action", chord: "Shift+M", label: "Reader mode",       icon: "svg:book-open",        page: 2 },
+  { id: "toggle-reader-mode", kind: "action", chord: "Shift+O", label: "Reader mode",       icon: "svg:book-open",        page: 2, needsReaderMode: true },
   { id: "view-page-source",   kind: "action", chord: "Shift+U", label: "View source",       icon: "svg:code",             page: 2 },
   { id: "view-page-info",     kind: "action", chord: "Shift+I", label: "Page info",         icon: "svg:info",             page: 2 },
   { id: "toggle-mute",        kind: "action", chord: "Shift+V", label: "Mute/unmute",       icon: "svg:volume-x",         page: 2 },
@@ -113,7 +113,7 @@ export const NAVIGATION_TREE = [
   { id: "replay-last-chord",  kind: "action", chord: ".",       label: "Repeat last",   icon: "svg:rotate-ccw", page: 2 },
 
   // Page 1 — Organize (new)
-  { id: "move-to-folder",     kind: "open-view", chord: "Shift+O", view: "move-to-folder", label: "Move to folder", icon: "svg:folder" },
+  { id: "move-to-folder",     kind: "open-view", chord: "Shift+M", view: "move-to-folder", label: "Move to folder", icon: "svg:folder" },
 
   // Split-view submenu
   {

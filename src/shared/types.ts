@@ -34,7 +34,8 @@ export type NavFlag =
   | "needsDuplicates"
   | "needsRecentlyClosed"
   | "needsHistory"
-  | "needsPinnedTab";
+  | "needsPinnedTab"
+  | "needsReaderMode";
 
 export type AvailabilityPredicateId = NavFlag;
 

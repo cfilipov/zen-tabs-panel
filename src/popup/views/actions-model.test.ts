@@ -44,6 +44,8 @@ describe("actions menu model", () => {
 
     expect(pageTwoItems.some((item) => item.id === "reload-tab")).toBe(true);
     expect(nodes.find((node) => node.id === "reload-tab")?.chord).toBe("Shift+R");
+    expect(nodes.find((node) => node.id === "move-to-folder")?.chord).toBe("Shift+M");
+    expect(nodes.find((node) => node.id === "toggle-reader-mode")?.chord).toBe("Shift+O");
   });
 
   it("derives prefix submenu rows from the navigation tree", () => {

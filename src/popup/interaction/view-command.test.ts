@@ -52,6 +52,15 @@ describe("view activation commands", () => {
       clearReveal: true,
       message: { type: "move-selected-tabs-to-workspace", workspaceId: "ws-1" },
     });
+    expect(commandForViewActivation({
+      kind: "move-to-workspace",
+      row: { uuid: "ws-1", name: "Work", svgContent: "", isActive: false },
+      switchToTarget: true,
+    })).toEqual({
+      kind: "message",
+      clearReveal: true,
+      message: { type: "move-selected-tabs-to-workspace", workspaceId: "ws-1", switchToTarget: true },
+    });
   });
 
   it("maps secondary row activations and skips current profile launch", () => {
@@ -70,6 +79,15 @@ describe("view activation commands", () => {
       kind: "message",
       clearReveal: true,
       message: { type: "move-tab-to-folder", folderId: "folder-1" },
+    });
+    expect(commandForViewActivation({
+      kind: "move-to-folder",
+      row: { id: "folder-1", name: "Folder", workspaceId: null },
+      switchToTarget: true,
+    })).toEqual({
+      kind: "message",
+      clearReveal: true,
+      message: { type: "move-tab-to-folder", folderId: "folder-1", switchToTarget: true },
     });
     expect(commandForViewActivation({
       kind: "launch-profile",
