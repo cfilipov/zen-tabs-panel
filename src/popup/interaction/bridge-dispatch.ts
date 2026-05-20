@@ -26,6 +26,10 @@ type QueuedInput = {
   origin: "bridge" | "visible";
 };
 
+type DispatchState =
+  | { mode: "holding"; held: BridgeKeyData[] }
+  | { mode: "live" };
+
 function replyBuffered(reply: BridgeReply | null) {
   return Array.isArray(reply?.buffered) ? reply.buffered : [];
 }
@@ -35,32 +39,41 @@ function forceBuffered(data: ForceReadyPayload) {
 }
 
 export function createBridgeDispatchController(options: BridgeDispatchOptions): BridgeDispatchController {
-  let ready = false;
+  let state: DispatchState = { mode: "holding", held: [] };
   let dispatchRunning = false;
-  let liveDispatchGeneration = 0;
-  let warmGeneration = 0;
-  const heldLiveKeys: BridgeKeyData[] = [];
+  let generation = 0;
   const liveDispatchQueue: QueuedInput[] = [];
 
-  const isCurrentWarmGeneration = (generation: number) => generation === warmGeneration;
+  const isCurrentWarmGeneration = (value: number) => value === generation;
+
+  function isLive() {
+    return state.mode === "live";
+  }
+
+  function heldKeys() {
+    if (state.mode !== "holding") return [];
+    const held = state.held;
+    state = { mode: "live" };
+    return held;
+  }
 
   async function runLiveDispatchQueue() {
     if (dispatchRunning) return;
     dispatchRunning = true;
-    const generation = liveDispatchGeneration;
+    const runGeneration = generation;
     try {
-      while (generation === liveDispatchGeneration && liveDispatchQueue.length > 0) {
+      while (runGeneration === generation && liveDispatchQueue.length > 0) {
         const queued = liveDispatchQueue.shift();
         if (!queued) continue;
         await options.dispatchKey(queued.input);
-        if (generation !== liveDispatchGeneration) return;
+        if (runGeneration !== generation) return;
         if (liveDispatchQueue.length === 0) {
           if (queued.origin === "visible") options.armVisibleRevealTimer();
           else options.armBridgeRevealTimer();
         }
       }
     } finally {
-      if (generation === liveDispatchGeneration) {
+      if (runGeneration === generation) {
         dispatchRunning = false;
       }
     }
@@ -72,14 +85,14 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
   }
 
   function cancelLiveDispatch() {
-    liveDispatchGeneration += 1;
+    generation += 1;
     dispatchRunning = false;
     liveDispatchQueue.length = 0;
   }
 
   function queueOrHold(input: BridgeKeyData) {
-    if (!ready) {
-      heldLiveKeys.push(input);
+    if (state.mode === "holding") {
+      state.held.push(input);
       return;
     }
     options.clearRevealTimer();
@@ -100,45 +113,43 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
 
   return {
     get ready() {
-      return ready;
+      return isLive();
     },
     get warmGeneration() {
-      return warmGeneration;
+      return generation;
     },
     queueOrHold,
     keydownInput(input) {
       queueOrHold(input);
-      return { preventDefault: true, stopPropagation: !ready };
+      return { preventDefault: true, stopPropagation: !isLive() };
     },
     visibleKeydownInput(input) {
-      ready = true;
+      state = { mode: "live" };
       options.clearRevealTimer();
       enqueue(input, "visible");
       return { preventDefault: true, stopPropagation: true };
     },
     resetForWarmRearm() {
-      warmGeneration += 1;
-      ready = false;
       cancelLiveDispatch();
-      heldLiveKeys.length = 0;
+      state = { mode: "holding", held: [] };
       options.clearRevealTimer();
-      return warmGeneration;
+      return generation;
     },
     isCurrentWarmGeneration,
     async drainReply(reply, generation) {
       if (reply?.stale) return;
       const buffered = replyBuffered(reply);
-      const held = heldLiveKeys.splice(0);
+      const held = heldKeys();
       const drained = buffered.concat(held);
       if (!(await dispatchDrained(drained, generation))) return;
       if (generation !== undefined && !isCurrentWarmGeneration(generation)) return;
-      ready = true;
+      state = { mode: "live" };
       void reply;
     },
     forceReady(data) {
       const buffered = forceBuffered(data);
-      const held = heldLiveKeys.splice(0);
-      ready = true;
+      const held = heldKeys();
+      state = { mode: "live" };
       options.clearRevealTimer();
       liveDispatchQueue.unshift(
         ...buffered.concat(held).map((input) => ({ input, origin: "bridge" as const }))
