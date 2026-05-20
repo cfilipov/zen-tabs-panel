@@ -1002,9 +1002,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // If no chord key arrives within CHORD_REVEAL_TIMEOUT_MS, the popup
     // is revealed at its current view+context. Reset on every forwarded
     // key (user is still actively chording).
-    // ChordSession owns traversal and replay state. The acceptEngineEvent name
-    // remains for compatibility with stale pre-shim frame-script IPC and for
-    // recording popup-visible events.
+    // ChordSession owns traversal and replay state. Its old acceptEngineEvent
+    // alias remains only for stale pre-shim frame-script IPC compatibility.
     let chordSession = null;
     // Popup-instance counter. Incremented in createOverlay; the popup
     // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
@@ -2947,19 +2946,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
     });
 
     function trackChordTerminalAction(payload) {
-      chordSession.acceptEngineEvent({ kind: "terminal-action", payload });
+      chordSession.recordEvent({ kind: "terminal-action", payload });
     }
 
     function trackChordOpenView(view) {
-      chordSession.acceptEngineEvent({ kind: "open-view", view });
+      chordSession.recordEvent({ kind: "open-view", view });
     }
 
     function trackChordBridgeKey(keyData) {
-      chordSession.acceptEngineEvent({ kind: "bridge-key", keyData });
+      chordSession.recordEvent({ kind: "bridge-key", keyData });
     }
 
     function recordReplayFromPopupAction(message) {
-      chordSession.acceptEngineEvent({ kind: "popup-action", message });
+      chordSession.recordEvent({ kind: "popup-action", message });
     }
 
     // Replay the last completed chord. Engine actions dispatch directly;
@@ -3347,7 +3346,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const rows = getWorkspaceRows(false);
           const row = rows[rowIndex];
           if (!row || row.isActive) return false;
-          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "move-selected-tabs-to-workspace", workspaceId: row.uuid, switchToTarget: !!switchToTarget } });
+          chordSession.recordEvent({ kind: "popup-action", message: { type: "move-selected-tabs-to-workspace", workspaceId: row.uuid, switchToTarget: !!switchToTarget } });
           void (async () => {
             if (destroy) destroyOverlay();
             await moveSelectedTabsToWorkspaceInternal(row.uuid, !!switchToTarget);
@@ -3358,7 +3357,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const rows = getContainerRows();
           const row = rows[rowIndex];
           if (!row || !row.userContextId) return false;
-          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "reopen-in-container", userContextId: row.userContextId } });
+          chordSession.recordEvent({ kind: "popup-action", message: { type: "reopen-in-container", userContextId: row.userContextId } });
           void (async () => {
             if (destroy) destroyOverlay();
             await reopenInContainerInternal(row.userContextId);
@@ -3369,7 +3368,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const rows = getFolderRows();
           const row = rows[rowIndex];
           if (!row) return false;
-          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "move-tab-to-folder", folderId: row.id, switchToTarget: !!switchToTarget } });
+          chordSession.recordEvent({ kind: "popup-action", message: { type: "move-tab-to-folder", folderId: row.id, switchToTarget: !!switchToTarget } });
           void (async () => {
             if (destroy) destroyOverlay();
             await moveTabToFolderInternal(row.id, !!switchToTarget);
@@ -3380,7 +3379,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const rows = getProfileRows();
           const row = rows[rowIndex];
           if (!row || row.isCurrent) return false;
-          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "launch-profile", name: row.name } });
+          chordSession.recordEvent({ kind: "popup-action", message: { type: "launch-profile", name: row.name } });
           if (destroy) destroyOverlay();
           launchProfileInternal(row.name);
           return true;
@@ -3391,7 +3390,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             ? navigationShortcutTarget(history, rowIndex)
             : history?.entries?.[rowIndex]?.historyIndex ?? rowIndex;
           if (target == null || target === history?.index) return false;
-          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "navigate-to-history-index", index: target } });
+          chordSession.recordEvent({ kind: "popup-action", message: { type: "navigate-to-history-index", index: target } });
           if (destroy) destroyOverlay();
           navigateToHistoryIndexInternal(target);
           return true;
@@ -3402,7 +3401,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const win = tabIndex.getWindow(view, rowIndex, 1, params);
           const row = win && Array.isArray(win.rows) ? win.rows[0] : null;
           if (!row || !row.domId) return false;
-          chordSession.acceptEngineEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
+          chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
           void (async () => {
             if (destroy) destroyOverlay();
             const tab = findTabByDomId(row.domId);
@@ -3994,7 +3993,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Stale pre-shim content script just self-armed. Clear the in-flight
       // trace and prerender the popup so it's ready if the chord chain
       // involves a view, or if the reveal timer fires.
-      chordSession.acceptEngineEvent({ kind: "armed" });
+      chordSession.recordEvent({ kind: "armed" });
       createOverlay();
     }
     function onContentOpenView(m) {
@@ -5977,7 +5976,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         async synthChordKey(payload) {
           if (!payload || typeof payload.chordKey !== "string" || !payload.chordKey) return;
-          chordSession.acceptEngineEvent({
+          chordSession.recordEvent({
             kind: "synthetic-key",
             chordKey: payload.chordKey,
             view: payload.view || null,

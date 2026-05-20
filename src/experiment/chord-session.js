@@ -25,7 +25,7 @@
     const raw = String(key || "");
     const shiftedDigit = /^Shift\+([1-9])$/.exec(raw);
     if (shiftedDigit) {
-      return {
+    return {
         key: raw,
         code: "Digit" + shiftedDigit[1],
         shiftKey: true,
@@ -211,7 +211,7 @@
       resetCurrentReplay();
     }
 
-    function acceptEngineEvent(event) {
+    function recordEvent(event) {
       if (!event || !event.kind) return;
       if (event.kind === "terminal-action") {
         trackTerminalAction(event.payload);
@@ -287,7 +287,7 @@
       clearChordTimer();
       currentNode = options && options.chordTree;
       currentPath = [];
-      acceptEngineEvent({ kind: "armed" });
+      recordEvent({ kind: "armed" });
       callOption("onArmed");
       const constants = options && options.constants || {};
       setChordTimer(rootTimeout, constants.CHORD_ROOT_TIMEOUT_MS || 500);
@@ -458,7 +458,8 @@
     }
 
     return {
-      acceptEngineEvent,
+      recordEvent,
+      acceptEngineEvent: recordEvent,
       arm,
       handleKey,
       resetEngine,
