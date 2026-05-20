@@ -1030,6 +1030,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // bridge keys, so the trace stays valid for the next replay.
     let lastChordReplay = null;
     let currentChordReplay = null;
+    let pretracedReplayKeys = [];
     // Popup-instance counter. Incremented in createOverlay; the popup
     // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
     // takeChordBridgeBuffer ignores POPUP_READY whose inst doesn't match
@@ -2852,6 +2853,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         lastChordReplay = { kind: "open-extension-popup", extensionId: payload.extensionId };
       }
       currentChordReplay = null;
+      pretracedReplayKeys = [];
     }
 
     function trackChordOpenView(view) {
@@ -2864,6 +2866,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // replace the root trace with a menu-opening-only trace.
       if (currentChordReplay && currentChordReplay.kind === "open-view") return;
       currentChordReplay = { kind: "open-view", view: view || null, bridgeKeys: [] };
+      pretracedReplayKeys = [];
     }
 
     function replayKeyFromBridgeKey(keyData) {
@@ -2880,6 +2883,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function trackChordBridgeKey(keyData) {
       const key = replayKeyFromBridgeKey(keyData);
       if (currentChordReplay && currentChordReplay.kind === "open-view" && key) {
+        if (keyData && keyData.__pretraced) {
+          currentChordReplay.bridgeKeys.push(key);
+          pretracedReplayKeys.push(key);
+          return;
+        }
+        if (pretracedReplayKeys.length > 0 && pretracedReplayKeys[0] === key) {
+          pretracedReplayKeys.shift();
+          return;
+        }
         currentChordReplay.bridgeKeys.push(key);
       }
     }
@@ -2924,6 +2936,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         lastChordReplay = Object.assign({ kind: "action-msg" }, message);
       }
       currentChordReplay = null;
+      pretracedReplayKeys = [];
     }
 
     // Replay the last completed chord. Engine actions dispatch directly;
@@ -2931,12 +2944,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // recorded bridge keys so the popup re-fires its handlers with
     // freshly resolved data (e.g. "2nd recent" cycles through recents
     // instead of jumping back to the same tab).
+    function dispatchReplayedAction(actionId) {
+      if (!paletteRequestFire) return false;
+      debugChordTrace("replay-action", { actionId });
+      paletteRequestFire.async({ kind: "chord-action", actionId });
+      return true;
+    }
+
     function replayLastChordTrace() {
       if (!lastChordReplay) return false;
       const r = lastChordReplay;
       if (r.kind === "action") {
-        dispatchChordAction({ type: "action", actionId: r.actionId });
-        return true;
+        return dispatchReplayedAction(r.actionId);
       }
       if (r.kind === "switch-workspace") {
         dispatchChordAction({ type: "switch-workspace", index: r.index });
@@ -2948,6 +2967,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
       if (r.kind === "open-view") {
         const keysCopy = Array.from(r.bridgeKeys || []);
+        debugChordTrace("replay-open-view", { view: r.view, keys: keysCopy });
         enterBridgeFromOpenView(r.view, [], "chrome", "match");
         for (const k of keysCopy) {
           forwardKeyToPopup({ key: k, code: "", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false });
@@ -2962,6 +2982,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return false;
       }
       return false;
+    }
+
+    function replayLastChordFromRepeatedLeader() {
+      debugChordTrace("leader-repeat-as-replay", {});
+      try { if (chromeEngine) chromeEngine.reset(); } catch (e) {}
+      try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
+      currentChordReplay = null;
+      pretracedReplayKeys = [];
+      if (replayLastChordTrace()) return;
+      dispatchChordAction({ type: "action", actionId: MSG_REPLAY_LAST_CHORD });
     }
 
     function dispatchChordAction(payload) {
@@ -3175,11 +3205,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // forwards typed key data into the Svelte bridge module. Before
     // POPUP_READY, queue in bridgeBuffer (drained on POPUP_READY).
     function forwardKeyToPopup(keyData) {
-      // Note: don't track the bridge key here. The popup/interpreter path
-      // is the authoritative replay trace path because it also catches
-      // slow-typed chord chains where the engine never sees the key.
-      // Tracking both here AND in the popup duplicated entries, so repeated
-      // replays accumulated bogus bridgeKeys and eventually broke.
+      // Pre-track engine/chrome-forwarded bridge keys so replay traces
+      // commit deterministically even if the terminal popup action reaches
+      // background before the popup's trace-replay-key echo. The popup
+      // still traces slow visible keys; matching echoes for pre-tracked
+      // keys are ignored by trackChordBridgeKey.
+      trackChordBridgeKey(Object.assign({}, keyData, { __pretraced: true }));
       //
       // Any chord key after the initial leader means the user is committed
       // to a chord chain — kill chrome's reveal timer so the menu doesn't
@@ -3191,6 +3222,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!popupReady) {
         if (bridgeBuffer) {
           bridgeBuffer.push(keyData);
+          debugChordTrace("forward-key-buffered", { key: keyData && keyData.key, buffered: bridgeBuffer.length });
           if (bridgeBuffer.length === 1) armBufferedRevealTimer();
         }
         return;
@@ -3199,6 +3231,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const br = w && w.document.getElementById(BROWSER_ID);
       const mm = browserMessageManager(br);
       if (mm) {
+        debugChordTrace("forward-key-live", { key: keyData && keyData.key });
         // Generation-tagged message name: only the frame script that
         // matches this CHORD_GENERATION receives. Stale frame scripts
         // from prior extension loads (Firefox doesn't unload them) listen
@@ -3386,6 +3419,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (!isDefaultLeaderShortcut(e)) return;
         try { e.preventDefault(); } catch (_) {}
         try { e.stopPropagation(); } catch (_) {}
+        // People naturally type the repeat chord as Cmd+. followed by .
+        // while Command is still held. That second keydown is reported as
+        // another Cmd+. leader shortcut, not as a plain "." chord key, so
+        // translate it to the repeat action while the root chord is armed.
+        if (!isOverlayVisible() && chromeEngine && chromeEngine.isArmed && chromeEngine.isArmed()) {
+          lastLeaderArmAt = Date.now();
+          replayLastChordFromRepeatedLeader();
+          return;
+        }
         armChordFromLeader();
       };
       w.addEventListener("keydown", fallbackLeaderKeydown, { capture: true, mozSystemGroup: true });
@@ -3405,6 +3447,32 @@ this.zenWorkspaces = class extends ExtensionAPI {
           debugChordTrace("fallback-skip-chord-handled", { key: e.key });
           return;
         }
+        if (e.key === "Meta" || e.key === "Control" || e.key === "Alt" || e.key === "Shift") return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        const t = e && e.target;
+        const name = (t && (t.tagName || t.nodeName) || "").toLowerCase();
+        if (
+          pendingReveal &&
+          currentChordReplay &&
+          currentChordReplay.kind === "open-view" &&
+          t &&
+          t.id !== BROWSER_ID
+        ) {
+          debugChordTrace("fallback-hidden-chain-key", { key: e.key, code: e.code, target: name });
+          try { Object.defineProperty(e, "__zenTabsPanelFallbackHandled", { value: true }); } catch (_) {}
+          try { e.preventDefault(); } catch (_) {}
+          try { e.stopPropagation(); } catch (_) {}
+          forwardKeyToPopup({
+            key: e.key,
+            code: e.code,
+            shiftKey: !!e.shiftKey,
+            altKey: !!e.altKey,
+            ctrlKey: !!e.ctrlKey,
+            metaKey: !!e.metaKey,
+          });
+          try { e.stopImmediatePropagation(); } catch (_) {}
+          return;
+        }
         if (!chromeEngine.isArmed()) {
           debugChordTrace("fallback-skip-not-armed", { key: e.key, target: e.target && e.target.localName });
           return;
@@ -3413,15 +3481,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
           debugChordTrace("fallback-skip-default-prevented", { key: e.key });
           return;
         }
-        if (e.key === "Meta" || e.key === "Control" || e.key === "Alt" || e.key === "Shift") return;
-        if (e.metaKey || e.ctrlKey || e.altKey) return;
-        const t = e && e.target;
-        const name = (t && (t.tagName || t.nodeName) || "").toLowerCase();
-        if (name === "browser") {
-          debugChordTrace(t && t.id === BROWSER_ID ? "fallback-skip-popup-browser" : "fallback-skip-content-browser", { key: e.key });
-          return;
-        }
         const chordKey = engineScope.chordKeyFor ? engineScope.chordKeyFor(e) : null;
+        if (name === "browser") {
+          if (t && t.id === BROWSER_ID) {
+            debugChordTrace("fallback-skip-popup-browser", { key: e.key });
+            return;
+          }
+          if (chordKey !== ".") {
+            debugChordTrace("fallback-skip-content-browser", { key: e.key });
+            return;
+          }
+        }
         debugChordTrace("fallback-handle", {
           key: e.key,
           code: e.code,
@@ -5479,6 +5549,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const wasBridging = bridgingEngineKind != null;
           const drained = bridgeBuffer || [];
           const snapshot = pendingStateSnapshot || [];
+          debugChordTrace("bridge-buffer-drain", { drained: drained.length, view: popupReadyTargetView || "actions" });
           // Reset the bridge buffer to an empty array so future bridge
           // keys from the engine (before forwardKeyToPopup checks
           // popupReady) don't NPE — though after popupReady is true
