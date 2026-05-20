@@ -994,9 +994,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // If no chord key arrives within CHORD_REVEAL_TIMEOUT_MS, the popup
     // is revealed at its current view+context. Reset on every forwarded
     // key (user is still actively chording).
-    // ChordSession owns traversal and replay state. Stale pre-shim frame
-    // scripts are handled by the IPC adapters below, not by duplicate session
-    // entry points.
+    // ChordSession owns traversal, reveal bookkeeping, and replay state.
+    // Content frame scripts now only forward normalized keys into this one
+    // chrome-side session.
     let chordSession = null;
     function setRevealBlocked(value, why) {
       try { if (chordSession) chordSession.setRevealBlocked(!!value, why); } catch (e) {}
@@ -3060,9 +3060,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     //     and UI never shows. If they pause, the timer fires and the
     //     popup is revealed at its current state.
     function enterBridgeFromOpenView(view, kind, source) {
-      // Stale pre-shim content scripts can still emit old open-view IPC after
-      // an extension reload. The first bridge wins; later bridge opens are
-      // ignored so they cannot destroy/recreate the live popup.
+      // The first bridge wins; later bridge opens from overlapping key/timer
+      // edges are ignored so they cannot destroy/recreate the live popup.
       if (bridgeState.activeView != null) return;
 
       // Source="match" is a user-typed chord-key (cmd+.,r, etc.) — the
