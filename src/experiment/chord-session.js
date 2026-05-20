@@ -303,17 +303,17 @@
     }
 
     function cancelTraversal() {
-      const wasArmed = isChordTraversalArmed();
+      const wasArmed = isArmed();
       resetTraversal("idle");
       if (wasArmed) callOption("onCancel");
     }
 
-    function handleKey(keyData) {
+    function acceptKey(keyData) {
       if (!keyData || keyData.kind !== "key") return;
       if (keyData.isTrusted === false) return;
       if (keyData.key === "Meta" || keyData.key === "Control" || keyData.key === "Alt" || keyData.key === "Shift") return;
       if (keyData.metaKey || keyData.ctrlKey || keyData.altKey) return;
-      if (!isChordTraversalArmed()) return;
+      if (!isArmed()) return;
 
       if (state === "bridging-buffering" || state === "bridging-live") {
         try { if (typeof keyData.preventDefault === "function") keyData.preventDefault(); } catch (e) {}
@@ -381,7 +381,7 @@
       }
     }
 
-    function resetChordTraversal() {
+    function reset() {
       resetTraversal("idle");
     }
 
@@ -389,16 +389,16 @@
       if (state === "bridging-buffering" || state === "bridging-live") resetTraversal("idle");
     }
 
-    function detachChordTraversal() {
+    function detach() {
       resetTraversal("idle");
     }
 
-    function isChordTraversalArmed() {
+    function isArmed() {
       return state === "armed-root" || state === "armed-prefix" || state === "bridging-buffering" || state === "bridging-live";
     }
 
-    function getChordTraversalState() {
-      return { armed: isChordTraversalArmed(), path: currentPath.slice() };
+    function getTraversalState() {
+      return { armed: isArmed(), path: currentPath.slice() };
     }
 
     function replayLastChord(effects) {
@@ -460,12 +460,12 @@
     return {
       recordEvent,
       arm,
-      handleKey,
-      resetChordTraversal,
+      acceptKey,
+      reset,
       exitBridge,
-      detachChordTraversal,
-      isChordTraversalArmed,
-      getChordTraversalState,
+      detach,
+      isArmed,
+      getTraversalState,
       resetCurrentReplay,
       replayLastChord,
       hasCurrentReplay,

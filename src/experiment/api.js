@@ -2763,7 +2763,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const browser = doc && doc.getElementById(BROWSER_ID);
       let chordTraversalState = null;
       try {
-        chordTraversalState = chordSession ? chordSession.getChordTraversalState() : null;
+        chordTraversalState = chordSession ? chordSession.getTraversalState() : null;
       } catch (e) {
         chordTraversalState = { error: String(e) };
       }
@@ -2971,7 +2971,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function replayLastChordFromRepeatedLeader() {
       debugChordTrace("leader-repeat-as-replay", {});
-      try { if (chordSession) chordSession.resetChordTraversal(); } catch (e) {}
+      try { if (chordSession) chordSession.reset(); } catch (e) {}
       try { if (chromeShim) chromeShim.disarm("replay"); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Disarm:" + CHORD_GENERATION); } catch (e) {}
       chordSession.resetCurrentReplay();
@@ -2987,7 +2987,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function acceptShimKey(keyData, source) {
       if (!chordSession || !keyData || keyData.kind !== "key") return;
       debugChordTrace("shim-key", { source, key: keyData.key, seq: keyData.shimSeq, ts: keyData.shimTs });
-      chordSession.handleKey({
+      chordSession.acceptKey({
         kind: "key",
         key: keyData.key,
         code: keyData.code,
@@ -3449,7 +3449,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       lastLeaderArmAt = now;
       debugChordTrace("arm-leader", {
         overlayVisible: isOverlayVisible(),
-        chromeArmed: !!(chordSession && chordSession.isChordTraversalArmed()),
+        chromeArmed: !!(chordSession && chordSession.isArmed()),
       });
       // Leader-shortcut routing while the menu is visible:
       //   - on actions   -> dismiss (toggle off).
@@ -3538,13 +3538,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // <browser>. Content shims handle their own blur via their own
       // content-window blur listener.
       w.addEventListener("focus", (e) => {
-        if (!chordSession.isChordTraversalArmed()) return;
+        if (!chordSession.isArmed()) return;
         const t = e && e.target;
         if (!t) return;
         const name = (t.tagName || t.nodeName || "").toLowerCase();
         if (name === "browser" && Date.now() - lastLeaderArmAt > CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS) {
           debugChordTrace("chrome-reset-focus-browser", { since: Date.now() - lastLeaderArmAt });
-          chordSession.resetChordTraversal();
+          chordSession.reset();
           try { if (chromeShim) chromeShim.disarm("focus-browser"); } catch (e) {}
         }
       }, true);
@@ -3557,7 +3557,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // while Command is still held. That second keydown is reported as
         // another Cmd+. leader shortcut, not as a plain "." chord key, so
         // translate it to the repeat action while the root chord is armed.
-        if (!isOverlayVisible() && chordSession && chordSession.isChordTraversalArmed()) {
+        if (!isOverlayVisible() && chordSession && chordSession.isArmed()) {
           lastLeaderArmAt = Date.now();
           replayLastChordFromRepeatedLeader();
           return;
@@ -3606,7 +3606,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           try { e.stopImmediatePropagation(); } catch (_) {}
           return;
         }
-        if (!chordSession.isChordTraversalArmed()) {
+        if (!chordSession.isArmed()) {
           debugChordTrace("fallback-skip-not-armed", { key: e.key, target: e.target && e.target.localName });
           return;
         }
@@ -3633,7 +3633,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           hasRootChild: !!(chordKey && CHORD_TREE && CHORD_TREE.children && CHORD_TREE.children[chordKey]),
         });
         try { Object.defineProperty(e, "__zenTabsPanelFallbackHandled", { value: true }); } catch (_) {}
-        chordSession.handleKey({
+        chordSession.acceptKey({
           kind: "key",
           key: e.key,
           code: e.code,
@@ -4273,7 +4273,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function teardownChordRuntime() {
-      try { if (chordSession) chordSession.detachChordTraversal(); } catch (e) {}
+      try { if (chordSession) chordSession.detach(); } catch (e) {}
       try { if (chromeShim) chromeShim.detach(); } catch (e) {}
       // Hard-remove the warm overlay so its persistent popup browser
       // doesn't leak across an extension reload (soft-hide alone keeps
@@ -5766,7 +5766,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // A chord might be in flight (session armed/bridging) when this
           // is invoked by an external path (toolbar icon click). Tear
           // down any in-flight chord state so we open cleanly.
-          if (chordSession && chordSession.isChordTraversalArmed()) chordSession.resetChordTraversal();
+          if (chordSession && chordSession.isArmed()) chordSession.reset();
           disarmChordShims("open-palette");
 
           if (view) {
