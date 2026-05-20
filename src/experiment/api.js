@@ -984,7 +984,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       readyTargetView: null,
       activeView: null,
       revealDeferred: false,
-      revealBlocked: false,
     };
     // Keep this comfortably above cold Svelte view startup in large tab
     // profiles. Fast chains like cmd+.,q,1 buffer row-selection digits in
@@ -1000,6 +999,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // scripts are handled by the IPC adapters below, not by duplicate session
     // entry points.
     let chordSession = null;
+    function setRevealBlocked(value, why) {
+      try { if (chordSession) chordSession.setRevealBlocked(!!value, why); } catch (e) {}
+    }
+    function isRevealBlocked() {
+      try { return !!(chordSession && chordSession.isRevealBlocked()); } catch (e) { return false; }
+    }
     // Popup-instance counter. Incremented in createOverlay; the popup
     // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
     // takeChordBridgeBuffer ignores POPUP_READY whose inst doesn't match
@@ -1706,7 +1711,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       popupInstance++;
       // A new popup is being constructed — any reveal-block from the
       // previous destroy is no longer relevant.
-      bridgeState.revealBlocked = false;
+      setRevealBlocked(false, "createOverlay");
 
       // Always refresh contents so CSS changes take effect on the next
       // open after an extension reload (otherwise the cached <style> from
@@ -1881,7 +1886,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // initial popup-load IIFE (which uses the URL's ?inst=N) and orphan
       // the popup with chordBridgeReady=false if the user chords during
       // extension load.
-      bridgeState.revealBlocked = false;
+      setRevealBlocked(false, "rearmExistingOverlay");
       // Popup will signal ready again after it processes WarmRearm; any
       // chord-chain keys that land in this window are buffered (just like
       // the cold-create case).
@@ -2572,7 +2577,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // still in flight — without this block, revealPalette would see
       // pendingReveal still set and unhide the overlay right before we
       // remove it, producing a flash.
-      bridgeState.revealBlocked = true;
+      setRevealBlocked(true, "destroyOverlay");
       explicitRevealToken++;
       explicitRevealView = null;
       explicitRevealScheduledToken = 0;
@@ -2801,7 +2806,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           popupReady: bridgeState.popupReady,
           activeView: bridgeState.activeView,
           activeBridgeView: bridgeState.activeView,
-          revealBlocked: bridgeState.revealBlocked,
+          revealBlocked: isRevealBlocked(),
           revealDeferred: bridgeState.revealDeferred,
         },
         replay: chordSession ? chordSession.getReplayState() : null,
@@ -5889,7 +5894,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         async bridgeDispatchSettled(inst) {
           if (typeof inst === "number" && inst !== popupInstance) return;
-          if (bridgeState.revealBlocked || !pendingReveal) return;
+          if (isRevealBlocked() || !pendingReveal) return;
           armRevealTimer();
         },
 
@@ -5924,7 +5929,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // unexpectedly revealing its replacement.
         async revealPalette(inst) {
           if (typeof inst === "number" && inst !== popupInstance) return;
-          if (bridgeState.revealBlocked) return;
+          if (isRevealBlocked()) return;
           if (pendingReveal) revealOverlay();
         },
 

@@ -87,6 +87,7 @@
     let currentChordReplay = null;
     let preRecordedReplayKeys = [];
     const syntheticReplayEvents = [];
+    let revealBlocked = false;
     let currentNode = options && options.chordTree;
     let currentPath = [];
     let chordTimer = null;
@@ -102,11 +103,12 @@
       if (!snapshot) return "idle";
       const bridge = snapshot.bridge || {};
       const overlay = snapshot.overlay || {};
+      const session = snapshot.session || {};
       const traversal = snapshot.traversal || {};
       if (bridge.active && !bridge.popupReady) return "bridging-buffering";
       if (bridge.active && bridge.popupReady && overlay.pendingReveal) return "bridging-live";
       if (bridge.active && bridge.popupReady && overlay.visibility !== "visible") return "bridging-live";
-      if (bridge.revealBlocked && !bridge.active && !traversal.armed) return "idle";
+      if (session.revealBlocked && !bridge.active && !traversal.armed) return "idle";
       if (overlay.visibility === "visible" && !overlay.pendingReveal) return "visible";
       if (traversal.armed && Array.isArray(traversal.path) && traversal.path.length > 0) return "armed-prefix";
       if (traversal.armed) return "armed-root";
@@ -453,8 +455,20 @@
     function getStateSnapshot() {
       return clonePlain({
         state,
+        revealBlocked,
         recentTransitions,
       });
+    }
+
+    function setRevealBlocked(value, why) {
+      revealBlocked = !!value;
+      if (revealBlocked) {
+        transition(state, why || "reveal-blocked", { revealBlocked });
+      }
+    }
+
+    function isRevealBlocked() {
+      return revealBlocked;
     }
 
     return {
@@ -475,6 +489,8 @@
       assertInvariant,
       getStateSnapshot,
       getReplayState,
+      setRevealBlocked,
+      isRevealBlocked,
     };
   }
 
