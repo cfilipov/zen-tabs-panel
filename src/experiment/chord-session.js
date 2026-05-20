@@ -88,6 +88,7 @@
     let preRecordedReplayKeys = [];
     const syntheticReplayEvents = [];
     let revealBlocked = false;
+    let revealDeferred = false;
     let currentNode = options && options.chordTree;
     let currentPath = [];
     let chordTimer = null;
@@ -456,6 +457,7 @@
       return clonePlain({
         state,
         revealBlocked,
+        revealDeferred,
         recentTransitions,
       });
     }
@@ -469,6 +471,16 @@
 
     function isRevealBlocked() {
       return revealBlocked;
+    }
+
+    function setRevealDeferred(value, why) {
+      revealDeferred = !!value;
+      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { revealDeferred } });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
+    function isRevealDeferred() {
+      return revealDeferred;
     }
 
     return {
@@ -491,6 +503,8 @@
       getReplayState,
       setRevealBlocked,
       isRevealBlocked,
+      setRevealDeferred,
+      isRevealDeferred,
     };
   }
 
