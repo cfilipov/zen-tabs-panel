@@ -884,6 +884,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       context.extension.getURL("shared/chord-engine.js"),
       engineScope
     );
+    const chordSessionScope = {};
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("experiment/chord-session.js"),
+      chordSessionScope
+    );
     const KEYBINDINGS = engineScope.ZEN_KEYBINDINGS || [];
     const WORKSPACE_DIGIT_CHORDS = engineScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
     const tabIndexScope = {};
@@ -1013,24 +1018,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // bridge — exit-bridge must be sent to it (and only it) when popup
     // drains. "chrome" or "content"; null when no bridge active.
     let bridgingEngineKind = null;
-    // Last completed chord, for the cmd+.,. replay action. Captures
-    // what the *engine* did (not the resolved popup-fired action) so
-    // replay re-runs the chord chain — e.g. cmd+.,r,2 records
-    // {kind:"open-view", view:"last-visited", bridgeKeys:["2"]} so
-    // replay re-navigates to recents and re-fires "2", which cycles
-    // through recents instead of activating the same now-current tab.
-    //
-    // For an engine action chord (cmd+.,p), records
-    // {kind:"action", actionId:"go-to-previous-tab"} and replay
-    // dispatches that action directly.
-    //
-    // currentChordReplay tracks the in-flight chain; bridge keys
-    // append into it. lastChordReplay points to the last committed
-    // chain. Reused across replays — replaying re-pushes the same
-    // bridge keys, so the trace stays valid for the next replay.
-    let lastChordReplay = null;
-    let currentChordReplay = null;
-    let pretracedReplayKeys = [];
+    // ChordSession owns replay state. During Track A Phase 1 the existing
+    // chrome/content chord engines still traverse the tree; they report their
+    // interpreted outcomes through chordSession.acceptEngineEvent().
+    let chordSession = null;
     // Popup-instance counter. Incremented in createOverlay; the popup
     // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
     // takeChordBridgeBuffer ignores POPUP_READY whose inst doesn't match
@@ -2841,11 +2832,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           revealBlocked,
           revealDeferred,
         },
-        replay: {
-          lastChordReplay,
-          currentChordReplay,
-          pretracedReplayKeys,
-        },
+        replay: chordSession ? chordSession.getReplayState() : null,
         engine: chromeEngineState,
         arm: {
           lastLeaderArmAt,
@@ -2918,116 +2905,34 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     // ----- Chord-replay tracking ------------------------------------------
     //
-    // The chord chain has two distinct states:
-    //
-    //   currentChordReplay — in-flight. Populated by trackChordOpenView /
-    //   trackChordBridgeKey as the engine traverses the chord chain. Reset
-    //   on engine arm (every cmd+. clears it).
-    //
-    //   lastChordReplay — committed. The most-recent chord chain that
-    //   actually FIRED A TERMINAL ACTION. cmd+.,. replays from here.
-    //
-    // Promotion happens only when an action terminates the chain (engine
-    // action via trackChordTerminalAction, popup-fired runtime action via
-    // recordReplayContext). Chord chains that just open a submenu and
-    // leave the user there (cmd+.,q, then Esc) never promote — so the
-    // previous chord stays replayable, matching the user's mental model
-    // of "repeat the last thing I DID."
-    function trackChordTerminalAction(payload) {
-      if (!payload || !payload.type) return;
-      if (payload.type === "action") {
-        if (payload.actionId === MSG_REPLAY_LAST_CHORD) return;
-        lastChordReplay = { kind: "action", actionId: payload.actionId };
-      } else if (payload.type === "switch-workspace") {
-        lastChordReplay = { kind: "switch-workspace", index: payload.index };
-      } else if (payload.type === "open-extension-popup") {
-        lastChordReplay = { kind: "open-extension-popup", extensionId: payload.extensionId };
-      }
-      currentChordReplay = null;
-      pretracedReplayKeys = [];
-    }
-
-    function trackChordOpenView(view) {
-      // In-flight only — the chain has merely descended into a view. It's
-      // not committed as replayable until an action actually fires.
-      //
-      // Preserve an existing open-view trace during drill navigation. For
-      // example, cmd+., q, 1, 2 should replay by opening Domains and then
-      // replaying "1, 2"; the intermediate domain-tabs navigate must not
-      // replace the root trace with a menu-opening-only trace.
-      if (currentChordReplay && currentChordReplay.kind === "open-view") return;
-      currentChordReplay = { kind: "open-view", view: view || null, bridgeKeys: [] };
-      pretracedReplayKeys = [];
-    }
-
-    function replayKeyFromBridgeKey(keyData) {
-      if (!keyData || typeof keyData.key !== "string" || !keyData.key) return null;
-      if (keyData.key.length === 1 && /[a-z]/i.test(keyData.key)) {
-        return (keyData.shiftKey ? "Shift+" : "") + keyData.key.toUpperCase();
-      }
-      if (keyData.shiftKey && keyData.code && /^Digit[1-9]$/.test(keyData.code)) {
-        return "Shift+" + keyData.code.slice("Digit".length);
-      }
-      return keyData.key;
-    }
-
-    function trackChordBridgeKey(keyData) {
-      const key = replayKeyFromBridgeKey(keyData);
-      if (currentChordReplay && currentChordReplay.kind === "open-view" && key) {
-        if (keyData && keyData.__pretraced) {
-          currentChordReplay.bridgeKeys.push(key);
-          pretracedReplayKeys.push(key);
-          return;
-        }
-        if (pretracedReplayKeys.length > 0 && pretracedReplayKeys[0] === key) {
-          pretracedReplayKeys.shift();
-          return;
-        }
-        currentChordReplay.bridgeKeys.push(key);
-      }
-    }
-
     // Commit-on-action hook for popup-fired runtime actions. Bg calls this
-    // from recordChordAction. If the chord chain involved a view open
-    // (currentChordReplay.kind === "open-view"), commit the chain itself
-    // so replay re-fires the navigation + bridge keys (cycling). Otherwise
-    // commit the raw action (e.g. user clicked a row in the menu without
-    // a chord prefix).
-    //
-    // Excludes its own action ids so chained replays don't recurse and
-    // duplicate-prompt actions stay context-bound (not replayable).
+    // from recordChordAction. ChordSession decides whether to promote the
+    // in-flight chord chain to a replayable trace or commit a raw action.
     const REPLAY_RECORD_BLOCKLIST = new Set([
       MSG_REPLAY_LAST_CHORD,
       "duplicate-switch",
       "duplicate-open-anyway",
       "duplicate-open-and-close-others",
     ]);
+    chordSession = chordSessionScope.createChordSession({
+      replayActionId: MSG_REPLAY_LAST_CHORD,
+      replayRecordBlocklist: Array.from(REPLAY_RECORD_BLOCKLIST),
+    });
+
+    function trackChordTerminalAction(payload) {
+      chordSession.acceptEngineEvent({ kind: "terminal-action", payload });
+    }
+
+    function trackChordOpenView(view) {
+      chordSession.acceptEngineEvent({ kind: "open-view", view });
+    }
+
+    function trackChordBridgeKey(keyData) {
+      chordSession.acceptEngineEvent({ kind: "bridge-key", keyData });
+    }
+
     function recordReplayFromPopupAction(message) {
-      if (!message || !message.type) return;
-      if (REPLAY_RECORD_BLOCKLIST.has(message.type)) return;
-      // Engine-fired chord actions (cmd+.,p, cmd+.,w,n, …) commit via
-      // trackChordTerminalAction at chord-fire time, then paletteRequestFire
-      // routes through bg's runChordAction → recordChordAction → here
-      // for the *same* action. Without this skip we'd promptly overwrite
-      // the engine's kind:"action" record with kind:"action-msg", and
-      // replay would fall through to bg's lastChordAction (which might
-      // have been overwritten by an unrelated runtime action since).
-      if (lastChordReplay && lastChordReplay.kind === "action" && lastChordReplay.actionId === message.type) {
-        currentChordReplay = null;
-        return;
-      }
-      if (
-        currentChordReplay &&
-        currentChordReplay.kind === "open-view" &&
-        Array.isArray(currentChordReplay.bridgeKeys) &&
-        currentChordReplay.bridgeKeys.length > 0
-      ) {
-        lastChordReplay = currentChordReplay;
-      } else {
-        lastChordReplay = Object.assign({ kind: "action-msg" }, message);
-      }
-      currentChordReplay = null;
-      pretracedReplayKeys = [];
+      chordSession.acceptEngineEvent({ kind: "popup-action", message });
     }
 
     // Replay the last completed chord. Engine actions dispatch directly;
@@ -3043,44 +2948,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function replayLastChordTrace() {
-      if (!lastChordReplay) return false;
-      const r = lastChordReplay;
-      if (r.kind === "action") {
-        return dispatchReplayedAction(r.actionId);
-      }
-      if (r.kind === "switch-workspace") {
-        dispatchChordAction({ type: "switch-workspace", index: r.index });
-        return true;
-      }
-      if (r.kind === "open-extension-popup") {
-        dispatchChordAction({ type: "open-extension-popup", extensionId: r.extensionId });
-        return true;
-      }
-      if (r.kind === "open-view") {
-        const keysCopy = Array.from(r.bridgeKeys || []);
-        debugChordTrace("replay-open-view", { view: r.view, keys: keysCopy });
-        enterBridgeFromOpenView(r.view, [], "chrome", "match");
-        for (const k of keysCopy) {
-          forwardKeyToPopup({ key: k, code: "", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false });
-        }
-        return true;
-      }
-      if (r.kind === "action-msg") {
-        // Replay a popup-fired action that wasn't part of a chord chain
-        // (e.g. user opened menu, clicked Reload — no chord prefix).
-        // Returns false so bg falls back to its lastChordAction path
-        // which re-dispatches the message through the ACTIONS table.
-        return false;
-      }
-      return false;
+      return chordSession.replayLastChord({
+        dispatchReplayedAction,
+        dispatchChordAction,
+        enterBridgeFromOpenView,
+        forwardKeyToPopup,
+        debug: debugChordTrace,
+      });
     }
 
     function replayLastChordFromRepeatedLeader() {
       debugChordTrace("leader-repeat-as-replay", {});
       try { if (chromeEngine) chromeEngine.reset(); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
-      currentChordReplay = null;
-      pretracedReplayKeys = [];
+      chordSession.resetCurrentReplay();
       if (replayLastChordTrace()) return;
       dispatchChordAction({ type: "action", actionId: MSG_REPLAY_LAST_CHORD });
     }
@@ -3441,9 +3322,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       onArmed: () => {
         // Fresh chord arm — clear the in-flight trace so any nav/keys
         // recorded for the previous chord chain don't bleed into this
-        // one. lastChordReplay (the COMMITTED previous chord) is
+        // one. The committed previous chord is
         // preserved for replay until something new commits over it.
-        currentChordReplay = null;
+        chordSession.acceptEngineEvent({ kind: "armed" });
         createOverlay();
       },
       // Any chrome-engine terminal/transition event resets content engines
@@ -3544,8 +3425,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const name = (t && (t.tagName || t.nodeName) || "").toLowerCase();
         if (
           pendingReveal &&
-          currentChordReplay &&
-          currentChordReplay.kind === "open-view" &&
+          chordSession.hasCurrentOpenViewReplay() &&
           t &&
           t.id !== BROWSER_ID
         ) {
@@ -3949,7 +3829,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // (same as chrome engine's onArmed) and prerender the popup
       // so it's ready if the chord chain involves a view, or if the
       // reveal timer fires (no further chord keys typed).
-      currentChordReplay = null;
+      chordSession.acceptEngineEvent({ kind: "armed" });
       createOverlay();
     }
     function onContentOpenView(m) {
@@ -5914,7 +5794,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // chord-opened popups (root timeout / bridge); toolbar-clicked
           // visible navigation is not itself replayable and must not
           // poison the previous leaf action.
-          if (bridgingEngineKind != null || currentChordReplay) {
+          if (bridgingEngineKind != null || chordSession.hasCurrentReplay()) {
             trackChordOpenView(view);
           }
           // Only swap browsers when crossing between our popup and a

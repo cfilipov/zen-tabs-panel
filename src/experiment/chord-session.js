@@ -1,0 +1,178 @@
+"use strict";
+
+// ChordSession is the chrome-side owner for cross-engine chord bookkeeping.
+// Phase 1 owns replay recording only: the existing chrome/content chord
+// engines still traverse the tree and emit interpreted outcomes.
+(function (scope) {
+  function clonePlain(value) {
+    if (value == null) return value;
+    try { return JSON.parse(JSON.stringify(value)); }
+    catch (e) { return String(value); }
+  }
+
+  function replayKeyFromBridgeKey(keyData) {
+    if (!keyData || typeof keyData.key !== "string" || !keyData.key) return null;
+    if (keyData.key.length === 1 && /[a-z]/i.test(keyData.key)) {
+      return (keyData.shiftKey ? "Shift+" : "") + keyData.key.toUpperCase();
+    }
+    if (keyData.shiftKey && keyData.code && /^Digit[1-9]$/.test(keyData.code)) {
+      return "Shift+" + keyData.code.slice("Digit".length);
+    }
+    return keyData.key;
+  }
+
+  function createChordSession(options) {
+    const replayActionId = options && options.replayActionId;
+    const replayRecordBlocklist = new Set((options && options.replayRecordBlocklist) || []);
+
+    let lastChordReplay = null;
+    let currentChordReplay = null;
+    let pretracedReplayKeys = [];
+
+    function resetCurrentReplay() {
+      currentChordReplay = null;
+      pretracedReplayKeys = [];
+    }
+
+    function trackTerminalAction(payload) {
+      if (!payload || !payload.type) return;
+      if (payload.type === "action") {
+        if (payload.actionId === replayActionId) return;
+        lastChordReplay = { kind: "action", actionId: payload.actionId };
+      } else if (payload.type === "switch-workspace") {
+        lastChordReplay = { kind: "switch-workspace", index: payload.index };
+      } else if (payload.type === "open-extension-popup") {
+        lastChordReplay = { kind: "open-extension-popup", extensionId: payload.extensionId };
+      }
+      resetCurrentReplay();
+    }
+
+    function trackOpenView(view) {
+      // In-flight only — the chain has merely descended into a view. It's
+      // not committed as replayable until an action actually fires.
+      //
+      // Preserve an existing open-view trace during drill navigation. For
+      // example, cmd+., q, 1, 2 should replay by opening Domains and then
+      // replaying "1, 2"; the intermediate domain-tabs navigate must not
+      // replace the root trace with a menu-opening-only trace.
+      if (currentChordReplay && currentChordReplay.kind === "open-view") return;
+      currentChordReplay = { kind: "open-view", view: view || null, bridgeKeys: [] };
+      pretracedReplayKeys = [];
+    }
+
+    function trackBridgeKey(keyData) {
+      const key = replayKeyFromBridgeKey(keyData);
+      if (currentChordReplay && currentChordReplay.kind === "open-view" && key) {
+        if (keyData && keyData.__pretraced) {
+          currentChordReplay.bridgeKeys.push(key);
+          pretracedReplayKeys.push(key);
+          return;
+        }
+        if (pretracedReplayKeys.length > 0 && pretracedReplayKeys[0] === key) {
+          pretracedReplayKeys.shift();
+          return;
+        }
+        currentChordReplay.bridgeKeys.push(key);
+      }
+    }
+
+    function recordPopupAction(message) {
+      if (!message || !message.type) return;
+      if (replayRecordBlocklist.has(message.type)) return;
+      // Engine-fired chord actions (cmd+.,p, cmd+.,w,n, ...) commit via
+      // trackTerminalAction at chord-fire time, then the action routes
+      // through bg's runChordAction -> recordChordAction -> here for the
+      // same action. Without this skip we'd overwrite the engine's
+      // kind:"action" record with kind:"action-msg".
+      if (lastChordReplay && lastChordReplay.kind === "action" && lastChordReplay.actionId === message.type) {
+        currentChordReplay = null;
+        return;
+      }
+      if (
+        currentChordReplay &&
+        currentChordReplay.kind === "open-view" &&
+        Array.isArray(currentChordReplay.bridgeKeys) &&
+        currentChordReplay.bridgeKeys.length > 0
+      ) {
+        lastChordReplay = currentChordReplay;
+      } else {
+        lastChordReplay = Object.assign({ kind: "action-msg" }, message);
+      }
+      resetCurrentReplay();
+    }
+
+    function acceptEngineEvent(event) {
+      if (!event || !event.kind) return;
+      if (event.kind === "terminal-action") {
+        trackTerminalAction(event.payload);
+      } else if (event.kind === "open-view") {
+        trackOpenView(event.view);
+      } else if (event.kind === "bridge-key") {
+        trackBridgeKey(event.keyData);
+      } else if (event.kind === "popup-action") {
+        recordPopupAction(event.message);
+      } else if (event.kind === "armed") {
+        resetCurrentReplay();
+      }
+    }
+
+    function replayLastChord(effects) {
+      if (!lastChordReplay || !effects) return false;
+      const r = lastChordReplay;
+      if (r.kind === "action") {
+        return !!(effects.dispatchReplayedAction && effects.dispatchReplayedAction(r.actionId));
+      }
+      if (r.kind === "switch-workspace") {
+        if (effects.dispatchChordAction) effects.dispatchChordAction({ type: "switch-workspace", index: r.index });
+        return true;
+      }
+      if (r.kind === "open-extension-popup") {
+        if (effects.dispatchChordAction) effects.dispatchChordAction({ type: "open-extension-popup", extensionId: r.extensionId });
+        return true;
+      }
+      if (r.kind === "open-view") {
+        const keysCopy = Array.from(r.bridgeKeys || []);
+        if (effects.debug) effects.debug("replay-open-view", { view: r.view, keys: keysCopy });
+        if (effects.enterBridgeFromOpenView) effects.enterBridgeFromOpenView(r.view, [], "chrome", "match");
+        if (effects.forwardKeyToPopup) {
+          for (const k of keysCopy) {
+            effects.forwardKeyToPopup({ key: k, code: "", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false });
+          }
+        }
+        return true;
+      }
+      if (r.kind === "action-msg") {
+        // Let background fall back to its last popup-action recorder.
+        return false;
+      }
+      return false;
+    }
+
+    function hasCurrentOpenViewReplay() {
+      return !!(currentChordReplay && currentChordReplay.kind === "open-view");
+    }
+
+    function hasCurrentReplay() {
+      return !!currentChordReplay;
+    }
+
+    function getReplayState() {
+      return clonePlain({
+        lastChordReplay,
+        currentChordReplay,
+        pretracedReplayKeys,
+      });
+    }
+
+    return {
+      acceptEngineEvent,
+      resetCurrentReplay,
+      replayLastChord,
+      hasCurrentReplay,
+      hasCurrentOpenViewReplay,
+      getReplayState,
+    };
+  }
+
+  scope.createChordSession = createChordSession;
+})(this);
