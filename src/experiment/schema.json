@@ -53,7 +53,8 @@
           { "name": "view", "type": "string" },
           { "name": "index", "type": "integer" },
           { "name": "source", "type": "string", "optional": true },
-          { "name": "switchToTarget", "type": "boolean", "optional": true }
+          { "name": "switchToTarget", "type": "boolean", "optional": true },
+          { "name": "listVersion", "type": "integer", "optional": true }
         ]
       },
       {

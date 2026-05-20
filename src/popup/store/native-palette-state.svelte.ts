@@ -16,6 +16,7 @@ export type NativePaletteState = {
   rows: NativeListRow[];
   total: number;
   offset: number;
+  listVersion: number;
   loading: boolean;
   error: string | null;
   currentPage: number;
@@ -57,6 +58,7 @@ function defaultNativePaletteState(): NativePaletteState {
     rows: [],
     total: 0,
     offset: 0,
+    listVersion: 0,
     loading: false,
     error: null,
     currentPage: 1,
@@ -139,6 +141,7 @@ export function createNativePaletteState() {
     state.rows = [];
     state.total = 0;
     state.offset = 0;
+    state.listVersion = 0;
     state.currentDomain = null;
     state.navigationHistory = null;
     state.recentlyClosedRows = [];
@@ -206,12 +209,14 @@ export function createNativePaletteState() {
   function commitListWindow(win: ViewWindow<NativeListRow>, resetSelection: boolean) {
     state.rows = win.rows;
     state.total = win.total;
+    state.listVersion = win.version;
     if (resetSelection) state.selectedIndex = -1;
   }
 
   function failListWindow(message: string) {
     state.rows = [];
     state.total = 0;
+    state.listVersion = 0;
     state.selectedIndex = -1;
     state.error = message;
   }
@@ -219,6 +224,7 @@ export function createNativePaletteState() {
   function replaceListWindow(rows: NativeListRow[], total: number, selectedIndex: number) {
     state.rows = rows;
     state.total = total;
+    state.listVersion = 0;
     state.selectedIndex = selectedIndex;
   }
 

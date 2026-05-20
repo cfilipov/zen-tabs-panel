@@ -30,6 +30,7 @@ describe("native palette state", () => {
     }];
     store.state.total = 1;
     store.state.offset = 4;
+    store.state.listVersion = 12;
     store.state.currentDomain = "example.com";
     store.state.selectedIndex = 2;
     store.state.workspaceFilter = "workspace-1";
@@ -40,10 +41,30 @@ describe("native palette state", () => {
     expect(store.state.rows).toEqual([]);
     expect(store.state.total).toBe(0);
     expect(store.state.offset).toBe(0);
+    expect(store.state.listVersion).toBe(0);
     expect(store.state.currentDomain).toBeNull();
     expect(store.state.selectedIndex).toBe(-1);
     expect(store.state.workspaceFilter).toBe("workspace-1");
     expect(store.state.actionCounts).toEqual({ recent: 7 });
+  });
+
+  it("tracks the chrome model version for rendered list windows", () => {
+    const store = createNativePaletteState();
+
+    store.commitListWindow({
+      version: 42,
+      view: "last-visited",
+      offset: 0,
+      limit: 1,
+      total: 1,
+      rows: [],
+    }, true);
+
+    expect(store.state.listVersion).toBe(42);
+
+    store.replaceListWindow([], 0, -1);
+
+    expect(store.state.listVersion).toBe(0);
   });
 
   it("resetToActions returns to the cold initial state", () => {

@@ -3340,6 +3340,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const rowIndex = Number(index);
       if (!Number.isInteger(rowIndex) || rowIndex < 0) return false;
       const destroy = !!(options && options.destroyOverlay);
+      const expectedListVersion = options && Number.isInteger(options.listVersion) && options.listVersion > 0
+        ? options.listVersion
+        : null;
       try {
         if (view === "move-to-workspace") {
           const rows = getWorkspaceRows(false);
@@ -3396,6 +3399,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
         if (CHROME_OWNED_TAB_BRIDGE_VIEWS.has(view)) {
           tabIndex.start();
+          if (expectedListVersion != null && tabIndex.getVersion() !== expectedListVersion) return false;
           const params = view === "domain-tabs" ? (currentViewParams || {}) : {};
           const win = tabIndex.getWindow(view, rowIndex, 1, params);
           const row = win && Array.isArray(win.rows) ? win.rows[0] : null;
@@ -4753,8 +4757,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return activateNativeTab(tab);
         },
 
-        async activateViewRow(view, index, source, switchToTarget) {
-          return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, { destroyOverlay: false });
+        async activateViewRow(view, index, source, switchToTarget, listVersion) {
+          return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, {
+            destroyOverlay: false,
+            listVersion,
+          });
         },
 
         // Go to previous tab using lastAccessed, filtering out the current

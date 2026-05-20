@@ -27,13 +27,14 @@ export function createPaletteEffects() {
     activateTab(domId: string) {
       fireMessage({ type: "activate-tab", domId });
     },
-    activateViewRow(view: ViewId, index: number, source: "selection" | "shortcut", switchToTarget = false) {
+    activateViewRow(view: ViewId, index: number, source: "selection" | "shortcut", switchToTarget = false, listVersion?: number) {
       fireMessage({
         type: "activate-view-row",
         view,
         index,
         source,
         ...(switchToTarget ? { switchToTarget: true } : {}),
+        ...(typeof listVersion === "number" && listVersion > 0 ? { listVersion } : {}),
       });
     },
     synthChordKey(chordKey: string, view: ViewId, activation = "keydown") {

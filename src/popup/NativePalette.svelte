@@ -462,7 +462,7 @@
   function activateChromeResolvedRow(index: number, source: "selection" | "shortcut", switchToTarget = false) {
     markTerminalCommandDispatched();
     revealController.clear();
-    effects.activateViewRow(palette.currentView, index, source, switchToTarget);
+    effects.activateViewRow(palette.currentView, index, source, switchToTarget, palette.listVersion);
   }
 
   function switchWorkspace(workspaceId: string) {
