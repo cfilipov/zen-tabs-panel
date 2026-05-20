@@ -4,6 +4,10 @@ import type { DuplicatePromptAction } from "../interaction/duplicate-prompt-opti
 import { chromeNavigationMessage } from "../interaction/view-navigation";
 import { fireMessage, sendMessage } from "./ipc";
 
+export type ActivateViewRowResult =
+  | boolean
+  | { kind: "open-view"; view: ViewId; params?: Record<string, unknown> };
+
 export function createPaletteEffects() {
   return {
     revealPalette(inst: number) {
@@ -36,7 +40,7 @@ export function createPaletteEffects() {
       expectedDomId?: string,
       expectedRowId?: string,
     ) {
-      fireMessage({
+      return sendMessage<ActivateViewRowResult>({
         type: "activate-view-row",
         view,
         index,

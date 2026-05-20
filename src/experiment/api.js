@@ -3336,6 +3336,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
         ? options.expectedRowId
         : null;
       try {
+        if (view === "domains") {
+          tabIndex.start();
+          const win = tabIndex.getWindow("domains", rowIndex, 1, currentViewParams || {});
+          const row = win && Array.isArray(win.rows) ? win.rows[0] : null;
+          if (!row || !row.domain) return false;
+          if (expectedRowId && row.domain !== expectedRowId) return false;
+          const nextParams = { domain: row.domain };
+          chordSession.recordEvent({ kind: "open-view", view: "domain-tabs" });
+          return { kind: "open-view", view: "domain-tabs", params: nextParams };
+        }
         if (view === "move-to-workspace") {
           const rows = getWorkspaceRows(false);
           const row = rows[rowIndex];

@@ -474,7 +474,6 @@ const ACTIONS = Object.freeze({
   [MSG.DUPLICATE_OPEN_ANYWAY]:            ()  => handleDuplicateOpenAnyway(),
   [MSG.DUPLICATE_OPEN_AND_CLOSE_OTHERS]:  ()  => handleDuplicateOpenAndCloseOthers(),
   [MSG.ACTIVATE_TAB]:                     (m) => api.activateTabByDomId(m.domId),
-  [MSG.ACTIVATE_VIEW_ROW]:                (m) => api.activateViewRow(m.view, m.index, m.source, !!m.switchToTarget, m.listVersion, m.expectedDomId, m.expectedRowId),
   [MSG.GO_TO_PREVIOUS_TAB]:               ()  => api.goToPreviousTab(),
   [MSG.GO_TO_PARENT_TAB]:                 ()  => api.goToParentTab(),
   [MSG.MOVE_TAB_TO_START]:                ()  => moveTabToStart(),
@@ -613,6 +612,15 @@ const SYNC_HANDLERS = Object.freeze({
     await api.focusPalette().catch(() => {});
   },
   [MSG.OPEN_EXTENSION_POPUP]: (m) => api.openExtensionPopup(m.extensionId),
+  [MSG.ACTIVATE_VIEW_ROW]: async (m) => {
+    const result = await api.activateViewRow(m.view, m.index, m.source, !!m.switchToTarget, m.listVersion, m.expectedDomId, m.expectedRowId);
+    if (result && typeof result === "object" && result.kind === "open-view") {
+      return result;
+    }
+    recordChordAction(m);
+    await api.hidePalette();
+    return result;
+  },
   [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view, m.height, m.dynamicSidebarWidth, m.inst),
   [MSG.SYNTH_CHORD_KEY]:      (m) => api.synthChordKey({ chordKey: m.chordKey, view: m.view, activation: m.activation }),
   [MSG.BRIDGE_DISPATCH_SETTLED]: (m) => api.bridgeDispatchSettled(m.inst),

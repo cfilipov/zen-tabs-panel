@@ -125,6 +125,7 @@
   const actionSections = buildActionsMenuModel();
   const CHROME_RESOLVED_ROW_VIEWS = new Set<ViewId>([
     "navigation",
+    "domains",
     "child-tabs",
     "sibling-tabs",
     "parent-tabs",
@@ -464,6 +465,7 @@
   }
 
   function expectedRowIdForActivation(activation: ViewActivation) {
+    if (activation.kind === "activate-domain") return activation.row.domain;
     if (activation.kind === "navigate-history-index") return String(activation.index);
     if (activation.kind === "move-to-workspace") return activation.row.uuid;
     if (activation.kind === "reopen-in-container") return String(activation.row.userContextId);
@@ -472,13 +474,16 @@
     return undefined;
   }
 
-  function activateChromeResolvedRow(index: number, source: "selection" | "shortcut", switchToTarget = false, activation: ViewActivation) {
-    markTerminalCommandDispatched();
-    revealController.clear();
+  async function activateChromeResolvedRow(index: number, source: "selection" | "shortcut", switchToTarget = false, activation: ViewActivation) {
+    const opensView = activation.kind === "activate-domain";
+    if (!opensView) {
+      markTerminalCommandDispatched();
+      revealController.clear();
+    }
     const chromeIndex = source === "shortcut" && isNativeListView(palette.currentView)
       ? palette.offset + index
       : index;
-    effects.activateViewRow(
+    const result = await effects.activateViewRow(
       palette.currentView,
       chromeIndex,
       source,
@@ -487,6 +492,9 @@
       expectedDomIdForActivation(activation),
       expectedRowIdForActivation(activation),
     );
+    if (result && typeof result === "object" && result.kind === "open-view") {
+      await openNativeView(result.view, result.params || {}, true);
+    }
   }
 
   function switchWorkspace(workspaceId: string) {
@@ -763,7 +771,7 @@
     const activation = resolveSelectionActivation(viewActivationContext(), { switchToTarget });
     if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
       if (activation.kind === "none") return;
-      activateChromeResolvedRow(palette.selectedIndex, "selection", switchToTarget, activation);
+      await activateChromeResolvedRow(palette.selectedIndex, "selection", switchToTarget, activation);
       return;
     }
 
@@ -779,7 +787,7 @@
     const activation = resolveViewActivation(viewActivationContext(), index, "shortcut", { switchToTarget });
     if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
       if (activation.kind === "none") return;
-      activateChromeResolvedRow(index, "shortcut", switchToTarget, activation);
+      await activateChromeResolvedRow(index, "shortcut", switchToTarget, activation);
       return;
     }
     await applyViewActivation(activation);
@@ -794,7 +802,7 @@
     const activation = resolveViewActivation(viewActivationContext(), index, "selection", { switchToTarget });
     if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
       if (activation.kind === "none") return;
-      activateChromeResolvedRow(index, "selection", switchToTarget, activation);
+      await activateChromeResolvedRow(index, "selection", switchToTarget, activation);
       return;
     }
     await applyViewActivation(activation);
