@@ -439,22 +439,14 @@
     await openNativeView("domain-tabs", { domain: row.domain }, true);
   }
 
-  function navigateToHistoryIndex(index: number) {
-    const historyIndex = palette.navigationHistory?.entries[index]?.historyIndex ?? index;
-    markTerminalCommandDispatched();
-    revealController.clear();
-    effects.navigateToHistoryIndex(historyIndex);
-  }
-
-  function navigateToHistoryIndexWithTrace(index: number) {
-    recordSyntheticChordKey(replayKeyForNavigationIndex(palette.navigationHistory, index));
-    navigateToHistoryIndex(index);
-  }
-
   function restoreClosedTab(row: RecentlyClosedRow, keepOpen = false) {
     if (!keepOpen) markTerminalCommandDispatched();
     if (!keepOpen) revealController.clear();
     effects.restoreClosedTab(row.sessionId, keepOpen);
+  }
+
+  async function navigateToHistoryIndex(index: number) {
+    await applyViewActivation({ kind: "navigate-history-index", index });
   }
 
   function switchWorkspace(workspaceId: string) {
@@ -750,6 +742,15 @@
     await applyViewActivation(resolveViewActivation(viewActivationContext(), index, "shortcut", { switchToTarget }));
   }
 
+  async function activateRenderedRow(index: number, switchToTarget = false) {
+    if (palette.currentView === "navigation") {
+      recordSyntheticChordKey(replayKeyForNavigationIndex(palette.navigationHistory, index));
+    } else {
+      traceReplayForListIndex(index, switchToTarget);
+    }
+    await applyViewActivation(resolveViewActivation(viewActivationContext(), index, "selection", { switchToTarget }));
+  }
+
   async function activateRowAndSwitch(index: number) {
     await activateRow(index, true);
   }
@@ -1029,8 +1030,7 @@
     {openExtensionPopup}
     {previewTabLike}
     {clearPreview}
-    {navigateToHistoryIndexWithTrace}
-    {activateRow}
+    {activateRenderedRow}
     restoreClosedTabKeepOpen={(row) => restoreClosedTab(row, true)}
     {activateTab}
     {closeDuplicateTab}

@@ -35,8 +35,7 @@
     openExtensionPopup: (extension: ExtensionRow) => void;
     previewTabLike: (row: { domId: string }) => void;
     clearPreview: () => void;
-    navigateToHistoryIndexWithTrace: (index: number) => void;
-    activateRow: (index: number, switchToTarget?: boolean) => void | Promise<void>;
+    activateRenderedRow: (index: number, switchToTarget?: boolean) => void | Promise<void>;
     restoreClosedTabKeepOpen: (row: NativePaletteState["recentlyClosedRows"][number]) => void;
     activateTab: (row: { domId: string }) => void;
     closeDuplicateTab: (row: TabIndexRow) => void;
@@ -66,8 +65,7 @@
     openExtensionPopup,
     previewTabLike,
     clearPreview,
-    navigateToHistoryIndexWithTrace,
-    activateRow,
+    activateRenderedRow,
     restoreClosedTabKeepOpen,
     activateTab,
     closeDuplicateTab,
@@ -123,39 +121,39 @@
       <NavigationList
         history={palette.navigationHistory}
         selectedIndex={palette.selectedIndex}
-        onactivate={navigateToHistoryIndexWithTrace}
+        onactivate={activateRenderedRow}
       />
     {:else if palette.currentView === "recently-closed"}
       <RecentlyClosedList
         rows={palette.recentlyClosedRows}
         selectedIndex={palette.selectedIndex}
-        onactivate={activateRow}
+        onactivate={activateRenderedRow}
         onrestore={restoreClosedTabKeepOpen}
       />
     {:else if palette.currentView === "move-to-workspace"}
       <WorkspaceList
         rows={palette.workspaceRows}
         selectedIndex={palette.selectedIndex}
-        onactivate={activateRow}
+        onactivate={activateRenderedRow}
       />
     {:else if palette.currentView === "open-in-container"}
       <ContainerList
         rows={palette.containerRows}
         selectedIndex={palette.selectedIndex}
-        onactivate={activateRow}
+        onactivate={activateRenderedRow}
       />
     {:else if palette.currentView === "move-to-folder"}
       <FolderList
         rows={palette.folderRows}
         workspaces={palette.folderWorkspaces}
         selectedIndex={palette.selectedIndex}
-        onactivate={activateRow}
+        onactivate={activateRenderedRow}
       />
     {:else if palette.currentView === "profiles"}
       <ProfileList
         rows={palette.profileRows}
         selectedIndex={palette.selectedIndex}
-        onactivate={activateRow}
+        onactivate={activateRenderedRow}
       />
     {:else if palette.currentView === "duplicates"}
       <DuplicateGroups
