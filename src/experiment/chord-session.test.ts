@@ -16,6 +16,12 @@ type ChordSession = {
   replayLastChord: (effects: Record<string, unknown>) => boolean;
   hasCurrentReplay: () => boolean;
   hasCurrentOpenViewReplay: () => boolean;
+  transition: (to: string, why: string, data?: unknown) => void;
+  observeLegacyState: (snapshot: unknown, why: string) => void;
+  getStateSnapshot: () => {
+    state: string;
+    recentTransitions: Array<Record<string, unknown>>;
+  };
   getReplayState: () => {
     lastChordReplay: unknown;
     currentChordReplay: unknown;
@@ -26,7 +32,7 @@ type ChordSession = {
 function loadSessionScope(): ChordSessionScope {
   const filename = path.resolve(process.cwd(), "src/experiment/chord-session.js");
   const code = fs.readFileSync(filename, "utf8");
-  const context: Record<string, unknown> = {};
+  const context: Record<string, unknown> = { console };
   vm.runInNewContext(code, context, { filename });
   return context as ChordSessionScope;
 }
@@ -157,5 +163,41 @@ describe("chord-session replay recording", () => {
       lastChordReplay: { kind: "action", actionId: "close-tab" },
       currentChordReplay: null,
     });
+  });
+
+  it("records state transitions for inspector diagnostics", () => {
+    const session = makeSession();
+    session.acceptEngineEvent({ kind: "armed" });
+    session.acceptEngineEvent({ kind: "open-view", view: "last-visited" });
+    session.transition("bridging-live", "test-ready");
+    session.transition("visible", "test-visible");
+
+    expect(session.getStateSnapshot()).toMatchObject({
+      state: "visible",
+      recentTransitions: [
+        { from: "idle", to: "armed-root", why: "armed" },
+        { from: "armed-root", to: "bridging-buffering", why: "open-view" },
+        { from: "bridging-buffering", to: "bridging-live", why: "test-ready" },
+        { from: "bridging-live", to: "visible", why: "test-visible" },
+      ],
+    });
+  });
+
+  it("warns, but does not throw, when legacy state disagrees", () => {
+    const session = makeSession();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    session.acceptEngineEvent({ kind: "armed" });
+
+    session.observeLegacyState({
+      bridge: { active: true, popupReady: false },
+      overlay: { visibility: "hidden" },
+      engine: { armed: true, path: [] },
+    }, "unit-test");
+
+    expect(warn).toHaveBeenCalledWith(
+      "[ChordSession] state mismatch:",
+      expect.objectContaining({ sessionState: "armed-root", legacyState: "bridging-buffering" }),
+    );
+    warn.mockRestore();
   });
 });

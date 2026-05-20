@@ -2011,6 +2011,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function revealOverlay() {
       const reveal = pendingReveal;
       if (reveal) reveal();
+      if (chordSession) chordSession.transition("visible", "revealOverlay");
 
       // Reloads can leave a warm hidden overlay whose pending reveal closure
       // no longer corresponds to the current DOM. Once a caller has decided
@@ -2040,6 +2041,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
         if (br) br.focus();
       }
+      observeChordSession("revealOverlay");
     }
 
     function forceRevealOverlay() {
@@ -2608,6 +2610,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       explicitRevealToken++;
       explicitRevealView = null;
       explicitRevealScheduledToken = 0;
+      if (chordSession) {
+        if (silent && (bridgeBuffer || bridgingEngineKind != null)) {
+          chordSession.transition("bridging-buffering", "destroyOverlay-silent", { hard, silent });
+        } else if (!silent) {
+          chordSession.transition("destroying", "destroyOverlay", { hard, silent });
+        }
+      }
 
       // Bridge mode can't outlive the chord chain it was driving. If a
       // bridge is active when the overlay is being destroyed, tear it down
@@ -2649,6 +2658,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (panel) panel.style.animation = "";
           focusSelectedTabBrowser();
         }
+        if (!silent && chordSession) chordSession.transition("idle", "destroyOverlay-pending-hidden");
+        observeChordSession("destroyOverlay-pending-hidden");
         return;
       }
 
@@ -2657,6 +2668,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (overlay.style.visibility === "hidden") {
         if (hard) overlay.remove();
         focusSelectedTabBrowser();
+        if (!silent && chordSession) chordSession.transition("idle", "destroyOverlay-idle-hidden");
+        observeChordSession("destroyOverlay-idle-hidden");
         return;
       }
 
@@ -2680,6 +2693,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (panel) panel.style.animation = "";
         delete overlay.dataset.closing;
         focusSelectedTabBrowser();
+        if (!silent && chordSession) chordSession.transition("idle", "destroyOverlay-finish");
+        observeChordSession("destroyOverlay-finish");
         // Tell the popup to navigate back to the default actions view
         // and re-render at its natural size while still hidden. Without
         // this, dismissing from a smaller submenu (e.g. reorder ~230px)
@@ -2833,6 +2848,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           revealDeferred,
         },
         replay: chordSession ? chordSession.getReplayState() : null,
+        session: chordSession ? chordSession.getStateSnapshot() : null,
         engine: chromeEngineState,
         arm: {
           lastLeaderArmAt,
@@ -2840,6 +2856,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
           terminalDispatchArmSequence,
         },
       });
+    }
+
+    function observeChordSession(why) {
+      if (!chordSession) return;
+      try { chordSession.observeLegacyState(getChordStateSnapshot(), why); } catch (e) {}
     }
 
     function installChordStateInspector() {
@@ -3033,6 +3054,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       pendingStateSnapshot = stateSnapshot || [];
       bridgingEngineKind = kind;
       popupReady = false;
+      if (chordSession) chordSession.transition("bridging-buffering", "enterBridgeFromOpenView", { view, kind, source });
+      observeChordSession("enterBridgeFromOpenView");
       const w = getWin();
       clearBridgeTimer();
       clearRevealTimer();
@@ -3125,6 +3148,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const drained = bridgeBuffer || [];
       bridgeBuffer = [];
       popupReady = true;
+      if (chordSession) chordSession.transition("bridging-live", "forcePopupBridgeReady", { drained: drained.length });
+      observeChordSession("forcePopupBridgeReady");
 
       const w = getWin();
       const br = w && w.document.getElementById(BROWSER_ID);
@@ -3231,6 +3256,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Content engines: broadcast — any one of them might own the bridge.
       try { Services.mm.broadcastAsyncMessage("ZenChord:ExitBridge"); } catch (e) {}
       bridgingEngineKind = null;
+      if (chordSession) chordSession.transition("idle", "finishBridge");
+      observeChordSession("finishBridge");
     }
 
     // ---- Chrome engine instance ----------------------------------------
@@ -5528,6 +5555,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // they get forwarded live, not buffered.
           bridgeBuffer = [];
           popupReady = true;
+          if (wasBridging && chordSession) {
+            chordSession.transition("bridging-live", "takeChordBridgeBuffer", { drained: drained.length, view: popupReadyTargetView || "actions" });
+            observeChordSession("takeChordBridgeBuffer");
+          }
           // The chord chain may continue (popup invisible at this view,
           // user may drill via more digits). The reveal timer governs
           // when the popup becomes visible. Don't finishBridge() here.

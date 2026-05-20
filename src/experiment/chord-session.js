@@ -24,10 +24,48 @@
   function createChordSession(options) {
     const replayActionId = options && options.replayActionId;
     const replayRecordBlocklist = new Set((options && options.replayRecordBlocklist) || []);
+    const recentTransitions = [];
 
+    let state = "idle";
     let lastChordReplay = null;
     let currentChordReplay = null;
     let pretracedReplayKeys = [];
+
+    function transition(to, why, data) {
+      const from = state;
+      state = to || "idle";
+      recentTransitions.push({ at: Date.now(), from, to: state, why: why || "", data: clonePlain(data || null) });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
+    function deriveLegacyState(snapshot) {
+      if (!snapshot) return "idle";
+      const bridge = snapshot.bridge || {};
+      const overlay = snapshot.overlay || {};
+      const engine = snapshot.engine || {};
+      if (bridge.active && !bridge.popupReady) return "bridging-buffering";
+      if (bridge.active && bridge.popupReady && overlay.visibility !== "visible") return "bridging-live";
+      if (overlay.visibility === "visible") return "visible";
+      if (engine.armed && Array.isArray(engine.path) && engine.path.length > 0) return "armed-prefix";
+      if (engine.armed) return "armed-root";
+      return "idle";
+    }
+
+    function observeLegacyState(snapshot, why) {
+      const derived = deriveLegacyState(snapshot);
+      if (derived === state) return;
+      if (typeof console !== "undefined" && console && console.warn) {
+        try {
+          console.warn("[ChordSession] state mismatch:", {
+            why,
+            sessionState: state,
+            legacyState: derived,
+            snapshot: clonePlain(snapshot),
+            recentTransitions: clonePlain(recentTransitions),
+          });
+        } catch (e) {}
+      }
+    }
 
     function resetCurrentReplay() {
       currentChordReplay = null;
@@ -105,14 +143,20 @@
       if (!event || !event.kind) return;
       if (event.kind === "terminal-action") {
         trackTerminalAction(event.payload);
+        transition("completed", "terminal-action", event.payload);
+        transition("idle", "terminal-action-idle");
       } else if (event.kind === "open-view") {
         trackOpenView(event.view);
+        transition("bridging-buffering", "open-view", { view: event.view });
       } else if (event.kind === "bridge-key") {
         trackBridgeKey(event.keyData);
       } else if (event.kind === "popup-action") {
         recordPopupAction(event.message);
+        transition("completed", "popup-action", event.message);
+        transition("idle", "popup-action-idle");
       } else if (event.kind === "armed") {
         resetCurrentReplay();
+        transition("armed-root", "armed");
       }
     }
 
@@ -164,12 +208,22 @@
       });
     }
 
+    function getStateSnapshot() {
+      return clonePlain({
+        state,
+        recentTransitions,
+      });
+    }
+
     return {
       acceptEngineEvent,
       resetCurrentReplay,
       replayLastChord,
       hasCurrentReplay,
       hasCurrentOpenViewReplay,
+      transition,
+      observeLegacyState,
+      getStateSnapshot,
       getReplayState,
     };
   }
