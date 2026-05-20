@@ -343,8 +343,8 @@ default). It leaves the palette hidden when it finishes.
 
 Do not use `tools/firefox-eval.py` to validate chord key delivery by
 dispatching DOM `KeyboardEvent`s. Those events are synthetic
-(`isTrusted === false`) and the chord engine intentionally ignores them in the
-real keydown path. Use `firefox-eval.py` for state inspection and chrome
+(`isTrusted === false`) and the key-capture shim intentionally ignores them in
+the real keydown path. Use `firefox-eval.py` for state inspection and chrome
 probes; use actual OS-level key delivery, or manual typing, for end-to-end
 leader/chord verification.
 
@@ -408,7 +408,7 @@ Note: the older `Services.els.addSystemEventListener` API is **not** available o
 
 ## Keyboard leak probes
 
-The chord engine's content-side default-group blocker can be tested with a page that records keydown events at `window` capture, `document` capture, `document` bubble, and `window` bubble, plus a focused textarea. This catches both character insertion leaks and page-keybinding leaks.
+The content shim's default-group blocker can be tested with a page that records keydown events at `window` capture, `document` capture, `document` bubble, and `window` bubble, plus a focused textarea. This catches both character insertion leaks and page-keybinding leaks.
 
 2026-05-14 results:
 

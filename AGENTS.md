@@ -34,11 +34,11 @@ Three execution contexts — they cannot share code or globals:
 
 The chord chain is `<leader>, <key>, <key>, …` where `<leader>` is any of four configurable shortcuts declared in `src/manifest.json` under `commands` (defaults: `cmd+.`, `cmd+option+.`, plus two unset slots). All four do the same thing — they're alternates so the user can pick whichever modifier isn't eaten by the focused page. Customize them in `about:addons` → Manage Extension Shortcuts.
 
-Everything after the leader flows from the navigation tree defined once in `src/shared/navigation-tree.ts`; `scripts/generate-keybindings.mjs` emits `dist/shared/keybindings.js` for the chrome-scope chord engines. The same sequence of keys does the same thing whether the user types it fast (no UI), slowly enough that the menu fades in (with UI), or with a key mid-fade-in (the bridge case):
+Everything after the leader flows from the navigation tree defined once in `src/shared/navigation-tree.ts`; `scripts/generate-keybindings.mjs` emits `dist/shared/keybindings.js` for the chrome-scope session. The same sequence of keys does the same thing whether the user types it fast (no UI), slowly enough that the menu fades in (with UI), or with a key mid-fade-in (the bridge case):
 
-- **Fast** (`cmd+., o, r`): the chord engine matches the keys against the tree and fires the terminal action — `reorder-all-tabs`, in this example — without showing any UI.
-- **Slow** (`cmd+., [wait], o, r`): the engine's root timer fires, the menu opens, the user types `o` into the menu (descend to Reorder submenu), then `r` (fire action). Same outcome as fast path.
-- **Mid-fade-in** (`cmd+., [hesitate], p`): the root timer triggered the menu to open but the user's next key arrives during the fade-in. The engine is in `bridging` state — it captures the key and chrome buffers it. When the popup signals `POPUP_READY`, the buffered key is replayed into the popup and fires the action mid-fade-in.
+- **Fast** (`cmd+., o, r`): `ChordSession` matches the keys against the tree and fires the terminal action — `reorder-all-tabs`, in this example — without showing any UI.
+- **Slow** (`cmd+., [wait], o, r`): the session's root timer fires, the menu opens, the user types `o` into the menu (descend to Reorder submenu), then `r` (fire action). Same outcome as fast path.
+- **Mid-fade-in** (`cmd+., [hesitate], p`): the root timer triggered the menu to open but the user's next key arrives during the fade-in. The session is in bridge state — the armed shim captures the key and chrome buffers it. When the popup signals `POPUP_READY`, the buffered key is replayed into the popup and fires the action mid-fade-in.
 
 In code this means: there is one source tree in `src/shared/navigation-tree.ts`. Adding a new entry there gives it the fast path, the slow path, and the bridge path automatically. The popup's view-item hotkeys are populated from `entry.chord`, so the on-screen badge and the matcher always agree.
 
@@ -74,7 +74,7 @@ This is a deliberate Firefox property, not a bug. It's also why a chrome-side JS
 
 ### Dynamic chord entries (extension-popup quick-launch)
 
-`Shift+1..9` are bound at runtime to the first 9 installed extensions' popups (Bitwarden, uBlock, etc.) by `buildExtensionList()` in `experiment/api.js`. The chrome-side `CHORD_TREE.children["Shift+N"]` is mutated directly. Each frame-script engine receives the same entries via a `ZenChord:AddChord` broadcast (and any frame script that initialized late asks for them via `ZenChord:Hello`, which chrome replies to per-frame).
+`Shift+1..9` are bound at runtime to the first 9 installed extensions' popups (Bitwarden, uBlock, etc.) by `buildExtensionList()` in `experiment/api.js`. The chrome-side `CHORD_TREE.children["Shift+N"]` is mutated directly. Content frame scripts are now key-capture shims, so they do not need dynamic chord entries; they only forward normalized keys to `ChordSession`, which reads the current chrome-side tree at match time.
 
 ### Bridge handshake
 
