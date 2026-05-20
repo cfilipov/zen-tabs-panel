@@ -940,10 +940,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       WORKSPACE_DIGIT_CHORDS,
       CHORD_CONSTANTS
     );
-    // Track dynamic chord entries so newly-spawned content frame scripts
-    // can request the current set on init.
-    const dynamicChordEntries = [];
-
     let navStack = [];
     let currentViewName = null;
     let currentViewParams = {};
@@ -1471,25 +1467,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // so the same shortcut works from outside an open palette
       // (leader chord -> Shift+N opens the Nth extension's popup directly,
       // just like clicking the icon does). ChordSession reads CHORD_TREE at
-      // match time; AddChord broadcasts remain only for stale pre-shim frame
-      // scripts that may still be alive after extension reload.
+      // match time.
       //
       // Clear any prior entries first — the extension set can change as
       // the user installs/uninstalls add-ons. Replacing the whole 1..9
       // range keeps both sides consistent.
-      dynamicChordEntries.length = 0;
       for (let i = 0; i < Math.min(items.length, 9); i++) {
         const key = "Shift+" + (i + 1);
-        const node = {
+        CHORD_TREE.children[key] = {
           type: "open-extension-popup",
           extensionId: items[i].id,
         };
-        CHORD_TREE.children[key] = node;
-        const entry = { key, node };
-        dynamicChordEntries.push(entry);
-        try {
-          Services.mm.broadcastAsyncMessage("ZenChord:AddChord", entry);
-        } catch (e) {}
       }
       patchBrowserActionCaptureHooks();
       return items;
@@ -2884,8 +2872,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       createOverlay(view);
     }
 
-    // Dispatch a chord action coming from ChordSession or from a stale
-    // pre-shim ZenChord:Action IPC. Same routing either way —
+    // Dispatch a chord action coming from ChordSession.
     // payload shape is { type: "action" | "switch-workspace" | "open-extension-popup", ...}.
 
     // The replay-last-chord action's id. Hoisted here because the
@@ -2986,7 +2973,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       debugChordTrace("leader-repeat-as-replay", {});
       try { if (chordSession) chordSession.resetChordTraversal(); } catch (e) {}
       try { if (chromeShim) chromeShim.disarm("replay"); } catch (e) {}
-      try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Disarm:" + CHORD_GENERATION); } catch (e) {}
       chordSession.resetCurrentReplay();
       if (replayLastChordTrace()) return;
@@ -2996,9 +2982,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function disarmChordShims(reason) {
       try { if (chromeShim) chromeShim.disarm(reason || "disarm"); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Disarm:" + CHORD_GENERATION, { reason: reason || "disarm" }); } catch (e) {}
-      // Compatibility for stale pre-shim frame scripts still alive in content
-      // processes after extension reload.
-      try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
     }
 
     function acceptShimKey(keyData, source) {
@@ -3277,8 +3260,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       bridgeState.popupReady = false;
       try { chordSession.exitBridge(); } catch (e) {}
       disarmChordShims("finish-bridge");
-      // Compatibility for stale pre-shim content scripts.
-      try { Services.mm.broadcastAsyncMessage("ZenChord:ExitBridge"); } catch (e) {}
       bridgeState.activeView = null;
       if (chordSession) chordSession.transition("idle", "finishBridge");
       observeChordSession("finishBridge");
@@ -3918,8 +3899,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "}\n" +
         "attach();\n" +
         "addEventListener('DOMWindowCreated', attach, true);\n" +
-        "addMessageListener('ZenChord:ExitBridge', function(){ try { __shim.disarm('exit-bridge'); } catch(e){} });\n" +
-        "addMessageListener('ZenChord:Reset', function(){ try { __shim.disarm('reset'); } catch(e){} });\n" +
         "addMessageListener('ZenChord:Disarm:' + __GEN, function(){ try { __shim.disarm('disarm'); } catch(e){} });\n" +
         // External-trigger arm — chrome calls this when the open-palette
         // commands shortcut fires. Sent to the focused tab's MM only.
@@ -3939,17 +3918,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  try { content && content.removeEventListener('mouseover', onDuplicateLinkMouseover, { capture: true }); } catch(e){}\n" +
         "  try { content && content.removeEventListener('click', onDuplicateLinkClick, { capture: true }); } catch(e){}\n" +
         "});\n" +
-        "addMessageListener('ZenChord:AddChord', function(m){\n" +
-        "  try {\n" +
-        "    if (__shutdown) return;\n" +
-        "    var d = m && m.data;\n" +
-        "    // Dynamic chord entries are resolved by the chrome traverser in the shim model.\n" +
-        "  } catch(e){}\n" +
-        "});\n" +
-        // Ask chrome for any dynamic chord entries that were registered
-        // before this frame script loaded (e.g. Shift+1..9 extension popup
-        // shortcuts added at extension startup).
-        "try { sendAsyncMessage('ZenChord:Hello', tag({})); } catch(e){}\n" +
         "})();";
       const url = "data:application/javascript;charset=utf-8," + encodeURIComponent(body);
       try {
@@ -3969,74 +3937,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const data = m && m.data;
       return data && data.__gen === CHORD_GENERATION;
     }
-    // Compatibility path for stale pre-shim frame scripts. If one of those
-    // scripts reports an interpreted outcome, reset the current ChordSession
-    // traversal before honoring it so a parallel arm cannot later reveal an
-    // unwanted menu.
-    function resetChordTraversalIfArmed() {
-      try { if (chordSession && chordSession.isChordTraversalArmed()) chordSession.resetChordTraversal(); } catch (e) {}
-    }
     function onContentKey(m) {
       if (!isCurrentGen(m)) return;
       acceptShimKey(m.data, "content-shim");
-    }
-    function onContentAction(m) {
-      if (!isCurrentGen(m)) return;
-      resetChordTraversalIfArmed();
-      dispatchChordAction(m.data);
-    }
-    function onContentArmed(m) {
-      if (!isCurrentGen(m)) return;
-      // Content arm is sent asynchronously after the chrome leader path
-      // arms synchronously. If the user types the first chord key before
-      // that IPC arrives, chrome may already be bridging into a requested
-      // view. A late content-armed prerender must not rearm the warm popup
-      // back to actions and make buffered drill keys replay in the wrong
-      // view.
-      if (bridgeState.activeView != null) {
-        debugChordTrace("content-armed-skip-bridging", {});
-        return;
-      }
-      // Stale pre-shim content script just self-armed. Clear the in-flight
-      // trace and prerender the popup so it's ready if the chord chain
-      // involves a view, or if the reveal timer fires.
-      chordSession.recordEvent({ kind: "armed" });
-      createOverlay();
-    }
-    function onContentOpenView(m) {
-      if (!isCurrentGen(m)) return;
-      resetChordTraversalIfArmed();
-      const data = m.data;
-      enterBridgeFromOpenView(data.view, "content", data.source);
-    }
-    function onContentCancel(m) {
-      if (!isCurrentGen(m)) return;
-      resetChordTraversalIfArmed();
-      if (pendingReveal) destroyOverlay();
-    }
-    function onContentBridgeKey(m) {
-      if (!isCurrentGen(m)) return;
-      forwardKeyToPopup(m.data);
-    }
-    function onContentStateChange(m) {
-      if (!isCurrentGen(m)) return;
-      // Stale pre-shim content script descended into a prefix. Keep this
-      // adapter so old frame scripts can still drive the matching prerender
-      // instead of leaving the user at the default actions view.
-      resetChordTraversalIfArmed();
-      const data = m.data;
-      prerenderPrefixView(data && data.snapshot);
-    }
-    function onContentHello(m) {
-      if (!isCurrentGen(m)) return;
-      // A frame script just initialized; reply with the current set of
-      // dynamic chord entries so it can populate its tree.
-      if (!m.target || !m.target.messageManager) return;
-      for (const entry of dynamicChordEntries) {
-        try {
-          m.target.messageManager.sendAsyncMessage("ZenChord:AddChord", entry);
-        } catch (e) {}
-      }
     }
     function onDuplicateCheckUrl(m) {
       if (!isCurrentGen(m)) return;
@@ -4081,13 +3984,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       } catch (e) {}
     }
     Services.mm.addMessageListener("ZenChord:Key:" + CHORD_GENERATION, onContentKey);
-    Services.mm.addMessageListener("ZenChord:Action",      onContentAction);
-    Services.mm.addMessageListener("ZenChord:Armed",       onContentArmed);
-    Services.mm.addMessageListener("ZenChord:OpenView",    onContentOpenView);
-    Services.mm.addMessageListener("ZenChord:Cancel",      onContentCancel);
-    Services.mm.addMessageListener("ZenChord:BridgeKey",   onContentBridgeKey);
-    Services.mm.addMessageListener("ZenChord:StateChange", onContentStateChange);
-    Services.mm.addMessageListener("ZenChord:Hello",       onContentHello);
     Services.mm.addMessageListener("ZenDuplicate:CheckUrl", onDuplicateCheckUrl);
     Services.mm.addMessageListener("ZenDuplicate:ContentLinkClick", onDuplicateContentLinkClick);
 
@@ -4384,7 +4280,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // the DOM around).
       try { destroyOverlay({ hard: true }); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Shutdown"); } catch (e) {}
-      try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
       // Remove every delayed chord frame script we (or a prior
       // extension load) ever registered. Firefox doesn't unload frame
       // scripts from existing content processes, but at least we can
@@ -4406,13 +4301,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       } catch (e) {}
       contentShimFrameScriptUrl = null;
       try { Services.mm.removeMessageListener("ZenChord:Key:" + CHORD_GENERATION, onContentKey); } catch (e) {}
-      try { Services.mm.removeMessageListener("ZenChord:Action",    onContentAction); } catch (e) {}
-      try { Services.mm.removeMessageListener("ZenChord:Armed",     onContentArmed); } catch (e) {}
-      try { Services.mm.removeMessageListener("ZenChord:OpenView",  onContentOpenView); } catch (e) {}
-      try { Services.mm.removeMessageListener("ZenChord:Cancel",    onContentCancel); } catch (e) {}
-      try { Services.mm.removeMessageListener("ZenChord:BridgeKey",   onContentBridgeKey); } catch (e) {}
-      try { Services.mm.removeMessageListener("ZenChord:StateChange", onContentStateChange); } catch (e) {}
-      try { Services.mm.removeMessageListener("ZenChord:Hello",       onContentHello); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenDuplicate:CheckUrl", onDuplicateCheckUrl); } catch (e) {}
       try { Services.mm.removeMessageListener("ZenDuplicate:ContentLinkClick", onDuplicateContentLinkClick); } catch (e) {}
     }
@@ -5879,7 +5767,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // is invoked by an external path (toolbar icon click). Tear
           // down any in-flight chord state so we open cleanly.
           if (chordSession && chordSession.isChordTraversalArmed()) chordSession.resetChordTraversal();
-          try { Services.mm.broadcastAsyncMessage("ZenChord:Reset"); } catch (e) {}
+          disarmChordShims("open-palette");
 
           if (view) {
             bridgeState.revealDeferred = true;
