@@ -142,6 +142,11 @@
     "profiles",
   ]);
 
+  function shouldChromeResolveActivation(view: ViewId, activation: ViewActivation) {
+    if (CHROME_RESOLVED_ROW_VIEWS.has(view)) return activation.kind !== "none";
+    return view === "duplicate-prompt" && activation.kind === "activate-tab";
+  }
+
   const paletteStore = createNativePaletteState();
   const palette = paletteStore.state;
   let pageAlive = true;
@@ -415,7 +420,19 @@
     }
   }
 
-  function activateTab(row: { domId: string }) {
+  async function activateTab(row: { domId: string }) {
+    if (palette.currentView === "duplicate-prompt") {
+      const duplicateIndex = duplicatePromptTabs.findIndex((tab) => tab.domId === row.domId);
+      if (duplicateIndex >= 0) {
+        await activateChromeResolvedRow(
+          DUPLICATE_PROMPT_ACTIONS.length + duplicateIndex,
+          "selection",
+          false,
+          { kind: "activate-tab", row: duplicatePromptTabs[duplicateIndex] },
+        );
+        return;
+      }
+    }
     markTerminalCommandDispatched();
     revealController.clear();
     effects.activateTab(row.domId);
@@ -772,7 +789,7 @@
     }
 
     const activation = resolveSelectionActivation(viewActivationContext(), { switchToTarget });
-    if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
+    if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
       await activateChromeResolvedRow(palette.selectedIndex, "selection", switchToTarget, activation);
       return;
@@ -788,7 +805,7 @@
   async function activateRow(index: number, switchToTarget = false) {
     traceReplayForListIndex(index, switchToTarget);
     const activation = resolveViewActivation(viewActivationContext(), index, "shortcut", { switchToTarget });
-    if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
+    if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
       await activateChromeResolvedRow(index, "shortcut", switchToTarget, activation);
       return;
@@ -803,7 +820,7 @@
       traceReplayForListIndex(index, switchToTarget);
     }
     const activation = resolveViewActivation(viewActivationContext(), index, "selection", { switchToTarget });
-    if (CHROME_RESOLVED_ROW_VIEWS.has(palette.currentView)) {
+    if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
       await activateChromeResolvedRow(index, "selection", switchToTarget, activation);
       return;

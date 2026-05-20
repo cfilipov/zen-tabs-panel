@@ -3339,6 +3339,25 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "recently-closed",
     ]);
 
+    function duplicatePromptTabsForCurrentParams() {
+      tabIndex.start();
+      const url = currentViewParams?.url || "";
+      if (!url) return [];
+      const groups = tabIndex.getDuplicateGroups({ url, includeSingleton: true });
+      const group = groups[0];
+      if (!group || !Array.isArray(group.tabs)) return [];
+      const tabs = group.tabs.slice();
+      const domId = currentViewParams?.domId || "";
+      if (domId) {
+        const existingIndex = tabs.findIndex((tab) => tab.domId === domId);
+        if (existingIndex > 0) {
+          const [existing] = tabs.splice(existingIndex, 1);
+          tabs.unshift(existing);
+        }
+      }
+      return tabs.slice(0, 9);
+    }
+
     function switchHiddenBridgeView(view, params, previousView, previousParams) {
       if (pendingReveal) destroyOverlay({ silent: true });
       createOverlay(view, params || {});
@@ -3447,6 +3466,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const groups = tabIndex.getDuplicateGroups(currentViewParams || {});
           const tabs = groups.flatMap((group) => Array.isArray(group.tabs) ? group.tabs : []);
           const row = tabs[rowIndex];
+          if (!row || !row.domId) return false;
+          if (expectedDomId && row.domId !== expectedDomId) return false;
+          chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
+          void (async () => {
+            if (destroy) destroyOverlay();
+            const tab = findTabByDomId(row.domId);
+            if (tab) await activateNativeTab(tab);
+          })();
+          return true;
+        }
+        if (view === "duplicate-prompt") {
+          const tabs = duplicatePromptTabsForCurrentParams();
+          const optionCount = 4;
+          const promptTabIndex = source === "selection" ? rowIndex - optionCount : rowIndex;
+          if (promptTabIndex < 0) return false;
+          const row = tabs[promptTabIndex];
           if (!row || !row.domId) return false;
           if (expectedDomId && row.domId !== expectedDomId) return false;
           chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
