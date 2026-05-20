@@ -985,12 +985,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // browser's message manager rather than buffered — see forwardKeyToPopup().
     const bridgeState = {
       buffer: null,
+      bridgeTimer: null,
+      revealTimer: null,
       popupReady: false,
       activeView: null,
       revealDeferred: false,
       revealBlocked: false,
     };
-    let bridgeTimer = null;
     // Keep this comfortably above cold Svelte view startup in large tab
     // profiles. Fast chains like cmd+.,q,1 buffer row-selection digits in
     // chrome until POPUP_READY; timing out too early discards the digits and
@@ -1001,7 +1002,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // If no chord key arrives within CHORD_REVEAL_TIMEOUT_MS, the popup
     // is revealed at its current view+context. Reset on every forwarded
     // key (user is still actively chording).
-    let revealTimer = null;
     // ChordSession owns traversal and replay state. The acceptEngineEvent name
     // remains for compatibility with stale pre-shim frame-script IPC and for
     // recording popup-visible events.
@@ -2810,8 +2810,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         bridge: {
           active: bridgeState.activeView != null,
           buffered: Array.isArray(bridgeState.buffer) ? bridgeState.buffer.length : 0,
-          bridgeTimerActive: bridgeTimer != null,
-          revealTimerActive: revealTimer != null,
+          bridgeTimerActive: bridgeState.bridgeTimer != null,
+          revealTimerActive: bridgeState.revealTimer != null,
           popupReady: bridgeState.popupReady,
           activeView: bridgeState.activeView,
           activeBridgeView: bridgeState.activeView,
@@ -3089,8 +3089,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       clearBridgeTimer();
       clearRevealTimer();
-      bridgeTimer = w ? w.setTimeout(() => {
-        bridgeTimer = null;
+      bridgeState.bridgeTimer = w ? w.setTimeout(() => {
+        bridgeState.bridgeTimer = null;
         finishBridge();
       }, BRIDGE_TIMEOUT_MS) : null;
 
@@ -3138,18 +3138,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function clearBridgeTimer() {
       const w = getWin();
-      if (bridgeTimer !== null && w) {
-        try { w.clearTimeout(bridgeTimer); } catch (e) {}
+      if (bridgeState.bridgeTimer !== null && w) {
+        try { w.clearTimeout(bridgeState.bridgeTimer); } catch (e) {}
       }
-      bridgeTimer = null;
+      bridgeState.bridgeTimer = null;
     }
 
     function clearRevealTimer() {
       const w = getWin();
-      if (revealTimer !== null && w) {
-        try { w.clearTimeout(revealTimer); } catch (e) {}
+      if (bridgeState.revealTimer !== null && w) {
+        try { w.clearTimeout(bridgeState.revealTimer); } catch (e) {}
       }
-      revealTimer = null;
+      bridgeState.revealTimer = null;
       // Reset any stale "fired-but-popup-wasn't-ready" flag. A new
       // chord chain starts fresh.
       bridgeState.revealDeferred = false;
@@ -3198,8 +3198,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       clearRevealTimer();
       if (!w) return;
-      revealTimer = w.setTimeout(() => {
-        revealTimer = null;
+      bridgeState.revealTimer = w.setTimeout(() => {
+        bridgeState.revealTimer = null;
         if (!pendingReveal) return;
         // Don't reveal an empty popup. If the popup hasn't drained yet
         // we'd just paint a blank panel for a beat before the popup's
@@ -3219,8 +3219,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       clearRevealTimer();
       if (!w) return;
-      revealTimer = w.setTimeout(() => {
-        revealTimer = null;
+      bridgeState.revealTimer = w.setTimeout(() => {
+        bridgeState.revealTimer = null;
         if (!pendingReveal || bridgeState.popupReady) return;
         revealOverlay();
       }, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700);
