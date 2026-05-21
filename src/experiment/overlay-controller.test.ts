@@ -24,6 +24,11 @@ type OverlayControllerScope = {
     clearExplicitReveal: () => void;
     nextMorphGeneration: () => number;
     isCurrentMorphGeneration: (generation: number) => boolean;
+    resetResizeState: () => void;
+    setDynamicSidebarWidth: (width: number) => number;
+    getDynamicSidebarWidth: () => number;
+    setMeasuredResizeView: (view?: string | null) => string | null;
+    getMeasuredResizeView: () => string | null;
     getExplicitRevealState: () => {
       explicitRevealToken: number;
       explicitRevealView: string | null;
@@ -125,5 +130,19 @@ describe("overlay controller", () => {
     expect(second).toBe(2);
     expect(controller.isCurrentMorphGeneration(first)).toBe(false);
     expect(controller.isCurrentMorphGeneration(second)).toBe(true);
+  });
+
+  it("owns dynamic resize state", () => {
+    const controller = loadOverlayControllerScope().createOverlayController();
+
+    expect(controller.getDynamicSidebarWidth()).toBe(0);
+    expect(controller.setDynamicSidebarWidth(42.2)).toBe(43);
+    expect(controller.getDynamicSidebarWidth()).toBe(43);
+    expect(controller.setMeasuredResizeView("duplicate-prompt")).toBe("duplicate-prompt");
+    expect(controller.getMeasuredResizeView()).toBe("duplicate-prompt");
+
+    controller.resetResizeState();
+    expect(controller.getDynamicSidebarWidth()).toBe(0);
+    expect(controller.getMeasuredResizeView()).toBe(null);
   });
 });

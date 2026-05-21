@@ -985,8 +985,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let navStack = [];
     let currentViewName = null;
     let currentViewParams = {};
-    let currentDynamicSidebarWidth = 0;
-    let currentMeasuredResizeView = null;
     // Set by createOverlay to the function that flips the (initially hidden)
     // overlay to visible and starts the in animations. Stays non-null until
     // the overlay is revealed or destroyed. When ChordSession prerenders
@@ -1887,8 +1885,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       navStack = [];
       currentViewName = viewName;
       currentViewParams = params || {};
-      currentDynamicSidebarWidth = 0;
-      currentMeasuredResizeView = null;
+      overlayController.resetResizeState();
       setPopupReady(false, "popup-ready-clear");
       setReadyTargetView(viewName, "ready-target-view");
 
@@ -2018,8 +2015,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       navStack = [];
       currentViewName = view || "actions";
       currentViewParams = {};
-      currentDynamicSidebarWidth = 0;
-      currentMeasuredResizeView = null;
+      overlayController.resetResizeState();
 
       const viewName = view || "actions";
       setReadyTargetView(viewName, "ready-target-view");
@@ -2184,7 +2180,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const height = Math.round(Number.parseFloat(br.style.height || "0"));
       const isMeasuredView = isCompactMeasuredView(viewName);
       const widthReady = width >= targetSize.width;
-      const heightReady = !isMeasuredView || (currentMeasuredResizeView === viewName && height > 0 && height < targetSize.height);
+      const heightReady = !isMeasuredView || (overlayController.getMeasuredResizeView() === viewName && height > 0 && height < targetSize.height);
       if (!widthReady || !heightReady) return false;
 
       const token = explicitRevealState().explicitRevealToken;
@@ -2249,10 +2245,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (overlay.style.visibility !== "hidden" && overlay.style.opacity !== "0") return;
 
         const viewName = view || "actions";
-        const targetWidth = getViewSize(viewName).width + currentDynamicSidebarWidth;
+        const targetWidth = getViewSize(viewName).width + overlayController.getDynamicSidebarWidth();
         const width = Math.round(Number.parseFloat(br?.style?.width || "0"));
         const isMeasuredView = isCompactMeasuredView(viewName);
-        const heightReady = !isMeasuredView || currentMeasuredResizeView === viewName;
+        const heightReady = !isMeasuredView || overlayController.getMeasuredResizeView() === viewName;
         const retryBounceWindowPassed = !isMeasuredView || Date.now() - startedAt >= 380;
         const viewReady = isMeasuredView ? heightReady && retryBounceWindowPassed : isPopupReady();
         if (revealExplicitViewIfReady(viewName)) {
@@ -2384,10 +2380,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return;
       }
       if (typeof dynamicSidebarWidth === "number" && Number.isFinite(dynamicSidebarWidth)) {
-        currentDynamicSidebarWidth = Math.max(0, Math.ceil(dynamicSidebarWidth));
+        overlayController.setDynamicSidebarWidth(dynamicSidebarWidth);
       }
       const targetSize = getViewSize(view);
-      const width = targetSize.width + currentDynamicSidebarWidth;
+      const width = targetSize.width + overlayController.getDynamicSidebarWidth();
       const canUseMeasuredHeight = isCompactMeasuredView(view);
       const height = (canUseMeasuredHeight && typeof measuredHeight === "number" && measuredHeight > 0)
         ? Math.min(Math.ceil(measuredHeight) + 2, targetSize.height)
@@ -2399,7 +2395,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         height < targetSize.height;
       const allowExplicitReveal = options.allowExplicitReveal !== false || (view === "duplicate-prompt" && measuredPastInitialSize);
       if (allowExplicitReveal && canUseMeasuredHeight && typeof measuredHeight === "number" && measuredHeight > 0 && height < targetSize.height) {
-        currentMeasuredResizeView = currentViewName;
+        overlayController.setMeasuredResizeView(currentViewName);
       }
       panel.style.width = width + "px";
       panel.style.height = height + "px";
@@ -2952,8 +2948,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           currentViewParams,
           popupReadyTargetView: getReadyTargetView(),
           navStack,
-          currentDynamicSidebarWidth,
-          currentMeasuredResizeView,
+          currentDynamicSidebarWidth: overlayController.getDynamicSidebarWidth(),
+          currentMeasuredResizeView: overlayController.getMeasuredResizeView(),
           pendingInvalidChordFeedback,
         },
         overlay: {

@@ -71,6 +71,9 @@
  * @property {(generation: number) => boolean} isCurrentMorphGeneration
  * True when an async morph callback still belongs to the latest morph.
  *
+ * @property {() => void} resetResizeState
+ * Reset per-view dynamic sizing state for a newly armed/rearmed overlay.
+ *
  * @property {() => number} currentInstance
  * Return the live popup instance id used to reject stale POPUP_READY and
  * REVEAL_PALETTE messages.
@@ -96,6 +99,8 @@
     let explicitRevealView = null;
     let explicitRevealScheduledToken = 0;
     let morphGeneration = 0;
+    let dynamicSidebarWidth = 0;
+    let measuredResizeView = null;
 
     function nextInstance() {
       popupInstance++;
@@ -186,6 +191,29 @@
       return generation === morphGeneration;
     }
 
+    function resetResizeState() {
+      dynamicSidebarWidth = 0;
+      measuredResizeView = null;
+    }
+
+    function setDynamicSidebarWidth(width) {
+      dynamicSidebarWidth = Math.max(0, Math.ceil(Number(width) || 0));
+      return dynamicSidebarWidth;
+    }
+
+    function getDynamicSidebarWidth() {
+      return dynamicSidebarWidth;
+    }
+
+    function setMeasuredResizeView(view) {
+      measuredResizeView = view || null;
+      return measuredResizeView;
+    }
+
+    function getMeasuredResizeView() {
+      return measuredResizeView;
+    }
+
     return {
       create(view, params) { return call(impl, "create", [view, params]); },
       rearm(view, params) { return call(impl, "rearm", [view, params]); },
@@ -209,6 +237,11 @@
       getExplicitRevealState,
       nextMorphGeneration,
       isCurrentMorphGeneration,
+      resetResizeState,
+      setDynamicSidebarWidth,
+      getDynamicSidebarWidth,
+      setMeasuredResizeView,
+      getMeasuredResizeView,
       nextInstance,
       currentInstance,
       matchesInstance,
