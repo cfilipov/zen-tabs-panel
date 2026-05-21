@@ -703,6 +703,28 @@
       return revealBlocked;
     }
 
+    function markOverlayVisible(why) {
+      transition("visible", why || "revealOverlay");
+    }
+
+    function markOverlayDestroying(options, why) {
+      const hard = !!(options && options.hard);
+      const silent = !!(options && options.silent);
+      if (silent && hasActiveBridge()) {
+        transition("bridging-buffering", why || "destroyOverlay-silent", { hard, silent });
+        return "bridging-buffering";
+      }
+      if (!silent) {
+        transition("destroying", why || "destroyOverlay", { hard, silent });
+        return "destroying";
+      }
+      return state;
+    }
+
+    function markOverlayHidden(why) {
+      transition("idle", why || "overlay-hidden");
+    }
+
     function setRevealDeferred(value, why) {
       bridgeState.revealDeferred = !!value;
       if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { revealDeferred: bridgeState.revealDeferred } });
@@ -955,6 +977,9 @@
       getReplayState,
       setRevealBlocked,
       isRevealBlocked,
+      markOverlayVisible,
+      markOverlayDestroying,
+      markOverlayHidden,
       setRevealDeferred,
       isRevealDeferred,
       setActiveBridgeView,

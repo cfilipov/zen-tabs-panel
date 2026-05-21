@@ -35,6 +35,9 @@ type ChordSession = {
   beginArm: (now?: number) => void;
   beginBridgeFromOpenView: (view?: string | null, kind?: string, source?: string) => Record<string, unknown>;
   finishBridge: (w?: { clearTimeout?: (id: number) => void } | null, why?: string) => void;
+  markOverlayVisible: (why?: string) => void;
+  markOverlayDestroying: (options?: { hard?: boolean; silent?: boolean }, why?: string) => string;
+  markOverlayHidden: (why?: string) => void;
   markPopupReady: (why?: string, options?: { clearReadyTarget?: boolean }) => {
     wasBridging: boolean;
     drained: unknown[];
@@ -343,6 +346,28 @@ describe("chord-session replay recording", () => {
       expect.objectContaining({ from: "armed-root", to: "cancelled", why: "cancel" }),
       expect.objectContaining({ from: "cancelled", to: "idle", why: "cancel-idle" }),
     ]));
+  });
+
+  it("names overlay lifecycle transitions", () => {
+    const session = makeSession();
+
+    session.markOverlayVisible("revealOverlay");
+    expect(session.getStateSnapshot().state).toBe("visible");
+
+    expect(session.markOverlayDestroying({ hard: false, silent: false }, "destroyOverlay")).toBe("destroying");
+    expect(session.getStateSnapshot().state).toBe("destroying");
+
+    session.markOverlayHidden("destroyOverlay-finish");
+    expect(session.getStateSnapshot().state).toBe("idle");
+  });
+
+  it("keeps silent overlay destroy in bridge state when a bridge is active", () => {
+    const session = makeSession();
+
+    session.beginBridgeFromOpenView("last-visited", "chrome", "match");
+    expect(session.markOverlayDestroying({ silent: true }, "destroyOverlay-silent")).toBe("bridging-buffering");
+    expect(session.getStateSnapshot().state).toBe("bridging-buffering");
+    expect(session.getStateSnapshot().activeBridgeView).toBe("last-visited");
   });
 
   it("throws when legacy state disagrees", () => {

@@ -2084,7 +2084,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function revealOverlay() {
       runPendingReveal();
       disarmChordShims("visible");
-      if (chordSession) chordSession.transition("visible", "revealOverlay");
+      if (chordSession) chordSession.markOverlayVisible("revealOverlay");
 
       // Reloads can leave a warm hidden overlay whose pending reveal closure
       // no longer corresponds to the current DOM. Once a caller has decided
@@ -2685,13 +2685,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // remove it, producing a flash.
       setRevealBlocked(true, "destroyOverlay");
       if (overlayController) overlayController.cancelExplicitReveal();
-      if (chordSession) {
-        if (silent && hasActiveBridge()) {
-          chordSession.transition("bridging-buffering", "destroyOverlay-silent", { hard, silent });
-        } else if (!silent) {
-          chordSession.transition("destroying", "destroyOverlay", { hard, silent });
-        }
-      }
+      try { if (chordSession) chordSession.markOverlayDestroying({ hard, silent }, silent ? "destroyOverlay-silent" : "destroyOverlay"); } catch (e) {}
 
       // Bridge mode can't outlive the chord chain it was driving. If a
       // bridge is active when the overlay is being destroyed, tear it down
@@ -2729,7 +2723,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (panel) panel.style.animation = "";
           focusSelectedTabBrowser();
         }
-        if (!silent && chordSession) chordSession.transition("idle", "destroyOverlay-pending-hidden");
+        if (!silent && chordSession) chordSession.markOverlayHidden("destroyOverlay-pending-hidden");
         observeChordSession("destroyOverlay-pending-hidden");
         return;
       }
@@ -2739,7 +2733,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (overlay.style.visibility === "hidden") {
         if (hard) overlay.remove();
         focusSelectedTabBrowser();
-        if (!silent && chordSession) chordSession.transition("idle", "destroyOverlay-idle-hidden");
+        if (!silent && chordSession) chordSession.markOverlayHidden("destroyOverlay-idle-hidden");
         observeChordSession("destroyOverlay-idle-hidden");
         return;
       }
@@ -2764,7 +2758,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (panel) panel.style.animation = "";
         delete overlay.dataset.closing;
         focusSelectedTabBrowser();
-        if (!silent && chordSession) chordSession.transition("idle", "destroyOverlay-finish");
+        if (!silent && chordSession) chordSession.markOverlayHidden("destroyOverlay-finish");
         observeChordSession("destroyOverlay-finish");
         // Tell the popup to navigate back to the default actions view
         // and re-render at its natural size while still hidden. Without
