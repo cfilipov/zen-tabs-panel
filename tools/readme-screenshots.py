@@ -59,38 +59,38 @@ SEED_TABS = [
 DUPLICATE_PROMPT_URL = "https://zen-browser.app/release-notes/"
 SCREENSHOTS = [
     {
-        "filename": "screenshot-actions-page-2.png",
+        "filename": "screenshot-actions-page-2@2x.png",
         "view": "actions",
         "label": "ErgoZen main menu page 2",
         "wait_for": "This tab",
         "select_actions_page": "2",
     },
     {
-        "filename": "screenshot.png",
+        "filename": "screenshot@2x.png",
         "view": "actions",
         "label": "ErgoZen main menu",
         "wait_for": "This tab",
     },
     {
-        "filename": "screenshot-reorder-tabs.png",
+        "filename": "screenshot-reorder-tabs@2x.png",
         "view": "reorder-tabs",
         "label": "Reorder tabs menu",
         "wait_for": "Reorder",
     },
     {
-        "filename": "screenshot-close-select.png",
+        "filename": "screenshot-close-select@2x.png",
         "view": "close-and-select",
         "label": "Close and select menu",
         "wait_for": "Close",
     },
     {
-        "filename": "screenshot-tabinfo.png",
+        "filename": "screenshot-tabinfo@2x.png",
         "view": "tab-info",
         "label": "Tab info view",
         "wait_for": "TAB AGE",
     },
     {
-        "filename": "screenshot-duplicate-prompt.png",
+        "filename": "screenshot-duplicate-prompt@2x.png",
         "view": "duplicate-prompt",
         "label": "Duplicate tab prompt",
         "wait_for": "Switch to existing tab",

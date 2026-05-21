@@ -14,17 +14,17 @@ ErgoZen gives you keyboard access to far more tab and workspace actions than Zen
 > [!NOTE]
 > Windows and Linux have not been tested yet, but should work in theory.
 
-![Main menu](screenshot.png)
+![Main menu](screenshot@2x.png)
 
-![Main menu page 2](screenshot-actions-page-2.png)
+![Main menu page 2](screenshot-actions-page-2@2x.png)
 
-![Reorder tabs menu](screenshot-reorder-tabs.png)
+![Reorder tabs menu](screenshot-reorder-tabs@2x.png)
 
-![Close and select menu](screenshot-close-select.png)
+![Close and select menu](screenshot-close-select@2x.png)
 
-![Tab info view](screenshot-tabinfo.png)
+![Tab info view](screenshot-tabinfo@2x.png)
 
-![Duplicate tab prompt](screenshot-duplicate-prompt.png)
+![Duplicate tab prompt](screenshot-duplicate-prompt@2x.png)
 
 ## Features
 
