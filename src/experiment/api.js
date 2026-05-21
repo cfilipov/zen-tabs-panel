@@ -893,6 +893,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       overlayControllerScope
     );
     const KEYBINDINGS = chordSupportScope.ZEN_KEYBINDINGS || [];
+    const ACTION_SECTIONS = chordSupportScope.ZEN_ACTION_SECTIONS || [];
     const WORKSPACE_DIGIT_CHORDS = chordSupportScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
     function flattenNavigationBindings(nodes) {
       const out = [];
@@ -934,6 +935,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       actionsModelScope
     );
     const actionsModel = actionsModelScope.createZenActionsModel({
+      sectionDefs: ACTION_SECTIONS,
       navigationTree: KEYBINDINGS,
       displayKey: chordSupportScope.zenDisplayKey,
     });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ACTION_SECTIONS } from "./action-sections";
 import { NAVIGATION_TREE, WORKSPACE_DIGIT_CHORDS, displayKey } from "./navigation-tree";
 import type { NavNode } from "./types";
 
@@ -32,6 +33,15 @@ describe("navigation tree", () => {
 
   it("keeps workspace digit chords in keyboard order", () => {
     expect(WORKSPACE_DIGIT_CHORDS).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]);
+  });
+
+  it("keeps actions menu section ids backed by navigation nodes", () => {
+    const ids = new Set(flatten(NAVIGATION_TREE).map((node) => node.id));
+    const missing = ACTION_SECTIONS
+      .flatMap((section) => section.actionIds)
+      .filter((id) => !ids.has(id));
+
+    expect(missing).toEqual([]);
   });
 
   it("uses the same display format as the legacy badges", () => {
