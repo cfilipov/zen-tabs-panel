@@ -22,6 +22,7 @@
     interpretStructuralInput,
     type InteractionCommand,
   } from "./interaction/interpreter";
+  import { invalidChordMessage, isInvalidChordFeedbackInput } from "./interaction/invalid-chord";
   import { chordFromKey } from "./interaction/inputs";
   import { DUPLICATE_PROMPT_ACTIONS, type DuplicatePromptAction } from "./interaction/duplicate-prompt-options";
   import { createNativePaletteInteractionRuntime } from "./interaction/native-palette-runtime";
@@ -165,20 +166,8 @@
     return false;
   }
 
-  function displayInvalidChordKey(raw: string | undefined | null) {
-    const value = String(raw || "");
-    if (!value) return "that key";
-    if (value === " ") return "Space";
-    if (value === "\\") return "\\";
-    if (value === "ArrowLeft") return "Left";
-    if (value === "ArrowRight") return "Right";
-    if (value === "ArrowUp") return "Up";
-    if (value === "ArrowDown") return "Down";
-    return value;
-  }
-
   function showInvalidChord(feedback: InvalidChordFeedback = {}) {
-    invalidChordHint = `No shortcut for ${displayInvalidChordKey(feedback.key)}`;
+    invalidChordHint = invalidChordMessage(feedback.key);
     if (invalidChordHintTimer !== null) {
       window.clearTimeout(invalidChordHintTimer);
     }
@@ -194,15 +183,6 @@
       window.clearTimeout(invalidChordHintTimer);
       invalidChordHintTimer = null;
     }
-  }
-
-  function isInvalidChordFeedbackInput(input: BridgeKeyData) {
-    if (input.metaKey || input.ctrlKey || input.altKey) return false;
-    if (input.key === "Meta" || input.key === "Control" || input.key === "Alt" || input.key === "Shift") return false;
-    return input.key !== "Escape" && input.key !== "Backspace" && input.key !== "Tab" &&
-      input.key !== "Enter" && input.key !== " " &&
-      input.key !== "ArrowLeft" && input.key !== "ArrowRight" &&
-      input.key !== "ArrowUp" && input.key !== "ArrowDown";
   }
 
   const headerHint = $derived(invalidChordHint);
