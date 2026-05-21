@@ -58,7 +58,7 @@ type ChordSession = {
   clearRevealTimer: (w?: { clearTimeout?: (id: number) => void } | null, why?: string) => void;
   retargetActiveBridgeView: (view?: string | null, why?: string) => string;
   pushBridgeKey: (event: Record<string, unknown>) => number | null;
-  observeLegacyState: (snapshot: unknown, why: string) => void;
+  observeDerivedState: (snapshot: unknown, why: string) => void;
   assertInvariant: (snapshot?: unknown) => true;
   getStateSnapshot: () => {
     state: string;
@@ -388,11 +388,11 @@ describe("chord-session replay recording", () => {
     expect(session.getStateSnapshot().activeBridgeView).toBe("last-visited");
   });
 
-  it("throws when legacy state disagrees", () => {
+  it("throws when observed state disagrees", () => {
     const session = makeSession();
     session.recordArmed();
 
-    expect(() => session.observeLegacyState({
+    expect(() => session.observeDerivedState({
       bridge: { active: true, popupReady: false },
       overlay: { visibility: "hidden" },
       traversal: { armed: true, path: [] },
@@ -405,7 +405,7 @@ describe("chord-session replay recording", () => {
     session.beginBridgeFromOpenView(null, "chrome", "match");
     session.markPopupReady("unit-ready");
 
-    expect(() => session.observeLegacyState({
+    expect(() => session.observeDerivedState({
       bridge: { active: true, popupReady: true },
       overlay: { visibility: "visible", pendingReveal: true },
       traversal: { armed: true, path: [] },

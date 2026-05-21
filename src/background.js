@@ -737,7 +737,7 @@ async function hideAndDo(fn) {
   return fn();
 }
 
-function recordChordAction(message) {
+function recordRuntimeActionReplay(message) {
   if (!message || !message.type) return;
   if (message.type === MSG.REPLAY_LAST_CHORD) return;
   // Duplicate-prompt outcomes are context-bound to the in-flight
@@ -763,7 +763,7 @@ async function runChordAction(actionId) {
   const handler = ACTIONS[actionId];
   if (!handler) return;
   const message = { type: actionId };
-  recordChordAction(message);
+  recordRuntimeActionReplay(message);
   await handler(message);
 }
 
@@ -953,7 +953,7 @@ browser.runtime.onMessage.addListener((message) => {
 
   const action = ACTIONS[type];
   if (action) {
-    recordChordAction(message);
+    recordRuntimeActionReplay(message);
     hideAndDo(() => action(message));
     return;
   }

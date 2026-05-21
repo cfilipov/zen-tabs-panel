@@ -2969,7 +2969,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function observeChordSession(why) {
       if (!chordSession) return;
-      chordSession.observeLegacyState(getChordStateSnapshot(), why);
+      chordSession.observeDerivedState(getChordStateSnapshot(), why);
     }
 
     function assertVisiblePopupOwnsKeys(why) {
@@ -3024,8 +3024,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // ----- Chord-replay tracking ------------------------------------------
     //
     // Commit-on-action hook for runtime action messages. Bg calls this
-    // from recordChordAction. ChordSession decides whether to promote the
-    // in-flight chord chain to a replayable trace or commit a raw runtime action.
+    // from recordRuntimeActionReplay. ChordSession decides whether to
+    // promote the in-flight chord chain to a replayable trace or commit a
+    // raw runtime action.
     const REPLAY_RECORD_BLOCKLIST = new Set([
       MSG_REPLAY_LAST_CHORD,
       "duplicate-switch",

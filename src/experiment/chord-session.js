@@ -139,7 +139,7 @@
       if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
-    function deriveLegacyState(snapshot) {
+    function deriveObservedState(snapshot) {
       if (!snapshot) return "idle";
       const bridge = snapshot.bridge || {};
       const overlay = snapshot.overlay || {};
@@ -155,14 +155,14 @@
       return "idle";
     }
 
-    function observeLegacyState(snapshot, why) {
-      const derived = deriveLegacyState(snapshot);
+    function observeDerivedState(snapshot, why) {
+      const derived = deriveObservedState(snapshot);
       if (derived === state) return;
       const error = new Error("[ChordSession] state mismatch");
       error.details = {
         why,
         sessionState: state,
-        legacyState: derived,
+        observedState: derived,
         snapshot: clonePlain(snapshot),
         recentTransitions: clonePlain(recentTransitions),
       };
@@ -170,7 +170,7 @@
     }
 
     function assertInvariant(snapshot) {
-      if (snapshot) observeLegacyState(snapshot, "assertInvariant");
+      if (snapshot) observeDerivedState(snapshot, "assertInvariant");
       for (const transition of recentTransitions) {
         if (transition.from === "bridging-buffering" && transition.to === "visible") {
           const error = new Error("[ChordSession] invalid transition");
@@ -233,7 +233,7 @@
       if (replayRecordBlocklist.has(message.type)) return;
       // ChordSession-fired chord actions (cmd+.,p, cmd+.,w,n, ...) commit via
       // trackTerminalAction at chord-fire time, then the action routes
-      // through bg's runChordAction -> recordChordAction -> here for the
+      // through bg's runChordAction -> recordRuntimeActionReplay -> here for the
       // same action. Without this skip we'd overwrite the chord trace's
       // kind:"action" record with kind:"runtime-action-msg".
       if (lastChordReplay && lastChordReplay.kind === "action" && lastChordReplay.actionId === message.type) {
@@ -1046,7 +1046,7 @@
       replayLastChord,
       hasCurrentReplay,
       hasCurrentOpenViewReplay,
-      observeLegacyState,
+      observeDerivedState,
       assertInvariant,
       getStateSnapshot,
       getReplayState,
