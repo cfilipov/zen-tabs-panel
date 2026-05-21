@@ -22,6 +22,35 @@
     catch (e) { return String(value); }
   }
 
+  function transitionDataValue(value) {
+    if (value == null) return value;
+    const type = typeof value;
+    if (type === "string" || type === "number" || type === "boolean") return value;
+    if (Array.isArray(value)) {
+      return value.map((item) => {
+        if (item == null) return item;
+        const itemType = typeof item;
+        return itemType === "string" || itemType === "number" || itemType === "boolean"
+          ? item
+          : `[${itemType}]`;
+      });
+    }
+    return `[${type}]`;
+  }
+
+  function transitionDataSnapshot(value) {
+    if (value == null) return value;
+    if (typeof value !== "object") return transitionDataValue(value);
+    if (Array.isArray(value)) return transitionDataValue(value);
+    const snapshot = {};
+    try {
+      for (const key of Object.keys(value)) snapshot[key] = transitionDataValue(value[key]);
+      return snapshot;
+    } catch (e) {
+      return String(value);
+    }
+  }
+
   function replayKeyFromBridgeKey(keyData) {
     if (!keyData || typeof keyData.key !== "string" || !keyData.key) return null;
     if (keyData.key.length === 1 && /[a-z]/i.test(keyData.key)) {
@@ -126,6 +155,17 @@
       return Date.now();
     }
 
+    function pushTransition(from, to, why, data) {
+      recentTransitions.push({
+        at: Date.now(),
+        from,
+        to,
+        why: why || "",
+        data: transitionDataSnapshot(data || null),
+      });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
     function transition(to, why, data) {
       const from = state;
       const next = to || "idle";
@@ -135,8 +175,7 @@
         throw error;
       }
       state = next;
-      recentTransitions.push({ at: Date.now(), from, to: state, why: why || "", data: clonePlain(data || null) });
-      if (recentTransitions.length > 50) recentTransitions.shift();
+      pushTransition(from, state, why, data);
     }
 
     function deriveObservedState(snapshot) {
@@ -469,13 +508,12 @@
       currentNode = timeout.currentNode;
       currentPath = Array.isArray(timeout.currentPath) ? timeout.currentPath.slice() : [];
       chordTimer = null;
-      recentTransitions.push({ at: Date.now(), from: postTimeoutState, to: state, why: "late-timeout-restore", data: clonePlain({
+      pushTransition(postTimeoutState, state, "late-timeout-restore", {
         key: keyData && keyData.key,
         sideEffect: timeout.sideEffect,
         timerFiredAt: timeout.timerFiredAt,
         shimTs: ts,
-      }) });
-      if (recentTransitions.length > 50) recentTransitions.shift();
+      });
       return timeout;
     }
 
@@ -745,14 +783,7 @@
 
     function clearRevealBlock(why) {
       revealBlocked = false;
-      recentTransitions.push({
-        at: Date.now(),
-        from: state,
-        to: state,
-        why: why || "reveal-block-clear",
-        data: { revealBlocked },
-      });
-      if (recentTransitions.length > 50) recentTransitions.shift();
+      pushTransition(state, state, why || "reveal-block-clear", { revealBlocked });
     }
 
     function isRevealBlocked() {
@@ -787,41 +818,20 @@
 
     function deferReveal(why) {
       bridgeState.revealDeferred = true;
-      recentTransitions.push({
-        at: Date.now(),
-        from: state,
-        to: state,
-        why: why || "reveal-deferred",
-        data: { revealDeferred: true },
-      });
-      if (recentTransitions.length > 50) recentTransitions.shift();
+      pushTransition(state, state, why || "reveal-deferred", { revealDeferred: true });
     }
 
     function consumeDeferredReveal(why) {
       const wasDeferred = bridgeState.revealDeferred;
       bridgeState.revealDeferred = false;
-      recentTransitions.push({
-        at: Date.now(),
-        from: state,
-        to: state,
-        why: why || "reveal-deferred-clear",
-        data: { revealDeferred: false, wasDeferred },
-      });
-      if (recentTransitions.length > 50) recentTransitions.shift();
+      pushTransition(state, state, why || "reveal-deferred-clear", { revealDeferred: false, wasDeferred });
       return wasDeferred;
     }
 
     function retargetActiveBridgeView(view, why) {
       const activeView = view || "actions";
       bridgeState.activeView = activeView;
-      recentTransitions.push({
-        at: Date.now(),
-        from: state,
-        to: state,
-        why: why || "retargetActiveBridgeView",
-        data: { activeBridgeView: activeView },
-      });
-      if (recentTransitions.length > 50) recentTransitions.shift();
+      pushTransition(state, state, why || "retargetActiveBridgeView", { activeBridgeView: activeView });
       return activeView;
     }
 
@@ -864,40 +874,19 @@
     function prepareReadyTargetView(view, why) {
       const readyTargetView = view || "actions";
       bridgeState.readyTargetView = readyTargetView;
-      recentTransitions.push({
-        at: Date.now(),
-        from: state,
-        to: state,
-        why: why || "ready-target-view",
-        data: { readyTargetView },
-      });
-      if (recentTransitions.length > 50) recentTransitions.shift();
+      pushTransition(state, state, why || "ready-target-view", { readyTargetView });
     }
 
     function clearReadyTargetView(why) {
       bridgeState.readyTargetView = null;
-      recentTransitions.push({
-        at: Date.now(),
-        from: state,
-        to: state,
-        why: why || "ready-target-view-clear",
-        data: { readyTargetView: null },
-      });
-      if (recentTransitions.length > 50) recentTransitions.shift();
+      pushTransition(state, state, why || "ready-target-view-clear", { readyTargetView: null });
     }
 
     function preparePopupLoad(view, why) {
       const readyTargetView = view || "actions";
       bridgeState.popupReady = false;
       bridgeState.readyTargetView = readyTargetView;
-      recentTransitions.push({
-        at: Date.now(),
-        from: state,
-        to: state,
-        why: why || "preparePopupLoad",
-        data: { popupReady: false, readyTargetView },
-      });
-      if (recentTransitions.length > 50) recentTransitions.shift();
+      pushTransition(state, state, why || "preparePopupLoad", { popupReady: false, readyTargetView });
     }
 
     function hasBridgeBuffer() {
@@ -917,8 +906,7 @@
     function drainBridgeBuffer(why) {
       const drained = Array.isArray(bridgeState.buffer) ? bridgeState.buffer : [];
       bridgeState.buffer = [];
-      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { drained: drained.length, bridgeBufferLength: 0 } });
-      if (recentTransitions.length > 50) recentTransitions.shift();
+      if (why) pushTransition(state, state, why, { drained: drained.length, bridgeBufferLength: 0 });
       return drained;
     }
 
@@ -932,8 +920,7 @@
       }
       if (options && options.clearReadyTarget) {
         bridgeState.readyTargetView = null;
-        recentTransitions.push({ at: Date.now(), from: state, to: state, why: "ready-target-view-clear", data: { readyTargetView: null } });
-        if (recentTransitions.length > 50) recentTransitions.shift();
+        pushTransition(state, state, "ready-target-view-clear", { readyTargetView: null });
       }
       return { wasBridging, drained, readyView };
     }
@@ -976,14 +963,7 @@
       revealTimer = null;
       if (bridgeState.revealDeferred) {
         bridgeState.revealDeferred = false;
-        recentTransitions.push({
-          at: Date.now(),
-          from: state,
-          to: state,
-          why: why || "reveal-deferred-clear",
-          data: { revealDeferred: false },
-        });
-        if (recentTransitions.length > 50) recentTransitions.shift();
+        pushTransition(state, state, why || "reveal-deferred-clear", { revealDeferred: false });
       }
     }
 
@@ -1018,8 +998,7 @@
       markLeaderArm(now);
       armSequence++;
       terminalDispatchArmSequence = -1;
-      recentTransitions.push({ at: Date.now(), from: state, to: state, why: "begin-arm", data: { armSequence, lastLeaderArmAt } });
-      if (recentTransitions.length > 50) recentTransitions.shift();
+      pushTransition(state, state, "begin-arm", { armSequence, lastLeaderArmAt });
     }
 
     function markTerminalDispatch() {

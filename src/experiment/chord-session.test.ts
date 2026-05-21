@@ -344,6 +344,31 @@ describe("chord-session replay recording", () => {
     ]));
   });
 
+  it("stores transition diagnostics without retaining nested objects", () => {
+    const session = makeSession();
+    const payload: Record<string, unknown> = {
+      type: "action",
+      actionId: "go-to-previous-tab",
+      nested: { keep: false },
+    };
+    payload.self = payload;
+
+    session.recordTerminalAction(payload);
+
+    const snapshot = session.getStateSnapshot();
+    expect(snapshot.recentTransitions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        why: "terminal-action",
+        data: expect.objectContaining({
+          type: "action",
+          actionId: "go-to-previous-tab",
+          nested: "[object]",
+          self: "[object]",
+        }),
+      }),
+    ]));
+  });
+
   it("records cancel as a first-class terminal state", () => {
     const env = makeInteractiveSession();
     env.session.arm();
