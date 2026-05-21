@@ -49,6 +49,8 @@ type ChordSession = {
   clearReadyTargetView: (why?: string) => void;
   preparePopupLoad: (view?: string | null, why?: string) => void;
   setRevealDeferred: (value: boolean, why?: string) => void;
+  deferReveal: (why?: string) => void;
+  consumeDeferredReveal: (why?: string) => boolean;
   clearRevealTimer: (w?: { clearTimeout?: (id: number) => void } | null, why?: string) => void;
   retargetActiveBridgeView: (view?: string | null, why?: string) => string;
   pushBridgeKey: (event: Record<string, unknown>) => number | null;
@@ -603,6 +605,15 @@ describe("chord-session replay recording", () => {
     session.setRevealDeferred(true, "reveal-deferred");
     session.clearRevealTimer(null, "reveal-deferred-clear");
 
+    expect(session.getStateSnapshot().revealDeferred).toBe(false);
+  });
+
+  it("names deferred reveal consumption", () => {
+    const session = makeSession();
+
+    session.deferReveal("reveal-deferred");
+    expect(session.getStateSnapshot().revealDeferred).toBe(true);
+    expect(session.consumeDeferredReveal("reveal-deferred-clear")).toBe(true);
     expect(session.getStateSnapshot().revealDeferred).toBe(false);
   });
 

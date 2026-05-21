@@ -735,6 +735,32 @@
       return bridgeState.revealDeferred;
     }
 
+    function deferReveal(why) {
+      bridgeState.revealDeferred = true;
+      recentTransitions.push({
+        at: Date.now(),
+        from: state,
+        to: state,
+        why: why || "reveal-deferred",
+        data: { revealDeferred: true },
+      });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
+    function consumeDeferredReveal(why) {
+      const wasDeferred = bridgeState.revealDeferred;
+      bridgeState.revealDeferred = false;
+      recentTransitions.push({
+        at: Date.now(),
+        from: state,
+        to: state,
+        why: why || "reveal-deferred-clear",
+        data: { revealDeferred: false, wasDeferred },
+      });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+      return wasDeferred;
+    }
+
     function setActiveBridgeView(view, why) {
       bridgeState.activeView = view || null;
       if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { activeBridgeView: bridgeState.activeView } });
@@ -1007,6 +1033,8 @@
       markOverlayHidden,
       setRevealDeferred,
       isRevealDeferred,
+      deferReveal,
+      consumeDeferredReveal,
       setActiveBridgeView,
       retargetActiveBridgeView,
       getActiveBridgeView,
