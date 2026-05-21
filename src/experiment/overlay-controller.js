@@ -7,9 +7,10 @@
 // chrome/XUL land because it touches DOM nodes, XUL <browser> elements, panel
 // sizing, animation settings, hosted extension popups, and focus.
 //
-// The controller starts with popup-instance ownership because that is pure
-// overlay state: it exists only to reject stale POPUP_READY / REVEAL_PALETTE
-// messages from a replaced hosted browser.
+// The controller owns overlay-private state: popup instance gating,
+// pending/explicit reveal bookkeeping, morph generations, current palette
+// view params, navigation stack, and resize diagnostics. api.js still owns
+// the concrete chrome DOM/XUL implementation behind the adapter.
 
 /**
  * @typedef {Object} OverlayController
@@ -79,6 +80,9 @@
  *
  * @property {() => Object} getViewState
  * Return current view, params, nav stack, and resize diagnostics.
+ *
+ * @property {() => Object} getDebugState
+ * Return all controller-owned state used by the chord inspector.
  *
  * @property {() => number} currentInstance
  * Return the live popup instance id used to reject stale POPUP_READY and
@@ -297,6 +301,22 @@
       });
     }
 
+    function getDebugState() {
+      return clonePlain({
+        popupInstance,
+        pendingReveal: hasPendingReveal(),
+        explicitRevealToken,
+        explicitRevealView,
+        explicitRevealScheduledToken,
+        morphGeneration,
+        currentViewName,
+        currentViewParams,
+        navStack,
+        currentDynamicSidebarWidth: dynamicSidebarWidth,
+        currentMeasuredResizeView: measuredResizeView,
+      });
+    }
+
     return {
       create(view, params) { return call(impl, "create", [view, params]); },
       rearm(view, params) { return call(impl, "rearm", [view, params]); },
@@ -337,6 +357,7 @@
       navigationLength,
       popNavigation,
       getViewState,
+      getDebugState,
       nextInstance,
       currentInstance,
       matchesInstance,

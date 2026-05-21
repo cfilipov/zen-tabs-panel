@@ -47,6 +47,7 @@ type OverlayControllerScope = {
       currentDynamicSidebarWidth: number;
       currentMeasuredResizeView: string | null;
     };
+    getDebugState: () => Record<string, unknown>;
     getExplicitRevealState: () => {
       explicitRevealToken: number;
       explicitRevealView: string | null;
@@ -185,6 +186,25 @@ describe("overlay controller", () => {
     expect(controller.getViewState()).toMatchObject({
       currentViewName: null,
       currentViewParams: {},
+      navStack: [],
+    });
+  });
+
+  it("returns a combined debug snapshot", () => {
+    const controller = loadOverlayControllerScope().createOverlayController();
+
+    controller.nextInstance();
+    controller.resetViewState("actions", { root: true });
+    controller.setPendingReveal(() => {});
+    controller.beginExplicitReveal("actions");
+
+    expect(controller.getDebugState()).toMatchObject({
+      popupInstance: 1,
+      pendingReveal: true,
+      explicitRevealToken: 1,
+      explicitRevealView: "actions",
+      currentViewName: "actions",
+      currentViewParams: { root: true },
       navStack: [],
     });
   });

@@ -2930,30 +2930,33 @@ this.zenWorkspaces = class extends ExtensionAPI {
       } catch (e) {
         chordTraversalState = { error: String(e) };
       }
+      const overlayDebug = overlayController ? overlayController.getDebugState() : {};
 
       return cloneChordInspectorValue({
         generation: CHORD_GENERATION,
         chordDelayMs,
         view: {
-          currentViewName: currentViewName(),
-          currentViewParams: currentViewParams(),
+          currentViewName: overlayDebug.currentViewName || null,
+          currentViewParams: overlayDebug.currentViewParams || {},
           popupReadyTargetView: getReadyTargetView(),
-          navStack: overlayController.getViewState().navStack,
-          currentDynamicSidebarWidth: overlayController.getDynamicSidebarWidth(),
-          currentMeasuredResizeView: overlayController.getMeasuredResizeView(),
+          navStack: overlayDebug.navStack || [],
+          currentDynamicSidebarWidth: overlayDebug.currentDynamicSidebarWidth || 0,
+          currentMeasuredResizeView: overlayDebug.currentMeasuredResizeView || null,
           pendingInvalidChordFeedback,
         },
         overlay: {
           exists: !!overlay,
           closing: overlay && overlay.dataset ? overlay.dataset.closing || "" : "",
           visibility: overlay && w ? w.getComputedStyle(overlay).visibility : null,
-          pendingReveal: hasPendingReveal(),
-          ...explicitRevealState(),
+          pendingReveal: !!overlayDebug.pendingReveal,
+          explicitRevealToken: overlayDebug.explicitRevealToken || 0,
+          explicitRevealView: overlayDebug.explicitRevealView || null,
+          explicitRevealScheduledToken: overlayDebug.explicitRevealScheduledToken || 0,
           panelWidth: panel ? Math.round(panel.getBoundingClientRect().width) : 0,
           panelHeight: panel ? Math.round(panel.getBoundingClientRect().height) : 0,
           browserSrc: browser ? browser.getAttribute("src") || "" : "",
           browserCurrentURI: browser && browser.currentURI ? String(browser.currentURI.spec || "") : "",
-          popupInstance: currentPopupInstance(),
+          popupInstance: overlayDebug.popupInstance || 0,
         },
         bridge: {
           active: hasActiveBridge(),
