@@ -13,7 +13,7 @@
     type InvalidChordFeedback,
   } from "./chord-bridge";
   import {
-    interpretVisibleInput,
+    interpretStructuralInput,
     type InteractionCommand,
   } from "./interaction/interpreter";
   import { chordFromKey } from "./interaction/inputs";
@@ -94,12 +94,10 @@
   import { formatDuration } from "./views/format";
   import {
     actionItemsForPage,
-    actionNodesForSections,
     appendWorkspaceSwitchItems,
     applyActionMetadata,
     applyActionSelection,
     buildActionsMenuModel,
-    prefixChildNodesForView,
     prefixItemsForView,
     type ActionMenuItem,
   } from "./views/actions-model";
@@ -278,9 +276,7 @@
   });
   const visibleActionItems = $derived(actionItemsForPage(renderedActionSections, palette.currentPage));
   const allActionItems = $derived(renderedActionSections.flatMap((section) => section.items));
-  const allActionNodes = $derived(actionNodesForSections(renderedActionSections));
   const prefixItems = $derived(isNativePrefixView(palette.currentView) ? prefixItemsForView(palette.currentView) : []);
-  const prefixNodes = $derived(isNativePrefixView(palette.currentView) ? prefixChildNodesForView(palette.currentView) : []);
   const title = $derived(resolveViewTitle(palette.currentView, {
     currentDomain: palette.currentDomain,
     actionLabel: allActionItems.find((item) => item.view === palette.currentView)?.label ?? null,
@@ -1011,33 +1007,33 @@
     if (terminalCommandStillBlocking()) {
       return false;
     }
-    const actionNodes = palette.currentView === "actions" ? allActionNodes : isNativePrefixView(palette.currentView) ? prefixNodes : [];
-    const command = interpretVisibleInput(
-      { kind: "key", ...input },
-      {
-        view: palette.currentView,
-        selectedIndex: palette.selectedIndex,
-        duplicatePromptActionCount: DUPLICATE_PROMPT_ACTIONS.length,
-      },
-      actionNodes,
-    );
+    const keyInput = { kind: "key" as const, ...input };
+    const chordKey = chordFromKey(keyInput);
+    const visibleCommandItems = palette.currentView === "actions"
+      ? allActionItems
+      : isNativePrefixView(palette.currentView)
+      ? prefixItems
+      : [];
+    const item = visibleCommandItems.find((candidate) => !!chordKey && candidate.hotkey === chordKey);
+    if (item) {
+      clearInvalidChordHint();
+      await activateVisibleActionItem(item, "shortcut");
+      return true;
+    }
+
+    const command = interpretStructuralInput(keyInput, {
+      view: palette.currentView,
+      selectedIndex: palette.selectedIndex,
+      duplicatePromptActionCount: DUPLICATE_PROMPT_ACTIONS.length,
+    });
     if (command.kind === "none") {
       if (isInvalidChordFeedbackInput(input)) {
-        showInvalidChord({ key: chordFromKey({ kind: "key", ...input }) ?? input.key });
+        showInvalidChord({ key: chordKey ?? input.key });
       }
       return false;
     }
 
     clearInvalidChordHint();
-    if (command.kind === "action" || command.kind === "open-view" || command.kind === "enter-prefix") {
-      const chordKey = chordFromKey({ kind: "key", ...input });
-      const item = (palette.currentView === "actions" ? allActionItems : isNativePrefixView(palette.currentView) ? prefixItems : [])
-        .find((candidate) => !!chordKey && candidate.hotkey === chordKey);
-      if (item) {
-        await activateVisibleActionItem(item, "shortcut");
-        return true;
-      }
-    }
     await runCommand(command);
     return true;
   }

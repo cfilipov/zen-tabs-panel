@@ -94,6 +94,13 @@ export function interpretVisibleInput(
   return node ? commandForNode(node, "view") : interpretStructuralKey(input, context);
 }
 
+export function interpretStructuralInput(
+  input: Extract<InteractionInput, { kind: "key" }>,
+  context: InteractionContext,
+): InteractionCommand {
+  return interpretStructuralKey(input, context);
+}
+
 type StructuralKeyResolver = {
   id: string;
   resolve: (input: Extract<InteractionInput, { kind: "key" }>, context: InteractionContext) => InteractionCommand;
