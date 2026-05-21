@@ -1016,8 +1016,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Content frame scripts now only forward normalized keys into this one
     // chrome-side session.
     let chordSession = null;
-    function setRevealBlocked(value, why) {
-      try { if (chordSession) chordSession.setRevealBlocked(!!value, why); } catch (e) {}
+    function blockReveal(why) {
+      try { if (chordSession) chordSession.blockReveal(why); } catch (e) {}
+    }
+    function clearRevealBlock(why) {
+      try { if (chordSession) chordSession.clearRevealBlock(why); } catch (e) {}
     }
     function isRevealBlocked() {
       try { return !!(chordSession && chordSession.isRevealBlocked()); } catch (e) { return false; }
@@ -1830,7 +1833,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       nextPopupInstance();
       // A new popup is being constructed — any reveal-block from the
       // previous destroy is no longer relevant.
-      setRevealBlocked(false, "createOverlay");
+      clearRevealBlock("createOverlay");
 
       // Always refresh contents so CSS changes take effect on the next
       // open after an extension reload (otherwise the cached <style> from
@@ -1999,7 +2002,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // initial popup-load IIFE (which uses the URL's ?inst=N) and orphan
       // the popup with chordBridgeReady=false if the user chords during
       // extension load.
-      setRevealBlocked(false, "rearmExistingOverlay");
+      clearRevealBlock("rearmExistingOverlay");
       // Popup will signal ready again after it processes WarmRearm; any
       // chord-chain keys that land in this window are buffered (just like
       // the cold-create case).
@@ -2689,7 +2692,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // still in flight — without this block, revealPalette would see
       // pendingReveal still set and unhide the overlay right before we
       // remove it, producing a flash.
-      setRevealBlocked(true, "destroyOverlay");
+      blockReveal("destroyOverlay");
       if (overlayController) overlayController.cancelExplicitReveal();
       try { if (chordSession) chordSession.markOverlayDestroying({ hard, silent }, silent ? "destroyOverlay-silent" : "destroyOverlay"); } catch (e) {}
 

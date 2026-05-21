@@ -718,11 +718,21 @@
       });
     }
 
-    function setRevealBlocked(value, why) {
-      revealBlocked = !!value;
-      if (revealBlocked) {
-        transition(state, why || "reveal-blocked", { revealBlocked });
-      }
+    function blockReveal(why) {
+      revealBlocked = true;
+      transition(state, why || "reveal-blocked", { revealBlocked });
+    }
+
+    function clearRevealBlock(why) {
+      revealBlocked = false;
+      recentTransitions.push({
+        at: Date.now(),
+        from: state,
+        to: state,
+        why: why || "reveal-block-clear",
+        data: { revealBlocked },
+      });
+      if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
     function isRevealBlocked() {
@@ -1021,7 +1031,8 @@
       assertInvariant,
       getStateSnapshot,
       getReplayState,
-      setRevealBlocked,
+      blockReveal,
+      clearRevealBlock,
       isRevealBlocked,
       markOverlayVisible,
       markOverlayDestroying,

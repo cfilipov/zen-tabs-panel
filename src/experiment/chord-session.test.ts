@@ -38,6 +38,8 @@ type ChordSession = {
   markOverlayVisible: (why?: string) => void;
   markOverlayDestroying: (options?: { hard?: boolean; silent?: boolean }, why?: string) => string;
   markOverlayHidden: (why?: string) => void;
+  blockReveal: (why?: string) => void;
+  clearRevealBlock: (why?: string) => void;
   markPopupReady: (why?: string, options?: { clearReadyTarget?: boolean }) => {
     wasBridging: boolean;
     drained: unknown[];
@@ -360,6 +362,16 @@ describe("chord-session replay recording", () => {
 
     session.markOverlayHidden("destroyOverlay-finish");
     expect(session.getStateSnapshot().state).toBe("idle");
+  });
+
+  it("names reveal blocking around overlay lifecycle", () => {
+    const session = makeSession();
+
+    session.blockReveal("destroyOverlay");
+    expect(session.getStateSnapshot().revealBlocked).toBe(true);
+
+    session.clearRevealBlock("createOverlay");
+    expect(session.getStateSnapshot().revealBlocked).toBe(false);
   });
 
   it("keeps silent overlay destroy in bridge state when a bridge is active", () => {
