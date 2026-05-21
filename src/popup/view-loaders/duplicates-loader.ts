@@ -1,8 +1,9 @@
-import type { DuplicateGroupRow } from "../runtime/tab-index-client";
+import type { DuplicateGroupRow, DuplicateGroupsViewModel } from "../runtime/tab-index-client";
 import type { WorkspaceRow } from "../runtime/workspace-client";
 
 export type DuplicateGroupsClient = {
   getDuplicateGroups(params?: Record<string, unknown>): Promise<DuplicateGroupRow[]>;
+  getDuplicateGroupsViewModel?(workspaceFilter?: string): Promise<DuplicateGroupsViewModel>;
 };
 
 export type DuplicateWorkspaceClient = {
@@ -14,6 +15,9 @@ export async function loadDuplicateGroupsView(
   workspaceClient: DuplicateWorkspaceClient,
   workspaceFilter: string,
 ) {
+  if (tabIndexClient.getDuplicateGroupsViewModel) {
+    return tabIndexClient.getDuplicateGroupsViewModel(workspaceFilter);
+  }
   const workspaces = await workspaceClient.getWorkspacesWithIcons().catch(() => []);
   const nextWorkspaceFilter = workspaceFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === workspaceFilter)
     ? "all"

@@ -3522,6 +3522,36 @@ this.zenWorkspaces = class extends ExtensionAPI {
       };
     }
 
+    async function getDuplicateGroupsViewModelInternal(workspaceFilter) {
+      const workspaces = await getWorkspacesWithIconContent();
+      const requestedFilter = workspaceFilter || "all";
+      const nextWorkspaceFilter = requestedFilter !== "all" && !workspaces.some((workspace) => workspace.uuid === requestedFilter)
+        ? "all"
+        : requestedFilter;
+      const params = nextWorkspaceFilter === "all" ? {} : { workspaceId: nextWorkspaceFilter };
+      tabIndex.start();
+      const groups = tabIndex.getDuplicateGroups(params);
+      const tabs = groups.flatMap((group) => Array.isArray(group.tabs) ? group.tabs : []);
+      return {
+        version: tabIndex.getVersion(),
+        view: "duplicates",
+        groups,
+        workspaces,
+        workspaceFilter: nextWorkspaceFilter,
+        selectedIndex: -1,
+        model: {
+          id: "duplicates",
+          view: "duplicates",
+          rowIntents: tabs.map((tab, index) => ({
+            rowId: tab.domId || null,
+            index,
+            chordKey: index < 9 ? String(index + 1) : null,
+            action: "activate-tab",
+          })),
+        },
+      };
+    }
+
     function getActionsSnapshotInternal() {
       const snapshot = tabIndex.getActionsSnapshot();
       const w = getWin();
@@ -5806,6 +5836,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
             params = paramsJson;
           }
           return tabIndex.getDuplicateGroups(params);
+        },
+
+        async getDuplicateGroupsViewModel(workspaceFilter) {
+          return getDuplicateGroupsViewModelInternal(workspaceFilter);
         },
 
         async getDuplicatePromptViewModel(url, domId) {

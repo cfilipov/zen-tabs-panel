@@ -120,6 +120,28 @@ describe("tab index client", () => {
     ]);
   });
 
+  it("loads the chrome-owned duplicate groups model through the message fallback", async () => {
+    const sent: unknown[] = [];
+    const client = createTabIndexClient(async <T>(message: unknown) => {
+      sent.push(message);
+      return {
+        version: 1,
+        view: "duplicates",
+        groups: [],
+        workspaces: [],
+        workspaceFilter: "ws-1",
+        selectedIndex: -1,
+        model: { id: "duplicates", view: "duplicates", rowIntents: [] },
+      } as T;
+    });
+
+    await client.getDuplicateGroupsViewModel("ws-1");
+
+    expect(sent).toEqual([
+      { type: "tab-index:get-duplicate-groups-model", workspaceFilter: "ws-1" },
+    ]);
+  });
+
   it("loads the chrome-owned actions model through the message fallback", async () => {
     const sent: unknown[] = [];
     const client = createTabIndexClient(async <T>(message: unknown) => {

@@ -309,12 +309,14 @@ export function createNativePaletteState() {
     workspaces: WorkspaceRow[];
     workspaceFilter: string;
     selectedIndex: number;
+    version?: number;
   }) {
     state.sidebarWorkspaces = result.workspaces;
     state.duplicateWorkspaces = result.workspaces;
     state.workspaceFilter = result.workspaceFilter;
     state.duplicateGroups = result.groups;
     state.selectedIndex = result.selectedIndex;
+    state.listVersion = result.version || 0;
   }
 
   function failDuplicates(message: string) {

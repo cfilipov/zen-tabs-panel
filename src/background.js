@@ -596,6 +596,7 @@ const QUERIES = Object.freeze({
     return api.getActionsViewModel(recentlyClosed.length);
   },
   [MSG.TAB_INDEX_GET_DUPLICATE_GROUPS]: (m) => api.getDuplicateGroups(JSON.stringify(m.params || {})),
+  [MSG.TAB_INDEX_GET_DUPLICATE_GROUPS_MODEL]: (m) => api.getDuplicateGroupsViewModel(m.workspaceFilter || "all"),
   [MSG.TAB_INDEX_GET_DUPLICATE_PROMPT_MODEL]: (m) => api.getDuplicatePromptViewModel(m.url || "", m.domId || null),
   [MSG.GET_CONTAINERS]:                ()  => api.getContainers(),
   [MSG.GET_CONTAINERS_VIEW_MODEL]:     ()  => api.getContainersViewModel(),
