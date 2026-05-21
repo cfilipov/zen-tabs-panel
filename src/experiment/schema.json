@@ -848,6 +848,13 @@
         "parameters": []
       },
       {
+        "name": "getFoldersViewModel",
+        "type": "function",
+        "async": true,
+        "description": "Get the chrome-owned move-to-folder view model",
+        "parameters": []
+      },
+      {
         "name": "moveTabToFolder",
         "type": "function",
         "async": true,
@@ -865,6 +872,13 @@
         "parameters": []
       },
       {
+        "name": "getContainersViewModel",
+        "type": "function",
+        "async": true,
+        "description": "Get the chrome-owned open-in-container view model",
+        "parameters": []
+      },
+      {
         "name": "reopenInContainer",
         "type": "function",
         "async": true,
@@ -878,6 +892,13 @@
         "type": "function",
         "async": true,
         "description": "Enumerate Firefox/Zen profiles from the toolkit profile service",
+        "parameters": []
+      },
+      {
+        "name": "getProfilesViewModel",
+        "type": "function",
+        "async": true,
+        "description": "Get the chrome-owned profiles view model",
         "parameters": []
       },
       {

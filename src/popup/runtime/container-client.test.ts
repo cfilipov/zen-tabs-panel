@@ -26,4 +26,21 @@ describe("container client", () => {
       { userContextId: 7, name: "Personal" },
     ]);
   });
+
+  it("requests the chrome-owned container view model", async () => {
+    const client = createContainerClient({
+      getContainersViewModel: async () => ({
+        version: 1,
+        view: "open-in-container",
+        rows: [],
+        selectedIndex: -1,
+        model: { id: "containers", view: "open-in-container", rowIntents: [] },
+      }),
+    });
+
+    await expect(client.getContainersViewModel()).resolves.toMatchObject({
+      view: "open-in-container",
+      model: { id: "containers" },
+    });
+  });
 });

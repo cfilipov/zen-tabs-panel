@@ -593,11 +593,14 @@ const QUERIES = Object.freeze({
   [MSG.TAB_INDEX_GET_ACTIONS_SNAPSHOT]: () => api.getActionsSnapshot(),
   [MSG.TAB_INDEX_GET_DUPLICATE_GROUPS]: (m) => api.getDuplicateGroups(JSON.stringify(m.params || {})),
   [MSG.GET_CONTAINERS]:                ()  => api.getContainers(),
+  [MSG.GET_CONTAINERS_VIEW_MODEL]:     ()  => api.getContainersViewModel(),
   [MSG.GET_FOLDERS]:                   ()  => api.getFolders(),
+  [MSG.GET_FOLDERS_VIEW_MODEL]:        ()  => api.getFoldersViewModel(),
   [MSG.CHECK_COMPANION_MOD]:           ()  => api.getCompanionMods(),
   [MSG.INSTALL_COMPANION_MOD]:         (m) => api.installCompanionMod(m.modId),
   [MSG.REMOVE_COMPANION_MOD]:          (m) => api.removeCompanionMod(m.modId),
   [MSG.GET_PROFILES]:                  ()  => api.getProfiles(),
+  [MSG.GET_PROFILES_VIEW_MODEL]:       ()  => api.getProfilesViewModel(),
   [MSG.LIST_EXTENSIONS]:               ()  => api.listBrowserActionExtensions(),
 });
 

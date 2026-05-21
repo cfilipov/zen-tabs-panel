@@ -8,6 +8,23 @@ export type ContainerRow = {
   iconUrl: string;
 };
 
+export type ContainersViewModel = {
+  version: number;
+  view: "open-in-container";
+  rows: ContainerRow[];
+  selectedIndex: number;
+  model: {
+    id: "containers";
+    view: "open-in-container";
+    rowIntents: Array<{
+      rowId: string;
+      index: number;
+      chordKey: string | null;
+      action: string;
+    }>;
+  };
+};
+
 type ContextualIdentity = {
   cookieStoreId?: string;
   userContextId?: number;
@@ -18,6 +35,7 @@ type ContextualIdentity = {
 
 type BrowserWithContainers = {
   getContainers?: () => Promise<ContextualIdentity[]>;
+  getContainersViewModel?: () => Promise<ContainersViewModel>;
 };
 
 function userContextIdFromCookieStore(cookieStoreId: string) {
@@ -43,6 +61,10 @@ export function createContainerClient(root: BrowserWithContainers | null = null)
         ? await root.getContainers()
         : await sendMessage<ContextualIdentity[]>({ type: "get-containers" });
       return rows.map(normalizeContainer);
+    },
+    async getContainersViewModel() {
+      if (root?.getContainersViewModel) return root.getContainersViewModel();
+      return sendMessage<ContainersViewModel>({ type: "get-containers-view-model" });
     },
   };
 }

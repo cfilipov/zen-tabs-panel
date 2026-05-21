@@ -262,9 +262,10 @@ export function createNativePaletteState() {
     state.error = message;
   }
 
-  function commitOpenInContainer(result: { rows: ContainerRow[]; selectedIndex: number }) {
+  function commitOpenInContainer(result: { rows: ContainerRow[]; selectedIndex: number; version?: number }) {
     state.containerRows = result.rows;
     state.selectedIndex = result.selectedIndex;
+    state.listVersion = result.version || 0;
   }
 
   function failOpenInContainer(message: string) {
@@ -273,10 +274,11 @@ export function createNativePaletteState() {
     state.error = message;
   }
 
-  function commitMoveToFolder(result: { folders: FolderRow[]; workspaces: WorkspaceRow[]; selectedIndex: number }) {
+  function commitMoveToFolder(result: { folders: FolderRow[]; workspaces: WorkspaceRow[]; selectedIndex: number; version?: number }) {
     state.folderRows = result.folders;
     state.folderWorkspaces = result.workspaces;
     state.selectedIndex = result.selectedIndex;
+    state.listVersion = result.version || 0;
   }
 
   function failMoveToFolder(message: string) {
@@ -286,9 +288,10 @@ export function createNativePaletteState() {
     state.error = message;
   }
 
-  function commitProfiles(result: { rows: ProfileRow[]; selectedIndex: number }) {
+  function commitProfiles(result: { rows: ProfileRow[]; selectedIndex: number; version?: number }) {
     state.profileRows = result.rows;
     state.selectedIndex = result.selectedIndex;
+    state.listVersion = result.version || 0;
   }
 
   function failProfiles(message: string) {

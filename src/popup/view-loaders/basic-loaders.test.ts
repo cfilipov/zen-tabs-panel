@@ -133,6 +133,48 @@ describe("basic view loaders", () => {
     expect(profiles.rows[0]?.isCurrent).toBe(true);
   });
 
+  it("prefers chrome-owned container and profile models when available", async () => {
+    const containers = await loadOpenInContainerView({
+      getContainers: async () => { throw new Error("fallback should not run"); },
+      getContainersViewModel: async () => ({
+        version: 2,
+        view: "open-in-container",
+        rows: [{
+          cookieStoreId: "firefox-container-1",
+          userContextId: 1,
+          name: "Work",
+          colorCode: "#00f",
+          iconUrl: "",
+        }],
+        selectedIndex: -1,
+        model: {
+          id: "containers",
+          view: "open-in-container",
+          rowIntents: [{ rowId: "1", index: 0, chordKey: "1", action: "reopen-in-container" }],
+        },
+      }),
+    });
+    const profiles = await loadProfilesView({
+      getProfiles: async () => { throw new Error("fallback should not run"); },
+      getProfilesViewModel: async () => ({
+        version: 4,
+        view: "profiles",
+        rows: [{ name: "default", isCurrent: true, isDefault: true }],
+        selectedIndex: -1,
+        model: {
+          id: "profiles",
+          view: "profiles",
+          rowIntents: [{ rowId: "default", index: 0, chordKey: "1", action: "launch-profile", disabled: true }],
+        },
+      }),
+    });
+
+    expect(containers.version).toBe(2);
+    expect(containers.model.rowIntents[0]?.action).toBe("reopen-in-container");
+    expect(profiles.version).toBe(4);
+    expect(profiles.model.rowIntents[0]?.disabled).toBe(true);
+  });
+
   it("loads folders and treats workspace-icon failures as optional", async () => {
     const result = await loadMoveToFolderView(
       { getFolders: async () => [{ id: "f1", name: "Folder", workspaceId: null }] },
@@ -141,5 +183,36 @@ describe("basic view loaders", () => {
 
     expect(result.folders).toEqual([{ id: "f1", name: "Folder", workspaceId: null }]);
     expect(result.workspaces).toEqual([]);
+  });
+
+  it("prefers the chrome-owned folder model when available", async () => {
+    const result = await loadMoveToFolderView(
+      {
+        getFolders: async () => { throw new Error("fallback should not run"); },
+        getFoldersViewModel: async () => ({
+          version: 5,
+          view: "move-to-folder",
+          rows: [{ id: "f1", name: "Folder", workspaceId: "ws-1" }],
+          selectedIndex: -1,
+          model: {
+            id: "folders",
+            view: "move-to-folder",
+            rowIntents: [{
+              rowId: "f1",
+              index: 0,
+              chordKey: "1",
+              shiftedChordKey: "Shift+1",
+              action: "move-tab-to-folder",
+            }],
+          },
+        }),
+      },
+      { getWorkspacesWithIcons: async () => [{ uuid: "ws-1", name: "Main", svgContent: "", isActive: false }] },
+    );
+
+    expect(result.version).toBe(5);
+    expect(result.folders[0]?.id).toBe("f1");
+    expect(result.workspaces[0]?.uuid).toBe("ws-1");
+    expect(result.model?.rowIntents[0]?.shiftedChordKey).toBe("Shift+1");
   });
 });

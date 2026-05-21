@@ -1,9 +1,9 @@
 import type { ViewId } from "../../shared/types";
-import type { ContainerRow } from "./container-client";
+import type { ContainerRow, ContainersViewModel } from "./container-client";
 import type { ExtensionRow } from "./extension-client";
-import type { FolderRow } from "./folder-client";
+import type { FolderRow, FoldersViewModel } from "./folder-client";
 import type { NavigationHistory, RecentlyClosedRow } from "./history-client";
-import type { ProfileRow } from "./profile-client";
+import type { ProfileRow, ProfilesViewModel } from "./profile-client";
 import type { HistoryVisit, TabInfo } from "./tab-info-client";
 import type { DomainIndexRow, TabIndexRow } from "./tab-index-client";
 import type { WorkspaceRow } from "./workspace-client";
@@ -38,9 +38,9 @@ export type NativePaletteLoaderDeps = {
     getNavigationHistory(): Promise<NavigationHistory | null>;
     getRecentlyClosed(): Promise<RecentlyClosedRow[]>;
   };
-  containerClient: { getContainers(): Promise<ContainerRow[]> };
-  folderClient: { getFolders(): Promise<FolderRow[]> };
-  profileClient: { getProfiles(): Promise<ProfileRow[]> };
+  containerClient: { getContainers(): Promise<ContainerRow[]>; getContainersViewModel?(): Promise<ContainersViewModel> };
+  folderClient: { getFolders(): Promise<FolderRow[]>; getFoldersViewModel?(): Promise<FoldersViewModel> };
+  profileClient: { getProfiles(): Promise<ProfileRow[]>; getProfilesViewModel?(): Promise<ProfilesViewModel> };
   tabInfoClient: {
     getTabInfo(domId: string): Promise<TabInfo | null>;
     getHistoryVisits(url: string): Promise<HistoryVisit[]>;

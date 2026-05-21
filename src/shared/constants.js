@@ -133,7 +133,9 @@ this.MSG = Object.freeze({
   MOVE_TAB_TO_FOLDER:             "move-tab-to-folder",
   REOPEN_IN_CONTAINER:            "reopen-in-container",
   GET_CONTAINERS:                 "get-containers",
+  GET_CONTAINERS_VIEW_MODEL:      "get-containers-view-model",
   GET_FOLDERS:                    "get-folders",
+  GET_FOLDERS_VIEW_MODEL:         "get-folders-view-model",
 
   // Replay the most recently fired chord-action (cmd+.,.). Background
   // records the last action's message (type + params) at dispatch and
@@ -159,6 +161,7 @@ this.MSG = Object.freeze({
 
   // Profiles
   GET_PROFILES:                   "get-profiles",
+  GET_PROFILES_VIEW_MODEL:        "get-profiles-view-model",
   LAUNCH_PROFILE:                 "launch-profile",
 
   // Foreign extension popup hosting

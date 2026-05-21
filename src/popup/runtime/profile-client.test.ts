@@ -13,4 +13,16 @@ describe("profile client", () => {
 
     expect(sent).toEqual([{ type: "get-profiles" }]);
   });
+
+  it("requests the chrome-owned profiles view model", async () => {
+    const sent: unknown[] = [];
+    const client = createProfileClient(async <T>(message: unknown) => {
+      sent.push(message);
+      return { rows: [], selectedIndex: -1 } as T;
+    });
+
+    await client.getProfilesViewModel();
+
+    expect(sent).toEqual([{ type: "get-profiles-view-model" }]);
+  });
 });

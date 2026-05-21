@@ -13,4 +13,16 @@ describe("folder client", () => {
 
     expect(sent).toEqual([{ type: "get-folders" }]);
   });
+
+  it("requests the chrome-owned folder view model", async () => {
+    const sent: unknown[] = [];
+    const client = createFolderClient(async <T>(message: unknown) => {
+      sent.push(message);
+      return { rows: [], selectedIndex: -1 } as T;
+    });
+
+    await client.getFoldersViewModel();
+
+    expect(sent).toEqual([{ type: "get-folders-view-model" }]);
+  });
 });

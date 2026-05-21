@@ -4724,6 +4724,59 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
     }
 
+    function compactRowChordKey(index) {
+      return index >= 0 && index < 9 ? String(index + 1) : null;
+    }
+
+    function buildCompactRowsViewModel(view, id, rows, makeIntent) {
+      return {
+        version: Date.now(),
+        view,
+        rows,
+        selectedIndex: -1,
+        model: {
+          id,
+          view,
+          rowIntents: rows.map((row, index) => makeIntent(row, index)),
+        },
+      };
+    }
+
+    function getFoldersViewModelInternal() {
+      const rows = getFolderRows();
+      return buildCompactRowsViewModel("move-to-folder", "folders", rows, (row, index) => {
+        const chordKey = compactRowChordKey(index);
+        return {
+          rowId: row.id,
+          index,
+          chordKey,
+          shiftedChordKey: chordKey ? "Shift+" + chordKey : null,
+          action: "move-tab-to-folder",
+        };
+      });
+    }
+
+    function getContainersViewModelInternal() {
+      const rows = getContainerRows();
+      return buildCompactRowsViewModel("open-in-container", "containers", rows, (row, index) => ({
+        rowId: String(row.userContextId || ""),
+        index,
+        chordKey: compactRowChordKey(index),
+        action: "reopen-in-container",
+      }));
+    }
+
+    function getProfilesViewModelInternal() {
+      const rows = getProfileRows();
+      return buildCompactRowsViewModel("profiles", "profiles", rows, (row, index) => ({
+        rowId: row.name,
+        index,
+        chordKey: compactRowChordKey(index),
+        action: "launch-profile",
+        disabled: !!row.isCurrent,
+      }));
+    }
+
     function launchProfileInternal(name) {
       const ps = Cc["@mozilla.org/toolkit/profile-service;1"]
         .getService(Ci.nsIToolkitProfileService);
@@ -5510,6 +5563,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return getFolderRows();
         },
 
+        async getFoldersViewModel() {
+          return getFoldersViewModelInternal();
+        },
+
         async moveTabToFolder(folderId, switchToTarget) {
           return moveTabToFolderInternal(folderId, switchToTarget);
         },
@@ -5520,11 +5577,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return getContainerRows();
         },
 
+        async getContainersViewModel() {
+          return getContainersViewModelInternal();
+        },
+
         // Enumerate Firefox/Zen profiles from the toolkit profile service.
         // Same source `about:profiles` reads — rootDir is the unique key
         // (names can technically collide), so identity checks use it.
         async getProfiles() {
           return getProfileRows();
+        },
+
+        async getProfilesViewModel() {
+          return getProfilesViewModelInternal();
         },
 
         // Launch a new Zen instance against the given profile — same call the
