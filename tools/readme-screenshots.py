@@ -34,7 +34,6 @@ DEFAULT_PROFILE = Path.home() / "Library/Application Support/zen-ergozen-readme-
 DEFAULT_PORT = 6100
 WORKSPACE_COUNT = 10
 DEFAULT_CAPTURE_SCALE = 2
-MIN_OUTPUT_WIDTH = 1200
 WORKSPACE_FIXTURES = [
     ("Research", "chrome://browser/skin/zen-icons/selectable/compass.svg"),
     ("Docs", "chrome://browser/skin/zen-icons/selectable/file.svg"),
@@ -927,49 +926,6 @@ def combine_diagonal(client: RdpClient, dark: Path, light: Path, output: Path, o
     )
 
 
-def normalize_output_canvas(client: RdpClient, path: Path, min_width: int) -> dict[str, Any] | None:
-    """Pad narrow screenshots so image viewers use the same effective zoom.
-
-    The panel itself is not scaled. We extend the left/right edge pixels into
-    gutters so compact views keep their rendered text size while QuickLook sees
-    a canvas width comparable to the other README screenshots.
-    """
-    if min_width <= 0:
-        return None
-    return eval_async_json(
-        client,
-        f"""
-(async () => {{
-  const w = Services.wm.getMostRecentWindow("navigator:browser");
-  const IOUtils = w.IOUtils || ChromeUtils.importESModule("resource://gre/modules/IOUtils.sys.mjs").IOUtils;
-  const path = {js_json(str(path))};
-  const bytes = await IOUtils.read(path);
-  const blob = new w.Blob([bytes], {{ type: "image/png" }});
-  const image = await w.createImageBitmap(blob);
-  const minWidth = Math.max(0, {int(min_width)});
-  if (image.width >= minWidth) {{
-    return {{ path, width: image.width, height: image.height, padded: false }};
-  }}
-  const canvas = w.document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
-  canvas.width = minWidth;
-  canvas.height = image.height;
-  const ctx = canvas.getContext("2d");
-  ctx.imageSmoothingEnabled = false;
-  const left = Math.floor((minWidth - image.width) / 2);
-  const right = minWidth - image.width - left;
-  if (left > 0) ctx.drawImage(image, 0, 0, 1, image.height, 0, 0, left, image.height);
-  if (right > 0) ctx.drawImage(image, image.width - 1, 0, 1, image.height, left + image.width, 0, right, image.height);
-  ctx.drawImage(image, left, 0);
-  const out = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-  if (!out) throw new Error("normalize canvas.toBlob returned null");
-  await IOUtils.write(path, new Uint8Array(await out.arrayBuffer()));
-  return {{ path, width: canvas.width, height: canvas.height, padded: true, sourceWidth: image.width, sourceHeight: image.height }};
-}})()
-""",
-        timeout=20,
-    )
-
-
 def launch_zen(profile: Path, port: int) -> subprocess.Popen[str]:
     if not ZEN_BIN.exists():
         raise RuntimeError(f"Zen binary not found at {ZEN_BIN}")
@@ -1038,10 +994,6 @@ def generate(args: argparse.Namespace) -> None:
 
                 if args.write_density:
                     write_png_density(output_path, density_scale)
-                normalized = normalize_output_canvas(client, output_path, args.min_output_width)
-                if normalized and normalized.get("padded") and args.write_density:
-                    write_png_density(output_path, density_scale)
-                    meta = { **meta, "width": normalized["width"], "height": normalized["height"] }
                 print(f"  wrote {meta['path']} ({meta['width']}x{meta['height']})", flush=True)
 
         eval_background(
@@ -1071,7 +1023,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--workspace-count", type=int, default=WORKSPACE_COUNT, help="Minimum number of workspaces in the screenshot profile")
     parser.add_argument("--capture-scale", type=float, default=DEFAULT_CAPTURE_SCALE, help="Snapshot scale before compositing; defaults to 2 for retina-sharp pixels")
     parser.add_argument("--output-scale", type=float, default=None, help="Final composite scale after capture; defaults to 1")
-    parser.add_argument("--min-output-width", type=int, default=MIN_OUTPUT_WIDTH, help="Pad narrower PNGs to this width without scaling panel content; defaults to 1200")
     parser.add_argument("--theme", choices=["split", "both", "light", "dark"], default="split", help="Capture theme mode: split/both combines dark left + light right; light or dark captures one theme only")
     parser.add_argument("--no-density", action="store_false", dest="write_density", help="Do not write PNG density metadata")
     parser.add_argument("--tab", action="append", dest="tabs", help="Seed tab URL; repeat to override the default tab set")
