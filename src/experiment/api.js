@@ -876,6 +876,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       chordSupportScope
     );
     Services.scriptloader.loadSubScript(
+      context.extension.getURL("shared/navigation-url.js"),
+      chordSupportScope
+    );
+    Services.scriptloader.loadSubScript(
       context.extension.getURL("shared/chord-tree.js"),
       chordSupportScope
     );
@@ -4679,13 +4683,50 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return true;
     }
 
+    function duplicateNavigationUrlKeys(url) {
+      const keys = new Set();
+      if (!url) return keys;
+      try {
+        const URLCtor = getWin()?.URL;
+        if (typeof URLCtor !== "function") return keys;
+        const parsed = new URLCtor(url);
+        if (!/^https?:$/.test(parsed.protocol)) return keys;
+        keys.add(parsed.href);
+        const pathname = parsed.pathname || "/";
+        if (pathname.length > 1 && pathname.endsWith("/")) {
+          const withoutSlash = pathname.replace(/\/+$/, "");
+          const lastSegment = withoutSlash.split("/").pop() || "";
+          if (!lastSegment.includes(".")) {
+            parsed.pathname = withoutSlash;
+            keys.add(parsed.href);
+          }
+        } else {
+          const lastSegment = pathname.split("/").pop() || "";
+          if (pathname.length > 1 && !lastSegment.includes(".")) {
+            parsed.pathname = pathname + "/";
+            keys.add(parsed.href);
+          }
+        }
+      } catch (e) {}
+      return keys;
+    }
+
+    function duplicateNavigationUrlsMatch(candidateUrl, openTabUrl) {
+      const candidateKeys = duplicateNavigationUrlKeys(candidateUrl);
+      if (candidateKeys.size === 0) return false;
+      for (const key of duplicateNavigationUrlKeys(openTabUrl)) {
+        if (candidateKeys.has(key)) return true;
+      }
+      return false;
+    }
+
     function urlMatchesAnyOpenTab(url, excludeTab) {
       const w = getWin();
       if (!w?.gBrowser) return null;
       for (const tab of w.gBrowser.tabs) {
         if (tab === excludeTab) continue;
         const u = tab.linkedBrowser?.currentURI?.spec || "";
-        if (u === url) return tab;
+        if (duplicateNavigationUrlsMatch(url, u)) return tab;
       }
       return null;
     }
@@ -4697,7 +4738,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       for (const tab of [...w.gBrowser.tabs]) {
         if (tab === excludeTab || tab.pinned) continue;
         const u = tab.linkedBrowser?.currentURI?.spec || "";
-        if (u !== url) continue;
+        if (!duplicateNavigationUrlsMatch(url, u)) continue;
         try {
           w.gBrowser.removeTab(tab);
           closed += 1;
@@ -6608,7 +6649,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (w?.gBrowser) {
             for (const tab of w.gBrowser.tabs) {
               const u = tab.linkedBrowser?.currentURI?.spec || "";
-              if (u === pendingDuplicate.url) { target = tab; break; }
+              if (duplicateNavigationUrlsMatch(pendingDuplicate.url, u)) { target = tab; break; }
             }
           }
           pendingDuplicate = null;

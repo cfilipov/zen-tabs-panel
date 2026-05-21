@@ -26,8 +26,47 @@ this.isSameMainFrameNavigationUrl = function (tabUrl, requestUrl) {
   }
 };
 
+function duplicateNavigationUrlKeys(url) {
+  const keys = new Set();
+  if (!url) return keys;
+
+  try {
+    const parsed = new URL(url);
+    if (!/^https?:$/.test(parsed.protocol)) return keys;
+    keys.add(parsed.href);
+
+    const pathname = parsed.pathname || "/";
+    if (pathname.length > 1 && pathname.endsWith("/")) {
+      const withoutSlash = pathname.replace(/\/+$/, "");
+      const lastSegment = withoutSlash.split("/").pop() || "";
+      if (!lastSegment.includes(".")) {
+        parsed.pathname = withoutSlash;
+        keys.add(parsed.href);
+      }
+    } else {
+      const lastSegment = pathname.split("/").pop() || "";
+      if (pathname.length > 1 && !lastSegment.includes(".")) {
+        parsed.pathname = pathname + "/";
+        keys.add(parsed.href);
+      }
+    }
+  } catch (e) {}
+
+  return keys;
+}
+
+this.isDuplicateNavigationUrl = function (candidateUrl, openTabUrl) {
+  const candidateKeys = duplicateNavigationUrlKeys(candidateUrl);
+  if (candidateKeys.size === 0) return false;
+  for (const key of duplicateNavigationUrlKeys(openTabUrl)) {
+    if (candidateKeys.has(key)) return true;
+  }
+  return false;
+};
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     isSameMainFrameNavigationUrl: this.isSameMainFrameNavigationUrl,
+    isDuplicateNavigationUrl: this.isDuplicateNavigationUrl,
   };
 }

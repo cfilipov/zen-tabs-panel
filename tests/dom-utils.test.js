@@ -4,7 +4,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { escapeAttr, extractFavicon, extractDomain } = require("../src/shared/dom-utils.js");
-const { isSameMainFrameNavigationUrl } = require("../src/shared/navigation-url.js");
+const {
+  isDuplicateNavigationUrl,
+  isSameMainFrameNavigationUrl,
+} = require("../src/shared/navigation-url.js");
 
 test("escapeAttr escapes the five HTML-attribute hazards", () => {
   assert.equal(escapeAttr(`a&b"c'd<e>f`), "a&amp;b&quot;c&#39;d&lt;e&gt;f");
@@ -70,6 +73,24 @@ test("main-frame navigation URL comparison still distinguishes real navigations"
   );
   assert.equal(
     isSameMainFrameNavigationUrl("about:newtab", "https://example.com/"),
+    false
+  );
+});
+
+test("duplicate navigation URL comparison treats directory slash redirects as same target", () => {
+  assert.equal(
+    isDuplicateNavigationUrl("https://example.com/release-notes", "https://example.com/release-notes/"),
+    true
+  );
+  assert.equal(
+    isDuplicateNavigationUrl("https://example.com/release-notes/", "https://example.com/release-notes"),
+    true
+  );
+});
+
+test("duplicate navigation URL comparison does not add slash variants for file-like paths", () => {
+  assert.equal(
+    isDuplicateNavigationUrl("https://example.com/app.js", "https://example.com/app.js/"),
     false
   );
 });
