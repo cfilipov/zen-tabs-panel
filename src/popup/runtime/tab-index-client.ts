@@ -1,4 +1,7 @@
 import { sendMessage } from "./ipc";
+import type { ActionSection } from "../views/actions-model";
+import type { ExtensionRow } from "./extension-client";
+import type { WorkspaceRow } from "./workspace-client";
 
 export type TabIndexView =
   | "child-tabs"
@@ -132,6 +135,20 @@ export type ActionsSnapshot = {
   previews: Record<string, ActionPreview | null>;
 };
 
+export type ActionsViewModel = {
+  version: number;
+  view: "actions";
+  sections: ActionSection[];
+  workspaces: WorkspaceRow[];
+  workspaceTabCounts: Record<string, number>;
+  extensions: ExtensionRow[];
+  iconHtmlById: Record<string, string | null>;
+  previewsById: Record<string, ActionPreview | null>;
+  counts: Record<string, number>;
+  disabledIds: string[];
+  selectedIndex: number;
+};
+
 export type Send = <T = unknown>(message: unknown) => Promise<T>;
 
 type ZenWorkspacesApi = {
@@ -149,6 +166,7 @@ type ZenWorkspacesApi = {
   getRowsByDomIds(domIdsJson?: string): Promise<TabIndexRow[]>;
   getWorkspaceTabCounts(): Promise<Record<string, number>>;
   getActionsSnapshot(): Promise<ActionsSnapshot>;
+  getActionsViewModel?(recentlyClosedCount?: number): Promise<ActionsViewModel>;
   getDuplicateGroups(paramsJson?: string): Promise<DuplicateGroupRow[]>;
   getDuplicatePromptViewModel?(url: string, domId?: string | null): Promise<DuplicatePromptViewModel>;
 };
@@ -207,6 +225,10 @@ export function createTabIndexClient(send: Send = sendMessage, directApi: ZenWor
     getActionsSnapshot() {
       if (directApi) return directApi.getActionsSnapshot();
       return send<ActionsSnapshot>({ type: "tab-index:get-actions-snapshot" });
+    },
+    getActionsViewModel() {
+      if (directApi?.getActionsViewModel) return directApi.getActionsViewModel();
+      return send<ActionsViewModel>({ type: "tab-index:get-actions-model" });
     },
     getDuplicateGroups(params: Record<string, unknown> = {}) {
       if (directApi) return directApi.getDuplicateGroups(encodeParams(params));

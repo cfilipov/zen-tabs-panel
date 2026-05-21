@@ -591,6 +591,10 @@ const QUERIES = Object.freeze({
   [MSG.TAB_INDEX_GET_ROWS_BY_DOM_IDS]: (m) => api.getRowsByDomIds(JSON.stringify(m.domIds || [])),
   [MSG.TAB_INDEX_GET_WORKSPACE_COUNTS]: () => api.getWorkspaceTabCounts(),
   [MSG.TAB_INDEX_GET_ACTIONS_SNAPSHOT]: () => api.getActionsSnapshot(),
+  [MSG.TAB_INDEX_GET_ACTIONS_MODEL]:    async () => {
+    const recentlyClosed = await getRecentlyClosed().catch(() => []);
+    return api.getActionsViewModel(recentlyClosed.length);
+  },
   [MSG.TAB_INDEX_GET_DUPLICATE_GROUPS]: (m) => api.getDuplicateGroups(JSON.stringify(m.params || {})),
   [MSG.TAB_INDEX_GET_DUPLICATE_PROMPT_MODEL]: (m) => api.getDuplicatePromptViewModel(m.url || "", m.domId || null),
   [MSG.GET_CONTAINERS]:                ()  => api.getContainers(),

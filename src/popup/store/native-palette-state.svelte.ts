@@ -9,6 +9,7 @@ import type { ActionPreview, DuplicateGroupRow, TabIndexRow, ViewWindow } from "
 import type { WorkspaceRow } from "../runtime/workspace-client";
 import type { NativeListRow } from "../view-loaders/list-loader";
 import type { ActionsMenuData } from "../view-loaders/actions-loader";
+import type { ActionSection } from "../views/actions-model";
 import type { DuplicatePromptData } from "../view-loaders/duplicate-prompt-loader";
 
 export type NativePaletteState = {
@@ -50,6 +51,7 @@ export type NativePaletteState = {
   disabledActionIds: Set<string>;
   actionIconHtmlById: Record<string, string | null>;
   actionExtensions: ExtensionRow[];
+  actionSections: ActionSection[];
 };
 
 function defaultNativePaletteState(): NativePaletteState {
@@ -92,6 +94,7 @@ function defaultNativePaletteState(): NativePaletteState {
     disabledActionIds: new Set(),
     actionIconHtmlById: {},
     actionExtensions: [],
+    actionSections: [],
   };
 }
 
@@ -182,6 +185,7 @@ export function createNativePaletteState() {
   }
 
   function applyActionsMenuData(data: ActionsMenuData) {
+    state.actionSections = data.sections || [];
     state.actionsWorkspaces = data.workspaces;
     state.actionWorkspaceTabCounts = data.workspaceTabCounts;
     state.actionExtensions = data.extensions;

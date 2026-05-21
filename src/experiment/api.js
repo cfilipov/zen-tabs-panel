@@ -910,6 +910,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
       recentsModelScope
     );
     const recentsModel = recentsModelScope.createZenRecentsModel({ tabIndex });
+    const actionsModelScope = {};
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("experiment/actions-model.js"),
+      actionsModelScope
+    );
+    const actionsModel = actionsModelScope.createZenActionsModel({
+      navigationTree: KEYBINDINGS,
+      displayKey: chordSupportScope.zenDisplayKey,
+    });
     const workspacesModelScope = {};
     Services.scriptloader.loadSubScript(
       context.extension.getURL("experiment/workspaces-model.js"),
@@ -3513,6 +3522,25 @@ this.zenWorkspaces = class extends ExtensionAPI {
       };
     }
 
+    function getActionsSnapshotInternal() {
+      const snapshot = tabIndex.getActionsSnapshot();
+      const w = getWin();
+      const browser = w?.gBrowser?.selectedBrowser;
+      const url = browser?.currentURI?.spec || "";
+      return {
+        ...snapshot,
+        currentTabCanReaderMode: !!(browser?.isArticle || url.startsWith("about:reader")),
+      };
+    }
+
+    function getSelectedTabDomIdsInternal() {
+      const w = getWin();
+      if (!w || !w.gBrowser) return [];
+      return w.gBrowser.selectedTabs
+        .filter((t) => !t.hasAttribute("zen-essential"))
+        .map((t) => t.id);
+    }
+
     function cloneReplayParams(params) {
       if (!params || typeof params !== "object") return null;
       try { return JSON.parse(JSON.stringify(params)); }
@@ -5786,14 +5814,25 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         async getActionsSnapshot() {
-          const snapshot = tabIndex.getActionsSnapshot();
-          const w = getWin();
-          const browser = w?.gBrowser?.selectedBrowser;
-          const url = browser?.currentURI?.spec || "";
-          return {
-            ...snapshot,
-            currentTabCanReaderMode: !!(browser?.isArticle || url.startsWith("about:reader")),
-          };
+          return getActionsSnapshotInternal();
+        },
+
+        async getActionsViewModel(recentlyClosedCount) {
+          const [workspaces, extensions] = await Promise.all([
+            getWorkspacesWithIconContent(),
+            (async () => {
+              if (!extensionListCache) extensionListCache = await buildExtensionList();
+              return withBrowserActionBadges(extensionListCache);
+            })(),
+          ]);
+          return actionsModel.getViewModel({
+            workspaces,
+            snapshot: getActionsSnapshotInternal(),
+            extensions,
+            recentlyClosedCount: Number(recentlyClosedCount) || 0,
+            navHistory: getFilteredNavigationHistory(),
+            selectedDomIds: getSelectedTabDomIdsInternal(),
+          });
         },
 
         // ---------------------------------------------------------------
@@ -5876,11 +5915,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         // Get DOM IDs of multiselected tabs (excludes essentials)
         async getSelectedTabDomIds() {
-          const w = getWin();
-          if (!w || !w.gBrowser) return [];
-          return w.gBrowser.selectedTabs
-            .filter(t => !t.hasAttribute("zen-essential"))
-            .map(t => t.id);
+          return getSelectedTabDomIdsInternal();
         },
 
         // DOM ids of tabs the next action should target. If the user has

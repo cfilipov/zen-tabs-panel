@@ -123,7 +123,7 @@
   const tabInfoClient = createTabInfoClient();
   const workspaceClient = createWorkspaceClient();
   const effects = createPaletteEffects();
-  const actionSections = buildActionsMenuModel();
+  const fallbackActionSections = buildActionsMenuModel();
   function shouldChromeResolveActivation(view: ViewId, activation: ViewActivation) {
     return view === "duplicate-prompt" && activation.kind === "activate-tab";
   }
@@ -236,7 +236,18 @@
   const headerOverlay = $derived(palette.currentView === "actions" && !!headerHint);
   const headerHidden = $derived(palette.currentView === "actions" && !headerHint);
   const fitContentHeight = $derived(usesFitContentHeight(palette.currentView));
-  const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
+  const renderedActionSections = $derived(
+    palette.actionSections.length
+      ? palette.actionSections
+      : applyActionMetadata(
+        appendWorkspaceSwitchItems(fallbackActionSections, palette.actionsWorkspaces, palette.actionWorkspaceTabCounts),
+        palette.actionCounts,
+        palette.disabledActionIds,
+        palette.actionIconHtmlById,
+        palette.actionPreviewsById,
+      ),
+  );
+  const pageCount = $derived(Math.max(1, Math.max(...renderedActionSections.map((section) => section.page))));
   const viewLoad = createViewLoadController<ViewId>({
     getCurrentView: () => palette.currentView,
     setCurrentView: paletteStore.setCurrentView,
@@ -265,15 +276,6 @@
     setTimeout: (fn, ms) => window.setTimeout(fn, ms),
     resizePanel: (view, height, width) => effects.resizePanel(view, height, width, revealController.inst).catch(() => {}),
   });
-  const renderedActionSections = $derived(
-    applyActionMetadata(
-      appendWorkspaceSwitchItems(actionSections, palette.actionsWorkspaces, palette.actionWorkspaceTabCounts),
-      palette.actionCounts,
-      palette.disabledActionIds,
-      palette.actionIconHtmlById,
-      palette.actionPreviewsById,
-    ),
-  );
   const visibleActionItems = $derived(actionItemsForPage(renderedActionSections, palette.currentPage));
   const allActionItems = $derived(renderedActionSections.flatMap((section) => section.items));
   const allActionNodes = $derived(actionNodesForSections(renderedActionSections));

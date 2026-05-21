@@ -50,6 +50,7 @@ this.MSG = Object.freeze({
   TAB_INDEX_GET_ROWS_BY_DOM_IDS:  "tab-index:get-rows-by-dom-ids",
   TAB_INDEX_GET_WORKSPACE_COUNTS: "tab-index:get-workspace-counts",
   TAB_INDEX_GET_ACTIONS_SNAPSHOT: "tab-index:get-actions-snapshot",
+  TAB_INDEX_GET_ACTIONS_MODEL: "tab-index:get-actions-model",
   TAB_INDEX_GET_DUPLICATE_GROUPS: "tab-index:get-duplicate-groups",
   TAB_INDEX_GET_DUPLICATE_PROMPT_MODEL: "tab-index:get-duplicate-prompt-model",
 

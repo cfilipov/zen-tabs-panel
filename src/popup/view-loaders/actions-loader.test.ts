@@ -17,6 +17,51 @@ const emptySnapshot = {
 };
 
 describe("actions loader", () => {
+  it("prefers the chrome-owned actions model when available", async () => {
+    const data = await loadActionsMenuData({
+      workspaceClient: { getWorkspacesWithIcons: async () => { throw new Error("fallback should not run"); } },
+      tabIndexClient: {
+        getActionsSnapshot: async () => { throw new Error("fallback should not run"); },
+        getActionsViewModel: async () => ({
+          version: 9,
+          view: "actions",
+          sections: [{
+            id: "navigate",
+            label: "Navigate",
+            page: 1,
+            items: [{
+              id: "go-to-previous-tab",
+              kind: "action",
+              label: "Previous",
+              hotkey: "P",
+              badge: "P",
+              isView: false,
+              page: 1,
+            }],
+          }],
+          workspaces: [],
+          workspaceTabCounts: {},
+          extensions: [],
+          iconHtmlById: {},
+          previewsById: {},
+          counts: { "child-tabs": 1 },
+          disabledIds: ["go-to-parent-tab"],
+          selectedIndex: -1,
+        }),
+      },
+      extensionClient: { listExtensions: async () => { throw new Error("fallback should not run"); } },
+      historyClient: {
+        getRecentlyClosed: async () => { throw new Error("fallback should not run"); },
+        getNavigationHistory: async () => { throw new Error("fallback should not run"); },
+      },
+      getSelectedTabDomIds: async () => { throw new Error("fallback should not run"); },
+    });
+
+    expect(data.sections?.[0]?.items[0]?.id).toBe("go-to-previous-tab");
+    expect(data.counts["child-tabs"]).toBe(1);
+    expect(data.disabledIds.has("go-to-parent-tab")).toBe(true);
+  });
+
   it("builds action counts, previews, disabled ids, and workspace navigation icons", async () => {
     const data = await loadActionsMenuData({
       workspaceClient: {

@@ -343,6 +343,15 @@
         "parameters": []
       },
       {
+        "name": "getActionsViewModel",
+        "type": "function",
+        "async": true,
+        "description": "Get the chrome-owned root actions view model",
+        "parameters": [
+          { "name": "recentlyClosedCount", "type": "integer", "optional": true }
+        ]
+      },
+      {
         "name": "getCompanionMods",
         "type": "function",
         "async": true,

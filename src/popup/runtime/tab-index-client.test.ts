@@ -120,6 +120,30 @@ describe("tab index client", () => {
     ]);
   });
 
+  it("loads the chrome-owned actions model through the message fallback", async () => {
+    const sent: unknown[] = [];
+    const client = createTabIndexClient(async <T>(message: unknown) => {
+      sent.push(message);
+      return {
+        version: 1,
+        view: "actions",
+        sections: [],
+        workspaces: [],
+        workspaceTabCounts: {},
+        extensions: [],
+        iconHtmlById: {},
+        previewsById: {},
+        counts: {},
+        disabledIds: [],
+        selectedIndex: -1,
+      } as T;
+    });
+
+    await client.getActionsViewModel();
+
+    expect(sent).toEqual([{ type: "tab-index:get-actions-model" }]);
+  });
+
   it("loads the chrome-owned duplicate prompt model through the message fallback", async () => {
     const sent: unknown[] = [];
     const client = createTabIndexClient(async <T>(message: unknown) => {
