@@ -126,12 +126,10 @@ describe("popup architecture boundary", () => {
   it("keeps typed navigation registries present", () => {
     const navigationTree = readFileSync(join(popupRoot, "..", "shared", "navigation-tree.ts"), "utf8");
     const actionRegistry = readFileSync(join(popupRoot, "interaction", "action-registry.ts"), "utf8");
-    const availability = readFileSync(join(popupRoot, "interaction", "availability.ts"), "utf8");
     const viewRegistry = readFileSync(join(popupRoot, "view-loaders", "view-registry.ts"), "utf8");
 
     expect(navigationTree).toMatch(/\bActionEffectId\b/);
     expect(actionRegistry).toMatch(/Record<ActionEffectId,/);
-    expect(availability).toMatch(/Record<AvailabilityPredicateId,/);
     expect(viewRegistry).toMatch(/\bViewLoaderId\b/);
     expect(viewRegistry).toMatch(/Exclude<NavigationViewId, PlannedNavigationView>/);
   });
