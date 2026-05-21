@@ -3,9 +3,10 @@ import type { ContainerRow } from "../runtime/container-client";
 import type { FolderRow } from "../runtime/folder-client";
 import type { NavigationHistory, RecentlyClosedRow } from "../runtime/history-client";
 import type { ProfileRow } from "../runtime/profile-client";
-import type { DomainIndexRow, TabIndexRow } from "../runtime/tab-index-client";
+import type { TabIndexRow } from "../runtime/tab-index-client";
 import type { WorkspaceRow } from "../runtime/workspace-client";
 import type { NativeListRow } from "../view-loaders/list-loader";
+import { isDomainRow, isTabRow } from "../view-loaders/list-row";
 import { isNativeListView, isRecentlyClosedView } from "../view-loaders/view-registry";
 import { rowInWindow } from "./list-window";
 
@@ -23,14 +24,6 @@ export type StableRowIdentityContext = {
   folderRows: readonly FolderRow[];
   profileRows: readonly ProfileRow[];
 };
-
-function isDomainRow(row: NativeListRow | null): row is DomainIndexRow {
-  return row?.kind === "domain";
-}
-
-function isTabRow(row: NativeListRow | null): row is TabIndexRow {
-  return !!row && row.kind !== "domain";
-}
 
 export function navigationEntryForShortcutIndex(history: NavigationHistory | null, index: number) {
   if (!history || !Number.isInteger(index) || index < 0) return null;

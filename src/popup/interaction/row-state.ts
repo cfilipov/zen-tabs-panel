@@ -1,11 +1,8 @@
 import type { RecentlyClosedRow } from "../runtime/history-client";
 import type { DomainIndexRow, DuplicateGroupRow, TabIndexRow } from "../runtime/tab-index-client";
+import { isTabRow } from "../view-loaders/list-row";
 
 export type NativeRow = TabIndexRow | DomainIndexRow;
-
-function isTabRow(row: NativeRow): row is TabIndexRow {
-  return row.kind !== "domain";
-}
 
 function selectionAfterRemoval(selectedIndex: number, count: number) {
   if (count <= 0) return -1;

@@ -97,6 +97,7 @@
     resolveViewOpenPlan,
     type NativeListView,
   } from "./view-loaders/view-registry";
+  import { isDomainRow, isTabRow } from "./view-loaders/list-row";
   import { formatDuration } from "./views/format";
   import {
     actionItemsForPage,
@@ -336,14 +337,6 @@
 
   function shouldScrollListSelection() {
     return !isCurrentActionsView() && !isNativePrefixView(palette.currentView);
-  }
-
-  function isDomainRow(row: NativeListRow | null): row is DomainIndexRow {
-    return row?.kind === "domain";
-  }
-
-  function isTabRow(row: NativeListRow | null): row is TabIndexRow {
-    return !!row && row.kind !== "domain";
   }
 
   function viewParams(view: NativeListView) {
