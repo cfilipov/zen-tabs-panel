@@ -740,6 +740,13 @@
     effects.runDuplicatePromptAction(action);
   }
 
+  async function activateDuplicatePromptTab(row: TabIndexRow, index: number) {
+    if (row.active) return;
+    const key = replayKeyForBadgeIndex(index);
+    if (key) effects.recordCurrentViewChordKey(key, "trace");
+    await activateCurrentChromeModelRow(index, "shortcut");
+  }
+
 
   function previewTab(row: TabIndexRow) {
     effects.previewTab(row.domId);
@@ -1230,6 +1237,7 @@
     {activateRenderedRow}
     restoreClosedTabKeepOpen={(row) => restoreClosedTab(row, true)}
     {activateTab}
+    {activateDuplicatePromptTab}
     {closeDuplicateTab}
     {closeDuplicatePromptTab}
     {previewTab}

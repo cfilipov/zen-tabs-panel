@@ -17,7 +17,7 @@
     workspaces?: WorkspaceRow[];
     selectedIndex?: number;
     onactivate?: (action: DuplicatePromptAction) => void;
-    ontabactivate?: (row: TabIndexRow) => void;
+    ontabactivate?: (row: TabIndexRow, index: number) => void;
     onclose?: (row: TabIndexRow) => void;
     onpreview?: (domId: string) => void;
     onclearpreview?: () => void;

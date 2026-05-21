@@ -11,7 +11,7 @@
     limit?: number;
     selectedIndex?: number;
     shortcutForIndex?: (index: number) => string | null;
-    onactivate?: (row: TabIndexRow) => void;
+    onactivate?: (row: TabIndexRow, index: number) => void;
     onclose?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
@@ -82,7 +82,7 @@
         onmouseenter={() => onpreview?.(tab)}
         onmouseleave={() => onclearpreview?.()}
         onclick={() => {
-          if (!tab.active) onactivate?.(tab);
+          if (!tab.active) onactivate?.(tab, index);
         }}
       >
         <span class="dup-workspace">

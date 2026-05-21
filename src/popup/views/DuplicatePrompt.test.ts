@@ -104,7 +104,7 @@ describe("DuplicatePrompt", () => {
     expect(onpreview).toHaveBeenCalledWith("existing-tab");
 
     await fireEvent.click(screen.getByRole("button", { name: /main .*2/i }));
-    expect(ontabactivate).toHaveBeenCalledWith(group.tabs[1]);
+    expect(ontabactivate).toHaveBeenCalledWith(group.tabs[1], 1);
 
     await fireEvent.click(screen.getAllByTitle("Close tab")[0]);
     expect(onclose).toHaveBeenCalledWith(group.tabs[0]);
