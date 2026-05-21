@@ -33,12 +33,23 @@ type ChordSession = {
   shouldDebounceLeaderArm: (now?: number, threshold?: number) => boolean;
   markLeaderArm: (now?: number) => number;
   beginArm: (now?: number) => void;
+  beginBridgeFromOpenView: (view?: string | null, kind?: string, source?: string) => Record<string, unknown>;
   transition: (to: string, why: string, data?: unknown) => void;
   observeLegacyState: (snapshot: unknown, why: string) => void;
   assertInvariant: (snapshot?: unknown) => true;
   getStateSnapshot: () => {
     state: string;
+    revealBlocked?: boolean;
+    revealDeferred?: boolean;
+    activeBridgeView?: string | null;
+    popupReady?: boolean;
+    readyTargetView?: string | null;
+    bridgeBufferLength?: number | null;
+    bridgeTimerActive?: boolean;
+    revealTimerActive?: boolean;
     lastLeaderArmAt: number;
+    armSequence?: number;
+    terminalDispatchArmSequence?: number;
     recentTransitions: Array<Record<string, unknown>>;
   };
   getReplayState: () => {
@@ -445,6 +456,33 @@ describe("chord-session replay recording", () => {
 
     env.session.acceptKey({ kind: "key", key: "Escape", code: "Escape", shimTs: 20 });
     expect(overlay.destroy).toHaveBeenLastCalledWith();
+  });
+
+  it("owns bridge entry and late retarget bookkeeping", () => {
+    const session = makeSession();
+
+    expect(session.beginBridgeFromOpenView("last-visited", "chrome", "match")).toMatchObject({
+      mode: "new-bridge",
+      requestedView: "last-visited",
+      activeView: "last-visited",
+    });
+    expect(session.getStateSnapshot()).toMatchObject({
+      state: "bridging-buffering",
+      activeBridgeView: "last-visited",
+      popupReady: false,
+      bridgeBufferLength: 0,
+    });
+
+    expect(session.beginBridgeFromOpenView("tabs-by-age", "chrome", "match")).toMatchObject({
+      mode: "ignored-active-bridge",
+    });
+    expect(session.getStateSnapshot().activeBridgeView).toBe("last-visited");
+
+    expect(session.beginBridgeFromOpenView("tabs-by-age", "chrome", "late-match")).toMatchObject({
+      mode: "retarget-active-bridge",
+      activeView: "tabs-by-age",
+    });
+    expect(session.getStateSnapshot().activeBridgeView).toBe("tabs-by-age");
   });
 
   it("commits chrome model row intents instead of popup bridge replays", () => {

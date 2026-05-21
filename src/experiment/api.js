@@ -3223,12 +3223,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // timeout fired even though the user typed it before the timeout. In
       // that case the timeout side effect has already opened the bridge; keep
       // the bridge but move it to the view the pre-timeout key matched.
-      if (hasActiveBridge()) {
-        if (source !== "late-match") return;
-        const requestedView = view || null;
-        setActiveBridgeView(requestedView || "actions", "lateTimeoutOpenView");
-        setPopupReady(false, "popup-ready-clear");
-        if (chordSession) chordSession.transition("bridging-buffering", "lateTimeoutOpenView", { view, kind, source });
+      const bridgeEntry = chordSession.beginBridgeFromOpenView(view, kind, source);
+      if (bridgeEntry.mode === "ignored-active-bridge") return;
+      if (bridgeEntry.mode === "retarget-active-bridge") {
+        const requestedView = bridgeEntry.requestedView || null;
         observeChordSession("lateTimeoutOpenView");
         const w = getWin();
         clearBridgeTimer();
@@ -3249,10 +3247,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return;
       }
 
-      startBridgeBuffer("enterBridgeFromOpenView");
-      setActiveBridgeView(view || "actions", "enterBridgeFromOpenView");
-      setPopupReady(false, "popup-ready-clear");
-      if (chordSession) chordSession.transition("bridging-buffering", "enterBridgeFromOpenView", { view, kind, source });
       observeChordSession("enterBridgeFromOpenView");
       const w = getWin();
       clearBridgeTimer();
@@ -3261,7 +3255,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         finishBridge();
       });
 
-      const requestedView = view || null;
+      const requestedView = bridgeEntry.requestedView || null;
 
       if (source === "timeout") {
         // User-paused open: reveal at the requested view. Reuse the

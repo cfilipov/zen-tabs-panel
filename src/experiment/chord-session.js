@@ -727,6 +727,26 @@
       return bridgeState.activeView != null;
     }
 
+    function beginBridgeFromOpenView(view, kind, source) {
+      const requestedView = view || null;
+      const activeView = requestedView || "actions";
+      if (bridgeState.activeView != null) {
+        if (source !== "late-match") {
+          return { mode: "ignored-active-bridge", requestedView, activeView };
+        }
+        bridgeState.activeView = activeView;
+        bridgeState.popupReady = false;
+        transition("bridging-buffering", "lateTimeoutOpenView", { view, kind, source });
+        return { mode: "retarget-active-bridge", requestedView, activeView };
+      }
+
+      bridgeState.buffer = [];
+      bridgeState.activeView = activeView;
+      bridgeState.popupReady = false;
+      transition("bridging-buffering", "enterBridgeFromOpenView", { view, kind, source });
+      return { mode: "new-bridge", requestedView, activeView };
+    }
+
     function setPopupReady(value, why) {
       bridgeState.popupReady = !!value;
       if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { popupReady: bridgeState.popupReady } });
@@ -874,6 +894,7 @@
       setActiveBridgeView,
       getActiveBridgeView,
       hasActiveBridge,
+      beginBridgeFromOpenView,
       setPopupReady,
       isPopupReady,
       setReadyTargetView,
