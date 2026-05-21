@@ -639,7 +639,7 @@
 
   async function activateTabInfoDuplicate(row: TabIndexRow, index: number) {
     if (row.active) return;
-    await activateChromeResolvedRow(index, "selection", false, { kind: "activate-tab", row });
+    await activateCurrentChromeModelRow(index, "selection", false, replayKeyForBadgeIndex(index), row.domId);
   }
 
 

@@ -3843,7 +3843,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const tabs = getAllTabElements().filter((tab) => (tab.linkedBrowser?.currentURI?.spec || "") === url);
           const row = tabs[rowIndex] || null;
           if (!row || !row.id) return false;
-          if (expectedDomId && row.id !== expectedDomId) return false;
+          const expectedTabId = expectedDomId || expectedRowId;
+          if (expectedTabId && row.id !== expectedTabId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           void (async () => {
             if (destroy) overlayController.destroy();
