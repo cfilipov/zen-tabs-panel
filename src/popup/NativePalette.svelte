@@ -8,7 +8,7 @@
     activationPlanForShortcut,
     type ActivationPlan,
   } from "./interaction/activation-plan";
-  import { nextActionSectionIndex, nextActionsPage } from "./interaction/actions-navigation";
+  import { nextActionsPage } from "./interaction/actions-navigation";
   import { createBridgeDispatchController } from "./interaction/bridge-dispatch";
   import {
     installChordBridgeHandlers,
@@ -38,10 +38,10 @@
   import { stableRowIdForActivation } from "./interaction/row-identity";
   import {
     duplicatePromptPreviewDomId,
-    nextDuplicatePromptSectionIndex,
     nextSelectionIndex,
     type SelectionContext,
   } from "./interaction/selection";
+  import { nextSectionJumpIndex } from "./interaction/section-jump";
   import {
     keepOnlyTabInfoDuplicate,
     removeRecentlyClosedRow,
@@ -706,22 +706,13 @@
   }
 
   function jumpSection(delta: 1 | -1) {
-    if (palette.currentView === "duplicate-prompt") {
-      const nextIndex = nextDuplicatePromptSectionIndex(selectionContext(), delta);
-      if (nextIndex !== null) {
-        paletteStore.selectIndex(nextIndex);
-        scrollCurrentSelectionIntoView();
-      }
-      return;
-    }
-    if (!isCurrentActionsView()) return;
-    const nextIndex = nextActionSectionIndex({
-      sections: renderedActionSections,
+    const nextIndex = nextSectionJumpIndex({
+      view: palette.currentView,
+      selection: selectionContext(),
+      actionSections: renderedActionSections,
       currentPage: palette.currentPage,
       visibleItemCount: visibleActionItems.length,
-      selectedIndex: palette.selectedIndex,
-      delta,
-    });
+    }, delta);
     if (nextIndex !== null) {
       paletteStore.selectIndex(nextIndex);
       scrollCurrentSelectionIntoView();

@@ -1,4 +1,4 @@
-type ActionSectionShape = {
+export type ActionSectionShape = {
   page: number;
   items: readonly unknown[];
 };
