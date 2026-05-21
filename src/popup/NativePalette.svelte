@@ -28,6 +28,7 @@
   import { createNativePaletteInteractionRuntime } from "./interaction/native-palette-runtime";
   import { previewPlan } from "./interaction/preview-plan";
   import { applyInteractionCommand } from "./interaction/runtime";
+  import { tabSubtitleForView } from "./interaction/tab-display";
   import {
     loadWindowForIndex,
     rowInWindow,
@@ -847,15 +848,11 @@
     paletteLoaders.loadListView(palette.currentView, request.offset, request.limit, false, viewParams(palette.currentView));
   }
 
-  function tabAge(row: TabIndexRow) {
-    const created = Number.parseInt(row.domId.split("-")[0] || "", 10);
-    return formatDuration(Date.now() - created);
-  }
-
   function tabSubtitle(row: TabIndexRow) {
-    if (palette.currentView === "most-visited") return `${row.focusCount ?? 0} focuses`;
-    if (palette.currentView === "tabs-by-age") return tabAge(row);
-    return null;
+    return tabSubtitleForView(palette.currentView, row, {
+      now: Date.now(),
+      formatDuration,
+    });
   }
 
   async function runCommand(command: InteractionCommand) {
