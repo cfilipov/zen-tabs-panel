@@ -25,6 +25,7 @@
   import { chordFromKey } from "./interaction/inputs";
   import { DUPLICATE_PROMPT_ACTIONS, type DuplicatePromptAction } from "./interaction/duplicate-prompt-options";
   import { createNativePaletteInteractionRuntime } from "./interaction/native-palette-runtime";
+  import { previewPlan } from "./interaction/preview-plan";
   import { applyInteractionCommand } from "./interaction/runtime";
   import {
     loadWindowForIndex,
@@ -1054,17 +1055,15 @@
   }
 
   $effect(() => {
-    if (selectedTabRow) {
-      previewTab(selectedTabRow);
-    } else if (selectedDuplicateTabRow) {
-      previewTab(selectedDuplicateTabRow);
-    } else if (selectedDuplicatePromptDomId) {
-      previewTabLike({ domId: selectedDuplicatePromptDomId });
-    } else if (palette.currentView === "duplicates") {
-      clearPreview();
-    } else if (palette.currentView === "duplicate-prompt") {
-      clearPreview();
-    } else if (palette.currentView === "actions") {
+    const plan = previewPlan({
+      view: palette.currentView,
+      selectedTabDomId: selectedTabRow?.domId,
+      selectedDuplicateTabDomId: selectedDuplicateTabRow?.domId,
+      selectedDuplicatePromptDomId,
+    });
+    if (plan.kind === "preview") {
+      previewTabLike({ domId: plan.domId });
+    } else if (plan.kind === "clear") {
       clearPreview();
     }
   });
