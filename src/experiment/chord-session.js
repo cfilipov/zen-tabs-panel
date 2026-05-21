@@ -1052,7 +1052,6 @@
       hasBridgeBuffer,
       getBridgeBufferLength,
       pushBridgeKey,
-      drainBridgeBuffer,
       markPopupReady,
       finishBridge,
       clearBridgeTimer,
