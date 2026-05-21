@@ -464,7 +464,7 @@
   async function navigateToHistoryIndex(index: number) {
     markTerminalCommandDispatched();
     revealController.clear();
-    effects.sendViewCommand({ type: "navigate-to-history-index", index });
+    effects.navigateToHistoryIndex(index);
   }
 
   async function activateCurrentChromeModelRow(

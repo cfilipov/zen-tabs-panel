@@ -1,5 +1,4 @@
 import type { ViewId } from "../../shared/types";
-import type { ActionEffectId } from "../../shared/navigation-tree";
 import type { DuplicatePromptAction } from "../interaction/duplicate-prompt-options";
 import { chromeNavigationMessage } from "../interaction/view-navigation";
 import { fireMessage, sendMessage } from "./ipc";
@@ -24,9 +23,6 @@ export function createPaletteEffects() {
     },
     getSelectedTabDomIds() {
       return sendMessage<string[]>({ type: "get-selected-tab-dom-ids" });
-    },
-    runAction(actionId: ActionEffectId) {
-      fireMessage({ type: actionId });
     },
     activateTab(domId: string) {
       fireMessage({ type: "activate-tab", domId });
@@ -102,9 +98,6 @@ export function createPaletteEffects() {
     },
     clearPreview() {
       fireMessage({ type: "clear-preview" });
-    },
-    sendViewCommand(message: Record<string, unknown>) {
-      fireMessage(message);
     },
     resizePanel(view: ViewId, height: number, dynamicSidebarWidth?: number, inst?: number | null) {
       return sendMessage({
