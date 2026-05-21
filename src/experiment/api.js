@@ -3035,8 +3035,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // (toolbar-icon clicks, ChordSession root/prefix timeout when prerender
     // is at the wrong view, etc.).
     function openOverlayWithView(view) {
-      createOverlay(view || null, null);
-      revealOverlay();
+      overlayController.create(view || null, null);
+      overlayController.reveal();
     }
 
     // ChordSession descended into a prefix node — eagerly prerender the prefix's
@@ -3060,8 +3060,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Swap the existing prerender (typically the actions-view one from
       // onArmed) for one at the prefix's view. Silent destroy preserves
       // any in-flight bridge state.
-      if (hasPendingReveal()) destroyOverlay({ silent: true });
-      createOverlay(view);
+      if (hasPendingReveal()) overlayController.destroy({ silent: true });
+      overlayController.create(view);
     }
 
     // Dispatch a chord action coming from ChordSession.
@@ -3098,7 +3098,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (w && id != null) try { w.clearTimeout(id); } catch (e) {}
       },
       onArmed: () => {
-        createOverlay();
+        overlayController.create();
       },
       onAction: (payload) => {
         debugChordTrace("chrome-on-action", payload);
@@ -3115,7 +3115,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       onCancel: () => {
         debugChordTrace("chrome-on-cancel", {});
         disarmChordShims("cancel");
-        if (hasPendingReveal()) destroyOverlay();
+        if (hasPendingReveal()) overlayController.destroy();
       },
       onBridgeKey: (keyData) => {
         debugChordTrace("chrome-on-bridge-key", keyData);
@@ -3226,7 +3226,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
       trackChordTerminalAction(payload);
       disarmChordShims("terminal-action");
-      if (hasPendingReveal()) destroyOverlay();
+      if (hasPendingReveal()) overlayController.destroy();
       if (payload.type === "action") {
         if (paletteRequestFire) {
           paletteRequestFire.async({ kind: "chord-action", actionId: payload.actionId });
@@ -3278,13 +3278,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
           finishBridge();
         });
         if (hasPendingReveal()) {
-          destroyOverlay({ silent: true });
-          createOverlay(requestedView);
+          overlayController.destroy({ silent: true });
+          overlayController.create(requestedView);
           armRevealTimer();
         } else if (isOverlayVisible()) {
-          morphToView(requestedView || "actions", {});
+          overlayController.morphTo(requestedView || "actions", {});
         } else {
-          createOverlay(requestedView);
+          overlayController.create(requestedView);
           armRevealTimer();
         }
         return;
@@ -3323,9 +3323,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // the overlay invisible after reload/rearm races.
           if (!isPopupReady()) forcePopupBridgeReady();
           setRevealDeferred(false, "reveal-deferred-clear");
-          revealOverlay();
+          overlayController.reveal();
         } else {
-          if (hasPendingReveal()) destroyOverlay({ silent: true });
+          if (hasPendingReveal()) overlayController.destroy({ silent: true });
           openOverlayWithView(requestedView);
         }
         return;
@@ -3346,8 +3346,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // which then reports the valid submenu key as invalid.
           createFreshOverlayForDirectOpen(requestedView);
         } else {
-          if (hasPendingReveal()) destroyOverlay({ silent: true });
-          createOverlay(requestedView);
+          if (hasPendingReveal()) overlayController.destroy({ silent: true });
+          overlayController.create(requestedView);
         }
       }
       armRevealTimer();
@@ -3381,7 +3381,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
         if (!isPopupReady()) forcePopupBridgeReady();
         setRevealDeferred(false, "reveal-deferred-clear");
-        revealOverlay();
+        overlayController.reveal();
       }, 250);
     }
 
@@ -3425,7 +3425,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           scheduleDeferredRevealFallback();
           return;
         }
-        revealOverlay();
+        overlayController.reveal();
       });
     }
 
@@ -3436,7 +3436,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!chordSession) return;
       chordSession.armRevealTimer(w, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700, () => {
         if (!hasPendingReveal() || isPopupReady()) return;
-        revealOverlay();
+        overlayController.reveal();
       });
     }
 
