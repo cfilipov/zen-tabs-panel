@@ -17,6 +17,7 @@ type ChordSessionScope = {
     onAction?: (payload: Record<string, unknown>) => void;
     onStateChange?: (path: string[]) => void;
     onBridgeKey?: (payload: Record<string, unknown>) => void;
+    overlay?: Record<string, (...args: unknown[]) => unknown>;
   }) => ChordSession;
 };
 
@@ -412,6 +413,25 @@ describe("chord-session replay recording", () => {
       type: "action",
       actionId: "sort-tabs-domain-alpha",
     });
+  });
+
+  it("uses the overlay controller for arm, prefix prerender, and cancel cleanup", () => {
+    const overlay = {
+      create: vi.fn(),
+      destroy: vi.fn(),
+      hasPendingReveal: vi.fn(() => true),
+    };
+    const env = makeInteractiveSession({ overlay });
+
+    env.session.arm();
+    expect(overlay.create).toHaveBeenCalledWith();
+
+    env.session.acceptKey({ kind: "key", key: "o", code: "KeyO", shimTs: 10 });
+    expect(overlay.destroy).toHaveBeenCalledWith({ silent: true });
+    expect(overlay.create).toHaveBeenLastCalledWith("reorder-tabs");
+
+    env.session.acceptKey({ kind: "key", key: "Escape", code: "Escape", shimTs: 20 });
+    expect(overlay.destroy).toHaveBeenLastCalledWith();
   });
 
   it("commits chrome model row intents instead of popup bridge replays", () => {

@@ -92,6 +92,7 @@
   function createChordSession(options) {
     const replayActionId = options && options.replayActionId;
     const replayRecordBlocklist = new Set((options && options.replayRecordBlocklist) || []);
+    const overlay = options && options.overlay;
     const recentTransitions = [];
 
     let state = "idle";
@@ -323,6 +324,13 @@
       try { fn.apply(null, Array.prototype.slice.call(arguments, 1)); } catch (e) {}
     }
 
+    function callOverlay(name /*, ...args */) {
+      const fn = overlay && overlay[name];
+      if (typeof fn !== "function") return undefined;
+      try { return fn.apply(overlay, Array.prototype.slice.call(arguments, 1)); } catch (e) {}
+      return undefined;
+    }
+
     function resetTraversal(nextState) {
       clearChordTimer();
       lastTimeout = null;
@@ -453,6 +461,7 @@
       lastAcceptedPhysicalKeySignature = null;
       lastAcceptedPhysicalKeyFingerprint = null;
       recordEvent({ kind: "armed" });
+      callOverlay("create");
       callOption("onArmed");
       const constants = options && options.constants || {};
       setChordTimer(rootTimeout, constants.CHORD_ROOT_TIMEOUT_MS || 500);
@@ -462,6 +471,10 @@
       currentNode = node;
       currentPath = currentPath.concat([key]);
       transition("armed-prefix", "descend", { path: currentPath });
+      if (node && node.onTimeout && node.onTimeout.type === "open-view" && node.onTimeout.view) {
+        if (callOverlay("hasPendingReveal")) callOverlay("destroy", { silent: true });
+        callOverlay("create", node.onTimeout.view);
+      }
       callOption("onStateChange", currentPath.slice());
       const constants = options && options.constants || {};
       setChordTimer(prefixTimeout, node.timeoutMs || constants.CHORD_PREFIX_TIMEOUT_MS || 500);
@@ -473,6 +486,7 @@
       if (wasArmed) {
         transition("cancelled", "cancel");
         transition("idle", "cancel-idle");
+        if (callOverlay("hasPendingReveal")) callOverlay("destroy");
         callOption("onCancel");
       }
     }

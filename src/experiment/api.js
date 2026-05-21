@@ -3023,31 +3023,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       overlayController.reveal();
     }
 
-    // ChordSession descended into a prefix node — eagerly prerender the prefix's
-    // view (the one that would open on prefix-timeout) so it's loaded by
-    // the time the timer fires. Without this, cmd+., o pauses for the
-    // prefix timeout AND THEN starts the popup load + reveal, which feels
-    // noticeably slower than cmd+., q (where the open-view match fires
-    // the IPC immediately and popup loads during the reveal-wait window).
-    function prerenderPrefixView(snapshot) {
-      if (!Array.isArray(snapshot) || snapshot.length === 0) return;
-      let node = CHORD_TREE;
-      for (const k of snapshot) {
-        if (!node || !node.children) return;
-        node = node.children[k];
-        if (!node) return;
-      }
-      if (!node || node.type !== "prefix") return;
-      const view = node.onTimeout && node.onTimeout.type === "open-view"
-        ? node.onTimeout.view : null;
-      if (!view) return;
-      // Swap the existing prerender (typically the actions-view one from
-      // onArmed) for one at the prefix's view. Silent destroy preserves
-      // any in-flight bridge state.
-      if (hasPendingReveal()) overlayController.destroy({ silent: true });
-      overlayController.create(view);
-    }
-
     // Dispatch a chord action coming from ChordSession.
     // payload shape is { type: "action" | "switch-workspace" | "open-extension-popup", ...}.
 
@@ -3073,6 +3048,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       chordTree: CHORD_TREE,
       chordKeyFor: chordSupportScope.chordKeyFor,
       constants: CHORD_CONSTANTS,
+      overlay: overlayController,
       setTimeoutFn: (fn, ms) => {
         const w = getWin();
         return w ? w.setTimeout(fn, ms) : null;
@@ -3082,7 +3058,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (w && id != null) try { w.clearTimeout(id); } catch (e) {}
       },
       onArmed: () => {
-        overlayController.create();
+        debugChordTrace("chrome-on-armed", {});
       },
       onAction: (payload) => {
         debugChordTrace("chrome-on-action", payload);
@@ -3094,12 +3070,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       },
       onStateChange: (snapshot) => {
         debugChordTrace("chrome-on-state-change", { snapshot });
-        prerenderPrefixView(snapshot);
       },
       onCancel: () => {
         debugChordTrace("chrome-on-cancel", {});
         disarmChordShims("cancel");
-        if (hasPendingReveal()) overlayController.destroy();
       },
       onBridgeKey: (keyData) => {
         debugChordTrace("chrome-on-bridge-key", keyData);
@@ -3293,7 +3267,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // prerender if it already matches — ChordSession root timer (no
         // requestedView, prerender is at actions) or prefix timer
         // (requestedView equals the prefix's onTimeout view, which
-        // prerenderPrefixView swapped to on descent). Otherwise
+        // ChordSession swapped to on descent). Otherwise
         // destroy+recreate. silent destroy preserves bridge state for
         // the new popup to drain on POPUP_READY.
         const prerenderMatches = hasPendingReveal() && (
