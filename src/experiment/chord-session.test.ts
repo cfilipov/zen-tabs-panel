@@ -262,4 +262,44 @@ describe("chord-session replay recording", () => {
       bridgeKeys: ["3"],
     });
   });
+
+  it("commits chrome model row intents instead of popup bridge replays", () => {
+    const session = makeSession();
+    session.recordEvent({ kind: "open-view", view: "last-visited" });
+    session.recordEvent({ kind: "bridge-key", keyData: { key: "2", code: "Digit2", __preRecorded: true } });
+    session.recordEvent({
+      kind: "model-row-intent",
+      view: "last-visited",
+      chordKey: "2",
+      switchToTarget: false,
+      params: { workspaceId: "all" },
+    });
+    session.recordEvent({ kind: "popup-action", message: { type: "activate-tab", tabId: 42 } });
+
+    expect(session.getReplayState().lastChordReplay).toMatchObject({
+      kind: "model-row-intent",
+      view: "last-visited",
+      chordKey: "2",
+      switchToTarget: false,
+      params: { workspaceId: "all" },
+    });
+  });
+
+  it("replays chrome model row intents without forwarding keys to the popup", () => {
+    const session = makeSession();
+    const dispatchModelRowIntent = vi.fn(() => true);
+    const forwardKeyToPopup = vi.fn();
+
+    session.recordEvent({
+      kind: "model-row-intent",
+      view: "move-to-workspace",
+      chordKey: "Shift+1",
+      switchToTarget: true,
+    });
+    session.recordEvent({ kind: "popup-action", message: { type: "move-selected-tabs-to-workspace", workspaceId: "ws-2", switchToTarget: true } });
+
+    expect(session.replayLastChord({ dispatchModelRowIntent, forwardKeyToPopup })).toBe(true);
+    expect(dispatchModelRowIntent).toHaveBeenCalledWith("move-to-workspace", "Shift+1", true, null);
+    expect(forwardKeyToPopup).not.toHaveBeenCalled();
+  });
 });

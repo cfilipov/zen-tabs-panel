@@ -56,7 +56,8 @@
           { "name": "switchToTarget", "type": "boolean", "optional": true },
           { "name": "listVersion", "type": "integer", "optional": true },
           { "name": "expectedDomId", "type": "string", "optional": true },
-          { "name": "expectedRowId", "type": "string", "optional": true }
+          { "name": "expectedRowId", "type": "string", "optional": true },
+          { "name": "chordKey", "type": "string", "optional": true }
         ]
       },
       {

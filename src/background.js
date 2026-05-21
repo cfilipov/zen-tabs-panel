@@ -642,11 +642,19 @@ const SYNC_HANDLERS = Object.freeze({
       }
       return ok;
     }
-    const result = await api.activateViewRow(m.view, m.index, m.source, !!m.switchToTarget, m.listVersion, m.expectedDomId, m.expectedRowId);
+    const result = await api.activateViewRow(
+      m.view,
+      m.index,
+      m.source,
+      !!m.switchToTarget,
+      m.listVersion,
+      m.expectedDomId,
+      m.expectedRowId,
+      m.chordKey || "",
+    );
     if (result && typeof result === "object" && result.kind === "open-view") {
       return result;
     }
-    recordChordAction(m);
     await api.hidePalette();
     return result;
   },
@@ -662,7 +670,6 @@ const SYNC_HANDLERS = Object.freeze({
     if (result && typeof result === "object" && result.kind === "open-view") {
       return result;
     }
-    recordChordAction(m);
     await api.hidePalette();
     return result;
   },

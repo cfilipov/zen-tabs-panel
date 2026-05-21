@@ -39,6 +39,7 @@ export function createPaletteEffects() {
       listVersion?: number,
       expectedDomId?: string,
       expectedRowId?: string,
+      chordKey?: string | null,
     ) {
       return sendMessage<ActivateViewRowResult>({
         type: "activate-view-row",
@@ -49,6 +50,7 @@ export function createPaletteEffects() {
         ...(typeof listVersion === "number" && listVersion > 0 ? { listVersion } : {}),
         ...(expectedDomId ? { expectedDomId } : {}),
         ...(expectedRowId ? { expectedRowId } : {}),
+        ...(chordKey ? { chordKey } : {}),
       });
     },
     activateCurrentViewRow(

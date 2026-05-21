@@ -556,6 +556,7 @@
       palette.listVersion,
       expectedDomIdForActivation(activation),
       expectedRowIdForActivation(activation),
+      replayKeyForBadgeIndex(index, switchToTarget),
     );
     if (result && typeof result === "object" && result.kind === "open-view") {
       await openNativeView(result.view, result.params || {}, true);

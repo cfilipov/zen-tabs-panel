@@ -3083,6 +3083,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return chordSession.replayLastChord({
         dispatchReplayedAction,
         dispatchChordAction,
+        dispatchModelRowIntent,
         enterBridgeFromOpenView,
         forwardKeyToPopup,
         debug: debugChordTrace,
@@ -3404,6 +3405,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return index == null ? null : { index, switchToTarget: false };
     }
 
+    function rowIntentFromReplayChordKey(chordKey, switchToTarget) {
+      const raw = String(chordKey || "");
+      const shifted = /^Shift\+([1-9])$/.exec(raw);
+      if (shifted) {
+        return { index: Number.parseInt(shifted[1], 10) - 1, switchToTarget: true };
+      }
+      if (/^[1-9]$/.test(raw)) {
+        return { index: Number.parseInt(raw, 10) - 1, switchToTarget: !!switchToTarget };
+      }
+      return null;
+    }
+
     const CHROME_OWNED_TAB_BRIDGE_VIEWS = new Set([
       "child-tabs",
       "sibling-tabs",
@@ -3431,15 +3444,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "recently-closed",
     ]);
 
-    function duplicatePromptTabsForCurrentParams() {
+    function duplicatePromptTabsForParams(params) {
       tabIndex.start();
-      const url = currentViewParams?.url || "";
+      const url = params?.url || "";
       if (!url) return [];
       const groups = tabIndex.getDuplicateGroups({ url, includeSingleton: true });
       const group = groups[0];
       if (!group || !Array.isArray(group.tabs)) return [];
       const tabs = group.tabs.slice();
-      const domId = currentViewParams?.domId || "";
+      const domId = params?.domId || "";
       if (domId) {
         const existingIndex = tabs.findIndex((tab) => tab.domId === domId);
         if (existingIndex > 0) {
@@ -3448,6 +3461,53 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
       }
       return tabs.slice(0, 9);
+    }
+
+    function duplicatePromptTabsForCurrentParams() {
+      return duplicatePromptTabsForParams(currentViewParams || {});
+    }
+
+    function cloneReplayParams(params) {
+      if (!params || typeof params !== "object") return null;
+      try { return JSON.parse(JSON.stringify(params)); }
+      catch (e) { return null; }
+    }
+
+    function recordModelRowIntentReplay(view, chordKey, switchToTarget, params) {
+      if (!chordKey) return;
+      chordSession.recordEvent({
+        kind: "model-row-intent",
+        view,
+        chordKey,
+        switchToTarget: !!switchToTarget,
+        params: cloneReplayParams(params),
+      });
+    }
+
+    function replayChordKeyFromKeyData(keyData) {
+      if (!keyData) return null;
+      try {
+        return chordSupportScope.chordKeyFor
+          ? chordSupportScope.chordKeyFor(Object.assign({ kind: "key" }, keyData))
+          : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function dispatchModelRowIntent(view, chordKey, switchToTarget, params) {
+      const intent = rowIntentFromReplayChordKey(chordKey, switchToTarget);
+      if (!intent) return false;
+      const result = activateChromeOwnedRowIntent(view, intent.index, "shortcut", intent.switchToTarget, {
+        destroyOverlay: true,
+        params: params || {},
+        replayChordKey: chordKey,
+      });
+      if (result && typeof result === "object" && result.kind === "open-view") {
+        enterBridgeFromOpenView(result.view, "chrome", "match", result.params || {});
+        return true;
+      }
+      return !!result;
     }
 
     function switchHiddenBridgeView(view, params, previousView, previousParams) {
@@ -3472,10 +3532,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const expectedRowId = options && typeof options.expectedRowId === "string" && options.expectedRowId
         ? options.expectedRowId
         : null;
+      const replayChordKey = options && typeof options.replayChordKey === "string" && options.replayChordKey
+        ? options.replayChordKey
+        : null;
+      const params = options && options.params && typeof options.params === "object"
+        ? options.params
+        : (currentViewParams || {});
       try {
         if (view === "domains") {
           tabIndex.start();
-          const win = tabIndex.getWindow("domains", rowIndex, 1, currentViewParams || {});
+          const win = tabIndex.getWindow("domains", rowIndex, 1, params);
           const row = win && Array.isArray(win.rows) ? win.rows[0] : null;
           if (!row || !row.domain) return false;
           if (expectedRowId && row.domain !== expectedRowId) return false;
@@ -3488,6 +3554,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const row = rows[rowIndex];
           if (!row || row.isActive) return false;
           if (expectedRowId && row.uuid !== expectedRowId) return false;
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "move-selected-tabs-to-workspace", workspaceId: row.uuid, switchToTarget: !!switchToTarget } });
           void (async () => {
             if (destroy) destroyOverlay();
@@ -3500,6 +3567,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const row = rows[rowIndex];
           if (!row || !row.userContextId) return false;
           if (expectedRowId && String(row.userContextId) !== expectedRowId) return false;
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "reopen-in-container", userContextId: row.userContextId } });
           void (async () => {
             if (destroy) destroyOverlay();
@@ -3512,6 +3580,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const row = rows[rowIndex];
           if (!row) return false;
           if (expectedRowId && row.id !== expectedRowId) return false;
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "move-tab-to-folder", folderId: row.id, switchToTarget: !!switchToTarget } });
           void (async () => {
             if (destroy) destroyOverlay();
@@ -3524,6 +3593,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const row = rows[rowIndex];
           if (!row || row.isCurrent) return false;
           if (expectedRowId && row.name !== expectedRowId) return false;
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "launch-profile", name: row.name } });
           if (destroy) destroyOverlay();
           launchProfileInternal(row.name);
@@ -3536,6 +3606,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             : history?.entries?.[rowIndex]?.historyIndex ?? rowIndex;
           if (target == null || target === history?.index) return false;
           if (expectedRowId && String(target) !== expectedRowId) return false;
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "navigate-to-history-index", index: target } });
           if (destroy) destroyOverlay();
           navigateToHistoryIndexInternal(target);
@@ -3543,6 +3614,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
         if (view === "recently-closed") {
           if (!paletteRequestFire) return false;
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: MSG.RESTORE_CLOSED_TAB_BY_INDEX, index: rowIndex } });
           if (destroy) destroyOverlay();
           paletteRequestFire.async({
@@ -3555,11 +3627,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (view === "duplicates") {
           tabIndex.start();
           if (expectedListVersion != null && tabIndex.getVersion() !== expectedListVersion) return false;
-          const groups = tabIndex.getDuplicateGroups(currentViewParams || {});
+          const groups = tabIndex.getDuplicateGroups(params);
           const tabs = groups.flatMap((group) => Array.isArray(group.tabs) ? group.tabs : []);
           const row = tabs[rowIndex];
           if (!row || !row.domId) return false;
           if (expectedDomId && row.domId !== expectedDomId) return false;
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
           void (async () => {
             if (destroy) destroyOverlay();
@@ -3569,13 +3642,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return true;
         }
         if (view === "duplicate-prompt") {
-          const tabs = duplicatePromptTabsForCurrentParams();
+          const tabs = duplicatePromptTabsForParams(params);
           const optionCount = 4;
           const promptTabIndex = source === "selection" ? rowIndex - optionCount : rowIndex;
           if (promptTabIndex < 0) return false;
           const row = tabs[promptTabIndex];
           if (!row || !row.domId) return false;
           if (expectedDomId && row.domId !== expectedDomId) return false;
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
           void (async () => {
             if (destroy) destroyOverlay();
@@ -3593,6 +3667,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const row = tabs[rowIndex] || null;
           if (!row || !row.id) return false;
           if (expectedDomId && row.id !== expectedDomId) return false;
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.id } });
           void (async () => {
             if (destroy) destroyOverlay();
@@ -3603,11 +3678,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (CHROME_OWNED_TAB_BRIDGE_VIEWS.has(view)) {
           tabIndex.start();
           if (expectedListVersion != null && tabIndex.getVersion() !== expectedListVersion) return false;
-          const params = view === "domain-tabs" ? (currentViewParams || {}) : {};
-          const win = tabIndex.getWindow(view, rowIndex, 1, params);
+          const viewParams = view === "domain-tabs" ? params : {};
+          const win = tabIndex.getWindow(view, rowIndex, 1, viewParams);
           const row = win && Array.isArray(win.rows) ? win.rows[0] : null;
           if (!row || !row.domId) return false;
           if (expectedDomId && row.domId !== expectedDomId) return false;
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, viewParams);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
           void (async () => {
             if (destroy) destroyOverlay();
@@ -3643,25 +3719,38 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (CHROME_OWNED_COMPACT_BRIDGE_VIEWS.has(getActiveBridgeView())) {
         const intent = bridgeRowIntentFromKey(keyData);
         if (!intent) return false;
-        return activateChromeOwnedRowIntent(getActiveBridgeView(), intent.index, "shortcut", intent.switchToTarget, { destroyOverlay: true });
+        return activateChromeOwnedRowIntent(getActiveBridgeView(), intent.index, "shortcut", intent.switchToTarget, {
+          destroyOverlay: true,
+          replayChordKey: replayChordKeyFromKeyData(keyData),
+        });
       }
 
       if (CHROME_OWNED_HISTORY_BRIDGE_VIEWS.has(getActiveBridgeView())) {
         const rowIndex = rowIndexFromDigitKey(keyData);
         if (rowIndex == null) return false;
-        return activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, { destroyOverlay: true });
+        return activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, {
+          destroyOverlay: true,
+          replayChordKey: replayChordKeyFromKeyData(keyData),
+        });
       }
 
       if (BACKGROUND_OWNED_BRIDGE_VIEWS.has(getActiveBridgeView())) {
         const rowIndex = rowIndexFromDigitKey(keyData);
         if (rowIndex == null) return false;
-        return activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, { destroyOverlay: true });
+        return activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, {
+          destroyOverlay: true,
+          replayChordKey: replayChordKeyFromKeyData(keyData),
+        });
       }
 
       if (!CHROME_OWNED_TAB_BRIDGE_VIEWS.has(getActiveBridgeView())) return false;
       const rowIndex = rowIndexFromDigitKey(keyData);
       if (rowIndex == null) return false;
-      return activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, { destroyOverlay: true });
+      return activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, {
+        destroyOverlay: true,
+        replayChordKey: replayChordKeyFromKeyData(keyData),
+        params: currentViewParams || {},
+      });
     }
 
     // ---- Chrome chord-session + shim instance ---------------------------
@@ -4883,29 +4972,25 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return activateNativeTab(tab);
         },
 
-        async activateViewRow(view, index, source, switchToTarget, listVersion, expectedDomId, expectedRowId) {
+        async activateViewRow(view, index, source, switchToTarget, listVersion, expectedDomId, expectedRowId, chordKey) {
           return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, {
             destroyOverlay: false,
             listVersion,
             expectedDomId,
             expectedRowId,
+            replayChordKey: typeof chordKey === "string" ? chordKey : null,
+            params: currentViewParams || {},
           });
         },
 
         async activateCurrentViewRow(index, source, switchToTarget, listVersion, chordKey, activation) {
           const view = currentViewName || getActiveBridgeView();
           if (!view || view === "actions") return false;
-          if (typeof chordKey === "string" && chordKey) {
-            chordSession.recordEvent({
-              kind: "synthetic-key",
-              chordKey,
-              view,
-              activation: activation || "trace",
-            });
-          }
           return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, {
             destroyOverlay: false,
             listVersion,
+            replayChordKey: typeof chordKey === "string" ? chordKey : null,
+            params: currentViewParams || {},
           });
         },
 

@@ -215,15 +215,44 @@
       }
       if (
         currentChordReplay &&
-        currentChordReplay.kind === "open-view" &&
-        Array.isArray(currentChordReplay.bridgeKeys) &&
-        currentChordReplay.bridgeKeys.length > 0
+        (
+          currentChordReplay.kind === "model-row-intent" ||
+          (
+            currentChordReplay.kind === "open-view" &&
+            Array.isArray(currentChordReplay.bridgeKeys) &&
+            currentChordReplay.bridgeKeys.length > 0
+          )
+        )
       ) {
         lastChordReplay = currentChordReplay;
       } else {
         lastChordReplay = Object.assign({ kind: "action-msg" }, message);
       }
       resetCurrentReplay();
+    }
+
+    function trackModelRowIntent(event) {
+      if (!event || !event.view || !event.chordKey) return;
+      const replay = {
+        kind: "model-row-intent",
+        view: event.view,
+        chordKey: event.chordKey,
+        switchToTarget: !!event.switchToTarget,
+        params: clonePlain(event.params || null),
+      };
+      if (
+        currentChordReplay &&
+        currentChordReplay.kind === "open-view" &&
+        currentChordReplay.view === replay.view &&
+        Array.isArray(currentChordReplay.bridgeKeys) &&
+        currentChordReplay.bridgeKeys.length <= 1
+      ) {
+        currentChordReplay = replay;
+        return;
+      }
+      if (!currentChordReplay) {
+        currentChordReplay = replay;
+      }
     }
 
     function recordEvent(event) {
@@ -253,6 +282,8 @@
         });
         if (syntheticReplayEvents.length > 50) syntheticReplayEvents.shift();
         trackBridgeKey({ key: event.chordKey });
+      } else if (event.kind === "model-row-intent") {
+        trackModelRowIntent(event);
       }
     }
 
@@ -519,6 +550,18 @@
           }
         }
         return true;
+      }
+      if (r.kind === "model-row-intent") {
+        if (effects.debug) effects.debug("replay-model-row-intent", {
+          view: r.view,
+          chordKey: r.chordKey,
+          switchToTarget: !!r.switchToTarget,
+          params: r.params || null,
+        });
+        return !!(
+          effects.dispatchModelRowIntent &&
+          effects.dispatchModelRowIntent(r.view, r.chordKey, !!r.switchToTarget, clonePlain(r.params || null))
+        );
       }
       if (r.kind === "action-msg") {
         // Let background fall back to its last popup-action recorder.
