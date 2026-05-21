@@ -1030,7 +1030,6 @@
       replayLastChord,
       hasCurrentReplay,
       hasCurrentOpenViewReplay,
-      transition,
       observeLegacyState,
       assertInvariant,
       getStateSnapshot,

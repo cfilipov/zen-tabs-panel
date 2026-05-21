@@ -58,7 +58,6 @@ type ChordSession = {
   clearRevealTimer: (w?: { clearTimeout?: (id: number) => void } | null, why?: string) => void;
   retargetActiveBridgeView: (view?: string | null, why?: string) => string;
   pushBridgeKey: (event: Record<string, unknown>) => number | null;
-  transition: (to: string, why: string, data?: unknown) => void;
   observeLegacyState: (snapshot: unknown, why: string) => void;
   assertInvariant: (snapshot?: unknown) => true;
   getStateSnapshot: () => {
@@ -322,26 +321,18 @@ describe("chord-session replay recording", () => {
   it("records state transitions for inspector diagnostics", () => {
     const session = makeSession();
     session.recordArmed();
-    session.recordOpenView("last-visited");
-    session.transition("bridging-live", "test-ready");
-    session.transition("visible", "test-visible");
+    session.beginBridgeFromOpenView("last-visited", "chrome", "match");
+    session.markPopupReady("test-ready");
+    session.markOverlayVisible("test-visible");
 
-    expect(session.getStateSnapshot()).toMatchObject({
-      state: "visible",
-      recentTransitions: [
-        { from: "idle", to: "armed-root", why: "armed" },
-        { from: "armed-root", to: "bridging-buffering", why: "open-view" },
-        { from: "bridging-buffering", to: "bridging-live", why: "test-ready" },
-        { from: "bridging-live", to: "visible", why: "test-visible" },
-      ],
-    });
-  });
-
-  it("rejects unknown state transitions", () => {
-    const session = makeSession();
-
-    expect(() => session.transition("spooky-state", "unit-test")).toThrow("[ChordSession] unknown state");
-    expect(session.getStateSnapshot().state).toBe("idle");
+    const snapshot = session.getStateSnapshot();
+    expect(snapshot.state).toBe("visible");
+    expect(snapshot.recentTransitions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: "idle", to: "armed-root", why: "armed" }),
+      expect.objectContaining({ from: "armed-root", to: "bridging-buffering", why: "enterBridgeFromOpenView" }),
+      expect.objectContaining({ from: "bridging-buffering", to: "bridging-live", why: "test-ready" }),
+      expect.objectContaining({ from: "bridging-live", to: "visible", why: "test-visible" }),
+    ]));
   });
 
   it("records cancel as a first-class terminal state", () => {
@@ -402,8 +393,8 @@ describe("chord-session replay recording", () => {
   it("treats opacity-hidden pending reveal overlays as bridging-live", () => {
     const session = makeSession();
     session.recordArmed();
-    session.recordOpenView(null);
-    session.transition("bridging-live", "unit-ready");
+    session.beginBridgeFromOpenView(null, "chrome", "match");
+    session.markPopupReady("unit-ready");
 
     expect(() => session.observeLegacyState({
       bridge: { active: true, popupReady: true },
@@ -414,8 +405,8 @@ describe("chord-session replay recording", () => {
 
   it("asserts impossible transition patterns", () => {
     const session = makeSession();
-    session.transition("bridging-buffering", "test-buffer");
-    session.transition("visible", "test-visible");
+    session.recordOpenView("last-visited");
+    session.markOverlayVisible("test-visible");
 
     expect(() => session.assertInvariant()).toThrow("[ChordSession] invalid transition");
   });
