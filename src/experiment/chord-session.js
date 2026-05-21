@@ -305,6 +305,32 @@
       }
     }
 
+    function recordTerminalAction(payload) {
+      recordEvent({ kind: "terminal-action", payload });
+    }
+
+    function recordOpenView(view) {
+      recordEvent({ kind: "open-view", view });
+    }
+
+    function recordBridgeKey(keyData) {
+      recordEvent({ kind: "bridge-key", keyData });
+    }
+
+    function recordPopupActionMessage(message) {
+      recordEvent({ kind: "popup-action", message });
+    }
+
+    function recordModelRowIntent(view, chordKey, switchToTarget, params) {
+      recordEvent({
+        kind: "model-row-intent",
+        view,
+        chordKey,
+        switchToTarget: !!switchToTarget,
+        params,
+      });
+    }
+
     function clearChordTimer() {
       if (chordTimer !== null && options && typeof options.clearTimeoutFn === "function") {
         try { options.clearTimeoutFn(chordTimer); } catch (e) {}
@@ -974,6 +1000,11 @@
 
     return {
       recordEvent,
+      recordTerminalAction,
+      recordOpenView,
+      recordBridgeKey,
+      recordPopupActionMessage,
+      recordModelRowIntent,
       arm,
       acceptKey,
       reset,
