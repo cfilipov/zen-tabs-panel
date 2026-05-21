@@ -1,19 +1,66 @@
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
 import ActionsMenu from "./ActionsMenu.svelte";
-import { appendWorkspaceSwitchItems, buildActionsMenuModel } from "./actions-model";
+import type { ActionMenuItem, ActionSection } from "./actions-model";
+
+function item(partial: Partial<ActionMenuItem> & Pick<ActionMenuItem, "id" | "label" | "badge">): ActionMenuItem {
+  return {
+    kind: "action",
+    hotkey: partial.badge,
+    isView: false,
+    page: 1,
+    ...partial,
+  };
+}
+
+function testSections(): ActionSection[] {
+  return [
+    {
+      id: "navigate",
+      label: "Navigate",
+      page: 1,
+      navigateGrid: true,
+      items: [
+        item({ id: "go-to-previous-tab", label: "Previous", badge: "P", preview: { title: "Prev", favIconUrl: "", domId: "tab-prev" } }),
+        item({ id: "go-to-parent-tab", label: "Parent", badge: "T", preview: { title: "Parent", favIconUrl: "", domId: "tab-parent" } }),
+      ],
+    },
+    { id: "this-tab", label: "This tab", page: 1, column: true, stack: true, items: [item({ id: "tab-info", label: "Info", badge: "I" })] },
+    { id: "tab-actions", label: "Tab actions", page: 1, column: true, stack: true, items: [item({ id: "unload-tab", label: "Unload", badge: "U" })] },
+    { id: "all-tabs", label: "All tabs", page: 1, column: true, items: [item({ id: "last-visited", label: "Recents", badge: "R" })] },
+    { id: "organize", label: "Organize", page: 1, column: true, items: [item({ id: "reorder-tabs", label: "Reorder", badge: "O" })] },
+    {
+      id: "workspaces",
+      label: "Workspaces",
+      page: 1,
+      column: true,
+      scrollable: true,
+      items: [
+        item({ id: "workspace-switch:ws-1", kind: "workspace-switch", label: "No Icon", badge: "1", workspaceId: "ws-1", workspaceIndex: 0, workspaceIconHtml: "", count: 4 }),
+        item({ id: "workspace-switch:ws-2", kind: "workspace-switch", label: "Active", badge: "2", workspaceId: "ws-2", workspaceIndex: 1, workspaceIconHtml: "<svg></svg>", count: 7, disabled: true }),
+      ],
+    },
+    {
+      id: "this-page",
+      label: "This page",
+      page: 2,
+      column: true,
+      items: [item({ id: "reload-skip-cache", label: "Hard reload", badge: "⇧L", hotkey: "Shift+L", page: 2 })],
+    },
+  ];
+}
 
 describe("ActionsMenu", () => {
   it("renders first-page action labels and badges from the model", () => {
     render(ActionsMenu, {
       props: {
-        sections: buildActionsMenuModel(),
+        sections: testSections(),
         currentPage: 1,
       },
     });
 
     expect(screen.getByText("Previous")).toBeTruthy();
-    expect(screen.getByText("Parent")).toBeTruthy();
+    expect(screen.getAllByText("Parent").length).toBeGreaterThan(0);
     expect(screen.getByText("P")).toBeTruthy();
     expect(screen.getByText("T")).toBeTruthy();
   });
@@ -21,7 +68,7 @@ describe("ActionsMenu", () => {
   it("renders second-page shift badges", () => {
     const { container } = render(ActionsMenu, {
       props: {
-        sections: buildActionsMenuModel(),
+        sections: testSections(),
         currentPage: 2,
       },
     });
@@ -35,7 +82,7 @@ describe("ActionsMenu", () => {
   it("only suppresses page-slide animation when skip animations is enabled", () => {
     const animated = render(ActionsMenu, {
       props: {
-        sections: buildActionsMenuModel(),
+        sections: testSections(),
         currentPage: 2,
       },
     });
@@ -45,7 +92,7 @@ describe("ActionsMenu", () => {
 
     const skipped = render(ActionsMenu, {
       props: {
-        sections: buildActionsMenuModel(),
+        sections: testSections(),
         currentPage: 2,
         skipAnimations: true,
       },
@@ -57,7 +104,7 @@ describe("ActionsMenu", () => {
   it("groups consecutive column sections into the vanilla actions grid", () => {
     const { container } = render(ActionsMenu, {
       props: {
-        sections: buildActionsMenuModel(),
+        sections: testSections(),
         currentPage: 1,
       },
     });
@@ -75,7 +122,7 @@ describe("ActionsMenu", () => {
   });
 
   it("renders navigate entries as preview cells", () => {
-    const sections = buildActionsMenuModel().map((section) => section.id === "navigate" && section.page === 1
+    const sections = testSections().map((section) => section.id === "navigate" && section.page === 1
       ? {
           ...section,
           items: section.items.map((item) => item.id === "go-to-previous-tab"
@@ -95,17 +142,9 @@ describe("ActionsMenu", () => {
   });
 
   it("renders workspace switcher rows with vanilla fallback dot and scroll affordance", () => {
-    const sections = appendWorkspaceSwitchItems(
-      buildActionsMenuModel(),
-      [
-        { uuid: "ws-1", name: "No Icon", isActive: false, svgContent: "" },
-        { uuid: "ws-2", name: "Active", isActive: true, svgContent: "<svg></svg>" },
-      ],
-      { "ws-1": 4, "ws-2": 7 },
-    );
     const { container } = render(ActionsMenu, {
       props: {
-        sections,
+        sections: testSections(),
         currentPage: 1,
       },
     });
