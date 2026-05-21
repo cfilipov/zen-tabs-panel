@@ -7,11 +7,23 @@ type ChordSessionScope = {
   createChordSession: (options: {
     replayActionId: string;
     replayRecordBlocklist?: string[];
+    chordTree?: Record<string, unknown>;
+    chordKeyFor?: (event: Record<string, unknown>) => string | null;
+    constants?: Record<string, number>;
+    setTimeoutFn?: (callback: () => void, ms: number) => number;
+    clearTimeoutFn?: (id: number) => void;
+    nowFn?: () => number;
+    onOpenView?: (view: string | null, snapshot: string[], source: string) => void;
+    onAction?: (payload: Record<string, unknown>) => void;
+    onStateChange?: (path: string[]) => void;
+    onBridgeKey?: (payload: Record<string, unknown>) => void;
   }) => ChordSession;
 };
 
 type ChordSession = {
   recordEvent: (event: Record<string, unknown>) => void;
+  arm: () => void;
+  acceptKey: (event: Record<string, unknown>) => void;
   resetCurrentReplay: () => void;
   replayLastChord: (effects: Record<string, unknown>) => boolean;
   hasCurrentReplay: () => boolean;
@@ -43,6 +55,70 @@ function makeSession() {
     replayActionId: "replay-last-chord",
     replayRecordBlocklist: ["duplicate-switch"],
   });
+}
+
+function makeInteractiveSession(overrides: Record<string, unknown> = {}) {
+  let timer: (() => void) | null = null;
+  let now = 0;
+  const onOpenView = vi.fn();
+  const onAction = vi.fn();
+  const onStateChange = vi.fn();
+  const onBridgeKey = vi.fn();
+  const session = loadSessionScope().createChordSession({
+    replayActionId: "replay-last-chord",
+    replayRecordBlocklist: [],
+    chordTree: {
+      children: {
+        R: { type: "open-view", view: "last-visited" },
+        P: { type: "action", actionId: "go-to-previous-tab" },
+        O: {
+          type: "prefix",
+          timeoutMs: 50,
+          onTimeout: { type: "open-view", view: "reorder-tabs" },
+          children: {
+            D: { type: "action", actionId: "sort-tabs-domain-alpha" },
+          },
+        },
+      },
+    },
+    chordKeyFor(event: Record<string, unknown>) {
+      if (event.key === "Escape") return "Escape";
+      if (typeof event.key === "string" && /^[a-z]$/i.test(event.key)) return event.key.toUpperCase();
+      return typeof event.key === "string" ? event.key : null;
+    },
+    constants: {
+      CHORD_ROOT_TIMEOUT_MS: 50,
+      CHORD_PREFIX_TIMEOUT_MS: 50,
+    },
+    setTimeoutFn(callback: () => void) {
+      timer = callback;
+      return 1;
+    },
+    clearTimeoutFn() {
+      timer = null;
+    },
+    nowFn() {
+      return now;
+    },
+    onOpenView,
+    onAction,
+    onStateChange,
+    onBridgeKey,
+    ...overrides,
+  });
+  return {
+    session,
+    onOpenView,
+    onAction,
+    onStateChange,
+    onBridgeKey,
+    setNow(value: number) { now = value; },
+    fireTimer() {
+      const callback = timer;
+      timer = null;
+      if (callback) callback();
+    },
+  };
 }
 
 describe("chord-session replay recording", () => {
@@ -234,6 +310,68 @@ describe("chord-session replay recording", () => {
     session.transition("visible", "test-visible");
 
     expect(() => session.assertInvariant()).toThrow("[ChordSession] invalid transition");
+  });
+
+  it("processes content keys typed before root timeout as chord matches", () => {
+    const env = makeInteractiveSession();
+    env.session.arm();
+
+    env.setNow(100);
+    env.fireTimer();
+    expect(env.onOpenView).toHaveBeenCalledWith(null, [], "timeout");
+
+    env.session.acceptKey({ kind: "key", key: "r", code: "KeyR", shimTs: 90 });
+
+    expect(env.onBridgeKey).not.toHaveBeenCalled();
+    expect(env.onOpenView).toHaveBeenLastCalledWith("last-visited", ["R"], "late-match");
+    expect(env.session.getStateSnapshot().recentTransitions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: "bridging-buffering", to: "armed-root", why: "late-timeout-restore" }),
+    ]));
+  });
+
+  it("keeps keys typed after root timeout on the bridge path", () => {
+    const env = makeInteractiveSession();
+    env.session.arm();
+
+    env.setNow(100);
+    env.fireTimer();
+    env.session.acceptKey({ kind: "key", key: "r", code: "KeyR", shimTs: 110 });
+
+    expect(env.onOpenView).toHaveBeenCalledTimes(1);
+    expect(env.onBridgeKey).toHaveBeenCalledWith(expect.objectContaining({
+      key: "r",
+      code: "KeyR",
+      shimTs: 110,
+    }));
+  });
+
+  it("opens a prefix view when the prefix key beat the root timeout", () => {
+    const env = makeInteractiveSession();
+    env.session.arm();
+
+    env.setNow(100);
+    env.fireTimer();
+    env.session.acceptKey({ kind: "key", key: "o", code: "KeyO", shimTs: 90 });
+
+    expect(env.onBridgeKey).not.toHaveBeenCalled();
+    expect(env.onStateChange).toHaveBeenCalledWith(["O"]);
+    expect(env.onOpenView).toHaveBeenLastCalledWith("reorder-tabs", ["O"], "late-match");
+  });
+
+  it("fires a prefix child action when the child key beat the prefix timeout", () => {
+    const env = makeInteractiveSession();
+    env.session.arm();
+    env.session.acceptKey({ kind: "key", key: "o", code: "KeyO", shimTs: 10 });
+
+    env.setNow(100);
+    env.fireTimer();
+    env.session.acceptKey({ kind: "key", key: "d", code: "KeyD", shimTs: 90 });
+
+    expect(env.onBridgeKey).not.toHaveBeenCalled();
+    expect(env.onAction).toHaveBeenCalledWith({
+      type: "action",
+      actionId: "sort-tabs-domain-alpha",
+    });
   });
 
   it("commits chrome model row intents instead of popup bridge replays", () => {

@@ -3202,16 +3202,42 @@ this.zenWorkspaces = class extends ExtensionAPI {
     //     and UI never shows. If they pause, the timer fires and the
     //     popup is revealed at its current state.
     function enterBridgeFromOpenView(view, kind, source) {
-      // The first bridge wins; later bridge opens from overlapping key/timer
-      // edges are ignored so they cannot destroy/recreate the live popup.
-      if (hasActiveBridge()) return;
-
       // Source="match" is a user-typed chord-key (cmd+.,r, etc.) — the
       // intentional chord. Source="timeout" is the menu opening because
       // the user paused, which isn't a chord chain we want to replay
       // (replay would just pop the actions menu instead of redoing what
       // the user just did).
-      if (source === "match") trackChordOpenView(view);
+      if (source === "match" || source === "late-match") trackChordOpenView(view);
+
+      // A content-process key can arrive just after chrome's root/prefix
+      // timeout fired even though the user typed it before the timeout. In
+      // that case the timeout side effect has already opened the bridge; keep
+      // the bridge but move it to the view the pre-timeout key matched.
+      if (hasActiveBridge()) {
+        if (source !== "late-match") return;
+        const requestedView = view || null;
+        setActiveBridgeView(requestedView || "actions", "lateTimeoutOpenView");
+        setPopupReady(false, "popup-ready-clear");
+        if (chordSession) chordSession.transition("bridging-buffering", "lateTimeoutOpenView", { view, kind, source });
+        observeChordSession("lateTimeoutOpenView");
+        const w = getWin();
+        clearBridgeTimer();
+        clearRevealTimer();
+        if (chordSession) chordSession.armBridgeTimer(w, BRIDGE_TIMEOUT_MS, () => {
+          finishBridge();
+        });
+        if (pendingReveal) {
+          destroyOverlay({ silent: true });
+          createOverlay(requestedView);
+          armRevealTimer();
+        } else if (isOverlayVisible()) {
+          morphToView(requestedView || "actions", {});
+        } else {
+          createOverlay(requestedView);
+          armRevealTimer();
+        }
+        return;
+      }
 
       startBridgeBuffer("enterBridgeFromOpenView");
       setActiveBridgeView(view || "actions", "enterBridgeFromOpenView");

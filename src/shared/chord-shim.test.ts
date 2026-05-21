@@ -129,7 +129,7 @@ describe("chord-shim", () => {
       ctrlKey: false,
       metaKey: false,
       shimSeq: 1,
-      shimTs: 1234,
+      shimTs: expect.any(Number),
     });
   });
 

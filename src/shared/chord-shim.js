@@ -24,7 +24,9 @@
       ctrlKey: !!(e && e.ctrlKey),
       metaKey: !!(e && e.metaKey),
       shimSeq: seq,
-      shimTs: e && typeof e.timeStamp === "number" ? e.timeStamp : Date.now(),
+      // Use wall-clock time so content-process key timestamps can be compared
+      // against chrome-process timeout timestamps.
+      shimTs: Date.now(),
     };
   }
 

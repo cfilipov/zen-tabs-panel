@@ -103,6 +103,14 @@
     let chordTimer = null;
     let lastAcceptedPhysicalKeySignature = null;
     let lastAcceptedPhysicalKeyFingerprint = null;
+    let lastTimeout = null;
+
+    function nowMs() {
+      if (options && typeof options.nowFn === "function") {
+        try { return options.nowFn(); } catch (e) {}
+      }
+      return Date.now();
+    }
 
     function transition(to, why, data) {
       const from = state;
@@ -298,6 +306,7 @@
 
     function resetTraversal(nextState) {
       clearChordTimer();
+      lastTimeout = null;
       currentNode = options && options.chordTree;
       currentPath = [];
       lastAcceptedPhysicalKeySignature = null;
@@ -364,9 +373,45 @@
       return onTo && onTo.type === "open-view" ? onTo.view : null;
     }
 
+    function captureTimeout(sideEffect, view, snapshot) {
+      lastTimeout = {
+        fromState: state,
+        currentNode,
+        currentPath: snapshot.slice(),
+        timerFiredAt: nowMs(),
+        sideEffect,
+        view: view || null,
+      };
+    }
+
+    function lateTimeoutForKey(keyData) {
+      if (!lastTimeout) return null;
+      const ts = physicalKeyTimestamp(keyData);
+      if (ts == null || ts >= lastTimeout.timerFiredAt) {
+        lastTimeout = null;
+        return null;
+      }
+      const timeout = lastTimeout;
+      lastTimeout = null;
+      const postTimeoutState = state;
+      state = timeout.fromState || "idle";
+      currentNode = timeout.currentNode;
+      currentPath = Array.isArray(timeout.currentPath) ? timeout.currentPath.slice() : [];
+      chordTimer = null;
+      recentTransitions.push({ at: Date.now(), from: postTimeoutState, to: state, why: "late-timeout-restore", data: clonePlain({
+        key: keyData && keyData.key,
+        sideEffect: timeout.sideEffect,
+        timerFiredAt: timeout.timerFiredAt,
+        shimTs: ts,
+      }) });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+      return timeout;
+    }
+
     function rootTimeout() {
       chordTimer = null;
       const snapshot = currentPath.slice();
+      captureTimeout("opened-actions", null, snapshot);
       transition("bridging-buffering", "root-timeout", { snapshot });
       callOption("onOpenView", null, snapshot, "timeout");
     }
@@ -376,12 +421,14 @@
       const snapshot = currentPath.slice();
       const onTo = currentNode && currentNode.onTimeout;
       const view = onTo && onTo.type === "open-view" ? onTo.view : null;
+      captureTimeout("opened-prefix-view", view, snapshot);
       transition("bridging-buffering", "prefix-timeout", { view, snapshot });
       callOption("onOpenView", view, snapshot, "timeout");
     }
 
     function arm() {
       clearChordTimer();
+      lastTimeout = null;
       currentNode = options && options.chordTree;
       currentPath = [];
       lastAcceptedPhysicalKeySignature = null;
@@ -420,7 +467,14 @@
       }
       rememberPhysicalKey(keyData);
 
-      if (state === "bridging-buffering" || state === "bridging-live") {
+      const chordKey = options && typeof options.chordKeyFor === "function"
+        ? options.chordKeyFor(keyData)
+        : replayKeyFromBridgeKey(keyData);
+      if (chordKey == null) return;
+
+      const lateTimeout = lateTimeoutForKey(keyData);
+
+      if (!lateTimeout && (state === "bridging-buffering" || state === "bridging-live")) {
         try { if (typeof keyData.preventDefault === "function") keyData.preventDefault(); } catch (e) {}
         try { if (typeof keyData.stopPropagation === "function") keyData.stopPropagation(); } catch (e) {}
         callOption("onBridgeKey", {
@@ -435,11 +489,6 @@
         });
         return;
       }
-
-      const chordKey = options && typeof options.chordKeyFor === "function"
-        ? options.chordKeyFor(keyData)
-        : replayKeyFromBridgeKey(keyData);
-      if (chordKey == null) return;
 
       try { if (typeof keyData.preventDefault === "function") keyData.preventDefault(); } catch (e) {}
       try { if (typeof keyData.stopPropagation === "function") keyData.stopPropagation(); } catch (e) {}
@@ -488,10 +537,20 @@
         currentPath = snapshot;
         clearChordTimer();
         transition("bridging-buffering", "open-view-match", { view: child.view, snapshot });
-        callOption("onOpenView", child.view, snapshot, "match");
+        callOption("onOpenView", child.view, snapshot, lateTimeout ? "late-match" : "match");
         return;
       }
       if (child.type === "prefix") {
+        if (lateTimeout) {
+          currentNode = child;
+          currentPath = currentPath.concat([chordKey]);
+          clearChordTimer();
+          const view = child.onTimeout && child.onTimeout.type === "open-view" ? child.onTimeout.view : null;
+          transition("bridging-buffering", "late-prefix-match", { view, snapshot: currentPath });
+          callOption("onStateChange", currentPath.slice());
+          callOption("onOpenView", view, currentPath.slice(), "late-match");
+          return;
+        }
         descend(chordKey, child);
       }
     }
