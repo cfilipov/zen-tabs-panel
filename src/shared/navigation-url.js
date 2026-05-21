@@ -7,13 +7,28 @@
 // those as the same in the duplicate-navigation blocker so reloads/current-page
 // navigations do not look like fresh duplicate-link clicks.
 
-this.isSameMainFrameNavigationUrl = function (tabUrl, requestUrl) {
+const navigationUrlRoot = typeof globalThis !== "undefined" ? globalThis : this;
+
+function getNavigationURLCtor() {
+  if (typeof URL === "function") return URL;
+  try {
+    if (typeof Services !== "undefined" && Services.wm) {
+      const w = Services.wm.getMostRecentWindow("navigator:browser");
+      if (typeof w?.URL === "function") return w.URL;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function isSameMainFrameNavigationUrl(tabUrl, requestUrl) {
   if (!tabUrl || !requestUrl) return false;
   if (tabUrl === requestUrl) return true;
 
   try {
-    const tab = new URL(tabUrl);
-    const request = new URL(requestUrl);
+    const URLCtor = getNavigationURLCtor();
+    if (!URLCtor) return false;
+    const tab = new URLCtor(tabUrl);
+    const request = new URLCtor(requestUrl);
     if (!/^https?:$/.test(tab.protocol) || !/^https?:$/.test(request.protocol)) {
       return false;
     }
@@ -24,14 +39,16 @@ this.isSameMainFrameNavigationUrl = function (tabUrl, requestUrl) {
   } catch (e) {
     return false;
   }
-};
+}
 
 function duplicateNavigationUrlKeys(url) {
   const keys = new Set();
   if (!url) return keys;
 
   try {
-    const parsed = new URL(url);
+    const URLCtor = getNavigationURLCtor();
+    if (!URLCtor) return keys;
+    const parsed = new URLCtor(url);
     if (!/^https?:$/.test(parsed.protocol)) return keys;
     keys.add(parsed.href);
 
@@ -55,18 +72,21 @@ function duplicateNavigationUrlKeys(url) {
   return keys;
 }
 
-this.isDuplicateNavigationUrl = function (candidateUrl, openTabUrl) {
+function isDuplicateNavigationUrl(candidateUrl, openTabUrl) {
   const candidateKeys = duplicateNavigationUrlKeys(candidateUrl);
   if (candidateKeys.size === 0) return false;
   for (const key of duplicateNavigationUrlKeys(openTabUrl)) {
     if (candidateKeys.has(key)) return true;
   }
   return false;
-};
+}
+
+navigationUrlRoot.isSameMainFrameNavigationUrl = isSameMainFrameNavigationUrl;
+navigationUrlRoot.isDuplicateNavigationUrl = isDuplicateNavigationUrl;
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    isSameMainFrameNavigationUrl: this.isSameMainFrameNavigationUrl,
-    isDuplicateNavigationUrl: this.isDuplicateNavigationUrl,
+    isSameMainFrameNavigationUrl,
+    isDuplicateNavigationUrl,
   };
 }

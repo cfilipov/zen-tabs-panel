@@ -2,6 +2,9 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
 
 const { escapeAttr, extractFavicon, extractDomain } = require("../src/shared/dom-utils.js");
 const {
@@ -92,5 +95,28 @@ test("duplicate navigation URL comparison does not add slash variants for file-l
   assert.equal(
     isDuplicateNavigationUrl("https://example.com/app.js", "https://example.com/app.js/"),
     false
+  );
+});
+
+test("navigation URL helper works in experiment-like scope without global URL", () => {
+  const code = fs.readFileSync(
+    path.join(__dirname, "../src/shared/navigation-url.js"),
+    "utf8"
+  );
+  const scope = {
+    Services: {
+      wm: {
+        getMostRecentWindow() {
+          return { URL };
+        },
+      },
+    },
+  };
+  vm.createContext(scope);
+  vm.runInContext("URL = undefined;\n" + code, scope);
+
+  assert.equal(
+    scope.isDuplicateNavigationUrl("https://example.com/release-notes", "https://example.com/release-notes/"),
+    true
   );
 });

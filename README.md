@@ -24,6 +24,8 @@ ErgoZen gives you keyboard access to far more tab and workspace actions than Zen
 
 ![Tab info view](screenshot-tabinfo.png)
 
+![Duplicate tab prompt](screenshot-duplicate-prompt.png)
+
 ## Features
 
 **Command palette** (`⌘.` / `⌘⌥.` on macOS, `⌃.` on Windows/Linux, or toolbar icon) - a Zen-styled floating panel with:
@@ -318,6 +320,37 @@ make package
 `npm run build` and `make build` write the Svelte source from `src/` to
 `dist/` only. `make package` builds the extension and zips `dist/` into
 `ergozen.xpi`. Install the `.xpi` from `about:addons` as described above.
+
+### Regenerating README screenshots
+
+```bash
+npm run screenshots:readme
+```
+
+This creates/reuses a dedicated Zen profile at
+`~/Library/Application Support/zen-ergozen-readme-screenshots`, installs the
+current built extension into it, creates enough fixture workspaces to keep the
+profile at 10 workspaces, opens a deterministic set of generic tabs, and
+captures the palette images referenced at the top of this README. By default,
+each README PNG is a generated diagonal composite: dark mode on the left, light
+mode on the right. Use `--theme light` or `--theme dark` to capture only one
+theme. The script captures at 2x for clean text edges and writes PNG density
+metadata equivalent to the retina scale so viewers that honor it can display the
+images at the menu's logical size. It uses remote debugging on port `6100` so it
+can run alongside the normal live debugging port `6000`.
+
+Useful options:
+
+```bash
+python3 tools/readme-screenshots.py --reset-profile
+python3 tools/readme-screenshots.py --output-dir /tmp/ergozen-shots
+python3 tools/readme-screenshots.py --theme light
+python3 tools/readme-screenshots.py --theme dark
+python3 tools/readme-screenshots.py --workspace-count 10
+python3 tools/readme-screenshots.py --capture-scale 1
+python3 tools/readme-screenshots.py --no-density
+python3 tools/readme-screenshots.py --keep-open
+```
 
 ### Architecture notes
 

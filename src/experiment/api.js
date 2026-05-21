@@ -4548,15 +4548,21 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const statusPanel = w.document.getElementById("statuspanel");
       const xbw = w.XULBrowserWindow;
       origSetOverLink = xbw.setOverLink.bind(xbw);
+      function normalizeOverLinkUrl(url) {
+        if (!url) return "";
+        if (/^https?:\/\//i.test(url)) return url;
+        try {
+          const current = w.gBrowser?.selectedBrowser?.currentURI;
+          if (current?.scheme === "http" || current?.scheme === "https") {
+            return current.scheme + "://" + url;
+          }
+        } catch (e) {}
+        return url;
+      }
       xbw.setOverLink = function (url, hosted) {
         try {
-          let isDup = false;
-          if (url && /^https?:/.test(url)) {
-            for (const tab of w.gBrowser.tabs) {
-              const u = tab.linkedBrowser?.currentURI?.spec || "";
-              if (u === url) { isDup = true; break; }
-            }
-          }
+          const normalizedUrl = normalizeOverLinkUrl(url);
+          const isDup = !!(normalizedUrl && /^https?:/.test(normalizedUrl) && urlMatchesAnyOpenTab(normalizedUrl, w.gBrowser?.selectedTab || null));
           if (statusPanel) {
             if (isDup) statusPanel.setAttribute("ztt-duplicate-link", "true");
             else statusPanel.removeAttribute("ztt-duplicate-link");
@@ -4643,7 +4649,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       pruneDuplicateApprovals(now);
       const sourceDomId = sourceTab?.id || null;
       const index = approvedDuplicateNavigations.findIndex((approval) =>
-        approval.url === url &&
+        duplicateNavigationUrlsMatch(url, approval.url) &&
         (!approval.domId || !sourceDomId || approval.domId === sourceDomId)
       );
       if (index < 0) return false;
@@ -4676,48 +4682,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
       pruneRecentContentLinkNavigations(now);
       const sourceDomId = sourceTab.id || null;
       const index = recentContentLinkNavigations.findIndex((entry) =>
-        entry.url === url && entry.domId === sourceDomId
+        duplicateNavigationUrlsMatch(url, entry.url) && entry.domId === sourceDomId
       );
       if (index < 0) return false;
       recentContentLinkNavigations.splice(index, 1);
       return true;
     }
 
-    function duplicateNavigationUrlKeys(url) {
-      const keys = new Set();
-      if (!url) return keys;
-      try {
-        const URLCtor = getWin()?.URL;
-        if (typeof URLCtor !== "function") return keys;
-        const parsed = new URLCtor(url);
-        if (!/^https?:$/.test(parsed.protocol)) return keys;
-        keys.add(parsed.href);
-        const pathname = parsed.pathname || "/";
-        if (pathname.length > 1 && pathname.endsWith("/")) {
-          const withoutSlash = pathname.replace(/\/+$/, "");
-          const lastSegment = withoutSlash.split("/").pop() || "";
-          if (!lastSegment.includes(".")) {
-            parsed.pathname = withoutSlash;
-            keys.add(parsed.href);
-          }
-        } else {
-          const lastSegment = pathname.split("/").pop() || "";
-          if (pathname.length > 1 && !lastSegment.includes(".")) {
-            parsed.pathname = pathname + "/";
-            keys.add(parsed.href);
-          }
-        }
-      } catch (e) {}
-      return keys;
-    }
-
     function duplicateNavigationUrlsMatch(candidateUrl, openTabUrl) {
-      const candidateKeys = duplicateNavigationUrlKeys(candidateUrl);
-      if (candidateKeys.size === 0) return false;
-      for (const key of duplicateNavigationUrlKeys(openTabUrl)) {
-        if (candidateKeys.has(key)) return true;
-      }
-      return false;
+      return !!chordSupportScope.isDuplicateNavigationUrl(candidateUrl, openTabUrl);
     }
 
     function urlMatchesAnyOpenTab(url, excludeTab) {

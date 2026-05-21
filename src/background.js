@@ -848,6 +848,13 @@ let webRequestPendingDuplicate = null; // { tabId, url, dupDomId }
 // the duplicate detector and re-pop the prompt forever.
 let allowOnce = null; // { tabId, url }
 
+function duplicateNavigationUrlsMatch(candidateUrl, openTabUrl) {
+  if (typeof isDuplicateNavigationUrl === "function") {
+    return !!isDuplicateNavigationUrl(candidateUrl, openTabUrl);
+  }
+  return candidateUrl === openTabUrl;
+}
+
 // Duplicate-prompt outcomes route here so we can pick between the bg
 // (webRequest, same-tab) path and the chrome (openLinkIn, new-tab)
 // path. Whichever has state set wins; if both are clear we just
@@ -903,7 +910,7 @@ browser.webRequest.onBeforeRequest.addListener(
     // One-shot bypass for the very navigation the user just chose to
     // "Open anyway" — without this we'd intercept the same URL again
     // and the prompt would loop.
-    if (allowOnce && allowOnce.tabId === details.tabId && allowOnce.url === details.url) {
+    if (allowOnce && allowOnce.tabId === details.tabId && duplicateNavigationUrlsMatch(details.url, allowOnce.url)) {
       allowOnce = null;
       return {};
     }

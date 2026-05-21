@@ -9,6 +9,7 @@
     "test:node": "node --test tests/*.test.js",
     "test:svelte": "vitest run",
     "typecheck": "tsc --noEmit",
+    "screenshots:readme": "python3 tools/readme-screenshots.py",
     "smoke": "tools/popup-smoke.py",
     "smoke:popup": "tools/popup-smoke.py"
   },
