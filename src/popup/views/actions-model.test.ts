@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 import { NAVIGATION_TREE } from "../../shared/navigation-tree";
 import {
   actionItemsForPage,
-  actionNodesForSections,
   appendWorkspaceSwitchItems,
   buildActionsMenuModel,
-  prefixChildNodesForView,
   prefixItemsForView,
 } from "./actions-model";
 
@@ -37,23 +35,21 @@ describe("actions menu model", () => {
     });
   });
 
-  it("derives page items and interpreter nodes from the same action model", () => {
+  it("derives page items from the shared action model", () => {
     const model = buildActionsMenuModel();
     const pageTwoItems = actionItemsForPage(model, 2);
-    const nodes = actionNodesForSections(model);
 
     expect(pageTwoItems.some((item) => item.id === "reload-tab")).toBe(true);
-    expect(nodes.find((node) => node.id === "reload-tab")?.chord).toBe("Shift+R");
-    expect(nodes.find((node) => node.id === "move-to-folder")?.chord).toBe("Shift+M");
-    expect(nodes.find((node) => node.id === "toggle-reader-mode")?.chord).toBe("Shift+O");
+    expect(pageTwoItems.find((item) => item.id === "reload-tab")?.hotkey).toBe("Shift+R");
+    expect(model.flatMap((section) => section.items).find((item) => item.id === "move-to-folder")?.hotkey).toBe("Shift+M");
+    expect(pageTwoItems.find((item) => item.id === "toggle-reader-mode")?.hotkey).toBe("Shift+O");
   });
 
   it("derives prefix submenu rows from the navigation tree", () => {
     const items = prefixItemsForView("reorder-tabs");
-    const nodes = prefixChildNodesForView("reorder-tabs");
 
     expect(items.map((item) => item.id)).toContain("sort-tabs-domain-alpha");
-    expect(nodes.find((node) => node.id === "sort-tabs-domain-alpha")?.chord).toBe("D");
+    expect(items.find((item) => item.id === "sort-tabs-domain-alpha")?.hotkey).toBe("D");
   });
 
   it("appends real workspace switch rows without inventing icons", () => {

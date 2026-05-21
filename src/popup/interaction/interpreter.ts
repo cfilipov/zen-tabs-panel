@@ -1,7 +1,6 @@
-import { NAVIGATION_TREE } from "../../shared/navigation-tree";
-import type { NavNode, TerminalNode, ViewId } from "../../shared/types";
+import type { ViewId } from "../../shared/types";
 import { duplicatePromptActionForHotkey, type DuplicatePromptAction } from "./duplicate-prompt-options";
-import { chordFromKey, type InteractionInput } from "./inputs";
+import type { InteractionInput } from "./inputs";
 import {
   canCloseAllInView,
   canDrillSelectionInView,
@@ -15,7 +14,6 @@ export type InteractionContext = {
   view: ViewId;
   selectedIndex?: number;
   duplicatePromptActionCount?: number;
-  treePath?: string[];
 };
 
 export type InteractionCommand =
@@ -44,55 +42,6 @@ export type InteractionCommand =
   | { kind: "filter-workspace-index"; index: number }
   | { kind: "switch-workspace-index"; index: number }
   | { kind: "open-extension-index"; index: number };
-
-function commandForNode(node: TerminalNode, source: "tree" | "view" | "mouse"): InteractionCommand {
-  if (node.kind === "action") return { kind: "action", actionId: node.id, source };
-  if (node.kind === "open-view") return { kind: "open-view", view: node.view, source };
-  return { kind: "enter-prefix", view: node.view, path: [node.id], source: source === "mouse" ? "view" : source };
-}
-
-function childrenForPath(tree: readonly NavNode[], path: readonly string[]): readonly TerminalNode[] {
-  if (path.length === 0) return tree;
-  let nodes: readonly NavNode[] = tree;
-  let current: NavNode | undefined;
-  for (const id of path) {
-    current = nodes.find((node) => node.id === id);
-    if (!current || current.kind !== "prefix") return [];
-    nodes = current.children;
-  }
-  return nodes;
-}
-
-export function interpretTreeInput(
-  input: InteractionInput,
-  context: InteractionContext,
-  tree: readonly NavNode[] = NAVIGATION_TREE,
-): InteractionCommand {
-  if (input.kind === "mouse") {
-    const node = childrenForPath(tree, context.treePath ?? []).find((candidate) => candidate.id === input.targetId);
-    return node ? commandForNode(node, "mouse") : { kind: "none" };
-  }
-
-  const chord = chordFromKey(input);
-  if (!chord) return { kind: "none" };
-  const node = childrenForPath(tree, context.treePath ?? []).find((candidate) => candidate.chord === chord);
-  return node ? commandForNode(node, "tree") : { kind: "none" };
-}
-
-export function interpretVisibleInput(
-  input: InteractionInput,
-  context: InteractionContext,
-  visibleNodes: readonly TerminalNode[],
-): InteractionCommand {
-  const chord = chordFromKey(input);
-  if (input.kind === "mouse") {
-    const node = visibleNodes.find((candidate) => candidate.id === input.targetId);
-    return node ? commandForNode(node, "mouse") : { kind: "none" };
-  }
-  if (!chord) return { kind: "none" };
-  const node = visibleNodes.find((candidate) => candidate.chord === chord);
-  return node ? commandForNode(node, "view") : interpretStructuralKey(input, context);
-}
 
 export function interpretStructuralInput(
   input: Extract<InteractionInput, { kind: "key" }>,

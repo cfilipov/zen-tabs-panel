@@ -86,17 +86,6 @@ export function actionItemsForPage(sections: readonly ActionSection[], page: num
     .flatMap((section) => section.items);
 }
 
-export function actionNodesForSections(sections: readonly ActionSection[]): TerminalNode[] {
-  return sections
-    .flatMap((section) => section.items)
-    .filter((item) => item.kind !== "workspace-switch")
-    .map((item) => {
-      const node = nodeById.get(item.id);
-      if (!node) throw new Error(`Missing navigation node: ${item.id}`);
-      return node;
-    });
-}
-
 export function prefixNodeForView(view: ViewId): PrefixNode | null {
   const node = (NAVIGATION_TREE as readonly NavNode[]).find((candidate) =>
     candidate.kind === "prefix" && candidate.view === view
@@ -106,10 +95,6 @@ export function prefixNodeForView(view: ViewId): PrefixNode | null {
 
 export function prefixItemsForView(view: ViewId): ActionMenuItem[] {
   return prefixNodeForView(view)?.children.map((node) => itemFromNode(node)) ?? [];
-}
-
-export function prefixChildNodesForView(view: ViewId): TerminalNode[] {
-  return [...(prefixNodeForView(view)?.children ?? [])];
 }
 
 export function appendWorkspaceSwitchItems(

@@ -1,125 +1,83 @@
 import { describe, expect, it } from "vitest";
-import type { NavNode, PrefixNode } from "../../shared/types";
-import { interpretTreeInput, interpretVisibleInput } from "./interpreter";
-
-const fixtureTree = [
-  { id: "recent", kind: "open-view", chord: "R", view: "last-visited", label: "Recent" },
-  {
-    id: "reorder",
-    kind: "prefix",
-    chord: "O",
-    view: "reorder-tabs",
-    label: "Reorder",
-    children: [
-      { id: "sort-recent", kind: "action", chord: "R", label: "Recent first" },
-      { id: "sort-domain", kind: "action", chord: "D", label: "Domain" },
-    ],
-  },
-] satisfies NavNode[];
-
-const reorderNode = fixtureTree[1] as PrefixNode;
+import { interpretStructuralInput } from "./interpreter";
 
 describe("interaction interpreter", () => {
-  it("maps fast chord input to the same node metadata as visible key input", () => {
-    const fast = interpretTreeInput({ kind: "chord", chord: "R" }, { view: "actions" }, fixtureTree);
-    const visible = interpretVisibleInput({ kind: "key", key: "r" }, { view: "actions" }, fixtureTree);
-    const mouse = interpretVisibleInput({ kind: "mouse", targetId: "recent" }, { view: "actions" }, fixtureTree);
-
-    expect(fast).toEqual({ kind: "open-view", view: "last-visited", source: "tree" });
-    expect(visible).toEqual({ kind: "open-view", view: "last-visited", source: "view" });
-    expect(mouse).toEqual({ kind: "open-view", view: "last-visited", source: "mouse" });
-  });
-
-  it("uses the same prefix child lookup for fast, visible, bridge, and mouse activation", () => {
-    const context = { view: "reorder-tabs" as const, treePath: ["reorder"] };
-    const fast = interpretTreeInput({ kind: "chord", chord: "D" }, context, fixtureTree);
-    const bridge = interpretTreeInput({ kind: "key", key: "d" }, context, fixtureTree);
-    const visible = interpretVisibleInput({ kind: "key", key: "d" }, context, reorderNode.children);
-    const mouse = interpretVisibleInput({ kind: "mouse", targetId: "sort-domain" }, context, reorderNode.children);
-
-    expect(fast).toEqual({ kind: "action", actionId: "sort-domain", source: "tree" });
-    expect(bridge).toEqual({ kind: "action", actionId: "sort-domain", source: "tree" });
-    expect(visible).toEqual({ kind: "action", actionId: "sort-domain", source: "view" });
-    expect(mouse).toEqual({ kind: "action", actionId: "sort-domain", source: "mouse" });
-  });
-
   it("keeps structural navigation separate from chord tree actions", () => {
-    expect(interpretVisibleInput({ kind: "key", key: "ArrowDown" }, { view: "actions" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: "ArrowDown" }, { view: "actions" }))
       .toEqual({ kind: "move-selection", delta: 1 });
-    expect(interpretVisibleInput({ kind: "key", key: "Backspace" }, { view: "last-visited" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: "Backspace" }, { view: "last-visited" }))
       .toEqual({ kind: "back" });
-    expect(interpretVisibleInput({ kind: "key", key: "Backspace" }, { view: "actions" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: "Backspace" }, { view: "actions" }))
       .toEqual({ kind: "cancel" });
-    expect(interpretVisibleInput({ kind: "key", key: "Backspace" }, { view: "duplicate-prompt" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: "Backspace" }, { view: "duplicate-prompt" }))
       .toEqual({ kind: "cancel" });
-    expect(interpretVisibleInput({ kind: "key", key: " " }, { view: "actions" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: " " }, { view: "actions" }))
       .toEqual({ kind: "cycle-page", delta: 1 });
-    expect(interpretVisibleInput({ kind: "key", key: "ArrowRight" }, { view: "actions" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: "ArrowRight" }, { view: "actions" }))
       .toEqual({ kind: "move-selection-directional", delta: 1 });
-    expect(interpretVisibleInput({ kind: "key", key: "ArrowLeft" }, { view: "reorder-tabs" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: "ArrowLeft" }, { view: "reorder-tabs" }))
       .toEqual({ kind: "move-selection-directional", delta: -1 });
-    expect(interpretVisibleInput({ kind: "key", key: "ArrowLeft" }, { view: "duplicate-prompt" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: "ArrowLeft" }, { view: "duplicate-prompt" }))
       .toEqual({ kind: "cancel" });
-    expect(interpretVisibleInput({ kind: "key", key: "3" }, { view: "last-visited" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: "3" }, { view: "last-visited" }))
       .toEqual({ kind: "activate-row", index: 2 });
-    expect(interpretVisibleInput({ kind: "key", key: "Enter" }, { view: "move-to-workspace" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: "Enter" }, { view: "move-to-workspace" }))
       .toEqual({ kind: "activate-selection" });
-    expect(interpretVisibleInput({ kind: "key", key: "Enter", shiftKey: true }, { view: "move-to-workspace" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: "Enter", shiftKey: true }, { view: "move-to-workspace" }))
       .toEqual({ kind: "activate-selection-and-switch" });
-    expect(interpretVisibleInput({ kind: "key", key: "!", code: "Digit1", shiftKey: true }, { view: "move-to-folder" }, fixtureTree))
+    expect(interpretStructuralInput({ kind: "key", key: "!", code: "Digit1", shiftKey: true }, { view: "move-to-folder" }))
       .toEqual({ kind: "activate-row-and-switch", index: 0 });
   });
 
   it("keeps list augmentation keys in the interpreter", () => {
-    expect(interpretVisibleInput({ kind: "key", key: "w" }, { view: "last-visited" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "w" }, { view: "last-visited" }))
       .toEqual({ kind: "close-selection" });
-    expect(interpretVisibleInput({ kind: "key", key: "w" }, { view: "duplicates" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "w" }, { view: "duplicates" }))
       .toEqual({ kind: "close-selection" });
-    expect(interpretVisibleInput({ kind: "key", key: "W", shiftKey: true }, { view: "child-tabs" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "W", shiftKey: true }, { view: "child-tabs" }))
       .toEqual({ kind: "close-all" });
-    expect(interpretVisibleInput({ kind: "key", key: "o" }, { view: "recently-closed" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "o" }, { view: "recently-closed" }))
       .toEqual({ kind: "restore-selection-keep-open" });
-    expect(interpretVisibleInput({ kind: "key", key: "S" }, { view: "domains" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "S" }, { view: "domains" }))
       .toEqual({ kind: "toggle-sort" });
-    expect(interpretVisibleInput({ kind: "key", key: "ArrowRight" }, { view: "parent-tabs" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "ArrowRight" }, { view: "parent-tabs" }))
       .toEqual({ kind: "drill-selection" });
   });
 
   it("keeps workspace filter shortcuts centralized for sidebar-backed views", () => {
-    expect(interpretVisibleInput({ kind: "key", key: "0" }, { view: "domains" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "0" }, { view: "domains" }))
       .toEqual({ kind: "toggle-workspace-filter" });
-    expect(interpretVisibleInput({ kind: "key", key: "!", code: "Digit1", shiftKey: true }, { view: "duplicates" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "!", code: "Digit1", shiftKey: true }, { view: "duplicates" }))
       .toEqual({ kind: "filter-workspace-index", index: 0 });
-    expect(interpretVisibleInput({ kind: "key", key: "0" }, { view: "recently-closed" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "0" }, { view: "recently-closed" }))
       .toEqual({ kind: "none" });
   });
 
   it("routes actions-menu dynamic row shortcuts through structural commands", () => {
-    expect(interpretVisibleInput({ kind: "key", key: "3" }, { view: "actions" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "3" }, { view: "actions" }))
       .toEqual({ kind: "switch-workspace-index", index: 2 });
-    expect(interpretVisibleInput({ kind: "key", key: "@", code: "Digit2", shiftKey: true }, { view: "actions" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "@", code: "Digit2", shiftKey: true }, { view: "actions" }))
       .toEqual({ kind: "open-extension-index", index: 1 });
   });
 
   it("keeps special view hotkeys in the interpreter instead of components", () => {
-    expect(interpretVisibleInput({ kind: "key", key: "b" }, { view: "navigation" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "b" }, { view: "navigation" }))
       .toEqual({ kind: "navigate-history-delta", delta: -1 });
-    expect(interpretVisibleInput({ kind: "key", key: "f" }, { view: "navigation" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "f" }, { view: "navigation" }))
       .toEqual({ kind: "navigate-history-delta", delta: 1 });
-    expect(interpretVisibleInput({ kind: "key", key: "1" }, { view: "duplicate-prompt" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "1" }, { view: "duplicate-prompt" }))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-switch" });
-    expect(interpretVisibleInput({ kind: "key", key: "s" }, { view: "duplicate-prompt" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "s" }, { view: "duplicate-prompt" }))
       .toEqual({ kind: "none" });
-    expect(interpretVisibleInput({ kind: "key", key: "o" }, { view: "duplicate-prompt" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "o" }, { view: "duplicate-prompt" }))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-anyway" });
-    expect(interpretVisibleInput({ kind: "key", key: "w" }, { view: "duplicate-prompt" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "w" }, { view: "duplicate-prompt" }))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-and-close-others" });
-    expect(interpretVisibleInput(
+    expect(interpretStructuralInput(
       { kind: "key", key: "w" },
       { view: "duplicate-prompt", selectedIndex: 4, duplicatePromptActionCount: 4 },
-      [],
     )).toEqual({ kind: "close-selection" });
-    expect(interpretVisibleInput({ kind: "key", key: "c" }, { view: "duplicate-prompt" }, []))
+    expect(interpretStructuralInput({ kind: "key", key: "c" }, { view: "duplicate-prompt" }))
       .toEqual({ kind: "duplicate-prompt-action", action: "hide-palette" });
   });
 });
