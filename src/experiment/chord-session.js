@@ -108,6 +108,7 @@
     };
     let bridgeTimer = null;
     let revealTimer = null;
+    let lastLeaderArmAt = 0;
     let armSequence = 0;
     let terminalDispatchArmSequence = -1;
     let currentNode = options && options.chordTree;
@@ -668,6 +669,7 @@
         bridgeBufferLength: Array.isArray(bridgeState.buffer) ? bridgeState.buffer.length : null,
         bridgeTimerActive: bridgeTimer != null,
         revealTimerActive: revealTimer != null,
+        lastLeaderArmAt,
         armSequence,
         terminalDispatchArmSequence,
         recentTransitions,
@@ -803,10 +805,25 @@
       return revealTimer != null;
     }
 
-    function beginArm() {
+    function leaderArmElapsed(now) {
+      const value = typeof now === "number" ? now : nowMs();
+      return value - lastLeaderArmAt;
+    }
+
+    function shouldDebounceLeaderArm(now, threshold) {
+      return leaderArmElapsed(now) < (typeof threshold === "number" ? threshold : 80);
+    }
+
+    function markLeaderArm(now) {
+      lastLeaderArmAt = typeof now === "number" ? now : nowMs();
+      return lastLeaderArmAt;
+    }
+
+    function beginArm(now) {
+      markLeaderArm(now);
       armSequence++;
       terminalDispatchArmSequence = -1;
-      recentTransitions.push({ at: Date.now(), from: state, to: state, why: "begin-arm", data: { armSequence } });
+      recentTransitions.push({ at: Date.now(), from: state, to: state, why: "begin-arm", data: { armSequence, lastLeaderArmAt } });
       if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
@@ -857,6 +874,9 @@
       clearRevealTimer,
       armRevealTimer,
       isRevealTimerActive,
+      leaderArmElapsed,
+      shouldDebounceLeaderArm,
+      markLeaderArm,
       beginArm,
       markTerminalDispatch,
     };

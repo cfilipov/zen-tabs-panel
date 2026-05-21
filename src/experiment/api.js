@@ -1092,7 +1092,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // destroy round-trip completes) is suppressed. Without this, the
     // popup-side 400ms timer races against the destroy IPC chain and
     // sometimes wins → brief flash before destroy.
-    let lastLeaderArmAt = 0;
     // Mirror whatever theme Zen's URL-bar dropdown (Cmd+T) uses. The
     // chrome root's resolved `color-scheme` is the same signal that dialog
     // reads, and it disagrees with both the `zen-should-be-dark-mode`
@@ -2080,6 +2079,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function revealOverlay() {
       const reveal = pendingReveal;
       if (reveal) reveal();
+      disarmChordShims("visible");
       if (chordSession) chordSession.transition("visible", "revealOverlay");
 
       // Reloads can leave a warm hidden overlay whose pending reveal closure
@@ -2116,6 +2116,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         try { mm.sendAsyncMessage("ZenChord:PaletteRevealed:" + CHORD_GENERATION, {}); } catch (e) {}
       }
       observeChordSession("revealOverlay");
+      assertVisiblePopupOwnsKeys("revealOverlay");
     }
 
     function forceRevealOverlay() {
@@ -2124,6 +2125,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const overlay = w.document.getElementById(OVERLAY_ID);
       const br = w.document.getElementById(BROWSER_ID);
       if (!overlay || overlay.dataset.closing) return;
+      disarmChordShims("visible");
       pendingReveal = null;
       overlay.style.visibility = "visible";
       overlay.style.opacity = "1";
@@ -2136,6 +2138,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (mm) {
         try { mm.sendAsyncMessage("ZenChord:PaletteRevealed:" + CHORD_GENERATION, {}); } catch (e) {}
       }
+      assertVisiblePopupOwnsKeys("forceRevealOverlay");
     }
 
     function revealExplicitViewIfReady(view) {
@@ -2949,7 +2952,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         session: chordSession ? chordSession.getStateSnapshot() : null,
         traversal: chordTraversalState,
         arm: {
-          lastLeaderArmAt,
+          lastLeaderArmAt: chordSession ? chordSession.getStateSnapshot().lastLeaderArmAt : 0,
           chordArmSequence: chordSession ? chordSession.getStateSnapshot().armSequence : 0,
           terminalDispatchArmSequence: chordSession ? chordSession.getStateSnapshot().terminalDispatchArmSequence : -1,
         },
@@ -2959,6 +2962,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function observeChordSession(why) {
       if (!chordSession) return;
       chordSession.observeLegacyState(getChordStateSnapshot(), why);
+    }
+
+    function assertVisiblePopupOwnsKeys(why) {
+      if (!chordSession || !isOverlayVisible()) return;
+      const chromeArmed = !!(chromeShim && chromeShim.isArmed && chromeShim.isArmed());
+      if (!chromeArmed && !chordSession.isArmed()) return;
+      const error = new Error("[ChordSession] visible popup must own keys");
+      error.details = {
+        why,
+        chromeArmed,
+        sessionArmed: chordSession.isArmed(),
+        snapshot: getChordStateSnapshot(),
+      };
+      throw error;
     }
 
     function installChordStateInspector() {
@@ -3963,11 +3980,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // ---- Chrome chord-session + shim instance ---------------------------
     function armChordFromLeader() {
       const now = Date.now();
-      if (now - lastLeaderArmAt < 80) {
-        debugChordTrace("arm-skip-debounce", { since: now - lastLeaderArmAt });
+      const sinceLeader = chordSession ? chordSession.leaderArmElapsed(now) : now;
+      if (chordSession && chordSession.shouldDebounceLeaderArm(now, 80)) {
+        debugChordTrace("arm-skip-debounce", { since: sinceLeader });
         return;
       }
-      lastLeaderArmAt = now;
       debugChordTrace("arm-leader", {
         overlayVisible: isOverlayVisible(),
         chromeArmed: !!(chordSession && chordSession.isArmed()),
@@ -4001,7 +4018,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       try { chordSession.arm(); } catch (e) {}
       try { if (chromeShim) chromeShim.arm(); } catch (e) {}
-      try { if (chordSession) chordSession.beginArm(); } catch (e) {}
+      try { if (chordSession) chordSession.beginArm(now); } catch (e) {}
       debugChordTrace("chrome-arm-called", {});
       const w = getWin();
       const tab = w && w.gBrowser && w.gBrowser.selectedTab;
@@ -4062,8 +4079,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const t = e && e.target;
         if (!t) return;
         const name = (t.tagName || t.nodeName || "").toLowerCase();
-        if (name === "browser" && Date.now() - lastLeaderArmAt > CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS) {
-          debugChordTrace("chrome-reset-focus-browser", { since: Date.now() - lastLeaderArmAt });
+        const sinceLeader = chordSession.leaderArmElapsed(Date.now());
+        if (name === "browser" && sinceLeader > CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS) {
+          debugChordTrace("chrome-reset-focus-browser", { since: sinceLeader });
           chordSession.reset();
           try { if (chromeShim) chromeShim.disarm("focus-browser"); } catch (e) {}
         }
@@ -4078,7 +4096,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // another Cmd+. leader shortcut, not as a plain "." chord key, so
         // translate it to the repeat action while the root chord is armed.
         if (!isOverlayVisible() && chordSession && chordSession.isArmed()) {
-          lastLeaderArmAt = Date.now();
+          chordSession.markLeaderArm(Date.now());
           replayLastChordFromRepeatedLeader();
           return;
         }

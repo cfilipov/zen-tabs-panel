@@ -28,11 +28,16 @@ type ChordSession = {
   replayLastChord: (effects: Record<string, unknown>) => boolean;
   hasCurrentReplay: () => boolean;
   hasCurrentOpenViewReplay: () => boolean;
+  leaderArmElapsed: (now?: number) => number;
+  shouldDebounceLeaderArm: (now?: number, threshold?: number) => boolean;
+  markLeaderArm: (now?: number) => number;
+  beginArm: (now?: number) => void;
   transition: (to: string, why: string, data?: unknown) => void;
   observeLegacyState: (snapshot: unknown, why: string) => void;
   assertInvariant: (snapshot?: unknown) => true;
   getStateSnapshot: () => {
     state: string;
+    lastLeaderArmAt: number;
     recentTransitions: Array<Record<string, unknown>>;
   };
   getReplayState: () => {
@@ -260,6 +265,22 @@ describe("chord-session replay recording", () => {
       lastChordReplay: { kind: "action", actionId: "close-tab" },
       currentChordReplay: null,
     });
+  });
+
+  it("owns leader debounce timing", () => {
+    const session = makeSession();
+
+    expect(session.leaderArmElapsed(100)).toBe(100);
+    expect(session.shouldDebounceLeaderArm(100, 80)).toBe(false);
+
+    session.beginArm(100);
+    expect(session.getStateSnapshot().lastLeaderArmAt).toBe(100);
+    expect(session.leaderArmElapsed(140)).toBe(40);
+    expect(session.shouldDebounceLeaderArm(140, 80)).toBe(true);
+    expect(session.shouldDebounceLeaderArm(190, 80)).toBe(false);
+
+    session.markLeaderArm(220);
+    expect(session.getStateSnapshot().lastLeaderArmAt).toBe(220);
   });
 
   it("records state transitions for inspector diagnostics", () => {
