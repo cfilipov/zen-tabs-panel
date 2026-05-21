@@ -50,7 +50,7 @@
     resolveDuplicatePromptSelectionActivation,
     type DuplicatePromptActivation,
     type DuplicatePromptActivationContext,
-  } from "./interaction/view-activation";
+  } from "./interaction/duplicate-prompt-activation";
   import { buildSidebarModel, type SidebarHintId } from "./interaction/sidebar-model";
   import {
     canDrillSelectionInView,

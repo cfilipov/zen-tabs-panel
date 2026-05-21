@@ -4,7 +4,7 @@ import {
   resolveDuplicatePromptActivation,
   resolveDuplicatePromptSelectionActivation,
   type DuplicatePromptActivationContext,
-} from "./view-activation";
+} from "./duplicate-prompt-activation";
 
 const tabRow: TabIndexRow = {
   index: 0,
