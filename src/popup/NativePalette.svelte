@@ -93,10 +93,7 @@
   import { formatDuration } from "./views/format";
   import {
     actionItemsForPage,
-    appendWorkspaceSwitchItems,
-    applyActionMetadata,
     applyActionSelection,
-    buildActionsMenuModel,
     prefixItemsForView,
     type ActionMenuItem,
   } from "./views/actions-model";
@@ -120,7 +117,6 @@
   const tabInfoClient = createTabInfoClient();
   const workspaceClient = createWorkspaceClient();
   const effects = createPaletteEffects();
-  const fallbackActionSections = buildActionsMenuModel();
   function shouldChromeResolveActivation(view: ViewId, activation: ViewActivation) {
     return view === "duplicate-prompt" && activation.kind === "activate-tab";
   }
@@ -210,17 +206,7 @@
   const headerOverlay = $derived(palette.currentView === "actions" && !!headerHint);
   const headerHidden = $derived(palette.currentView === "actions" && !headerHint);
   const fitContentHeight = $derived(usesFitContentHeight(palette.currentView));
-  const renderedActionSections = $derived(
-    palette.actionSections.length
-      ? palette.actionSections
-      : applyActionMetadata(
-        appendWorkspaceSwitchItems(fallbackActionSections, palette.actionsWorkspaces, palette.actionWorkspaceTabCounts),
-        palette.actionCounts,
-        palette.disabledActionIds,
-        palette.actionIconHtmlById,
-        palette.actionPreviewsById,
-      ),
-  );
+  const renderedActionSections = $derived(palette.actionSections);
   const pageCount = $derived(Math.max(1, Math.max(...renderedActionSections.map((section) => section.page))));
   const viewLoad = createViewLoadController<ViewId>({
     getCurrentView: () => palette.currentView,

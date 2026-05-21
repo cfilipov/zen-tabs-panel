@@ -8,10 +8,9 @@ describe("native palette state", () => {
     expect(store.state.currentView).toBe("actions");
     expect(store.state.selectedIndex).toBe(-1);
     expect(store.state.workspaceFilter).toBe("all");
-    expect(store.state.disabledActionIds).toBeInstanceOf(Set);
   });
 
-  it("clears loaded view data without discarding action metadata or user filters", () => {
+  it("clears loaded view data without discarding user filters", () => {
     const store = createNativePaletteState();
     store.state.currentView = "last-visited";
     store.state.rows = [{
@@ -34,7 +33,6 @@ describe("native palette state", () => {
     store.state.currentDomain = "example.com";
     store.state.selectedIndex = 2;
     store.state.workspaceFilter = "workspace-1";
-    store.state.actionCounts = { recent: 7 };
 
     store.clearLoadedViewData();
 
@@ -45,7 +43,6 @@ describe("native palette state", () => {
     expect(store.state.currentDomain).toBeNull();
     expect(store.state.selectedIndex).toBe(-1);
     expect(store.state.workspaceFilter).toBe("workspace-1");
-    expect(store.state.actionCounts).toEqual({ recent: 7 });
   });
 
   it("tracks the chrome model version for rendered list windows", () => {
@@ -71,12 +68,10 @@ describe("native palette state", () => {
     const store = createNativePaletteState();
     store.state.currentView = "domains";
     store.state.workspaceFilter = "workspace-1";
-    store.state.actionCounts = { recent: 7 };
 
     store.resetToActions();
 
     expect(store.state.currentView).toBe("actions");
     expect(store.state.workspaceFilter).toBe("all");
-    expect(store.state.actionCounts).toEqual({});
   });
 });

@@ -35,15 +35,15 @@ describe("actions loader", () => {
     });
 
     expect(data.sections?.[0]?.items[0]?.id).toBe("go-to-previous-tab");
-    expect(data.counts["child-tabs"]).toBe(1);
-    expect(data.disabledIds.has("go-to-parent-tab")).toBe(true);
+    expect(data.workspaces).toEqual([]);
+    expect(data.extensions).toEqual([]);
   });
 
   it("creates a fresh empty action-data object", () => {
-    const first = emptyActionsMenuData();
-    const second = emptyActionsMenuData();
+    const data = emptyActionsMenuData();
 
-    first.disabledIds.add("x");
-    expect(second.disabledIds.has("x")).toBe(false);
+    expect(data.sections).toEqual([]);
+    expect(data.workspaces).toEqual([]);
+    expect(data.extensions).toEqual([]);
   });
 });

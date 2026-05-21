@@ -5,7 +5,7 @@ import type { FolderRow } from "../runtime/folder-client";
 import type { NavigationHistory, RecentlyClosedRow } from "../runtime/history-client";
 import type { ProfileRow } from "../runtime/profile-client";
 import type { HistoryVisit, TabInfo } from "../runtime/tab-info-client";
-import type { ActionPreview, DuplicateGroupRow, TabIndexRow, ViewWindow } from "../runtime/tab-index-client";
+import type { DuplicateGroupRow, TabIndexRow, ViewWindow } from "../runtime/tab-index-client";
 import type { WorkspaceRow } from "../runtime/workspace-client";
 import type { NativeListRow } from "../view-loaders/list-loader";
 import type { ActionsMenuData } from "../view-loaders/actions-loader";
@@ -45,11 +45,6 @@ export type NativePaletteState = {
   sidebarWorkspaces: WorkspaceRow[];
   workspaceFilter: string;
   actionsWorkspaces: WorkspaceRow[];
-  actionWorkspaceTabCounts: Record<string, number>;
-  actionCounts: Record<string, number>;
-  actionPreviewsById: Record<string, ActionPreview | null>;
-  disabledActionIds: Set<string>;
-  actionIconHtmlById: Record<string, string | null>;
   actionExtensions: ExtensionRow[];
   actionSections: ActionSection[];
 };
@@ -88,11 +83,6 @@ function defaultNativePaletteState(): NativePaletteState {
     sidebarWorkspaces: [],
     workspaceFilter: "all",
     actionsWorkspaces: [],
-    actionWorkspaceTabCounts: {},
-    actionCounts: {},
-    actionPreviewsById: {},
-    disabledActionIds: new Set(),
-    actionIconHtmlById: {},
     actionExtensions: [],
     actionSections: [],
   };
@@ -187,12 +177,7 @@ export function createNativePaletteState() {
   function applyActionsMenuData(data: ActionsMenuData) {
     state.actionSections = data.sections || [];
     state.actionsWorkspaces = data.workspaces;
-    state.actionWorkspaceTabCounts = data.workspaceTabCounts;
     state.actionExtensions = data.extensions;
-    state.actionIconHtmlById = data.iconHtmlById;
-    state.actionPreviewsById = data.previewsById;
-    state.actionCounts = data.counts;
-    state.disabledActionIds = data.disabledIds;
   }
 
   function commitSidebarWorkspaces(workspaces: WorkspaceRow[]) {
