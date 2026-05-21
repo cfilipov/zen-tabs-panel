@@ -994,9 +994,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // during its wait window (via onArmed), this is what enterBridgeFromOpenView
     // / revealOverlay surface to display the already-loaded popup with no
     // further delay.
-    let explicitRevealToken = 0;
-    let explicitRevealView = null;
-    let explicitRevealScheduledToken = 0;
     let overlayController = null;
 
     let chromeShim = null;
@@ -1108,6 +1105,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function runPendingReveal() {
       return !!(overlayController && overlayController.runPendingReveal());
+    }
+
+    function explicitRevealState() {
+      return overlayController ? overlayController.getExplicitRevealState() : {
+        explicitRevealToken: 0,
+        explicitRevealView: null,
+        explicitRevealScheduledToken: 0,
+      };
     }
 
     // Reveal-blocked flag: set the moment destroyOverlay starts tearing
@@ -2165,7 +2170,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function revealExplicitViewIfReady(view) {
       const viewName = view || "actions";
-      if (explicitRevealView !== viewName || !hasPendingReveal()) return false;
+      if (!overlayController || overlayController.getExplicitRevealView() !== viewName || !hasPendingReveal()) return false;
 
       const w = getWin();
       if (!w) return false;
@@ -2183,18 +2188,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const heightReady = !isMeasuredView || (currentMeasuredResizeView === viewName && height > 0 && height < targetSize.height);
       if (!widthReady || !heightReady) return false;
 
-      const token = explicitRevealToken;
-      if (explicitRevealScheduledToken === token) return true;
-      explicitRevealScheduledToken = token;
+      const token = explicitRevealState().explicitRevealToken;
+      if (!overlayController.markExplicitRevealScheduled(token)) return true;
       const commitReveal = () => {
-        if (token !== explicitRevealToken || explicitRevealScheduledToken !== token) return;
+        if (!overlayController.isExplicitRevealCurrent(token) || !overlayController.isExplicitRevealScheduled(token)) return;
         const w2 = getWin();
         if (!w2) return;
         const overlay2 = w2.document.getElementById(OVERLAY_ID);
         if (!overlay2 || overlay2.dataset.closing) return;
         if (currentViewName !== viewName) return;
-        explicitRevealScheduledToken = 0;
-        explicitRevealView = null;
+        overlayController.clearExplicitReveal();
         setRevealDeferred(false, "reveal-deferred-clear");
         if (hasPendingReveal()) revealOverlay();
         else forceRevealOverlay();
@@ -2209,10 +2212,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function scheduleExplicitViewReveal(view) {
-      const token = ++explicitRevealToken;
+      const token = overlayController.beginExplicitReveal(view || "actions");
       const w = getWin();
       if (!w) return;
-      explicitRevealView = view || "actions";
       const startedAt = Date.now();
       let revealScheduled = false;
 
@@ -2223,13 +2225,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (!w2) return;
         w2.requestAnimationFrame(() => {
           w2.requestAnimationFrame(() => {
-            if (token !== explicitRevealToken) return;
+            if (!overlayController.isExplicitRevealCurrent(token)) return;
             const w3 = getWin();
             if (!w3) return;
             const overlay = w3.document.getElementById(OVERLAY_ID);
             if (!overlay || overlay.dataset.closing) return;
             if (currentViewName !== (view || "actions")) return;
-            explicitRevealView = null;
+            overlayController.clearExplicitReveal();
             setRevealDeferred(false, "reveal-deferred-clear");
             if (hasPendingReveal()) revealOverlay();
             else forceRevealOverlay();
@@ -2238,7 +2240,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       };
 
       const tryReveal = () => {
-        if (token !== explicitRevealToken) return;
+        if (!overlayController.isExplicitRevealCurrent(token)) return;
         const w2 = getWin();
         if (!w2) return;
         const overlay = w2.document.getElementById(OVERLAY_ID);
@@ -2265,7 +2267,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (Date.now() - startedAt < 2000) {
           w2.setTimeout(tryReveal, 100);
         } else if (hasPendingReveal()) {
-          explicitRevealView = null;
+          overlayController.clearExplicitReveal();
           setRevealDeferred(false, "reveal-deferred-clear");
           revealOverlay();
         }
@@ -2441,7 +2443,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const height = Number(msg.data && msg.data.height);
         if (height > 0) {
           resizePanelToView(view, height, undefined, { allowExplicitReveal: false });
-          if (!explicitRevealView && isRevealDeferred() && hasPendingReveal() && (!hasBridgeBuffer() || getBridgeBufferLength() === 0)) {
+          if (!overlayController.getExplicitRevealView() && isRevealDeferred() && hasPendingReveal() && (!hasBridgeBuffer() || getBridgeBufferLength() === 0)) {
             setRevealDeferred(false, "reveal-deferred-clear");
             const w2 = getWin();
             if (w2) w2.setTimeout(() => { if (hasPendingReveal()) revealOverlay(); }, 0);
@@ -2709,9 +2711,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // pendingReveal still set and unhide the overlay right before we
       // remove it, producing a flash.
       setRevealBlocked(true, "destroyOverlay");
-      explicitRevealToken++;
-      explicitRevealView = null;
-      explicitRevealScheduledToken = 0;
+      if (overlayController) overlayController.cancelExplicitReveal();
       if (chordSession) {
         if (silent && hasActiveBridge()) {
           chordSession.transition("bridging-buffering", "destroyOverlay-silent", { hard, silent });
@@ -2962,9 +2962,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           closing: overlay && overlay.dataset ? overlay.dataset.closing || "" : "",
           visibility: overlay && w ? w.getComputedStyle(overlay).visibility : null,
           pendingReveal: hasPendingReveal(),
-          explicitRevealToken,
-          explicitRevealView,
-          explicitRevealScheduledToken,
+          ...explicitRevealState(),
           panelWidth: panel ? Math.round(panel.getBoundingClientRect().width) : 0,
           panelHeight: panel ? Math.round(panel.getBoundingClientRect().height) : 0,
           browserSrc: browser ? browser.getAttribute("src") || "" : "",
@@ -6382,7 +6380,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // pause case the user wanted UI for, not a fast chain),
           // reveal now. For the buffered-keys case the user is in a
           // chord chain and the popup will decide reveal timing.
-          if (!explicitRevealView && isRevealDeferred()) {
+          if (!overlayController.getExplicitRevealView() && isRevealDeferred()) {
             setRevealDeferred(false, "reveal-deferred-clear");
             if (drained.length === 0 && hasPendingReveal()) {
               // Defer one tick so the popup's init() has time to
@@ -6641,7 +6639,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!isOverlayOpen()) return;
           if (!matchesPopupInstance(inst)) return;
           resizePanelToView(view, height, dynamicSidebarWidth);
-          if (!explicitRevealView && isRevealDeferred() && hasPendingReveal() && (!hasBridgeBuffer() || getBridgeBufferLength() === 0)) {
+          if (!overlayController.getExplicitRevealView() && isRevealDeferred() && hasPendingReveal() && (!hasBridgeBuffer() || getBridgeBufferLength() === 0)) {
             setRevealDeferred(false, "reveal-deferred-clear");
             const w = getWin();
             if (w) w.setTimeout(() => { if (hasPendingReveal()) revealOverlay(); }, 0);

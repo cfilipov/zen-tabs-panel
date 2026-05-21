@@ -56,6 +56,15 @@
  * @property {() => boolean} runPendingReveal
  * Invoke the current reveal closure if one exists.
  *
+ * @property {(view?: string | null) => number} beginExplicitReveal
+ * Start a direct-open reveal attempt and return its token.
+ *
+ * @property {() => number} cancelExplicitReveal
+ * Invalidate any pending direct-open reveal attempt.
+ *
+ * @property {() => Object} getExplicitRevealState
+ * Return debug state for the direct-open reveal scheduler.
+ *
  * @property {() => number} currentInstance
  * Return the live popup instance id used to reject stale POPUP_READY and
  * REVEAL_PALETTE messages.
@@ -77,6 +86,9 @@
   function createOverlayController(impl) {
     let popupInstance = 0;
     let pendingReveal = null;
+    let explicitRevealToken = 0;
+    let explicitRevealView = null;
+    let explicitRevealScheduledToken = 0;
 
     function nextInstance() {
       popupInstance++;
@@ -113,6 +125,51 @@
       return true;
     }
 
+    function beginExplicitReveal(view) {
+      explicitRevealToken++;
+      explicitRevealView = view || "actions";
+      explicitRevealScheduledToken = 0;
+      return explicitRevealToken;
+    }
+
+    function cancelExplicitReveal() {
+      explicitRevealToken++;
+      explicitRevealView = null;
+      explicitRevealScheduledToken = 0;
+      return explicitRevealToken;
+    }
+
+    function getExplicitRevealView() {
+      return explicitRevealView;
+    }
+
+    function isExplicitRevealCurrent(token) {
+      return token === explicitRevealToken;
+    }
+
+    function isExplicitRevealScheduled(token) {
+      return token === explicitRevealScheduledToken;
+    }
+
+    function markExplicitRevealScheduled(token) {
+      if (explicitRevealScheduledToken === token) return false;
+      explicitRevealScheduledToken = token;
+      return true;
+    }
+
+    function clearExplicitReveal() {
+      explicitRevealView = null;
+      explicitRevealScheduledToken = 0;
+    }
+
+    function getExplicitRevealState() {
+      return {
+        explicitRevealToken,
+        explicitRevealView,
+        explicitRevealScheduledToken,
+      };
+    }
+
     return {
       create(view, params) { return call(impl, "create", [view, params]); },
       rearm(view, params) { return call(impl, "rearm", [view, params]); },
@@ -126,6 +183,14 @@
       setPendingReveal,
       clearPendingReveal,
       runPendingReveal,
+      beginExplicitReveal,
+      cancelExplicitReveal,
+      getExplicitRevealView,
+      isExplicitRevealCurrent,
+      isExplicitRevealScheduled,
+      markExplicitRevealScheduled,
+      clearExplicitReveal,
+      getExplicitRevealState,
       nextInstance,
       currentInstance,
       matchesInstance,

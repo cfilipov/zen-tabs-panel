@@ -15,6 +15,18 @@ type OverlayControllerScope = {
     setPendingReveal: (reveal: (() => void) | null) => (() => void) | null;
     clearPendingReveal: (expected?: (() => void) | null) => boolean;
     runPendingReveal: () => boolean;
+    beginExplicitReveal: (view?: string | null) => number;
+    cancelExplicitReveal: () => number;
+    getExplicitRevealView: () => string | null;
+    isExplicitRevealCurrent: (token: number) => boolean;
+    isExplicitRevealScheduled: (token: number) => boolean;
+    markExplicitRevealScheduled: (token: number) => boolean;
+    clearExplicitReveal: () => void;
+    getExplicitRevealState: () => {
+      explicitRevealToken: number;
+      explicitRevealView: string | null;
+      explicitRevealScheduledToken: number;
+    };
   };
 };
 
@@ -77,5 +89,26 @@ describe("overlay controller", () => {
     expect(first).toHaveBeenCalledOnce();
     expect(controller.hasPendingReveal()).toBe(false);
     expect(controller.runPendingReveal()).toBe(false);
+  });
+
+  it("owns explicit reveal scheduler tokens", () => {
+    const controller = loadOverlayControllerScope().createOverlayController();
+
+    const first = controller.beginExplicitReveal("last-visited");
+    expect(first).toBe(1);
+    expect(controller.getExplicitRevealView()).toBe("last-visited");
+    expect(controller.isExplicitRevealCurrent(first)).toBe(true);
+    expect(controller.markExplicitRevealScheduled(first)).toBe(true);
+    expect(controller.markExplicitRevealScheduled(first)).toBe(false);
+    expect(controller.isExplicitRevealScheduled(first)).toBe(true);
+
+    const second = controller.cancelExplicitReveal();
+    expect(second).toBe(2);
+    expect(controller.isExplicitRevealCurrent(first)).toBe(false);
+    expect(controller.getExplicitRevealState()).toMatchObject({
+      explicitRevealToken: 2,
+      explicitRevealView: null,
+      explicitRevealScheduledToken: 0,
+    });
   });
 });
