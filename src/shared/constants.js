@@ -24,7 +24,6 @@ this.MSG = Object.freeze({
 
   // Tab activation / preview
   ACTIVATE_TAB:                   "activate-tab",
-  ACTIVATE_VIEW_ROW:              "activate-view-row",
   ACTIVATE_CURRENT_VIEW_ROW:      "activate-current-view-row",
   PREVIEW_TAB:                    "preview-tab",
   CLEAR_PREVIEW:                  "clear-preview",

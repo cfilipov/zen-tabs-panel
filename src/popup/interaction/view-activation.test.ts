@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { TabIndexRow } from "../runtime/tab-index-client";
-import { resolveSelectionActivation, resolveViewActivation, type ViewActivationContext } from "./view-activation";
+import {
+  resolveDuplicatePromptActivation,
+  resolveDuplicatePromptSelectionActivation,
+  type DuplicatePromptActivationContext,
+} from "./view-activation";
 
 const tabRow: TabIndexRow = {
   index: 0,
@@ -24,9 +28,8 @@ const tabRow: TabIndexRow = {
   panelParentUuid: null,
 };
 
-function context(overrides: Partial<ViewActivationContext> = {}): ViewActivationContext {
+function context(overrides: Partial<DuplicatePromptActivationContext> = {}): DuplicatePromptActivationContext {
   return {
-    view: "duplicate-prompt",
     selectedIndex: -1,
     duplicatePromptTabs: [],
     ...overrides,
@@ -34,24 +37,19 @@ function context(overrides: Partial<ViewActivationContext> = {}): ViewActivation
 }
 
 describe("view activation resolver", () => {
-  it("keeps migrated chrome-owned views out of popup activation resolution", () => {
-    expect(resolveViewActivation(context({ view: "last-visited" }), 0, "shortcut"))
-      .toEqual({ kind: "none" });
-  });
-
   it("resolves duplicate prompt option rows locally", () => {
-    expect(resolveViewActivation(context(), 0, "shortcut"))
+    expect(resolveDuplicatePromptActivation(context(), 0, "shortcut"))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-switch" });
-    expect(resolveSelectionActivation(context({ selectedIndex: 1 })))
+    expect(resolveDuplicatePromptSelectionActivation(context({ selectedIndex: 1 })))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-anyway" });
-    expect(resolveSelectionActivation(context({ selectedIndex: 2 })))
+    expect(resolveDuplicatePromptSelectionActivation(context({ selectedIndex: 2 })))
       .toEqual({ kind: "duplicate-prompt-action", action: "duplicate-open-and-close-others" });
   });
 
   it("returns duplicate prompt tab rows for chrome activation", () => {
-    expect(resolveSelectionActivation(context({ selectedIndex: 4, duplicatePromptTabs: [tabRow] })))
-      .toEqual({ kind: "activate-tab", row: tabRow });
-    expect(resolveViewActivation(context({ duplicatePromptTabs: [tabRow, { ...tabRow, domId: "tab-2" }] }), 1, "shortcut"))
-      .toEqual({ kind: "activate-tab", row: { ...tabRow, domId: "tab-2" } });
+    expect(resolveDuplicatePromptSelectionActivation(context({ selectedIndex: 4, duplicatePromptTabs: [tabRow] })))
+      .toEqual({ kind: "activate-tab", row: tabRow, rowIndex: 0 });
+    expect(resolveDuplicatePromptActivation(context({ duplicatePromptTabs: [tabRow, { ...tabRow, domId: "tab-2" }] }), 1, "shortcut"))
+      .toEqual({ kind: "activate-tab", row: { ...tabRow, domId: "tab-2" }, rowIndex: 1 });
   });
 });

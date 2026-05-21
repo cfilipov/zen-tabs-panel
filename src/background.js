@@ -711,31 +711,6 @@ const SYNC_HANDLERS = Object.freeze({
     }
     return ok;
   },
-  [MSG.ACTIVATE_VIEW_ROW]: async (m) => {
-    if (m.view === "recently-closed") {
-      const ok = await restoreRecentlyClosedByIndex(m.index, m.expectedRowId);
-      if (ok) {
-        recordChordAction({ type: MSG.RESTORE_CLOSED_TAB_BY_INDEX, index: m.index, expectedRowId: m.expectedRowId });
-        await api.hidePalette();
-      }
-      return ok;
-    }
-    const result = await api.activateViewRow(
-      m.view,
-      m.index,
-      m.source,
-      !!m.switchToTarget,
-      m.listVersion,
-      m.expectedDomId,
-      m.expectedRowId,
-      m.chordKey || "",
-    );
-    if (result && typeof result === "object" && result.kind === "open-view") {
-      return result;
-    }
-    await api.hidePalette();
-    return result;
-  },
   [MSG.ACTIVATE_CURRENT_VIEW_ROW]: async (m) => {
     const result = await api.activateCurrentViewRow(
       m.index,

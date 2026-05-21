@@ -5200,17 +5200,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return activateNativeTab(tab);
         },
 
-        async activateViewRow(view, index, source, switchToTarget, listVersion, expectedDomId, expectedRowId, chordKey) {
-          return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, {
-            destroyOverlay: false,
-            listVersion,
-            expectedDomId,
-            expectedRowId,
-            replayChordKey: typeof chordKey === "string" ? chordKey : null,
-            params: currentViewParams() || {},
-          });
-        },
-
         async activateCurrentViewRow(index, source, switchToTarget, listVersion, chordKey, activation, expectedRowId) {
           const view = currentViewName() || getActiveBridgeView();
           if (!view) return false;

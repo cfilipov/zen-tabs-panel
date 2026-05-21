@@ -46,10 +46,10 @@
     workspaceReloadKind,
   } from "./interaction/sort-filter";
   import {
-    resolveSelectionActivation,
-    resolveViewActivation,
-    type ViewActivation,
-    type ViewActivationContext,
+    resolveDuplicatePromptActivation,
+    resolveDuplicatePromptSelectionActivation,
+    type DuplicatePromptActivation,
+    type DuplicatePromptActivationContext,
   } from "./interaction/view-activation";
   import { buildSidebarModel, type SidebarHintId } from "./interaction/sidebar-model";
   import {
@@ -116,9 +116,6 @@
   const tabInfoClient = createTabInfoClient();
   const workspaceClient = createWorkspaceClient();
   const effects = createPaletteEffects();
-  function shouldChromeResolveActivation(view: ViewId, activation: ViewActivation) {
-    return view === "duplicate-prompt" && activation.kind === "activate-tab";
-  }
 
   const paletteStore = createNativePaletteState();
   const palette = paletteStore.state;
@@ -419,31 +416,6 @@
     markTerminalCommandDispatched();
     revealController.clear();
     effects.sendViewCommand({ type: "navigate-to-history-index", index });
-  }
-
-  function expectedDomIdForActivation(activation: ViewActivation) {
-    return activation.kind === "activate-tab" ? activation.row.domId : undefined;
-  }
-
-  async function activateChromeResolvedRow(index: number, source: "selection" | "shortcut", switchToTarget = false, activation: ViewActivation) {
-    markTerminalCommandDispatched();
-    revealController.clear();
-    const chromeIndex = source === "shortcut" && isNativeListView(palette.currentView)
-      ? palette.offset + index
-      : index;
-    const result = await effects.activateViewRow(
-      palette.currentView,
-      chromeIndex,
-      source,
-      switchToTarget,
-      palette.listVersion,
-      expectedDomIdForActivation(activation),
-      undefined,
-      replayKeyForBadgeIndex(index, switchToTarget),
-    );
-    if (result && typeof result === "object" && result.kind === "open-view") {
-      await openNativeView(result.view, result.params || {}, true);
-    }
   }
 
   async function activateCurrentChromeModelRow(
@@ -780,14 +752,12 @@
       return;
     }
 
-    const activation = resolveSelectionActivation(viewActivationContext());
-    if (shouldChromeResolveActivation(palette.currentView, activation)) {
-      if (activation.kind === "none") return;
-      await activateChromeResolvedRow(palette.selectedIndex, "selection", switchToTarget, activation);
-      return;
+    if (palette.currentView === "duplicate-prompt") {
+      await applyDuplicatePromptActivation(
+        resolveDuplicatePromptSelectionActivation(duplicatePromptActivationContext()),
+        "selection",
+      );
     }
-
-    await applyViewActivation(activation);
   }
 
   async function activateSelectedAndSwitch() {
@@ -804,13 +774,12 @@
       );
       return;
     }
-    const activation = resolveViewActivation(viewActivationContext(), index, "shortcut");
-    if (shouldChromeResolveActivation(palette.currentView, activation)) {
-      if (activation.kind === "none") return;
-      await activateChromeResolvedRow(index, "shortcut", switchToTarget, activation);
-      return;
+    if (palette.currentView === "duplicate-prompt") {
+      await applyDuplicatePromptActivation(
+        resolveDuplicatePromptActivation(duplicatePromptActivationContext(), index, "shortcut"),
+        "shortcut",
+      );
     }
-    await applyViewActivation(activation);
   }
 
   async function activateRenderedRow(index: number, switchToTarget = false) {
@@ -821,30 +790,42 @@
       await activateCurrentChromeModelRow(index, "selection", switchToTarget, chordKey);
       return;
     }
-    const activation = resolveViewActivation(viewActivationContext(), index, "selection");
-    if (shouldChromeResolveActivation(palette.currentView, activation)) {
-      if (activation.kind === "none") return;
-      await activateChromeResolvedRow(index, "selection", switchToTarget, activation);
-      return;
+    if (palette.currentView === "duplicate-prompt") {
+      await applyDuplicatePromptActivation(
+        resolveDuplicatePromptActivation(duplicatePromptActivationContext(), index, "selection"),
+        "selection",
+      );
     }
-    await applyViewActivation(activation);
   }
 
   async function activateRowAndSwitch(index: number) {
     await activateRow(index, true);
   }
 
-  function viewActivationContext(): ViewActivationContext {
+  function duplicatePromptActivationContext(): DuplicatePromptActivationContext {
     return {
-      view: palette.currentView,
       selectedIndex: palette.selectedIndex,
       duplicatePromptTabs,
     };
   }
 
-  async function applyViewActivation(activation: ViewActivation) {
+  async function applyDuplicatePromptActivation(
+    activation: DuplicatePromptActivation,
+    source: "selection" | "shortcut",
+  ) {
     if (activation.kind === "duplicate-prompt-action") {
       runDuplicatePromptAction(activation.action);
+      return;
+    }
+    if (activation.kind === "activate-tab") {
+      if (activation.row.active) return;
+      await activateCurrentChromeModelRow(
+        activation.rowIndex,
+        source,
+        false,
+        replayKeyForBadgeIndex(activation.rowIndex),
+        activation.row.domId,
+      );
     }
   }
 
