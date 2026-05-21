@@ -81,6 +81,36 @@ describe("basic view loaders", () => {
     expect(result.rows.map((row) => row.uuid)).toEqual(["active", "other"]);
   });
 
+  it("prefers the chrome-owned workspace model when available", async () => {
+    const result = await loadMoveToWorkspaceView({
+      getWorkspacesWithIcons: async () => { throw new Error("fallback should not run"); },
+      getWorkspacesViewModel: async () => ({
+        version: 3,
+        view: "move-to-workspace",
+        rows: [
+          { uuid: "main", name: "Main", svgContent: "", isActive: true, tabCount: 4, chordKey: "1" },
+        ],
+        selectedIndex: -1,
+        model: {
+          id: "workspaces",
+          view: "move-to-workspace",
+          rowIntents: [{
+            rowId: "main",
+            index: 0,
+            chordKey: "1",
+            shiftedChordKey: "Shift+1",
+            action: "move-selected-tabs-to-workspace",
+            disabled: true,
+          }],
+        },
+      }),
+    });
+
+    expect(result.version).toBe(3);
+    expect(result.rows[0]?.tabCount).toBe(4);
+    expect(result.model.rowIntents[0]?.rowId).toBe("main");
+  });
+
   it("loads containers and profiles", async () => {
     const containers = await loadOpenInContainerView({
       getContainers: async () => [{

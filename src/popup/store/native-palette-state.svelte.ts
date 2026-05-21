@@ -250,9 +250,10 @@ export function createNativePaletteState() {
     state.error = message;
   }
 
-  function commitMoveToWorkspace(result: { rows: WorkspaceRow[]; selectedIndex: number }) {
+  function commitMoveToWorkspace(result: { rows: WorkspaceRow[]; selectedIndex: number; version?: number }) {
     state.workspaceRows = result.rows;
     state.selectedIndex = result.selectedIndex;
+    state.listVersion = result.version || 0;
   }
 
   function failMoveToWorkspace(message: string) {

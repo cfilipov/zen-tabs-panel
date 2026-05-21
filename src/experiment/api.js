@@ -910,6 +910,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
       recentsModelScope
     );
     const recentsModel = recentsModelScope.createZenRecentsModel({ tabIndex });
+    const workspacesModelScope = {};
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("experiment/workspaces-model.js"),
+      workspacesModelScope
+    );
+    const workspacesModel = workspacesModelScope.createZenWorkspacesModel({
+      getWorkspaceRows,
+      getWorkspaceTabCounts: () => tabIndex.getWorkspaceTabCounts(),
+    });
     context.callOnClose({
       close() {
         try { tabIndex.stop(); } catch (e) {}
@@ -5997,6 +6006,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // Get workspaces with inline SVG icon content
         async getWorkspacesWithIcons() {
           return getWorkspacesWithIconContent();
+        },
+
+        async getWorkspacesViewModel() {
+          const w = getWin();
+          const model = workspacesModel.getRows();
+          for (const row of model.rows) {
+            row.svgContent = "";
+            if (w && row.icon) {
+              try {
+                const resp = await w.fetch(row.icon);
+                row.svgContent = await resp.text();
+              } catch (e) {}
+            }
+            delete row.icon;
+          }
+          return model;
         },
 
         // Move gBrowser.selectedTabs to the given workspace, placed at top

@@ -580,6 +580,7 @@ const QUERIES = Object.freeze({
   [MSG.GET_SELECTED_TAB_DOM_IDS]:      ()  => api.getSelectedTabDomIds(),
   [MSG.GET_SELECTED_TAB_URLS]:         ()  => api.getSelectedTabUrls(),
   [MSG.GET_WORKSPACES_WITH_ICONS]:     ()  => api.getWorkspacesWithIcons(),
+  [MSG.GET_WORKSPACES_VIEW_MODEL]:     ()  => api.getWorkspacesViewModel(),
   [MSG.TAB_INDEX_ENSURE_STARTED]:      ()  => api.ensureIndexStarted(),
   [MSG.TAB_INDEX_GET_VERSION]:         ()  => api.getIndexVersion(),
   [MSG.TAB_INDEX_GET_SUMMARY]:         (m) => api.getViewSummary(m.view, JSON.stringify(m.params || {})),

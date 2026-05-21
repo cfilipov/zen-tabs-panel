@@ -2,7 +2,7 @@ import type { ContainerRow } from "../runtime/container-client";
 import type { FolderRow } from "../runtime/folder-client";
 import type { NavigationHistory, RecentlyClosedRow } from "../runtime/history-client";
 import type { ProfileRow } from "../runtime/profile-client";
-import type { WorkspaceRow } from "../runtime/workspace-client";
+import type { WorkspaceRow, WorkspacesViewModel } from "../runtime/workspace-client";
 import { filterNavigationHistory } from "./navigation-history";
 
 export type HistoryClient = {
@@ -12,6 +12,7 @@ export type HistoryClient = {
 
 export type WorkspaceClient = {
   getWorkspacesWithIcons(): Promise<WorkspaceRow[]>;
+  getWorkspacesViewModel?(): Promise<WorkspacesViewModel>;
 };
 
 export type ContainerClient = {
@@ -42,9 +43,11 @@ export async function loadRecentlyClosedView(historyClient: HistoryClient) {
 }
 
 export async function loadMoveToWorkspaceView(workspaceClient: WorkspaceClient) {
-  const workspaces = await workspaceClient.getWorkspacesWithIcons();
+  if (workspaceClient.getWorkspacesViewModel) {
+    return workspaceClient.getWorkspacesViewModel();
+  }
   return {
-    rows: workspaces,
+    rows: await workspaceClient.getWorkspacesWithIcons(),
     selectedIndex: -1,
   };
 }
