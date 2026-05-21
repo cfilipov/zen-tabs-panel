@@ -29,6 +29,24 @@ type OverlayControllerScope = {
     getDynamicSidebarWidth: () => number;
     setMeasuredResizeView: (view?: string | null) => string | null;
     getMeasuredResizeView: () => string | null;
+    resetViewState: (view?: string | null, params?: Record<string, unknown> | null) => void;
+    clearViewState: () => void;
+    getCurrentView: () => string | null;
+    getCurrentParams: () => Record<string, unknown>;
+    setCurrentView: (view?: string | null, params?: Record<string, unknown> | null) => string;
+    pushNavigation: (view?: string | null, params?: Record<string, unknown> | null) => void;
+    pushCurrentNavigation: () => void;
+    clearNavigation: () => void;
+    setNavigationStack: (stack: Array<{ view: string | null; params: Record<string, unknown> }>) => void;
+    navigationLength: () => number;
+    popNavigation: () => { view: string | null; params: Record<string, unknown> } | null;
+    getViewState: () => {
+      currentViewName: string | null;
+      currentViewParams: Record<string, unknown>;
+      navStack: Array<{ view: string | null; params: Record<string, unknown> }>;
+      currentDynamicSidebarWidth: number;
+      currentMeasuredResizeView: string | null;
+    };
     getExplicitRevealState: () => {
       explicitRevealToken: number;
       explicitRevealView: string | null;
@@ -144,5 +162,30 @@ describe("overlay controller", () => {
     controller.resetResizeState();
     expect(controller.getDynamicSidebarWidth()).toBe(0);
     expect(controller.getMeasuredResizeView()).toBe(null);
+  });
+
+  it("owns current view and navigation stack state", () => {
+    const controller = loadOverlayControllerScope().createOverlayController();
+
+    controller.resetViewState("last-visited", { source: "test" });
+    expect(controller.getCurrentView()).toBe("last-visited");
+    expect(controller.getCurrentParams()).toEqual({ source: "test" });
+    expect(controller.navigationLength()).toBe(0);
+
+    controller.pushCurrentNavigation();
+    controller.setCurrentView("domain-tabs", { domain: "example.com" });
+    expect(controller.getViewState()).toMatchObject({
+      currentViewName: "domain-tabs",
+      currentViewParams: { domain: "example.com" },
+      navStack: [{ view: "last-visited", params: { source: "test" } }],
+    });
+
+    expect(controller.popNavigation()).toEqual({ view: "last-visited", params: { source: "test" } });
+    controller.clearViewState();
+    expect(controller.getViewState()).toMatchObject({
+      currentViewName: null,
+      currentViewParams: {},
+      navStack: [],
+    });
   });
 });

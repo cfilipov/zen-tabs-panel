@@ -74,6 +74,12 @@
  * @property {() => void} resetResizeState
  * Reset per-view dynamic sizing state for a newly armed/rearmed overlay.
  *
+ * @property {(view?: string | null, params?: Object | null) => void} resetViewState
+ * Reset navigation and resize state for a fresh overlay view.
+ *
+ * @property {() => Object} getViewState
+ * Return current view, params, nav stack, and resize diagnostics.
+ *
  * @property {() => number} currentInstance
  * Return the live popup instance id used to reject stale POPUP_READY and
  * REVEAL_PALETTE messages.
@@ -101,6 +107,9 @@
     let morphGeneration = 0;
     let dynamicSidebarWidth = 0;
     let measuredResizeView = null;
+    let navStack = [];
+    let currentViewName = null;
+    let currentViewParams = {};
 
     function nextInstance() {
       popupInstance++;
@@ -214,6 +223,80 @@
       return measuredResizeView;
     }
 
+    function clonePlain(value) {
+      if (value == null) return value;
+      try { return JSON.parse(JSON.stringify(value)); }
+      catch (e) { return value; }
+    }
+
+    function normalizeView(view) {
+      return view || "actions";
+    }
+
+    function resetViewState(view, params) {
+      navStack = [];
+      currentViewName = normalizeView(view);
+      currentViewParams = params || {};
+      resetResizeState();
+    }
+
+    function clearViewState() {
+      navStack = [];
+      currentViewName = null;
+      currentViewParams = {};
+      resetResizeState();
+    }
+
+    function getCurrentView() {
+      return currentViewName;
+    }
+
+    function getCurrentParams() {
+      return currentViewParams || {};
+    }
+
+    function setCurrentView(view, params) {
+      currentViewName = normalizeView(view);
+      if (arguments.length > 1) currentViewParams = params || {};
+      return currentViewName;
+    }
+
+    function pushNavigation(view, params) {
+      navStack.push({ view: view || currentViewName, params: params || {} });
+    }
+
+    function pushCurrentNavigation() {
+      pushNavigation(currentViewName, currentViewParams || {});
+    }
+
+    function clearNavigation() {
+      navStack = [];
+    }
+
+    function setNavigationStack(stack) {
+      navStack = Array.isArray(stack)
+        ? stack.map((entry) => ({ view: entry && entry.view || null, params: entry && entry.params || {} }))
+        : [];
+    }
+
+    function navigationLength() {
+      return navStack.length;
+    }
+
+    function popNavigation() {
+      return navStack.pop() || null;
+    }
+
+    function getViewState() {
+      return clonePlain({
+        currentViewName,
+        currentViewParams,
+        navStack,
+        currentDynamicSidebarWidth: dynamicSidebarWidth,
+        currentMeasuredResizeView: measuredResizeView,
+      });
+    }
+
     return {
       create(view, params) { return call(impl, "create", [view, params]); },
       rearm(view, params) { return call(impl, "rearm", [view, params]); },
@@ -242,6 +325,18 @@
       getDynamicSidebarWidth,
       setMeasuredResizeView,
       getMeasuredResizeView,
+      resetViewState,
+      clearViewState,
+      getCurrentView,
+      getCurrentParams,
+      setCurrentView,
+      pushNavigation,
+      pushCurrentNavigation,
+      clearNavigation,
+      setNavigationStack,
+      navigationLength,
+      popNavigation,
+      getViewState,
       nextInstance,
       currentInstance,
       matchesInstance,
