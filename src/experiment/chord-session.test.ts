@@ -42,6 +42,7 @@ type ChordSession = {
   };
   setPopupReady: (value: boolean, why?: string) => void;
   setReadyTargetView: (view: string | null, why?: string) => void;
+  preparePopupLoad: (view?: string | null, why?: string) => void;
   setRevealDeferred: (value: boolean, why?: string) => void;
   pushBridgeKey: (event: Record<string, unknown>) => number | null;
   transition: (to: string, why: string, data?: unknown) => void;
@@ -533,6 +534,18 @@ describe("chord-session replay recording", () => {
       popupReady: true,
       readyTargetView: null,
       bridgeBufferLength: 0,
+    });
+  });
+
+  it("prepares popup load readiness and target view together", () => {
+    const session = makeSession();
+
+    session.setPopupReady(true, "popup-ready");
+    session.preparePopupLoad("last-visited", "createOverlay");
+
+    expect(session.getStateSnapshot()).toMatchObject({
+      popupReady: false,
+      readyTargetView: "last-visited",
     });
   });
 

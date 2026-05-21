@@ -1049,6 +1049,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function getReadyTargetView() {
       try { return chordSession ? chordSession.getReadyTargetView() : null; } catch (e) { return null; }
     }
+    function preparePopupLoad(view, why) {
+      try { if (chordSession) chordSession.preparePopupLoad(view || "actions", why); } catch (e) {}
+    }
     function startBridgeBuffer(why) {
       try { if (chordSession) chordSession.startBridgeBuffer(why); } catch (e) {}
     }
@@ -1885,8 +1888,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const initialSize = initialViewSize(viewName);
 
       overlayController.resetViewState(viewName, params || {});
-      setPopupReady(false, "popup-ready-clear");
-      setReadyTargetView(viewName, "ready-target-view");
+      preparePopupLoad(viewName, "createOverlay");
 
       const overlay = w.document.createElement("div");
       overlay.id = OVERLAY_ID;
@@ -2010,11 +2012,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Popup will signal ready again after it processes WarmRearm; any
       // chord-chain keys that land in this window are buffered (just like
       // the cold-create case).
-      setPopupReady(false, "popup-ready-clear");
       overlayController.resetViewState(view || "actions", {});
 
       const viewName = view || "actions";
-      setReadyTargetView(viewName, "ready-target-view");
+      preparePopupLoad(viewName, "rearmExistingOverlay");
       const panel = w.document.getElementById(PANEL_ID);
       const br = w.document.getElementById(BROWSER_ID);
       const idleHidden = overlay.style.visibility === "hidden" && !hasPendingReveal();
@@ -2647,8 +2648,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const mm = browserMessageManager(br);
       if (!mm) return;
       overlayController.resetViewState("actions", {});
-      setReadyTargetView("actions", "ready-target-view");
-      setPopupReady(false, "popup-ready-clear");
+      preparePopupLoad("actions", "resetWarmPopupToActions");
       if (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions") {
         try {
           br.setAttribute("src", getPaletteURL(null, null));
