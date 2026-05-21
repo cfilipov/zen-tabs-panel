@@ -987,7 +987,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let currentViewParams = {};
     let currentDynamicSidebarWidth = 0;
     let currentMeasuredResizeView = null;
-    let morphGeneration = 0;
     // Set by createOverlay to the function that flips the (initially hidden)
     // overlay to visible and starts the in animations. Stays non-null until
     // the overlay is revealed or destroyed. When ChordSession prerenders
@@ -2289,7 +2288,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const oldBrowser = w.document.getElementById(BROWSER_ID);
       if (!panel || !oldBrowser) return;
 
-      const gen = ++morphGeneration;
+      const gen = overlayController.nextMorphGeneration();
       setReadyTargetView(view || "actions", "ready-target-view");
       // For extension-popup view, prefer the cached natural size from a
       // previous open so we morph straight there. For the first open
@@ -2309,7 +2308,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       oldBrowser.style.opacity = "0";
 
       w.setTimeout(() => {
-        if (gen !== morphGeneration) return;
+        if (!overlayController.isCurrentMorphGeneration(gen)) return;
 
         if (!skipPanelResize) {
           panel.style.width = targetSize.width + "px";
@@ -2346,14 +2345,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
 
         w.setTimeout(() => {
-          if (gen !== morphGeneration) return;
+          if (!overlayController.isCurrentMorphGeneration(gen)) return;
           newBr.style.transition = "opacity 0.08s ease-out";
           if (view === "extension-popup" && !isOverlayVisible()) {
             forceRevealOverlay();
           }
           newBr.style.opacity = "1";
           w.setTimeout(() => {
-            if (gen !== morphGeneration) return;
+            if (!overlayController.isCurrentMorphGeneration(gen)) return;
             newBr.focus();
           }, 50);
         }, 160);
@@ -2509,7 +2508,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       };
       const flush = () => {
         debounceTimer = null;
-        if (gen !== morphGeneration) return;
+        if (!overlayController.isCurrentMorphGeneration(gen)) return;
         if (pendingSize && currentSize &&
             (pendingSize.w !== currentSize.w || pendingSize.h !== currentSize.h)) {
           apply(pendingSize.w, pendingSize.h);
@@ -2517,7 +2516,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         pendingSize = null;
       };
       const applySize = (rawW, rawH) => {
-        if (gen !== morphGeneration) return;
+        if (!overlayController.isCurrentMorphGeneration(gen)) return;
         const cw = Math.max(FOREIGN_POPUP_MIN_W, Math.min(FOREIGN_POPUP_MAX_W, rawW || 0));
         const ch = Math.max(FOREIGN_POPUP_MIN_H, Math.min(FOREIGN_POPUP_MAX_H, rawH || 0));
         if (!cw || !ch) return;
@@ -2576,7 +2575,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       let gotFirstSize = false;
       const armedMessageManagers = new WeakSet();
       const arm = () => {
-        if (gen !== morphGeneration) return;
+          if (!overlayController.isCurrentMorphGeneration(gen)) return;
         const mm = browserMessageManager(br);
         if (!mm) return;
         if (!armedMessageManagers.has(mm)) {
@@ -2589,7 +2588,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             }
           });
           mm.addMessageListener("ztt:popup-escape", () => {
-            if (gen !== morphGeneration) return;
+            if (!overlayController.isCurrentMorphGeneration(gen)) return;
             destroyOverlay();
           });
         }
@@ -2733,7 +2732,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         finishBridge();
       }
 
-      morphGeneration++;
+      overlayController.nextMorphGeneration();
       navStack = [];
       currentViewName = null;
       currentViewParams = {};

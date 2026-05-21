@@ -65,6 +65,12 @@
  * @property {() => Object} getExplicitRevealState
  * Return debug state for the direct-open reveal scheduler.
  *
+ * @property {() => number} nextMorphGeneration
+ * Increment and return the generation token for an overlay browser morph.
+ *
+ * @property {(generation: number) => boolean} isCurrentMorphGeneration
+ * True when an async morph callback still belongs to the latest morph.
+ *
  * @property {() => number} currentInstance
  * Return the live popup instance id used to reject stale POPUP_READY and
  * REVEAL_PALETTE messages.
@@ -89,6 +95,7 @@
     let explicitRevealToken = 0;
     let explicitRevealView = null;
     let explicitRevealScheduledToken = 0;
+    let morphGeneration = 0;
 
     function nextInstance() {
       popupInstance++;
@@ -170,6 +177,15 @@
       };
     }
 
+    function nextMorphGeneration() {
+      morphGeneration++;
+      return morphGeneration;
+    }
+
+    function isCurrentMorphGeneration(generation) {
+      return generation === morphGeneration;
+    }
+
     return {
       create(view, params) { return call(impl, "create", [view, params]); },
       rearm(view, params) { return call(impl, "rearm", [view, params]); },
@@ -191,6 +207,8 @@
       markExplicitRevealScheduled,
       clearExplicitReveal,
       getExplicitRevealState,
+      nextMorphGeneration,
+      isCurrentMorphGeneration,
       nextInstance,
       currentInstance,
       matchesInstance,

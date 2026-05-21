@@ -22,6 +22,8 @@ type OverlayControllerScope = {
     isExplicitRevealScheduled: (token: number) => boolean;
     markExplicitRevealScheduled: (token: number) => boolean;
     clearExplicitReveal: () => void;
+    nextMorphGeneration: () => number;
+    isCurrentMorphGeneration: (generation: number) => boolean;
     getExplicitRevealState: () => {
       explicitRevealToken: number;
       explicitRevealView: string | null;
@@ -110,5 +112,18 @@ describe("overlay controller", () => {
       explicitRevealView: null,
       explicitRevealScheduledToken: 0,
     });
+  });
+
+  it("owns morph generation invalidation", () => {
+    const controller = loadOverlayControllerScope().createOverlayController();
+
+    const first = controller.nextMorphGeneration();
+    expect(first).toBe(1);
+    expect(controller.isCurrentMorphGeneration(first)).toBe(true);
+
+    const second = controller.nextMorphGeneration();
+    expect(second).toBe(2);
+    expect(controller.isCurrentMorphGeneration(first)).toBe(false);
+    expect(controller.isCurrentMorphGeneration(second)).toBe(true);
   });
 });
