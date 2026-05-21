@@ -148,6 +148,29 @@
     return view === "duplicate-prompt" && activation.kind === "activate-tab";
   }
 
+  const CHROME_MODEL_INTENT_VIEWS = new Set<ViewId>([
+    "navigation",
+    "recently-closed",
+    "child-tabs",
+    "sibling-tabs",
+    "parent-tabs",
+    "last-visited",
+    "unvisited-tabs",
+    "domain-tabs",
+    "tabs-by-age",
+    "most-visited",
+    "domains",
+    "duplicates",
+    "move-to-workspace",
+    "open-in-container",
+    "move-to-folder",
+    "profiles",
+  ]);
+
+  function isChromeModelIntentView(view: ViewId) {
+    return CHROME_MODEL_INTENT_VIEWS.has(view);
+  }
+
   const paletteStore = createNativePaletteState();
   const palette = paletteStore.state;
   let pageAlive = true;
@@ -491,7 +514,11 @@
   function recordSyntheticChordKey(key: string | null | undefined) {
     if (!key) return;
     try {
-      effects.synthChordKey(key, palette.currentView, "trace");
+      if (isChromeModelIntentView(palette.currentView)) {
+        effects.recordCurrentViewChordKey(key, "trace");
+      } else {
+        effects.synthChordKey(key, palette.currentView, "trace");
+      }
     } catch {
       // Replay tracing is best-effort; it must never block the command.
     }
@@ -561,6 +588,23 @@
       palette.listVersion,
       expectedDomIdForActivation(activation),
       expectedRowIdForActivation(activation),
+    );
+    if (result && typeof result === "object" && result.kind === "open-view") {
+      await openNativeView(result.view, result.params || {}, true);
+    }
+  }
+
+  async function activateCurrentChromeModelRow(index: number, source: "selection" | "shortcut", switchToTarget = false) {
+    markTerminalCommandDispatched();
+    revealController.clear();
+    const chromeIndex = source === "shortcut" && isNativeListView(palette.currentView)
+      ? palette.offset + index
+      : index;
+    const result = await effects.activateCurrentViewRow(
+      chromeIndex,
+      source,
+      switchToTarget,
+      palette.listVersion,
     );
     if (result && typeof result === "object" && result.kind === "open-view") {
       await openNativeView(result.view, result.params || {}, true);
@@ -826,6 +870,11 @@
       return;
     }
 
+    if (isChromeModelIntentView(palette.currentView)) {
+      await activateCurrentChromeModelRow(palette.selectedIndex, "selection", switchToTarget);
+      return;
+    }
+
     const activation = resolveSelectionActivation(viewActivationContext(), { switchToTarget });
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
@@ -842,6 +891,10 @@
 
   async function activateRow(index: number, switchToTarget = false) {
     traceReplayForListIndex(index, switchToTarget);
+    if (isChromeModelIntentView(palette.currentView)) {
+      await activateCurrentChromeModelRow(index, "shortcut", switchToTarget);
+      return;
+    }
     const activation = resolveViewActivation(viewActivationContext(), index, "shortcut", { switchToTarget });
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
@@ -856,6 +909,10 @@
       recordSyntheticChordKey(replayKeyForNavigationIndex(palette.navigationHistory, index));
     } else {
       traceReplayForListIndex(index, switchToTarget);
+    }
+    if (isChromeModelIntentView(palette.currentView)) {
+      await activateCurrentChromeModelRow(index, "selection", switchToTarget);
+      return;
     }
     const activation = resolveViewActivation(viewActivationContext(), index, "selection", { switchToTarget });
     if (shouldChromeResolveActivation(palette.currentView, activation)) {

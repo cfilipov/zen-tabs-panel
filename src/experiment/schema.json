@@ -60,6 +60,18 @@
         ]
       },
       {
+        "name": "activateCurrentViewRow",
+        "type": "function",
+        "async": true,
+        "description": "Resolve and activate a row in chrome's current palette view model",
+        "parameters": [
+          { "name": "index", "type": "integer" },
+          { "name": "source", "type": "string", "optional": true },
+          { "name": "switchToTarget", "type": "boolean", "optional": true },
+          { "name": "listVersion", "type": "integer", "optional": true }
+        ]
+      },
+      {
         "name": "goToPreviousTab",
         "type": "function",
         "async": true,
@@ -582,6 +594,15 @@
         "type": "function",
         "async": true,
         "description": "Transitional popup-side synthetic chord trace. Records the chord key, current view, and activation source without firing the action.",
+        "parameters": [
+          { "name": "payload", "type": "any" }
+        ]
+      },
+      {
+        "name": "recordCurrentViewChordKey",
+        "type": "function",
+        "async": true,
+        "description": "Record a chord key against chrome's current palette view for replay tracing.",
         "parameters": [
           { "name": "payload", "type": "any" }
         ]

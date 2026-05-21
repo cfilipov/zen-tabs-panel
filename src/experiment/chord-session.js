@@ -88,11 +88,13 @@
     let preRecordedReplayKeys = [];
     const syntheticReplayEvents = [];
     let revealBlocked = false;
-    let revealDeferred = false;
-    let activeBridgeView = null;
-    let popupReady = false;
-    let readyTargetView = null;
-    let bridgeBuffer = null;
+    const bridgeState = {
+      revealDeferred: false,
+      activeView: null,
+      popupReady: false,
+      readyTargetView: null,
+      buffer: null,
+    };
     let bridgeTimer = null;
     let revealTimer = null;
     let armSequence = 0;
@@ -546,11 +548,11 @@
       return clonePlain({
         state,
         revealBlocked,
-        revealDeferred,
-        activeBridgeView,
-        popupReady,
-        readyTargetView,
-        bridgeBufferLength: Array.isArray(bridgeBuffer) ? bridgeBuffer.length : null,
+        revealDeferred: bridgeState.revealDeferred,
+        activeBridgeView: bridgeState.activeView,
+        popupReady: bridgeState.popupReady,
+        readyTargetView: bridgeState.readyTargetView,
+        bridgeBufferLength: Array.isArray(bridgeState.buffer) ? bridgeState.buffer.length : null,
         bridgeTimerActive: bridgeTimer != null,
         revealTimerActive: revealTimer != null,
         armSequence,
@@ -571,78 +573,78 @@
     }
 
     function setRevealDeferred(value, why) {
-      revealDeferred = !!value;
-      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { revealDeferred } });
+      bridgeState.revealDeferred = !!value;
+      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { revealDeferred: bridgeState.revealDeferred } });
       if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
     function isRevealDeferred() {
-      return revealDeferred;
+      return bridgeState.revealDeferred;
     }
 
     function setActiveBridgeView(view, why) {
-      activeBridgeView = view || null;
-      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { activeBridgeView } });
+      bridgeState.activeView = view || null;
+      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { activeBridgeView: bridgeState.activeView } });
       if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
     function getActiveBridgeView() {
-      return activeBridgeView;
+      return bridgeState.activeView;
     }
 
     function hasActiveBridge() {
-      return activeBridgeView != null;
+      return bridgeState.activeView != null;
     }
 
     function setPopupReady(value, why) {
-      popupReady = !!value;
-      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { popupReady } });
+      bridgeState.popupReady = !!value;
+      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { popupReady: bridgeState.popupReady } });
       if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
     function isPopupReady() {
-      return popupReady;
+      return bridgeState.popupReady;
     }
 
     function setReadyTargetView(view, why) {
-      readyTargetView = view || null;
-      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { readyTargetView } });
+      bridgeState.readyTargetView = view || null;
+      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { readyTargetView: bridgeState.readyTargetView } });
       if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
     function getReadyTargetView() {
-      return readyTargetView;
+      return bridgeState.readyTargetView;
     }
 
     function startBridgeBuffer(why) {
-      bridgeBuffer = [];
+      bridgeState.buffer = [];
       if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { bridgeBufferLength: 0 } });
       if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
     function clearBridgeBuffer(why) {
-      bridgeBuffer = null;
+      bridgeState.buffer = null;
       if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { bridgeBufferLength: null } });
       if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
     function hasBridgeBuffer() {
-      return Array.isArray(bridgeBuffer);
+      return Array.isArray(bridgeState.buffer);
     }
 
     function getBridgeBufferLength() {
-      return Array.isArray(bridgeBuffer) ? bridgeBuffer.length : 0;
+      return Array.isArray(bridgeState.buffer) ? bridgeState.buffer.length : 0;
     }
 
     function pushBridgeKey(keyData) {
-      if (!Array.isArray(bridgeBuffer)) return null;
-      bridgeBuffer.push(keyData);
-      return bridgeBuffer.length;
+      if (!Array.isArray(bridgeState.buffer)) return null;
+      bridgeState.buffer.push(keyData);
+      return bridgeState.buffer.length;
     }
 
     function drainBridgeBuffer(why) {
-      const drained = Array.isArray(bridgeBuffer) ? bridgeBuffer : [];
-      bridgeBuffer = [];
+      const drained = Array.isArray(bridgeState.buffer) ? bridgeState.buffer : [];
+      bridgeState.buffer = [];
       if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { drained: drained.length, bridgeBufferLength: 0 } });
       if (recentTransitions.length > 50) recentTransitions.shift();
       return drained;

@@ -650,8 +650,18 @@ const SYNC_HANDLERS = Object.freeze({
     await api.hidePalette();
     return result;
   },
+  [MSG.ACTIVATE_CURRENT_VIEW_ROW]: async (m) => {
+    const result = await api.activateCurrentViewRow(m.index, m.source, !!m.switchToTarget, m.listVersion);
+    if (result && typeof result === "object" && result.kind === "open-view") {
+      return result;
+    }
+    recordChordAction(m);
+    await api.hidePalette();
+    return result;
+  },
   [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view, m.height, m.dynamicSidebarWidth, m.inst),
   [MSG.SYNTH_CHORD_KEY]:      (m) => api.synthChordKey({ chordKey: m.chordKey, view: m.view, activation: m.activation }),
+  [MSG.RECORD_CURRENT_VIEW_CHORD_KEY]: (m) => api.recordCurrentViewChordKey({ chordKey: m.chordKey, activation: m.activation }),
   [MSG.BRIDGE_DISPATCH_SETTLED]: (m) => api.bridgeDispatchSettled(m.inst),
 });
 

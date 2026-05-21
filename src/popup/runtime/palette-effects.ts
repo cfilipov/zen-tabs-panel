@@ -51,8 +51,25 @@ export function createPaletteEffects() {
         ...(expectedRowId ? { expectedRowId } : {}),
       });
     },
+    activateCurrentViewRow(
+      index: number,
+      source: "selection" | "shortcut",
+      switchToTarget = false,
+      listVersion?: number,
+    ) {
+      return sendMessage<ActivateViewRowResult>({
+        type: "activate-current-view-row",
+        index,
+        source,
+        ...(switchToTarget ? { switchToTarget: true } : {}),
+        ...(typeof listVersion === "number" && listVersion > 0 ? { listVersion } : {}),
+      });
+    },
     synthChordKey(chordKey: string, view: ViewId, activation = "keydown") {
       fireMessage({ type: "synth-chord-key", chordKey, view, activation });
+    },
+    recordCurrentViewChordKey(chordKey: string, activation = "trace") {
+      fireMessage({ type: "record-current-view-chord-key", chordKey, activation });
     },
     bridgeDispatchSettled(inst: number | null) {
       fireMessage({ type: "bridge-dispatch-settled", inst });

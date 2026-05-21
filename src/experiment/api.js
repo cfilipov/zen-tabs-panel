@@ -4876,6 +4876,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
           });
         },
 
+        async activateCurrentViewRow(index, source, switchToTarget, listVersion) {
+          const view = currentViewName || getActiveBridgeView();
+          if (!view || view === "actions") return false;
+          return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, {
+            destroyOverlay: false,
+            listVersion,
+          });
+        },
+
         // Go to previous tab using lastAccessed, filtering out the current
         // tab and any tabs visible in split view.
         //
@@ -6104,6 +6113,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
             chordKey: payload.chordKey,
             view: payload.view || null,
             activation: payload.activation || null,
+          });
+        },
+
+        async recordCurrentViewChordKey(payload) {
+          if (!payload || typeof payload.chordKey !== "string" || !payload.chordKey) return;
+          const view = currentViewName || getActiveBridgeView() || null;
+          chordSession.recordEvent({
+            kind: "synthetic-key",
+            chordKey: payload.chordKey,
+            view,
+            activation: payload.activation || "trace",
           });
         },
 
