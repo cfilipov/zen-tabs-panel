@@ -23,10 +23,16 @@
   type Props = {
     palette: Readonly<NativePaletteState>;
     skipAnimations?: boolean;
+    loading: boolean;
+    error: string | null;
     actionSections: ActionSection[];
     prefixItems: ActionMenuItem[];
     tabRows: TabIndexRow[];
     domainRows: DomainIndexRow[];
+    tabInfo: TabInfo | null;
+    tabInfoVisits: HistoryVisit[];
+    tabInfoDuplicates: TabIndexRow[];
+    tabInfoWorkspaces: NativePaletteState["tabInfoWorkspaces"];
     selectedRowDomId: string | null;
     selectedDomain: string | null;
     activeWorkspaceId: string | null;
@@ -53,10 +59,16 @@
   let {
     palette,
     skipAnimations = false,
+    loading,
+    error,
     actionSections,
     prefixItems,
     tabRows,
     domainRows,
+    tabInfo,
+    tabInfoVisits,
+    tabInfoDuplicates,
+    tabInfoWorkspaces,
     selectedRowDomId,
     selectedDomain,
     activeWorkspaceId,
@@ -90,7 +102,7 @@
     if (palette.currentView === "move-to-folder") return palette.folderRows.length > 0;
     if (palette.currentView === "profiles") return palette.profileRows.length > 0;
     if (palette.currentView === "duplicates") return palette.duplicateGroups.length > 0;
-    if (palette.currentView === "tab-info") return !!palette.tabInfo;
+    if (palette.currentView === "tab-info") return !!tabInfo;
     if (palette.currentView === "duplicate-prompt") return !!palette.duplicatePromptUrl;
     return false;
   }
@@ -98,8 +110,8 @@
 
 {#key palette.currentView}
   <div class="view-frame" data-skip-animations={skipAnimations ? "true" : "false"} in:fade={{ duration: skipAnimations ? 0 : 120 }}>
-    {#if palette.error}
-      <div class="empty-state">{palette.error}</div>
+    {#if error}
+      <div class="empty-state">{error}</div>
     {:else if palette.currentView === "actions"}
       <ActionsMenu
         sections={actionSections}
@@ -114,7 +126,7 @@
       />
     {:else if isNativePrefixView(palette.currentView)}
       <PrefixMenu view={palette.currentView} items={prefixItems} onactivate={activateAction} />
-    {:else if palette.loading && !hasRenderableRows()}
+    {:else if loading && !hasRenderableRows()}
       <div class="empty-state">Loading...</div>
     {:else if palette.currentView === "navigation"}
       <NavigationList
@@ -166,10 +178,10 @@
       />
     {:else if palette.currentView === "tab-info"}
       <TabInfoView
-        info={palette.tabInfo as TabInfo | null}
-        visits={palette.tabInfoVisits as HistoryVisit[]}
-        duplicates={palette.tabInfoDuplicates}
-        workspaces={palette.tabInfoWorkspaces}
+        info={tabInfo}
+        visits={tabInfoVisits}
+        duplicates={tabInfoDuplicates}
+        workspaces={tabInfoWorkspaces}
         onactivate={activateTab}
         onduplicateactivate={activateTabInfoDuplicate}
         onclose={closeTabInfoDuplicate}

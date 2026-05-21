@@ -243,11 +243,11 @@
   {#if groupedVisits.length > 0}
     <div class="info-section">
       <div class="info-section-title">History</div>
-      {#each groupedVisits as group (group.label)}
+      {#each groupedVisits as group}
         <details class="info-date-details" open>
           <summary class="info-date-group">{group.label}</summary>
           <div class="info-history-table">
-            {#each group.visits as visit (visit.visitTime)}
+            {#each group.visits as visit}
               {@const time = formatVisitTime(visit.visitTime)}
               <div class="info-history-row">
                 <span class="info-history-date">{time.date}</span>

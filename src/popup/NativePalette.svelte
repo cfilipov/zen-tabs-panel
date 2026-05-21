@@ -1053,10 +1053,16 @@
   <ViewHost
     {palette}
     skipAnimations={skipAnimations || suppressViewTransition}
+    loading={palette.loading}
+    error={palette.error}
     actionSections={actionSectionsForRender}
     prefixItems={prefixItemsForRender}
     {tabRows}
     {domainRows}
+    tabInfo={palette.tabInfo}
+    tabInfoVisits={palette.tabInfoVisits}
+    tabInfoDuplicates={palette.tabInfoDuplicates}
+    tabInfoWorkspaces={palette.tabInfoWorkspaces}
     {selectedRowDomId}
     {selectedDomain}
     {activeWorkspaceId}
