@@ -1,6 +1,19 @@
 "use strict";
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
+const params = new URLSearchParams(location.search);
+
+function configurePageMode() {
+  if (params.get("mode") !== "update") return;
+
+  document.querySelector("h1").textContent = "ErgoZen updated";
+  document.querySelector(".intro").textContent = "A new version of ErgoZen is installed.";
+
+  if (params.get("restart") === "1") {
+    const notice = document.getElementById("restart-notice");
+    if (notice) notice.hidden = false;
+  }
+}
 
 async function loadShortcut() {
   try {
@@ -38,5 +51,19 @@ document.getElementById("open-settings").addEventListener("click", () => {
   ext.runtime.openOptionsPage();
 });
 
+document.getElementById("restart-zen").addEventListener("click", async () => {
+  const button = document.getElementById("restart-zen");
+  const status = document.getElementById("restart-status");
+  button.disabled = true;
+  status.textContent = "Restarting...";
+  try {
+    await sendMessageWithReply(MSG.RESTART_ZEN);
+  } catch (e) {
+    button.disabled = false;
+    status.textContent = "Restart failed. Quit Zen and reopen it to finish clearing old keyboard handlers.";
+  }
+});
+
+configurePageMode();
 loadShortcut();
 loadCompanionMods();

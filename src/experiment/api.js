@@ -5255,6 +5255,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
           });
         },
 
+        async restartZen() {
+          const Ci = Components.interfaces;
+          Services.startup.quit(
+            Ci.nsIAppStartup.eAttemptQuit |
+            Ci.nsIAppStartup.eRestart
+          );
+          return true;
+        },
+
         // Go to previous tab using lastAccessed, filtering out the current
         // tab and any tabs visible in split view.
         //

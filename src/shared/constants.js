@@ -20,6 +20,7 @@ this.MSG = Object.freeze({
   NAVIGATE_BACK:                  "navigate-back",
   RESIZE_PANEL:                   "resize-panel",
   OPEN_OPTIONS:                   "open-options",
+  RESTART_ZEN:                    "restart-zen",
 
   // Tab activation / preview
   ACTIVATE_TAB:                   "activate-tab",

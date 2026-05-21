@@ -49,10 +49,26 @@ section {
   margin-bottom: 20px;
 }
 
+.notice-restart {
+  border-color: rgba(99, 102, 241, 0.45);
+  background: color-mix(in srgb, var(--bg-surface) 82%, var(--accent));
+}
+
 .description {
   font-size: 13px;
   color: var(--text-muted);
   margin-bottom: 12px;
+}
+
+.notice-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-text {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 kbd {

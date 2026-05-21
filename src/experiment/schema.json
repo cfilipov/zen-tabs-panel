@@ -76,6 +76,13 @@
         ]
       },
       {
+        "name": "restartZen",
+        "type": "function",
+        "async": true,
+        "description": "Request a Zen Browser restart from chrome context",
+        "parameters": []
+      },
+      {
         "name": "goToPreviousTab",
         "type": "function",
         "async": true,

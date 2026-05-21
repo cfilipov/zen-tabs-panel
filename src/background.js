@@ -12,6 +12,31 @@ const api = browser.zenWorkspaces;
 // ---------------------------------------------------------------------------
 
 const settings = Object.assign({}, STORAGE_DEFAULTS);
+const CHORD_REFACTOR_RESTART_VERSION = "0.4.4";
+
+function compareVersions(a, b) {
+  const left = String(a || "").split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const right = String(b || "").split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const length = Math.max(left.length, right.length);
+  for (let i = 0; i < length; i += 1) {
+    const delta = (left[i] || 0) - (right[i] || 0);
+    if (delta !== 0) return delta < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+function shouldShowChordRestartNotice(previousVersion, currentVersion) {
+  return (
+    compareVersions(previousVersion, CHORD_REFACTOR_RESTART_VERSION) < 0 &&
+    compareVersions(currentVersion, CHORD_REFACTOR_RESTART_VERSION) >= 0
+  );
+}
+
+function welcomeUrl(params) {
+  const query = new URLSearchParams(params || {});
+  const suffix = query.toString();
+  return browser.runtime.getURL("welcome/welcome.html" + (suffix ? "?" + suffix : ""));
+}
 
 async function loadSettings() {
   const stored = await browser.storage.local.get(STORAGE_DEFAULTS);
@@ -665,6 +690,7 @@ const SYNC_HANDLERS = Object.freeze({
     return api.navigateToView(m.view, m.params);
   },
   [MSG.NAVIGATE_BACK]:   ()  => api.navigateBack(),
+  [MSG.RESTART_ZEN]:     ()  => api.restartZen(),
   [MSG.PREVIEW_TAB]:     (m) => api.previewTab(m.domId),
   [MSG.CLEAR_PREVIEW]:   ()  => api.clearPreview(),
   [MSG.CLOSE_TAB]:       (m) => api.closeTabByDomId(m.domId),
@@ -1015,13 +1041,26 @@ api.getActiveWorkspaceId().catch(() => {});
 api.syncDuplicates().catch(() => {});
 api.initTabTracking().catch(() => {});
 
-// Show welcome page on first install
+// Show welcome/update page when the user should see setup or migration notes.
 browser.runtime.onInstalled.addListener(async (details) => {
+  const currentVersion = browser.runtime.getManifest().version;
   if (details.reason === "install") {
     const { welcomed } = await browser.storage.local.get({ welcomed: STORAGE_DEFAULTS.welcomed });
     if (!welcomed) {
       await browser.storage.local.set({ welcomed: true });
-      browser.tabs.create({ url: browser.runtime.getURL("welcome/welcome.html") });
+      browser.tabs.create({ url: welcomeUrl() });
     }
+  } else if (
+    details.reason === "update" &&
+    shouldShowChordRestartNotice(details.previousVersion, currentVersion)
+  ) {
+    browser.tabs.create({
+      url: welcomeUrl({
+        mode: "update",
+        from: details.previousVersion || "",
+        to: currentVersion,
+        restart: "1",
+      }),
+    });
   }
 });
