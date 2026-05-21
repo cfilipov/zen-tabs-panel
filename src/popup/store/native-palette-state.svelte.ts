@@ -47,6 +47,7 @@ export type NativePaletteState = {
   actionsWorkspaces: WorkspaceRow[];
   actionExtensions: ExtensionRow[];
   actionSections: ActionSection[];
+  actionPrefixItemsByView: Partial<Record<ViewId, ActionSection["items"]>>;
 };
 
 function defaultNativePaletteState(): NativePaletteState {
@@ -85,6 +86,7 @@ function defaultNativePaletteState(): NativePaletteState {
     actionsWorkspaces: [],
     actionExtensions: [],
     actionSections: [],
+    actionPrefixItemsByView: {},
   };
 }
 
@@ -176,6 +178,7 @@ export function createNativePaletteState() {
 
   function applyActionsMenuData(data: ActionsMenuData) {
     state.actionSections = data.sections || [];
+    state.actionPrefixItemsByView = data.prefixItemsByView || {};
     state.actionsWorkspaces = data.workspaces;
     state.actionExtensions = data.extensions;
   }

@@ -1,4 +1,5 @@
 import { sendMessage } from "./ipc";
+import type { ViewId } from "../../shared/types";
 import type { ActionSection } from "../views/actions-model";
 import type { ExtensionRow } from "./extension-client";
 import type { WorkspaceRow } from "./workspace-client";
@@ -143,6 +144,7 @@ export type ActionsViewModel = {
   version: number;
   view: "actions";
   sections: ActionSection[];
+  prefixItemsByView: Partial<Record<ViewId, ActionSection["items"]>>;
   workspaces: WorkspaceRow[];
   workspaceTabCounts: Record<string, number>;
   extensions: ExtensionRow[];

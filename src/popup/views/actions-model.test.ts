@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   actionItemsForPage,
   applyActionSelection,
-  prefixItemsForView,
   type ActionSection,
 } from "./actions-model";
 
@@ -23,13 +22,6 @@ describe("actions menu model", () => {
 
     expect(pageTwoItems.some((item) => item.id === "reload-tab")).toBe(true);
     expect(pageTwoItems.find((item) => item.id === "reload-tab")?.hotkey).toBe("Shift+R");
-  });
-
-  it("derives prefix submenu rows from the navigation tree", () => {
-    const items = prefixItemsForView("reorder-tabs");
-
-    expect(items.map((item) => item.id)).toContain("sort-tabs-domain-alpha");
-    expect(items.find((item) => item.id === "sort-tabs-domain-alpha")?.hotkey).toBe("D");
   });
 
   it("marks selected chrome-provided action items", () => {

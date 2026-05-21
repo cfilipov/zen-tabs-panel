@@ -13,6 +13,7 @@ export type LoadActionsDeps = {
 
 export type ActionsMenuData = {
   sections?: ActionSection[];
+  prefixItemsByView?: Partial<Record<string, ActionSection["items"]>>;
   workspaces: WorkspaceRow[];
   extensions: ExtensionRow[];
 };
@@ -20,6 +21,7 @@ export type ActionsMenuData = {
 export function emptyActionsMenuData(): ActionsMenuData {
   return {
     sections: [],
+    prefixItemsByView: {},
     workspaces: [],
     extensions: [],
   };
@@ -29,6 +31,7 @@ export async function loadActionsMenuData(deps: LoadActionsDeps): Promise<Action
   const model = await deps.tabIndexClient.getActionsViewModel();
   return {
     sections: model.sections,
+    prefixItemsByView: model.prefixItemsByView || {},
     workspaces: model.workspaces,
     extensions: model.extensions,
   };

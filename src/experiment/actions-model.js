@@ -101,6 +101,17 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
     }));
   }
 
+  function buildPrefixItemsByView(disabledIds) {
+    const itemsByView = Object.create(null);
+    for (const node of navigationTree) {
+      if (!node || node.kind !== "prefix" || !node.view) continue;
+      itemsByView[node.view] = (node.children || []).map((child) =>
+        itemFromNode(child, 1, disabledIds)
+      );
+    }
+    return itemsByView;
+  }
+
   function appendWorkspaceSwitchItems(sections, workspaces, tabCounts) {
     return sections.map((section) => {
       if (section.id !== "workspaces" || section.page !== 1) {
@@ -193,11 +204,13 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
       iconHtmlById,
       previewsById
     );
+    const prefixItemsByView = buildPrefixItemsByView(disabledIds);
 
     return {
       version: snapshot.version || Date.now(),
       view: "actions",
       sections,
+      prefixItemsByView,
       workspaces,
       workspaceTabCounts,
       extensions: input.extensions || [],

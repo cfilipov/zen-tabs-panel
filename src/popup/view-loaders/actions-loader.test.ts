@@ -22,6 +22,17 @@ describe("actions loader", () => {
               page: 1,
             }],
           }],
+          prefixItemsByView: {
+            "reorder-tabs": [{
+              id: "sort-tabs-domain-alpha",
+              kind: "action",
+              label: "Domain",
+              hotkey: "D",
+              badge: "D",
+              isView: false,
+              page: 1,
+            }],
+          },
           workspaces: [],
           workspaceTabCounts: {},
           extensions: [],
@@ -35,6 +46,7 @@ describe("actions loader", () => {
     });
 
     expect(data.sections?.[0]?.items[0]?.id).toBe("go-to-previous-tab");
+    expect(data.prefixItemsByView?.["reorder-tabs"]?.[0]?.id).toBe("sort-tabs-domain-alpha");
     expect(data.workspaces).toEqual([]);
     expect(data.extensions).toEqual([]);
   });
@@ -43,6 +55,7 @@ describe("actions loader", () => {
     const data = emptyActionsMenuData();
 
     expect(data.sections).toEqual([]);
+    expect(data.prefixItemsByView).toEqual({});
     expect(data.workspaces).toEqual([]);
     expect(data.extensions).toEqual([]);
   });

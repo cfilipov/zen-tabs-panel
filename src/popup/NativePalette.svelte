@@ -94,7 +94,6 @@
   import {
     actionItemsForPage,
     applyActionSelection,
-    prefixItemsForView,
     type ActionMenuItem,
   } from "./views/actions-model";
   import type { ViewId } from "../shared/types";
@@ -238,7 +237,7 @@
   });
   const visibleActionItems = $derived(actionItemsForPage(renderedActionSections, palette.currentPage));
   const allActionItems = $derived(renderedActionSections.flatMap((section) => section.items));
-  const prefixItems = $derived(isNativePrefixView(palette.currentView) ? prefixItemsForView(palette.currentView) : []);
+  const prefixItems = $derived(isNativePrefixView(palette.currentView) ? palette.actionPrefixItemsByView[palette.currentView] ?? [] : []);
   const title = $derived(resolveViewTitle(palette.currentView, {
     currentDomain: palette.currentDomain,
     actionLabel: allActionItems.find((item) => item.view === palette.currentView)?.label ?? null,
@@ -377,6 +376,7 @@
       await paletteLoaders.loadListView(plan.view, 0, 80, true, { ...plan.params, ...viewParams(plan.view) });
     } else if (plan.kind === "prefix") {
       paletteStore.enterPrefixView(plan.view);
+      await paletteLoaders.loadActionsData();
     } else if (plan.kind === "loader") {
       await paletteLoaders.loadRegisteredView(plan.loader, params);
     } else {

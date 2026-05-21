@@ -121,6 +121,7 @@ describe("tab index client", () => {
         version: 1,
         view: "actions",
         sections: [],
+        prefixItemsByView: {},
         workspaces: [],
         workspaceTabCounts: {},
         extensions: [],
