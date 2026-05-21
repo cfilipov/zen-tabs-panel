@@ -25,7 +25,7 @@ type ChordSession = {
   recordTerminalAction: (payload: Record<string, unknown>) => void;
   recordOpenView: (view?: string | null) => void;
   recordBridgeKey: (keyData: Record<string, unknown>) => void;
-  recordPopupActionMessage: (message: Record<string, unknown>) => void;
+  recordRuntimeActionMessage: (message: Record<string, unknown>) => void;
   recordModelRowIntent: (view: string, chordKey: string, switchToTarget?: boolean, params?: Record<string, unknown> | null) => void;
   recordArmed: () => void;
   arm: () => void;
@@ -179,7 +179,7 @@ describe("chord-session replay recording", () => {
     expect(session.getReplayState().lastChordReplay).toBeNull();
   });
 
-  it("records open-view chains only after a popup action commits them", () => {
+  it("records open-view chains only after a runtime action commits them", () => {
     const session = makeSession();
     session.recordOpenView("last-visited");
     session.recordBridgeKey({ key: "2", code: "Digit2" });
@@ -188,7 +188,7 @@ describe("chord-session replay recording", () => {
     expect(session.hasCurrentOpenViewReplay()).toBe(true);
     expect(session.getReplayState().lastChordReplay).toBeNull();
 
-    session.recordPopupActionMessage({ type: "activate-tab", tabId: 42 });
+    session.recordRuntimeActionMessage({ type: "activate-tab", tabId: 42 });
     expect(session.getReplayState()).toMatchObject({
       lastChordReplay: { kind: "open-view", view: "last-visited", bridgeKeys: ["2"] },
       currentChordReplay: null,
@@ -200,7 +200,7 @@ describe("chord-session replay recording", () => {
     session.recordOpenView("last-visited");
     session.recordBridgeKey({ key: "3", code: "Digit3", __preRecorded: true });
     session.recordBridgeKey({ key: "3", code: "Digit3" });
-    session.recordPopupActionMessage({ type: "activate-tab", tabId: 42 });
+    session.recordRuntimeActionMessage({ type: "activate-tab", tabId: 42 });
 
     expect(session.getReplayState().lastChordReplay).toMatchObject({
       kind: "open-view",
@@ -212,7 +212,7 @@ describe("chord-session replay recording", () => {
     const session = makeSession();
     session.recordOpenView("extension-popups");
     session.recordBridgeKey({ key: "!", code: "Digit1", shiftKey: true });
-    session.recordPopupActionMessage({ type: "open-extension-popup", extensionId: "abc" });
+    session.recordRuntimeActionMessage({ type: "open-extension-popup", extensionId: "abc" });
 
     expect(session.getReplayState().lastChordReplay).toMatchObject({
       kind: "open-view",
@@ -220,20 +220,20 @@ describe("chord-session replay recording", () => {
     });
   });
 
-  it("falls back to raw popup action replay when no chord chain is active", () => {
+  it("falls back to raw runtime action replay when no chord chain is active", () => {
     const session = makeSession();
-    session.recordPopupActionMessage({ type: "reload-tab", source: "click" });
+    session.recordRuntimeActionMessage({ type: "reload-tab", source: "click" });
 
     expect(session.getReplayState().lastChordReplay).toMatchObject({
-      kind: "action-msg",
+      kind: "runtime-action-msg",
       type: "reload-tab",
       source: "click",
     });
   });
 
-  it("ignores blocklisted popup actions", () => {
+  it("ignores blocklisted runtime actions", () => {
     const session = makeSession();
-    session.recordPopupActionMessage({ type: "duplicate-switch" });
+    session.recordRuntimeActionMessage({ type: "duplicate-switch" });
 
     expect(session.getReplayState().lastChordReplay).toBeNull();
   });
@@ -246,7 +246,7 @@ describe("chord-session replay recording", () => {
 
     session.recordOpenView("last-visited");
     session.recordBridgeKey({ key: "2", code: "Digit2" });
-    session.recordPopupActionMessage({ type: "activate-tab", tabId: 42 });
+    session.recordRuntimeActionMessage({ type: "activate-tab", tabId: 42 });
 
     expect(session.replayLastChord({ enterBridgeFromOpenView, forwardKeyToPopup, debug })).toBe(true);
     expect(enterBridgeFromOpenView).toHaveBeenCalledWith("last-visited", "chrome", "match");
@@ -268,7 +268,7 @@ describe("chord-session replay recording", () => {
 
     session.recordOpenView("move-to-workspace");
     session.recordBridgeKey({ key: "!", code: "Digit1", shiftKey: true });
-    session.recordPopupActionMessage({ type: "move-selected-tabs-to-workspace", workspaceId: "ws-2", switchToTarget: true });
+    session.recordRuntimeActionMessage({ type: "move-selected-tabs-to-workspace", workspaceId: "ws-2", switchToTarget: true });
 
     expect(session.replayLastChord({ enterBridgeFromOpenView, forwardKeyToPopup })).toBe(true);
     expect(forwardKeyToPopup).toHaveBeenCalledWith({
@@ -290,10 +290,10 @@ describe("chord-session replay recording", () => {
     expect(dispatchReplayedAction).toHaveBeenCalledWith("close-tab");
   });
 
-  it("replays raw popup action messages through the supplied dispatcher", () => {
+  it("replays raw runtime action messages through the supplied dispatcher", () => {
     const session = makeSession();
     const dispatchActionMessage = vi.fn(() => true);
-    session.recordPopupActionMessage({ type: "activate-tab", domId: "tab-1" });
+    session.recordRuntimeActionMessage({ type: "activate-tab", domId: "tab-1" });
 
     expect(session.replayLastChord({ dispatchActionMessage })).toBe(true);
     expect(dispatchActionMessage).toHaveBeenCalledWith({ type: "activate-tab", domId: "tab-1" });

@@ -228,14 +228,14 @@
       }
     }
 
-    function recordPopupAction(message) {
+    function recordRuntimeAction(message) {
       if (!message || !message.type) return;
       if (replayRecordBlocklist.has(message.type)) return;
       // ChordSession-fired chord actions (cmd+.,p, cmd+.,w,n, ...) commit via
       // trackTerminalAction at chord-fire time, then the action routes
       // through bg's runChordAction -> recordChordAction -> here for the
       // same action. Without this skip we'd overwrite the chord trace's
-      // kind:"action" record with kind:"action-msg".
+      // kind:"action" record with kind:"runtime-action-msg".
       if (lastChordReplay && lastChordReplay.kind === "action" && lastChordReplay.actionId === message.type) {
         currentChordReplay = null;
         return;
@@ -253,7 +253,7 @@
       ) {
         lastChordReplay = currentChordReplay;
       } else {
-        lastChordReplay = Object.assign({ kind: "action-msg" }, message);
+        lastChordReplay = Object.assign({ kind: "runtime-action-msg" }, message);
       }
       resetCurrentReplay();
     }
@@ -307,10 +307,10 @@
         transition("bridging-buffering", "open-view", { view: event.view });
       } else if (event.kind === "bridge-key") {
         trackBridgeKey(event.keyData);
-      } else if (event.kind === "popup-action") {
-        recordPopupAction(event.message);
-        transition("completed", "popup-action", event.message);
-        transition("idle", "popup-action-idle");
+      } else if (event.kind === "runtime-action") {
+        recordRuntimeAction(event.message);
+        transition("completed", "runtime-action", event.message);
+        transition("idle", "runtime-action-idle");
       } else if (event.kind === "armed") {
         resetCurrentReplay();
         transition("armed-root", "armed");
@@ -331,8 +331,8 @@
       recordEvent({ kind: "bridge-key", keyData });
     }
 
-    function recordPopupActionMessage(message) {
-      recordEvent({ kind: "popup-action", message });
+    function recordRuntimeActionMessage(message) {
+      recordEvent({ kind: "runtime-action", message });
     }
 
     function recordModelRowIntent(view, chordKey, switchToTarget, params) {
@@ -695,7 +695,7 @@
           effects.dispatchModelRowIntent(r.view, r.chordKey, !!r.switchToTarget, clonePlain(r.params || null))
         );
       }
-      if (r.kind === "action-msg") {
+      if (r.kind === "runtime-action-msg") {
         if (!effects.dispatchActionMessage) return false;
         const message = clonePlain(r);
         if (message) delete message.kind;
@@ -1032,7 +1032,7 @@
       recordTerminalAction,
       recordOpenView,
       recordBridgeKey,
-      recordPopupActionMessage,
+      recordRuntimeActionMessage,
       recordModelRowIntent,
       recordArmed,
       arm,

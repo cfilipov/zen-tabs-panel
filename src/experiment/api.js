@@ -3023,9 +3023,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     // ----- Chord-replay tracking ------------------------------------------
     //
-    // Commit-on-action hook for popup-fired runtime actions. Bg calls this
+    // Commit-on-action hook for runtime action messages. Bg calls this
     // from recordChordAction. ChordSession decides whether to promote the
-    // in-flight chord chain to a replayable trace or commit a raw action.
+    // in-flight chord chain to a replayable trace or commit a raw runtime action.
     const REPLAY_RECORD_BLOCKLIST = new Set([
       MSG_REPLAY_LAST_CHORD,
       "duplicate-switch",
@@ -3099,8 +3099,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       chordSession.recordBridgeKey(keyData);
     }
 
-    function recordReplayFromPopupAction(message) {
-      chordSession.recordPopupActionMessage(message);
+    function recordRuntimeActionForReplayInternal(message) {
+      chordSession.recordRuntimeActionMessage(message);
     }
 
     // Replay the last completed chord. ChordSession actions dispatch directly;
@@ -3391,9 +3391,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // POPUP_READY, queue in ChordSession's bridge buffer (drained on POPUP_READY).
     function forwardKeyToPopup(keyData) {
       // Pre-record ChordSession/chrome-forwarded bridge keys so replay traces
-      // commit deterministically even if the terminal popup action reaches
-      // background before the popup's synthetic replay trace. Matching
-      // synthetic events for pre-recorded keys are ignored by ChordSession.
+      // commit deterministically even if the terminal runtime action reaches
+      // background before the bridge key echo. Matching pre-recorded keys are
+      // ignored by ChordSession.
       trackChordBridgeKey(Object.assign({}, keyData, { __preRecorded: true }));
       if (tryHandleChromeOwnedBridgeKey(keyData)) return;
       //
@@ -6458,10 +6458,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return closeDuplicateTabsForUrlInternal(url, excludeTab);
         },
 
-        // Replay the last ChordSession-recorded chord. Returns true if something
-        // was replayed; false if no chord has been recorded yet (cold
-        // session). Bg's REPLAY_LAST_CHORD handler calls this; only falls
-        // back to its own popup-action recording if this returns false.
+        // Replay the last ChordSession-recorded chord or runtime action.
+        // Bg's REPLAY_LAST_CHORD handler calls this; replay ownership lives
+        // in ChordSession, while background remains the runtime executor.
         async replayLastChord() {
           return replayLastChordTrace();
         },
@@ -6472,14 +6471,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
           armRevealTimer();
         },
 
-        // Commit-on-action hook. Bg calls this for every popup-fired
-        // runtime action so ChordSession decides whether to promote the
+        // Commit-on-action hook. Bg calls this for every runtime action
+        // message so ChordSession decides whether to promote the
         // in-flight chord chain to the replay trace (cycling-capable
-        // replay) or commit a raw action. The blocklist inside
-        // recordReplayFromPopupAction keeps the replay action itself
+        // replay) or commit a raw runtime action. The blocklist inside
+        // recordRuntimeActionForReplayInternal keeps the replay action itself
         // and the duplicate-prompt outcomes out of the trace.
-        async recordReplayContext(message) {
-          recordReplayFromPopupAction(message);
+        async recordRuntimeActionForReplay(message) {
+          recordRuntimeActionForReplayInternal(message);
         },
 
 

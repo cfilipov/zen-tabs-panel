@@ -624,10 +624,10 @@
         ]
       },
       {
-        "name": "recordReplayContext",
+        "name": "recordRuntimeActionForReplay",
         "type": "function",
         "async": true,
-        "description": "Commit-on-action hook. Bg calls this for every runtime action so ChordSession decides whether to promote the in-flight chord chain to the replay trace (cycling) or commit the raw action.",
+        "description": "Commit-on-action hook. Bg calls this for every runtime action so ChordSession decides whether to promote the in-flight chord chain to the replay trace (cycling) or commit the raw runtime action.",
         "parameters": [
           { "name": "message", "type": "any" }
         ]

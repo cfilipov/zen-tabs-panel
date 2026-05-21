@@ -753,7 +753,7 @@ function recordChordAction(message) {
   // (open-view + bridge keys -> cycling replay) or just gets recorded as a
   // plain action. Chord-chain state lives in ChordSession; runtime action
   // dispatch still happens here in background.
-  try { api.recordReplayContext(message).catch(() => {}); } catch (e) {}
+  try { api.recordRuntimeActionForReplay(message).catch(() => {}); } catch (e) {}
 }
 
 // Run an action triggered via a chord shortcut. The palette never opened
@@ -768,7 +768,7 @@ async function runChordAction(actionId) {
 }
 
 // Replay-last-chord (cmd+.,.). ChordSession owns both chord traces and
-// raw popup action-message traces; background only executes the replayed
+// raw runtime action-message traces; background only executes the replayed
 // runtime action when chrome sends it back through handleChordResult.
 async function replayLastChord() {
   try {
