@@ -331,6 +331,10 @@
       });
     }
 
+    function recordArmed() {
+      recordEvent({ kind: "armed" });
+    }
+
     function clearChordTimer() {
       if (chordTimer !== null && options && typeof options.clearTimeoutFn === "function") {
         try { options.clearTimeoutFn(chordTimer); } catch (e) {}
@@ -1009,12 +1013,12 @@
     }
 
     return {
-      recordEvent,
       recordTerminalAction,
       recordOpenView,
       recordBridgeKey,
       recordPopupActionMessage,
       recordModelRowIntent,
+      recordArmed,
       arm,
       acceptKey,
       reset,
