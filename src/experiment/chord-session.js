@@ -573,6 +573,7 @@
         const snapshot = currentPath.concat([chordKey]);
         currentPath = snapshot;
         clearChordTimer();
+        trackOpenView(child.view);
         transition("bridging-buffering", "open-view-match", { view: child.view, snapshot });
         callOption("onOpenView", child.view, snapshot, lateTimeout ? "late-match" : "match");
         return;
@@ -583,6 +584,7 @@
           currentPath = currentPath.concat([chordKey]);
           clearChordTimer();
           const view = child.onTimeout && child.onTimeout.type === "open-view" ? child.onTimeout.view : null;
+          trackOpenView(view);
           transition("bridging-buffering", "late-prefix-match", { view, snapshot: currentPath });
           callOption("onStateChange", currentPath.slice());
           callOption("onOpenView", view, currentPath.slice(), "late-match");

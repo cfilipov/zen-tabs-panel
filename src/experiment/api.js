@@ -3219,8 +3219,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // the user paused, which isn't a chord chain we want to replay
       // (replay would just pop the actions menu instead of redoing what
       // the user just did).
-      if (source === "match" || source === "late-match") trackChordOpenView(view);
-
       // A content-process key can arrive just after chrome's root/prefix
       // timeout fired even though the user typed it before the timeout. In
       // that case the timeout side effect has already opened the bridge; keep

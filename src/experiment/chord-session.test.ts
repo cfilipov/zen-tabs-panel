@@ -386,6 +386,19 @@ describe("chord-session replay recording", () => {
     }));
   });
 
+  it("records typed open-view matches at the acceptKey boundary", () => {
+    const env = makeInteractiveSession();
+    env.session.arm();
+
+    env.session.acceptKey({ kind: "key", key: "r", code: "KeyR", shimTs: 10 });
+
+    expect(env.session.getReplayState().currentChordReplay).toMatchObject({
+      kind: "open-view",
+      view: "last-visited",
+      bridgeKeys: [],
+    });
+  });
+
   it("opens a prefix view when the prefix key beat the root timeout", () => {
     const env = makeInteractiveSession();
     env.session.arm();
