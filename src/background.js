@@ -651,7 +651,14 @@ const SYNC_HANDLERS = Object.freeze({
     return result;
   },
   [MSG.ACTIVATE_CURRENT_VIEW_ROW]: async (m) => {
-    const result = await api.activateCurrentViewRow(m.index, m.source, !!m.switchToTarget, m.listVersion);
+    const result = await api.activateCurrentViewRow(
+      m.index,
+      m.source,
+      !!m.switchToTarget,
+      m.listVersion,
+      m.chordKey || "",
+      m.activation || null,
+    );
     if (result && typeof result === "object" && result.kind === "open-view") {
       return result;
     }

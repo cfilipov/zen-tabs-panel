@@ -56,6 +56,8 @@ export function createPaletteEffects() {
       source: "selection" | "shortcut",
       switchToTarget = false,
       listVersion?: number,
+      chordKey?: string | null,
+      activation = "trace",
     ) {
       return sendMessage<ActivateViewRowResult>({
         type: "activate-current-view-row",
@@ -63,6 +65,7 @@ export function createPaletteEffects() {
         source,
         ...(switchToTarget ? { switchToTarget: true } : {}),
         ...(typeof listVersion === "number" && listVersion > 0 ? { listVersion } : {}),
+        ...(chordKey ? { chordKey, activation } : {}),
       });
     },
     synthChordKey(chordKey: string, view: ViewId, activation = "keydown") {

@@ -68,7 +68,9 @@
           { "name": "index", "type": "integer" },
           { "name": "source", "type": "string", "optional": true },
           { "name": "switchToTarget", "type": "boolean", "optional": true },
-          { "name": "listVersion", "type": "integer", "optional": true }
+          { "name": "listVersion", "type": "integer", "optional": true },
+          { "name": "chordKey", "type": "string", "optional": true },
+          { "name": "activation", "type": "string", "optional": true }
         ]
       },
       {

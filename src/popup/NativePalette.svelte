@@ -501,12 +501,16 @@
   }
 
   function traceReplayForSelection(shifted = false) {
-    if (palette.currentView === "actions" || isNativePrefixView(palette.currentView)) return;
+    const key = replayKeyForSelection(shifted);
+    if (key) recordSyntheticChordKey(key);
+  }
+
+  function replayKeyForSelection(shifted = false) {
+    if (palette.currentView === "actions" || isNativePrefixView(palette.currentView)) return null;
     if (palette.currentView === "navigation") {
-      recordSyntheticChordKey(replayKeyForNavigationIndex(palette.navigationHistory, palette.selectedIndex));
-      return;
+      return replayKeyForNavigationIndex(palette.navigationHistory, palette.selectedIndex);
     }
-    traceReplayForListIndex(palette.selectedIndex, shifted);
+    return replayKeyForBadgeIndex(palette.selectedIndex, shifted);
   }
 
   async function activateDomain(row: DomainIndexRow) {
@@ -562,7 +566,12 @@
     }
   }
 
-  async function activateCurrentChromeModelRow(index: number, source: "selection" | "shortcut", switchToTarget = false) {
+  async function activateCurrentChromeModelRow(
+    index: number,
+    source: "selection" | "shortcut",
+    switchToTarget = false,
+    chordKey: string | null = null,
+  ) {
     markTerminalCommandDispatched();
     revealController.clear();
     const chromeIndex = source === "shortcut" && isNativeListView(palette.currentView)
@@ -573,6 +582,7 @@
       source,
       switchToTarget,
       palette.listVersion,
+      chordKey,
     );
     if (result && typeof result === "object" && result.kind === "open-view") {
       await openNativeView(result.view, result.params || {}, true);
@@ -711,8 +721,7 @@
   async function activateDuplicatePromptTab(row: TabIndexRow, index: number) {
     if (row.active) return;
     const key = replayKeyForBadgeIndex(index);
-    if (key) effects.recordCurrentViewChordKey(key, "trace");
-    await activateCurrentChromeModelRow(index, "shortcut");
+    await activateCurrentChromeModelRow(index, "shortcut", false, key);
   }
 
   async function activateTabInfoDuplicate(row: TabIndexRow, index: number) {
@@ -836,8 +845,6 @@
   }
 
   async function activateSelected(switchToTarget = false) {
-    traceReplayForSelection(switchToTarget);
-
     if (palette.currentView === "actions") {
       const item = visibleActionItems[palette.selectedIndex];
       if (item) await activateAction(item);
@@ -851,10 +858,16 @@
     }
 
     if (isChromeModelIntentView(palette.currentView)) {
-      await activateCurrentChromeModelRow(palette.selectedIndex, "selection", switchToTarget);
+      await activateCurrentChromeModelRow(
+        palette.selectedIndex,
+        "selection",
+        switchToTarget,
+        replayKeyForSelection(switchToTarget),
+      );
       return;
     }
 
+    traceReplayForSelection(switchToTarget);
     const activation = resolveSelectionActivation(viewActivationContext(), { switchToTarget });
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
@@ -870,11 +883,16 @@
   }
 
   async function activateRow(index: number, switchToTarget = false) {
-    traceReplayForListIndex(index, switchToTarget);
     if (isChromeModelIntentView(palette.currentView)) {
-      await activateCurrentChromeModelRow(index, "shortcut", switchToTarget);
+      await activateCurrentChromeModelRow(
+        index,
+        "shortcut",
+        switchToTarget,
+        replayKeyForBadgeIndex(index, switchToTarget),
+      );
       return;
     }
+    traceReplayForListIndex(index, switchToTarget);
     const activation = resolveViewActivation(viewActivationContext(), index, "shortcut", { switchToTarget });
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
@@ -885,15 +903,14 @@
   }
 
   async function activateRenderedRow(index: number, switchToTarget = false) {
-    if (palette.currentView === "navigation") {
-      recordSyntheticChordKey(replayKeyForNavigationIndex(palette.navigationHistory, index));
-    } else {
-      traceReplayForListIndex(index, switchToTarget);
-    }
+    const chordKey = palette.currentView === "navigation"
+      ? replayKeyForNavigationIndex(palette.navigationHistory, index)
+      : replayKeyForBadgeIndex(index, switchToTarget);
     if (isChromeModelIntentView(palette.currentView)) {
-      await activateCurrentChromeModelRow(index, "selection", switchToTarget);
+      await activateCurrentChromeModelRow(index, "selection", switchToTarget, chordKey);
       return;
     }
+    recordSyntheticChordKey(chordKey);
     const activation = resolveViewActivation(viewActivationContext(), index, "selection", { switchToTarget });
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;

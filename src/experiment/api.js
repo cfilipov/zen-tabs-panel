@@ -4892,9 +4892,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
           });
         },
 
-        async activateCurrentViewRow(index, source, switchToTarget, listVersion) {
+        async activateCurrentViewRow(index, source, switchToTarget, listVersion, chordKey, activation) {
           const view = currentViewName || getActiveBridgeView();
           if (!view || view === "actions") return false;
+          if (typeof chordKey === "string" && chordKey) {
+            chordSession.recordEvent({
+              kind: "synthetic-key",
+              chordKey,
+              view,
+              activation: activation || "trace",
+            });
+          }
           return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, {
             destroyOverlay: false,
             listVersion,
