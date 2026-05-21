@@ -9,11 +9,19 @@ export type BridgeKeyData = {
   metaKey?: boolean;
 };
 
+export type InvalidChordFeedback = {
+  key?: string;
+  view?: string | null;
+  path?: string[];
+};
+
 export type BridgeReply = {
   buffered?: BridgeKeyData[];
   stale?: boolean;
   view?: string | null;
   armRevealTimer?: boolean;
+  invalidChord?: InvalidChordFeedback | null;
+  visible?: boolean;
 };
 
 export type WarmRearmPayload = {
@@ -25,12 +33,16 @@ export type WarmRearmPayload = {
 
 export type ForceReadyPayload = {
   buffered?: BridgeKeyData[];
+  invalidChord?: InvalidChordFeedback | null;
+  visible?: boolean;
 };
 
 type BridgeMessage =
   | { type: "deliver-key"; data?: BridgeKeyData }
   | { type: "warm-rearm"; data?: WarmRearmPayload }
   | { type: "force-ready"; data?: ForceReadyPayload }
+  | { type: "invalid-chord"; data?: InvalidChordFeedback }
+  | { type: "palette-revealed" }
   | { type: "cancel-reveal" }
   | { type: "go-to-actions" };
 
@@ -38,6 +50,8 @@ export type ChordBridgeHandlers = {
   onDeliverKey: (input: BridgeKeyData) => void;
   onWarmRearm: (data: WarmRearmPayload) => void;
   onForceReady: (data: ForceReadyPayload) => void;
+  onInvalidChord: (data: InvalidChordFeedback) => void;
+  onPaletteRevealed: () => void;
   onCancelReveal: () => void;
   onGoToActions: () => void;
 };
@@ -69,6 +83,12 @@ export function installChordBridgeHandlers(handlers: ChordBridgeHandlers) {
         return;
       case "force-ready":
         handlers.onForceReady(message.data ?? {});
+        return;
+      case "invalid-chord":
+        handlers.onInvalidChord(message.data ?? {});
+        return;
+      case "palette-revealed":
+        handlers.onPaletteRevealed();
         return;
       case "cancel-reveal":
         handlers.onCancelReveal();

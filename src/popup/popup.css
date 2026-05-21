@@ -71,6 +71,25 @@ html, body {
   display: none;
 }
 
+#header.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 14px 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+#header.overlay #view-title,
+#header.overlay #back-button {
+  display: none;
+}
+
+#header.overlay #header-hint {
+  margin-left: auto;
+}
+
 #back-button {
   cursor: pointer;
   font-size: 16px;
@@ -101,6 +120,15 @@ html, body {
   gap: 8px;
   font-size: 11px;
   color: var(--ztt-text-muted);
+}
+
+#header-hint.error {
+  color: light-dark(#b45309, #fbbf24);
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: light-dark(rgba(255, 247, 237, 0.95), rgba(69, 26, 3, 0.92));
+  box-shadow: 0 1px 8px light-dark(rgba(120, 53, 15, 0.14), rgba(0, 0, 0, 0.2));
 }
 
 #header-hint.hidden {

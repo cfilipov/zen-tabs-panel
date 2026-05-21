@@ -100,6 +100,8 @@
     let currentNode = options && options.chordTree;
     let currentPath = [];
     let chordTimer = null;
+    let lastAcceptedPhysicalKeySignature = null;
+    let lastAcceptedPhysicalKeyFingerprint = null;
 
     function transition(to, why, data) {
       const from = state;
@@ -275,7 +277,68 @@
       clearChordTimer();
       currentNode = options && options.chordTree;
       currentPath = [];
+      lastAcceptedPhysicalKeySignature = null;
+      lastAcceptedPhysicalKeyFingerprint = null;
       if (nextState) transition(nextState, "traversal-reset");
+    }
+
+    function physicalKeySignature(keyData) {
+      if (!keyData) return null;
+      if (keyData.shimSeq == null && keyData.shimTs == null) return null;
+      return [
+        keyData.source || "",
+        keyData.shimSeq == null ? "" : String(keyData.shimSeq),
+        keyData.shimTs == null ? "" : String(keyData.shimTs),
+        keyData.key || "",
+        keyData.code || "",
+      ].join(":");
+    }
+
+    function physicalKeyTimestamp(keyData) {
+      if (!keyData) return null;
+      if (typeof keyData.shimTs === "number") return keyData.shimTs;
+      if (typeof keyData.timeStamp === "number") return keyData.timeStamp;
+      return null;
+    }
+
+    function physicalKeyFingerprint(keyData) {
+      const ts = physicalKeyTimestamp(keyData);
+      if (ts == null) return null;
+      return {
+        key: keyData.key || "",
+        code: keyData.code || "",
+        ts,
+      };
+    }
+
+    function isDuplicatePhysicalKey(keyData) {
+      const signature = physicalKeySignature(keyData);
+      if (signature && signature === lastAcceptedPhysicalKeySignature) return true;
+
+      const fingerprint = physicalKeyFingerprint(keyData);
+      if (
+        fingerprint &&
+        lastAcceptedPhysicalKeyFingerprint &&
+        fingerprint.key === lastAcceptedPhysicalKeyFingerprint.key &&
+        fingerprint.code === lastAcceptedPhysicalKeyFingerprint.code &&
+        Math.abs(fingerprint.ts - lastAcceptedPhysicalKeyFingerprint.ts) <= 8
+      ) {
+        return true;
+      }
+
+      return false;
+    }
+
+    function rememberPhysicalKey(keyData) {
+      const signature = physicalKeySignature(keyData);
+      if (signature) lastAcceptedPhysicalKeySignature = signature;
+      const fingerprint = physicalKeyFingerprint(keyData);
+      if (fingerprint) lastAcceptedPhysicalKeyFingerprint = fingerprint;
+    }
+
+    function timeoutViewForCurrentNode() {
+      const onTo = currentNode && currentNode.onTimeout;
+      return onTo && onTo.type === "open-view" ? onTo.view : null;
     }
 
     function rootTimeout() {
@@ -298,6 +361,8 @@
       clearChordTimer();
       currentNode = options && options.chordTree;
       currentPath = [];
+      lastAcceptedPhysicalKeySignature = null;
+      lastAcceptedPhysicalKeyFingerprint = null;
       recordEvent({ kind: "armed" });
       callOption("onArmed");
       const constants = options && options.constants || {};
@@ -325,6 +390,12 @@
       if (keyData.key === "Meta" || keyData.key === "Control" || keyData.key === "Alt" || keyData.key === "Shift") return;
       if (keyData.metaKey || keyData.ctrlKey || keyData.altKey) return;
       if (!isArmed()) return;
+
+      if (isDuplicatePhysicalKey(keyData)) {
+        callOption("onDuplicatePhysicalKey", keyData);
+        return;
+      }
+      rememberPhysicalKey(keyData);
 
       if (state === "bridging-buffering" || state === "bridging-live") {
         try { if (typeof keyData.preventDefault === "function") keyData.preventDefault(); } catch (e) {}
@@ -357,7 +428,17 @@
 
       const child = currentNode && currentNode.children && currentNode.children[chordKey];
       if (!child) {
-        cancelTraversal();
+        clearChordTimer();
+        const snapshot = currentPath.slice();
+        const view = timeoutViewForCurrentNode();
+        transition("bridging-buffering", "invalid-key", { chordKey, view, snapshot });
+        callOption("onInvalidKey", {
+          chordKey,
+          key: keyData.key,
+          code: keyData.code,
+          view,
+          path: snapshot,
+        });
         return;
       }
 

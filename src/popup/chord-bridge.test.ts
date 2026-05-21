@@ -14,6 +14,8 @@ describe("chord bridge", () => {
       onDeliverKey: (input) => keys.push(input),
       onWarmRearm: () => {},
       onForceReady: () => {},
+      onInvalidChord: () => {},
+      onPaletteRevealed: () => {},
       onCancelReveal: () => {},
       onGoToActions: () => {},
     });
@@ -30,16 +32,20 @@ describe("chord bridge", () => {
       onDeliverKey: () => {},
       onWarmRearm: (data) => calls.push(`warm:${data.view}`),
       onForceReady: (data) => calls.push(`force:${data.buffered?.length ?? 0}`),
+      onInvalidChord: (data) => calls.push(`invalid:${data.key}`),
+      onPaletteRevealed: () => calls.push("revealed"),
       onCancelReveal: () => calls.push("cancel"),
       onGoToActions: () => calls.push("actions"),
     });
 
     dispatchBridge("warm-rearm", { view: "actions" });
     dispatchBridge("force-ready", { buffered: [{ key: " " }] });
+    dispatchBridge("invalid-chord", { key: "\\" });
+    dispatchBridge("palette-revealed");
     dispatchBridge("cancel-reveal");
     dispatchBridge("go-to-actions");
     uninstall();
 
-    expect(calls).toEqual(["warm:actions", "force:1", "cancel", "actions"]);
+    expect(calls).toEqual(["warm:actions", "force:1", "invalid:\\", "revealed", "cancel", "actions"]);
   });
 });

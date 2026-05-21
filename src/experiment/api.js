@@ -2073,6 +2073,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
         if (br) br.focus();
       }
+      const br = w.document.getElementById(BROWSER_ID);
+      const mm = browserMessageManager(br);
+      if (mm) {
+        try { mm.sendAsyncMessage("ZenChord:PaletteRevealed:" + CHORD_GENERATION, {}); } catch (e) {}
+      }
       observeChordSession("revealOverlay");
     }
 
@@ -2089,6 +2094,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (skipOverlayAnimations) clearPanelAnimations(overlay, w.document.getElementById(PANEL_ID));
       if (br) {
         try { br.focus(); } catch (e) {}
+      }
+      const mm = browserMessageManager(br);
+      if (mm) {
+        try { mm.sendAsyncMessage("ZenChord:PaletteRevealed:" + CHORD_GENERATION, {}); } catch (e) {}
       }
     }
 
@@ -2803,12 +2812,41 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Pre-declared so functions defined earlier (destroyOverlay, etc.) can
     // call into the session for state queries.
     let paletteRequestFire = null;
+    let pendingInvalidChordFeedback = null;
 
     function debugChordTrace(type, data) {
       const w = getWin();
       if (!w || !w.__zenTabsPanelTraceEnabled) return;
       if (!Array.isArray(w.__zenTabsPanelTrace)) w.__zenTabsPanelTrace = [];
       w.__zenTabsPanelTrace.push(Object.assign({ at: Date.now(), type }, data || {}));
+    }
+
+    function invalidChordFeedback(payload) {
+      return {
+        key: payload && (payload.chordKey || payload.key) || "",
+        view: payload && payload.view || "actions",
+        path: Array.isArray(payload && payload.path) ? payload.path.slice() : [],
+      };
+    }
+
+    function consumeInvalidChordFeedback() {
+      const feedback = pendingInvalidChordFeedback;
+      pendingInvalidChordFeedback = null;
+      return feedback;
+    }
+
+    function deliverInvalidChordFeedbackIfReady() {
+      if (!pendingInvalidChordFeedback || !isPopupReady()) return;
+      const w = getWin();
+      const br = w && w.document.getElementById(BROWSER_ID);
+      const mm = browserMessageManager(br);
+      if (!mm) return;
+      const feedback = consumeInvalidChordFeedback();
+      try {
+        mm.sendAsyncMessage("ZenChord:InvalidChord:" + CHORD_GENERATION, feedback);
+      } catch (e) {
+        pendingInvalidChordFeedback = feedback;
+      }
     }
 
     function cloneChordInspectorValue(value) {
@@ -2843,6 +2881,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           navStack,
           currentDynamicSidebarWidth,
           currentMeasuredResizeView,
+          pendingInvalidChordFeedback,
         },
         overlay: {
           exists: !!overlay,
@@ -2994,6 +3033,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
         debugChordTrace("chrome-on-bridge-key", keyData);
         forwardKeyToPopup(keyData);
       },
+      onInvalidKey: (payload) => {
+        const feedback = invalidChordFeedback(payload);
+        debugChordTrace("chrome-on-invalid-key", feedback);
+        pendingInvalidChordFeedback = feedback;
+        disarmChordShims("invalid-key");
+        enterBridgeFromOpenView(payload && payload.view || null, "chrome", "timeout");
+        deliverInvalidChordFeedbackIfReady();
+      },
+      onDuplicatePhysicalKey: (keyData) => {
+        debugChordTrace("shim-key-duplicate-ignored", {
+          source: keyData && keyData.source,
+          key: keyData && keyData.key,
+          seq: keyData && keyData.shimSeq,
+          ts: keyData && keyData.shimTs,
+        });
+      },
     });
 
     function trackChordTerminalAction(payload) {
@@ -3049,28 +3104,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       try { Services.mm.broadcastAsyncMessage("ZenChord:Disarm:" + CHORD_GENERATION, { reason: reason || "disarm" }); } catch (e) {}
     }
 
-    let lastAcceptedShimKeySignature = null;
-
     function acceptShimKey(keyData, source) {
       if (!chordSession || !keyData || keyData.kind !== "key") return;
-      const hasShimSequence = keyData.shimSeq != null || keyData.shimTs != null;
-      const signature = hasShimSequence
-        ? [
-            source || "",
-            keyData.shimSeq == null ? "" : String(keyData.shimSeq),
-            keyData.shimTs == null ? "" : String(keyData.shimTs),
-            keyData.key || "",
-            keyData.code || "",
-          ].join(":")
-        : null;
-      if (signature && signature === lastAcceptedShimKeySignature) {
-        debugChordTrace("shim-key-duplicate-ignored", { source, key: keyData.key, seq: keyData.shimSeq, ts: keyData.shimTs });
-        return;
-      }
-      if (signature) lastAcceptedShimKeySignature = signature;
       debugChordTrace("shim-key", { source, key: keyData.key, seq: keyData.shimSeq, ts: keyData.shimTs });
       chordSession.acceptKey({
         kind: "key",
+        source,
         key: keyData.key,
         code: keyData.code,
         shiftKey: !!keyData.shiftKey,
@@ -3078,6 +3117,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         ctrlKey: !!keyData.ctrlKey,
         metaKey: !!keyData.metaKey,
         isTrusted: true,
+        shimSeq: keyData.shimSeq,
+        shimTs: keyData.shimTs,
         timeStamp: keyData.shimTs,
         preventDefault() {},
         stopPropagation() {},
@@ -3182,8 +3223,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (pendingReveal && !requestedView) {
         // Already prerendered at the right default view — keep it hidden.
       } else {
-        if (pendingReveal) destroyOverlay({ silent: true });
-        createOverlay(requestedView);
+        if (pendingReveal && requestedView) {
+          // Direct submenu chords (cmd+.,r / cmd+.,o) need the popup to
+          // boot at the requested view, not rely on a warm root popup
+          // receiving WarmRearm before reveal. A missed WarmRearm leaves
+          // chrome in the submenu while Svelte still renders actions,
+          // which then reports the valid submenu key as invalid.
+          createFreshOverlayForDirectOpen(requestedView);
+        } else {
+          if (pendingReveal) destroyOverlay({ silent: true });
+          createOverlay(requestedView);
+        }
       }
       armRevealTimer();
     }
@@ -3233,7 +3283,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
         try {
           mm.sendAsyncMessage(
             "ZenChord:ForceReady:" + CHORD_GENERATION,
-            { buffered: drained }
+            {
+              buffered: drained,
+              invalidChord: pendingInvalidChordFeedback,
+              visible: !!pendingInvalidChordFeedback || isOverlayVisible(),
+            }
           );
         } catch (e) {}
       }
@@ -3634,7 +3688,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
 
       try { chordSession.arm(); } catch (e) {}
-      lastAcceptedShimKeySignature = null;
       try { if (chromeShim) chromeShim.arm(); } catch (e) {}
       try { if (chordSession) chordSession.beginArm(); } catch (e) {}
       debugChordTrace("chrome-arm-called", {});
@@ -3797,6 +3850,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           ctrlKey: !!e.ctrlKey,
           metaKey: !!e.metaKey,
           isTrusted: !!e.isTrusted,
+          source: "fallback",
+          timeStamp: typeof e.timeStamp === "number" ? e.timeStamp : undefined,
           target: name === "browser" ? null : e.target,
           preventDefault: () => { try { e.preventDefault(); } catch (_) {} },
           stopPropagation: () => { try { e.stopPropagation(); } catch (_) {} },
@@ -3909,6 +3964,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "addMessageListener('ZenChord:ForceReady:' + __GEN, function(m){\n" +
         "  if (__shutdown) return;\n" +
         "  bridgeEvent('force-ready', (m && m.data) || {});\n" +
+        "});\n" +
+        "addMessageListener('ZenChord:InvalidChord:' + __GEN, function(m){\n" +
+        "  if (__shutdown) return;\n" +
+        "  bridgeEvent('invalid-chord', (m && m.data) || {});\n" +
+        "});\n" +
+        "addMessageListener('ZenChord:PaletteRevealed:' + __GEN, function(){\n" +
+        "  if (__shutdown) return;\n" +
+        "  bridgeEvent('palette-revealed', {});\n" +
         "});\n" +
         // Cancel-reveal: chrome dismisses the overlay and needs the popup
         // to drop any in-flight reveal-on-pause timer before the next
@@ -5880,6 +5943,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
             buffered: drained,
             view: replyView,
             armRevealTimer: wasBridging || drained.length > 0,
+            invalidChord: consumeInvalidChordFeedback(),
+            visible: isOverlayVisible(),
           };
         },
 

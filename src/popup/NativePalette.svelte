@@ -10,6 +10,7 @@
     type BridgeKeyData,
     type BridgeReply,
     type ForceReadyPayload,
+    type InvalidChordFeedback,
   } from "./chord-bridge";
   import {
     interpretVisibleInput,
@@ -154,8 +155,14 @@
   let suppressViewTransition = $state(true);
   let terminalCommandDispatched = false;
   let terminalCommandDispatchedAt = 0;
+  let invalidChordHint = $state<string | null>(null);
+  let invalidChordHintTimer: number | null = null;
+  let paletteRevealed = false;
   const revealController = createPaletteRevealController({
-    sendReveal: effects.revealPalette,
+    sendReveal: (inst) => {
+      paletteRevealed = true;
+      effects.revealPalette(inst);
+    },
   });
   const bridgeDispatch = createBridgeDispatchController({
     dispatchKey: handleKeyInput,
@@ -181,7 +188,50 @@
     return false;
   }
 
-  const headerHidden = $derived(palette.currentView === "actions");
+  function displayInvalidChordKey(raw: string | undefined | null) {
+    const value = String(raw || "");
+    if (!value) return "that key";
+    if (value === " ") return "Space";
+    if (value === "\\") return "\\";
+    if (value === "ArrowLeft") return "Left";
+    if (value === "ArrowRight") return "Right";
+    if (value === "ArrowUp") return "Up";
+    if (value === "ArrowDown") return "Down";
+    return value;
+  }
+
+  function showInvalidChord(feedback: InvalidChordFeedback = {}) {
+    invalidChordHint = `No shortcut for ${displayInvalidChordKey(feedback.key)}`;
+    if (invalidChordHintTimer !== null) {
+      window.clearTimeout(invalidChordHintTimer);
+    }
+    invalidChordHintTimer = window.setTimeout(() => {
+      invalidChordHint = null;
+      invalidChordHintTimer = null;
+    }, 3000);
+  }
+
+  function clearInvalidChordHint() {
+    invalidChordHint = null;
+    if (invalidChordHintTimer !== null) {
+      window.clearTimeout(invalidChordHintTimer);
+      invalidChordHintTimer = null;
+    }
+  }
+
+  function isInvalidChordFeedbackInput(input: BridgeKeyData) {
+    if (input.metaKey || input.ctrlKey || input.altKey) return false;
+    if (input.key === "Meta" || input.key === "Control" || input.key === "Alt" || input.key === "Shift") return false;
+    return input.key !== "Escape" && input.key !== "Backspace" && input.key !== "Tab" &&
+      input.key !== "Enter" && input.key !== " " &&
+      input.key !== "ArrowLeft" && input.key !== "ArrowRight" &&
+      input.key !== "ArrowUp" && input.key !== "ArrowDown";
+  }
+
+  const headerHint = $derived(invalidChordHint);
+  const headerHintTone = $derived<"normal" | "error">(invalidChordHint ? "error" : "normal");
+  const headerOverlay = $derived(palette.currentView === "actions" && !!headerHint);
+  const headerHidden = $derived(palette.currentView === "actions" && !headerHint);
   const fitContentHeight = $derived(usesFitContentHeight(palette.currentView));
   const pageCount = $derived(Math.max(1, Math.max(...actionSections.map((section) => section.page))));
   const viewLoad = createViewLoadController<ViewId>({
@@ -926,9 +976,13 @@
       actionNodes,
     );
     if (command.kind === "none") {
+      if (isInvalidChordFeedbackInput(input)) {
+        showInvalidChord({ key: chordFromKey({ kind: "key", ...input }) ?? input.key });
+      }
       return false;
     }
 
+    clearInvalidChordHint();
     if (command.kind === "action" || command.kind === "open-view" || command.kind === "enter-prefix") {
       traceReplayInput(input);
     }
@@ -941,6 +995,11 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (!paletteRevealed) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const input = snapshotKeyEvent(event);
     const result = bridgeDispatch.visibleKeydownInput(input);
     if (result.preventDefault) event.preventDefault();
@@ -970,6 +1029,8 @@
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     await bridgeDispatch.drainReply(reply, generation);
+    if (reply?.visible) paletteRevealed = true;
+    if (reply?.invalidChord) showInvalidChord(reply.invalidChord);
   }
 
   async function initializeBridge(initialViewReady: Promise<unknown>) {
@@ -988,6 +1049,8 @@
     revealController.updateInst(data.inst);
     skipAnimations = !!data.skipAnimations;
     suppressViewTransition = true;
+    paletteRevealed = false;
+    clearInvalidChordHint();
     clearPreview();
 
     const view = data.view || "actions";
@@ -1004,6 +1067,8 @@
   function handleForceReady(data: ForceReadyPayload) {
     clearTerminalCommandDispatched();
     bridgeDispatch.forceReady(data);
+    if (data.visible) paletteRevealed = true;
+    if (data.invalidChord) showInvalidChord(data.invalidChord);
   }
 
   onMount(() => {
@@ -1019,7 +1084,12 @@
       onDeliverKey: handleBridgeKey,
       onWarmRearm: (data) => void handleWarmRearm(data),
       onForceReady: handleForceReady,
-      onCancelReveal: revealController.clear,
+      onInvalidChord: showInvalidChord,
+      onPaletteRevealed: () => { paletteRevealed = true; },
+      onCancelReveal: () => {
+        paletteRevealed = false;
+        revealController.clear();
+      },
       onGoToActions: goToActions,
     });
     void initializeBridge(initialViewReady);
@@ -1028,12 +1098,14 @@
       panelController.invalidate();
       window.removeEventListener("keydown", handleKeydown);
       window.removeEventListener("pagehide", handlePageHide);
+      clearInvalidChordHint();
       uninstallBridge();
     };
   });
 
   function handlePageHide() {
     pageAlive = false;
+    paletteRevealed = false;
     revealController.markDead();
   }
 
@@ -1063,6 +1135,9 @@
 <PaletteShell
   {headerHidden}
   {title}
+  hint={headerHint}
+  hintTone={headerHintTone}
+  {headerOverlay}
   onback={palette.currentView === "actions" ? undefined : goBack}
   {sidebarHidden}
   {sidebarHints}

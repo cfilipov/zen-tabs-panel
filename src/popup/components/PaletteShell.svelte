@@ -16,6 +16,8 @@
     headerHidden?: boolean;
     title?: string;
     hint?: string | null;
+    hintTone?: "normal" | "error";
+    headerOverlay?: boolean;
     onback?: () => void;
     sidebarHidden?: boolean;
     sidebarHints?: SidebarHint[];
@@ -40,6 +42,8 @@
     headerHidden = false,
     title = "",
     hint = null,
+    hintTone = "normal",
+    headerOverlay = false,
     onback,
     sidebarHidden = true,
     sidebarHints = [],
@@ -110,7 +114,7 @@
 </script>
 
 <div id="palette" class:fit-content-height={fitContentHeight} bind:this={paletteElement} bind:clientHeight={paletteHeight}>
-  <Header hidden={headerHidden} {title} {hint} {onback} />
+  <Header hidden={headerHidden} {title} {hint} {hintTone} overlay={headerOverlay} {onback} />
   <div id="content">
     <div id="list" bind:this={listElement}>
       {@render children?.()}

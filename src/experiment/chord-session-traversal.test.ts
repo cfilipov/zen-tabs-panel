@@ -16,6 +16,10 @@ type EventLike = {
   altKey?: boolean;
   ctrlKey?: boolean;
   metaKey?: boolean;
+  source?: string;
+  shimSeq?: number;
+  shimTs?: number;
+  timeStamp?: number;
   isTrusted?: boolean;
   preventDefault?: ReturnType<typeof vi.fn>;
   stopPropagation?: ReturnType<typeof vi.fn>;
@@ -101,6 +105,16 @@ function bindings() {
         },
       ],
     },
+    {
+      kind: "prefix",
+      id: "split",
+      chord: "\\",
+      view: "split-view",
+      children: [
+        { kind: "action", id: "split-horizontal", chord: "H" },
+        { kind: "action", id: "split-vertical", chord: "V" },
+      ],
+    },
   ];
 }
 
@@ -113,6 +127,7 @@ function makeSession() {
     stateChange: vi.fn(),
     cancel: vi.fn(),
     bridgeKey: vi.fn(),
+    invalidKey: vi.fn(),
   };
   const chordTree = treeScope.buildChordTree(bindings(), ["1", "2"], constants);
   const session = sessionScope.createChordSession({
@@ -127,6 +142,7 @@ function makeSession() {
     onStateChange: events.stateChange,
     onCancel: events.cancel,
     onBridgeKey: events.bridgeKey,
+    onInvalidKey: events.invalidKey,
   });
   return { session, clock, events, chordTree };
 }
@@ -216,6 +232,17 @@ describe("ChordSession traversal", () => {
     expect(session.getTraversalState().path).toEqual(["R"]);
   });
 
+  it("ignores content shim delivery of a key already handled by fallback", () => {
+    const { session, events } = makeSession();
+    session.arm();
+    session.acceptKey(key("r", { source: "fallback", timeStamp: 100 }));
+    session.acceptKey(key("r", { source: "content-shim", shimSeq: 1, shimTs: 100 }));
+
+    expect(events.openView).toHaveBeenCalledWith("last-visited", ["R"], "match");
+    expect(events.bridgeKey).not.toHaveBeenCalled();
+    expect(session.getTraversalState().path).toEqual(["R"]);
+  });
+
   it("descends through a prefix, emits state, and then fires a child action", () => {
     const { session, events, clock } = makeSession();
     session.arm();
@@ -227,6 +254,24 @@ describe("ChordSession traversal", () => {
 
     session.acceptKey(key("d"));
     expect(events.action).toHaveBeenCalledWith({ type: "action", actionId: "reorder-by-domain" });
+    expect(session.isArmed()).toBe(false);
+  });
+
+  it("ignores duplicate delivery of the same physical shim key", () => {
+    const { session, events } = makeSession();
+    const slash = key("\\", { code: "Backslash", source: "content-shim", shimSeq: 17, shimTs: 1234 });
+
+    session.arm();
+    session.acceptKey(slash);
+    session.acceptKey(key("\\", { code: "Backslash", source: "content-shim", shimSeq: 17, shimTs: 1234 }));
+
+    expect(events.stateChange).toHaveBeenCalledTimes(1);
+    expect(events.stateChange).toHaveBeenCalledWith(["\\"]);
+    expect(events.cancel).not.toHaveBeenCalled();
+    expect(session.getTraversalState().path).toEqual(["\\"]);
+
+    session.acceptKey(key("h", { source: "content-shim", shimSeq: 18, shimTs: 1240 }));
+    expect(events.action).toHaveBeenCalledWith({ type: "action", actionId: "split-horizontal" });
     expect(session.isArmed()).toBe(false);
   });
 
@@ -282,15 +327,41 @@ describe("ChordSession traversal", () => {
     expect(session.isArmed()).toBe(false);
   });
 
-  it("cancels and eats unknown chord keys", () => {
+  it("opens the root menu immediately for unknown root chord keys", () => {
     const { session, events } = makeSession();
     const event = key("z");
     session.arm();
     session.acceptKey(event);
 
-    expect(events.cancel).toHaveBeenCalledTimes(1);
+    expect(events.invalidKey).toHaveBeenCalledWith({
+      chordKey: "Z",
+      key: "z",
+      code: "KeyZ",
+      view: null,
+      path: [],
+    });
+    expect(events.cancel).not.toHaveBeenCalled();
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
-    expect(session.isArmed()).toBe(false);
+    expect(session.isArmed()).toBe(true);
+    expect(session.getTraversalState().path).toEqual([]);
+  });
+
+  it("opens the deepest prefix menu immediately for unknown prefix chord keys", () => {
+    const { session, events } = makeSession();
+    session.arm();
+    session.acceptKey(key("\\", { code: "Backslash" }));
+    session.acceptKey(key("\\", { code: "Backslash" }));
+
+    expect(events.invalidKey).toHaveBeenCalledWith({
+      chordKey: "\\",
+      key: "\\",
+      code: "Backslash",
+      view: "split-view",
+      path: ["\\"],
+    });
+    expect(events.cancel).not.toHaveBeenCalled();
+    expect(session.isArmed()).toBe(true);
+    expect(session.getTraversalState().path).toEqual(["\\"]);
   });
 
   it("passes through unarmed keys", () => {
