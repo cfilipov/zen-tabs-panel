@@ -696,8 +696,10 @@
         );
       }
       if (r.kind === "action-msg") {
-        // Let background fall back to its last popup-action recorder.
-        return false;
+        if (!effects.dispatchActionMessage) return false;
+        const message = clonePlain(r);
+        if (message) delete message.kind;
+        return !!effects.dispatchActionMessage(message);
       }
       return false;
     }

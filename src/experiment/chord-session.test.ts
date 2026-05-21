@@ -290,6 +290,15 @@ describe("chord-session replay recording", () => {
     expect(dispatchReplayedAction).toHaveBeenCalledWith("close-tab");
   });
 
+  it("replays raw popup action messages through the supplied dispatcher", () => {
+    const session = makeSession();
+    const dispatchActionMessage = vi.fn(() => true);
+    session.recordPopupActionMessage({ type: "activate-tab", domId: "tab-1" });
+
+    expect(session.replayLastChord({ dispatchActionMessage })).toBe(true);
+    expect(dispatchActionMessage).toHaveBeenCalledWith({ type: "activate-tab", domId: "tab-1" });
+  });
+
   it("resets only the current in-flight trace on arm", () => {
     const session = makeSession();
     session.recordTerminalAction({ type: "action", actionId: "close-tab" });

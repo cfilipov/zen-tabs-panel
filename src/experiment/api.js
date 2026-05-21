@@ -3115,9 +3115,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return true;
     }
 
+    function dispatchReplayedActionMessage(message) {
+      if (!paletteRequestFire || !message || !message.type) return false;
+      debugChordTrace("replay-action-message", { type: message.type });
+      paletteRequestFire.async({ kind: "runtime-action", message });
+      return true;
+    }
+
     function replayLastChordTrace() {
       return chordSession.replayLastChord({
         dispatchReplayedAction,
+        dispatchActionMessage: dispatchReplayedActionMessage,
         dispatchChordAction,
         dispatchModelRowIntent,
         enterBridgeFromOpenView,

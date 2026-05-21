@@ -737,27 +737,18 @@ async function hideAndDo(fn) {
   return fn();
 }
 
-// Most-recently fired action's full message — recorded at dispatch
-// (popup-driven via onMessage / chord-driven via runChordAction), so
-// cmd+.,. can replay it. The replay action itself is NOT recorded,
-// so repeated presses keep replaying the same prior action rather
-// than recursing on "replay last".
-let lastChordAction = null;
-
 function recordChordAction(message) {
   if (!message || !message.type) return;
   if (message.type === MSG.REPLAY_LAST_CHORD) return;
   // Duplicate-prompt outcomes are context-bound to the in-flight
   // openLinkIn intercept — replaying them does nothing useful (and
-  // would mask the previous replayable chord by overwriting the bg
-  // fallback). Don't record either lastChordAction or chrome's
-  // chord-chain context for these.
+  // would mask the previous replayable chord by overwriting chrome's
+  // chord-chain context.
   if (
     message.type === MSG.DUPLICATE_SWITCH ||
     message.type === MSG.DUPLICATE_OPEN_ANYWAY ||
     message.type === MSG.DUPLICATE_OPEN_AND_CLOSE_OTHERS
   ) return;
-  lastChordAction = message;
   // Let chrome decide whether this terminal action commits a chord chain
   // (open-view + bridge keys -> cycling replay) or just gets recorded as a
   // plain action. Chord-chain state lives in ChordSession; runtime action
@@ -776,25 +767,22 @@ async function runChordAction(actionId) {
   await handler(message);
 }
 
-// Replay-last-chord (cmd+.,.). Re-runs the most recent chord. Prefers
-// ChordSession's trace (so cmd+.,r,2 cycles through recents instead of
-// re-activating the same now-active tab) and falls back to bg's
-// runtime-action record for click-driven cases that never reached the
-// chord session.
+// Replay-last-chord (cmd+.,.). ChordSession owns both chord traces and
+// raw popup action-message traces; background only executes the replayed
+// runtime action when chrome sends it back through handleChordResult.
 async function replayLastChord() {
   try {
-    const ok = await api.replayLastChord();
-    if (ok) return;
+    await api.replayLastChord();
   } catch (e) {}
-  if (!lastChordAction) return;
-  const handler = ACTIONS[lastChordAction.type];
-  if (!handler) return;
-  await handler(lastChordAction);
 }
 
 async function handleChordResult(result) {
   if (result && result.kind === "chord-action") {
     await runChordAction(result.actionId);
+  } else if (result && result.kind === "runtime-action") {
+    const message = result.message;
+    const handler = message && ACTIONS[message.type];
+    if (handler) await handler(message);
   } else if (result && result.kind === "restore-recently-closed-index") {
     await restoreRecentlyClosedByIndex(result.index, result.expectedSessionId);
   } else if (result && result.kind === "duplicate-content-link") {
