@@ -3740,7 +3740,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!row || row.isActive) return false;
           if (expectedRowId && row.uuid !== expectedRowId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
-          chordSession.recordPopupActionMessage({ type: "move-selected-tabs-to-workspace", workspaceId: row.uuid, switchToTarget: !!switchToTarget });
           void (async () => {
             if (destroy) overlayController.destroy();
             await moveSelectedTabsToWorkspaceInternal(row.uuid, !!switchToTarget);
@@ -3753,7 +3752,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!row || !row.userContextId) return false;
           if (expectedRowId && String(row.userContextId) !== expectedRowId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
-          chordSession.recordPopupActionMessage({ type: "reopen-in-container", userContextId: row.userContextId });
           void (async () => {
             if (destroy) overlayController.destroy();
             await reopenInContainerInternal(row.userContextId);
@@ -3766,7 +3764,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!row) return false;
           if (expectedRowId && row.id !== expectedRowId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
-          chordSession.recordPopupActionMessage({ type: "move-tab-to-folder", folderId: row.id, switchToTarget: !!switchToTarget });
           void (async () => {
             if (destroy) overlayController.destroy();
             await moveTabToFolderInternal(row.id, !!switchToTarget);
@@ -3779,7 +3776,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!row || row.isCurrent) return false;
           if (expectedRowId && row.name !== expectedRowId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
-          chordSession.recordPopupActionMessage({ type: "launch-profile", name: row.name });
           if (destroy) overlayController.destroy();
           launchProfileInternal(row.name);
           return true;
@@ -3792,7 +3788,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (target == null || target === history?.index) return false;
           if (expectedRowId && String(target) !== expectedRowId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
-          chordSession.recordPopupActionMessage({ type: "navigate-to-history-index", index: target });
           if (destroy) overlayController.destroy();
           navigateToHistoryIndexInternal(target);
           return true;
@@ -3800,7 +3795,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (view === "recently-closed") {
           if (!paletteRequestFire) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
-          chordSession.recordPopupActionMessage({ type: MSG.RESTORE_CLOSED_TAB_BY_INDEX, index: rowIndex });
           if (destroy) overlayController.destroy();
           paletteRequestFire.async({
             kind: "restore-recently-closed-index",
@@ -3818,7 +3812,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!row || !row.domId) return false;
           if (expectedDomId && row.domId !== expectedDomId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
-          chordSession.recordPopupActionMessage({ type: "activate-tab", domId: row.domId });
           void (async () => {
             if (destroy) overlayController.destroy();
             const tab = findTabByDomId(row.domId);
@@ -3835,7 +3828,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!row || !row.domId) return false;
           if (expectedDomId && row.domId !== expectedDomId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
-          chordSession.recordPopupActionMessage({ type: "activate-tab", domId: row.domId });
           void (async () => {
             if (destroy) overlayController.destroy();
             const tab = findTabByDomId(row.domId);
@@ -3853,7 +3845,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!row || !row.id) return false;
           if (expectedDomId && row.id !== expectedDomId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
-          chordSession.recordPopupActionMessage({ type: "activate-tab", domId: row.id });
           void (async () => {
             if (destroy) overlayController.destroy();
             await activateNativeTab(row);
@@ -3869,7 +3860,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!row || !row.domId) return false;
           if (expectedDomId && row.domId !== expectedDomId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, viewParams);
-          chordSession.recordPopupActionMessage({ type: "activate-tab", domId: row.domId });
           void (async () => {
             if (destroy) overlayController.destroy();
             const tab = findTabByDomId(row.domId);

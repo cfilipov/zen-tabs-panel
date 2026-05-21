@@ -627,7 +627,6 @@ describe("chord-session replay recording", () => {
     session.recordOpenView("last-visited");
     session.recordBridgeKey({ key: "2", code: "Digit2", __preRecorded: true });
     session.recordModelRowIntent("last-visited", "2", false, { workspaceId: "all" });
-    session.recordPopupActionMessage({ type: "activate-tab", tabId: 42 });
 
     expect(session.getReplayState().lastChordReplay).toMatchObject({
       kind: "model-row-intent",
@@ -644,7 +643,6 @@ describe("chord-session replay recording", () => {
     const forwardKeyToPopup = vi.fn();
 
     session.recordModelRowIntent("move-to-workspace", "Shift+1", true);
-    session.recordPopupActionMessage({ type: "move-selected-tabs-to-workspace", workspaceId: "ws-2", switchToTarget: true });
 
     expect(session.replayLastChord({ dispatchModelRowIntent, forwardKeyToPopup })).toBe(true);
     expect(dispatchModelRowIntent).toHaveBeenCalledWith("move-to-workspace", "Shift+1", true, null);

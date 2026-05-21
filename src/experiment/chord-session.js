@@ -282,6 +282,20 @@
       }
     }
 
+    function commitModelRowIntent(event) {
+      trackModelRowIntent(event);
+      if (currentChordReplay && currentChordReplay.kind === "model-row-intent") {
+        lastChordReplay = currentChordReplay;
+        resetCurrentReplay();
+        transition("completed", "model-row-intent", {
+          view: event.view,
+          chordKey: event.chordKey,
+          switchToTarget: !!event.switchToTarget,
+        });
+        transition("idle", "model-row-intent-idle");
+      }
+    }
+
     function recordEvent(event) {
       if (!event || !event.kind) return;
       if (event.kind === "terminal-action") {
@@ -301,7 +315,7 @@
         resetCurrentReplay();
         transition("armed-root", "armed");
       } else if (event.kind === "model-row-intent") {
-        trackModelRowIntent(event);
+        commitModelRowIntent(event);
       }
     }
 
