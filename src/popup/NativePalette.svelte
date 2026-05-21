@@ -55,6 +55,7 @@
     workspaceFilterByIndex,
     workspaceReloadKind,
   } from "./interaction/sort-filter";
+  import { createTerminalCommandBlocker } from "./interaction/terminal-command-block";
   import {
     resolveDuplicatePromptActivation,
     type DuplicatePromptActivation,
@@ -131,11 +132,10 @@
   let pageAlive = true;
   let skipAnimations = $state(new URLSearchParams(location.search).get("skipAnimations") === "1");
   let suppressViewTransition = $state(true);
-  let terminalCommandDispatched = false;
-  let terminalCommandDispatchedAt = 0;
   let invalidChordHint = $state<string | null>(null);
   let invalidChordHintTimer: number | null = null;
   let paletteRevealed = false;
+  const terminalCommandBlocker = createTerminalCommandBlocker();
   const revealController = createPaletteRevealController({
     sendReveal: (inst) => {
       paletteRevealed = true;
@@ -150,20 +150,15 @@
   });
 
   function markTerminalCommandDispatched() {
-    terminalCommandDispatched = true;
-    terminalCommandDispatchedAt = Date.now();
+    terminalCommandBlocker.markDispatched();
   }
 
   function clearTerminalCommandDispatched() {
-    terminalCommandDispatched = false;
-    terminalCommandDispatchedAt = 0;
+    terminalCommandBlocker.clear();
   }
 
   function terminalCommandStillBlocking() {
-    if (!terminalCommandDispatched) return false;
-    if (Date.now() - terminalCommandDispatchedAt < 500) return true;
-    clearTerminalCommandDispatched();
-    return false;
+    return terminalCommandBlocker.isBlocking();
   }
 
   function showInvalidChord(feedback: InvalidChordFeedback = {}) {
