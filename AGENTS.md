@@ -16,6 +16,46 @@ Three execution contexts — they cannot share code or globals:
 2. **`src/background.js`** — Extension background script. Routes messages between popup and experiment API. Owns auto-close/auto-move logic.
 3. **`src/popup/`** — Content process inside a XUL `<browser>` element. No chrome access. Communicates via `browser.runtime.sendMessage` to background.js.
 
+## Architecture Guardrails
+
+The current design intentionally separates capture, sequence, model, and render
+ownership. Keep new features inside these boundaries:
+
+- **ChordSession owns chord progression.** `src/experiment/chord-session.js`
+  is the only chord-tree traverser and owns replay traces, bridge state, leader
+  timing, reveal deferral/blocking, and state invariants. Do not add a second
+  chord matcher in popup, background, or content scripts.
+- **Shims only capture keys.** `src/shared/chord-shim.js` and the chrome/content
+  listeners synchronously suppress capturable keydowns and forward normalized
+  keys to `ChordSession`. They should stay stateless apart from armed/disarmed
+  and their fail-safe timeout.
+- **Overlay lifecycle state lives in `overlay-controller`.** Popup instance
+  gating, pending reveal closures, morph generations, current view params, nav
+  stack, and resize diagnostics belong to `src/experiment/overlay-controller.js`.
+  `api.js` should provide the chrome/XUL implementation details; do not scatter
+  popup-instance or pending-reveal state back into top-level globals.
+- **Chrome owns authoritative view models where migrated.** Recents, tab lists,
+  domains, workspaces, folders, containers, profiles, duplicates, actions, and
+  duplicate-prompt tab rows are driven by chrome-side DTO/model APIs. The popup
+  renders DTOs and reports row intents with stable row IDs and sequence/list
+  versions. Do not rebuild a parallel recents/tabs/domains/workspaces model in
+  Svelte.
+- **Popup owns visible UI interaction only.** Structural UI keys such as arrows,
+  Enter, Tab, Space, Escape, Backspace, sort/filter toggles, preview, and close
+  hints live under `src/popup/interaction/` and `src/popup/runtime/`. Prefer
+  pure helpers with tests for decisions, with `NativePalette.svelte` acting as
+  wiring for stores/effects/lifecycle.
+- **Background remains the runtime router.** `src/background.js` routes
+  WebExtension messages and executes runtime actions. It should not maintain
+  chord replay state; call `recordRuntimeActionForReplay` and let
+  `ChordSession` decide whether to promote an in-flight chord trace or store a
+  raw runtime action.
+- **Never duplicate model ownership for convenience.** If chrome needs to
+  resolve a key, move that view's model to chrome and send compact DTOs to the
+  popup. If the popup still owns a special-case UI view, keep chrome's knowledge
+  transitional and explicit. Two independently computed row orders are a bug
+  class, not an optimization.
+
 ## Critical Gotchas
 
 **Experiment scope is limited:** `PathUtils`, `IOUtils`, `TextEncoder`, `setTimeout` are NOT available. Access them from the window: `const { PathUtils, IOUtils } = Services.wm.getMostRecentWindow("navigator:browser")` and `new w.TextEncoder()`.
