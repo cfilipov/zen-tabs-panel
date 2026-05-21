@@ -481,26 +481,26 @@
     effects.activateTab(row.domId);
   }
 
-  function recordSyntheticChordKey(key: string | null | undefined) {
+  function recordReplayKey(key: string | null | undefined) {
     if (!key) return;
     try {
-      effects.synthChordKey(key, palette.currentView, "trace");
+      effects.recordReplayKey(key);
     } catch {
       // Replay tracing is best-effort; it must never block the command.
     }
   }
 
   function traceReplayInput(input: BridgeKeyData) {
-    recordSyntheticChordKey(chordFromKey({ kind: "key", ...input }));
+    recordReplayKey(chordFromKey({ kind: "key", ...input }));
   }
 
   function traceReplayForListIndex(index: number, shifted = false) {
-    recordSyntheticChordKey(replayKeyForBadgeIndex(index, shifted));
+    recordReplayKey(replayKeyForBadgeIndex(index, shifted));
   }
 
   function traceReplayForSelection(shifted = false) {
     const key = replayKeyForSelection(shifted);
-    if (key) recordSyntheticChordKey(key);
+    if (key) recordReplayKey(key);
   }
 
   function replayKeyForSelection(shifted = false) {
@@ -909,7 +909,7 @@
       await activateCurrentChromeModelRow(index, "selection", switchToTarget, chordKey);
       return;
     }
-    recordSyntheticChordKey(chordKey);
+    recordReplayKey(chordKey);
     const activation = resolveViewActivation(viewActivationContext(), index, "selection", { switchToTarget });
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;

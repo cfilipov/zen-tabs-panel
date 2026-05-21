@@ -6,7 +6,7 @@ import type { NavigationHistory, RecentlyClosedRow } from "./history-client";
 import type { ProfileRow, ProfilesViewModel } from "./profile-client";
 import type { HistoryVisit, TabInfo, TabInfoViewModel } from "./tab-info-client";
 import type { DomainIndexRow, TabIndexRow } from "./tab-index-client";
-import type { WorkspaceRow } from "./workspace-client";
+import type { WorkspaceRow, WorkspacesViewModel } from "./workspace-client";
 import type { ViewLoadController } from "./view-load-controller";
 import { isWorkspaceFilterView } from "../interaction/view-capabilities";
 import type { NativePaletteState, createNativePaletteState } from "../store/native-palette-state.svelte";
@@ -32,7 +32,7 @@ export type NativePaletteLoaderDeps = {
   paletteStore: ReturnType<typeof createNativePaletteState>;
   viewLoad: ViewLoadController<ViewId>;
   tabIndexClient: TabIndexClient;
-  workspaceClient: { getWorkspacesWithIcons(): Promise<WorkspaceRow[]> };
+  workspaceClient: { getWorkspacesWithIcons(): Promise<WorkspaceRow[]>; getWorkspacesViewModel?(): Promise<WorkspacesViewModel> };
   extensionClient: { listExtensions(): Promise<ExtensionRow[]> };
   historyClient: {
     getNavigationHistory(): Promise<NavigationHistory | null>;

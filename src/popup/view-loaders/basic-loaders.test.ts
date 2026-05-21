@@ -108,7 +108,7 @@ describe("basic view loaders", () => {
 
     expect(result.version).toBe(3);
     expect(result.rows[0]?.tabCount).toBe(4);
-    expect(result.model.rowIntents[0]?.rowId).toBe("main");
+    expect(result.model!.rowIntents[0]?.rowId).toBe("main");
   });
 
   it("loads containers and profiles", async () => {
@@ -170,9 +170,9 @@ describe("basic view loaders", () => {
     });
 
     expect(containers.version).toBe(2);
-    expect(containers.model.rowIntents[0]?.action).toBe("reopen-in-container");
+    expect(containers.model!.rowIntents[0]?.action).toBe("reopen-in-container");
     expect(profiles.version).toBe(4);
-    expect(profiles.model.rowIntents[0]?.disabled).toBe(true);
+    expect(profiles.model!.rowIntents[0]?.disabled).toBe(true);
   });
 
   it("loads folders and treats workspace-icon failures as optional", async () => {

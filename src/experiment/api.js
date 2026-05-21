@@ -6426,13 +6426,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return replayLastChordTrace();
         },
 
-        async synthChordKey(payload) {
+        async recordReplayKey(payload) {
           if (!payload || typeof payload.chordKey !== "string" || !payload.chordKey) return;
           chordSession.recordEvent({
-            kind: "synthetic-key",
+            kind: "replay-key",
             chordKey: payload.chordKey,
-            view: payload.view || null,
-            activation: payload.activation || null,
           });
         },
 

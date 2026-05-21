@@ -10,11 +10,20 @@ export type DuplicateWorkspaceClient = {
   getWorkspacesWithIcons(): Promise<WorkspaceRow[]>;
 };
 
+export type DuplicateGroupsViewData = {
+  groups: DuplicateGroupRow[];
+  workspaces: WorkspaceRow[];
+  workspaceFilter: string;
+  selectedIndex: number;
+  version?: number;
+  model?: DuplicateGroupsViewModel["model"];
+};
+
 export async function loadDuplicateGroupsView(
   tabIndexClient: DuplicateGroupsClient,
   workspaceClient: DuplicateWorkspaceClient,
   workspaceFilter: string,
-) {
+): Promise<DuplicateGroupsViewData> {
   if (tabIndexClient.getDuplicateGroupsViewModel) {
     return tabIndexClient.getDuplicateGroupsViewModel(workspaceFilter);
   }

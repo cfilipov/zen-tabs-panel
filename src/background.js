@@ -733,7 +733,7 @@ const SYNC_HANDLERS = Object.freeze({
     return result;
   },
   [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view, m.height, m.dynamicSidebarWidth, m.inst),
-  [MSG.SYNTH_CHORD_KEY]:      (m) => api.synthChordKey({ chordKey: m.chordKey, view: m.view, activation: m.activation }),
+  [MSG.RECORD_REPLAY_KEY]:    (m) => api.recordReplayKey({ chordKey: m.chordKey }),
   [MSG.BRIDGE_DISPATCH_SETTLED]: (m) => api.bridgeDispatchSettled(m.inst),
 });
 

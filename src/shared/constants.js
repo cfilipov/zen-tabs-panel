@@ -147,7 +147,7 @@ this.MSG = Object.freeze({
   // presses keep replaying the SAME prior action.
   REPLAY_LAST_CHORD:              "replay-last-chord",
 
-  SYNTH_CHORD_KEY:                "synth-chord-key",
+  RECORD_REPLAY_KEY:             "record-replay-key",
   BRIDGE_DISPATCH_SETTLED:        "bridge-dispatch-settled",
 
   // Duplicate-link intercept: popup-fired actions for the buttons

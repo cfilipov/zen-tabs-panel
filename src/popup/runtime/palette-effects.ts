@@ -70,8 +70,8 @@ export function createPaletteEffects() {
         ...(chordKey ? { chordKey, activation } : {}),
       });
     },
-    synthChordKey(chordKey: string, view: ViewId, activation = "keydown") {
-      fireMessage({ type: "synth-chord-key", chordKey, view, activation });
+    recordReplayKey(chordKey: string) {
+      fireMessage({ type: "record-replay-key", chordKey });
     },
     bridgeDispatchSettled(inst: number | null) {
       fireMessage({ type: "bridge-dispatch-settled", inst });

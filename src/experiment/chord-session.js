@@ -86,7 +86,6 @@
     let lastChordReplay = null;
     let currentChordReplay = null;
     let preRecordedReplayKeys = [];
-    const syntheticReplayEvents = [];
     let revealBlocked = false;
     const bridgeState = {
       revealDeferred: false,
@@ -273,14 +272,7 @@
       } else if (event.kind === "armed") {
         resetCurrentReplay();
         transition("armed-root", "armed");
-      } else if (event.kind === "synthetic-key") {
-        syntheticReplayEvents.push({
-          at: Date.now(),
-          chordKey: event.chordKey || null,
-          view: event.view || null,
-          activation: event.activation || null,
-        });
-        if (syntheticReplayEvents.length > 50) syntheticReplayEvents.shift();
+      } else if (event.kind === "replay-key") {
         trackBridgeKey({ key: event.chordKey });
       } else if (event.kind === "model-row-intent") {
         trackModelRowIntent(event);
@@ -583,7 +575,6 @@
         lastChordReplay,
         currentChordReplay,
         preRecordedReplayKeys,
-        syntheticReplayEvents,
       });
     }
 
