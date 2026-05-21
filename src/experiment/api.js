@@ -4826,18 +4826,30 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }));
     }
 
-    async function getWorkspacesWithIconContent() {
+    const workspaceSvgCache = new Map();
+    async function getWorkspaceSvgContent(url) {
+      if (!url) return "";
+      if (workspaceSvgCache.has(url)) return await workspaceSvgCache.get(url);
       const w = getWin();
-      if (!w) return [];
+      if (!w) return "";
+      const pending = (async () => {
+        try {
+          const resp = await w.fetch(url);
+          return resp ? await resp.text() : "";
+        } catch (e) {
+          return "";
+        }
+      })();
+      workspaceSvgCache.set(url, pending);
+      const svgContent = await pending;
+      workspaceSvgCache.set(url, svgContent);
+      return svgContent;
+    }
+
+    async function getWorkspacesWithIconContent() {
       const rows = getWorkspaceRows(true);
       for (const row of rows) {
-        row.svgContent = "";
-        if (row.icon) {
-          try {
-            const resp = await w.fetch(row.icon);
-            row.svgContent = await resp.text();
-          } catch (e) {}
-        }
+        row.svgContent = await getWorkspaceSvgContent(row.icon);
         delete row.icon;
       }
       return rows;
@@ -6436,16 +6448,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         async getWorkspacesViewModel() {
-          const w = getWin();
           const model = workspacesModel.getRows();
           for (const row of model.rows) {
-            row.svgContent = "";
-            if (w && row.icon) {
-              try {
-                const resp = await w.fetch(row.icon);
-                row.svgContent = await resp.text();
-              } catch (e) {}
-            }
+            row.svgContent = await getWorkspaceSvgContent(row.icon);
             delete row.icon;
           }
           return model;
