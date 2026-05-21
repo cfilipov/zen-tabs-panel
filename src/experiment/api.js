@@ -91,6 +91,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     context.callOnClose({
       close() {
         try { teardownChordRuntime(); } catch (e) {}
+        try { teardownNativeLinkContextMenus(); } catch (e) {}
         try { teardownDuplicateLinkIndicator(); } catch (e) {}
         try { teardownDuplicateLinkInterceptor(); } catch (e) {}
         try { cancelSyncDuplicates(); } catch (e) {}
@@ -4857,6 +4858,140 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
     }
 
+    const NATIVE_LINK_WORKSPACE_MENU_ID = "zen-tabs-panel-open-link-in-workspace";
+    const NATIVE_LINK_FOLDER_MENU_ID = "zen-tabs-panel-open-link-in-folder";
+
+    function safeMenuLabel(value, fallback) {
+      const label = typeof value === "string" ? value.trim() : "";
+      return label || fallback;
+    }
+
+    function clearMenuPopup(popup) {
+      if (!popup) return;
+      while (popup.firstChild) popup.firstChild.remove();
+    }
+
+    function currentContextLinkUrl(w) {
+      const cm = w?.gContextMenu;
+      if (!cm?.onLink) return "";
+      return cm.linkURL || cm.linkURI?.spec || cm.link?.href || "";
+    }
+
+    function setMenuEnabled(menu, enabled) {
+      if (!menu) return;
+      if (enabled) menu.removeAttribute("disabled");
+      else menu.setAttribute("disabled", "true");
+    }
+
+    function createNativeMenuItem(w, label, command, enabled = true) {
+      const item = w.document.createXULElement("menuitem");
+      item.setAttribute("label", label);
+      if (!enabled) item.setAttribute("disabled", "true");
+      if (enabled && typeof command === "function") {
+        item.addEventListener("command", command);
+      }
+      return item;
+    }
+
+    function populateNativeLinkContextMenus() {
+      const w = getWin();
+      const doc = w?.document;
+      const workspaceMenu = doc?.getElementById(NATIVE_LINK_WORKSPACE_MENU_ID);
+      const folderMenu = doc?.getElementById(NATIVE_LINK_FOLDER_MENU_ID);
+      const workspacePopup = workspaceMenu?.querySelector("menupopup");
+      const folderPopup = folderMenu?.querySelector("menupopup");
+      if (!w || !workspaceMenu || !folderMenu || !workspacePopup || !folderPopup) return;
+
+      const url = currentContextLinkUrl(w);
+      const visible = isOpenableExternalLinkUrl(url);
+      workspaceMenu.hidden = !visible;
+      folderMenu.hidden = !visible;
+      clearMenuPopup(workspacePopup);
+      clearMenuPopup(folderPopup);
+      if (!visible) return;
+
+      const workspaces = getWorkspaceRows(false);
+      const folders = getFolderRows();
+      const workspaceById = new Map(workspaces.map((workspace) => [workspace.uuid, workspace]));
+
+      setMenuEnabled(workspaceMenu, workspaces.length > 0);
+      setMenuEnabled(folderMenu, folders.length > 0);
+
+      if (workspaces.length === 0) {
+        workspacePopup.appendChild(createNativeMenuItem(w, "No workspaces", null, false));
+      } else {
+        for (const workspace of workspaces) {
+          if (!workspace?.uuid) continue;
+          const label = workspace.isActive
+            ? `${safeMenuLabel(workspace.name, "Workspace")} (current)`
+            : safeMenuLabel(workspace.name, "Workspace");
+          workspacePopup.appendChild(createNativeMenuItem(w, label, () => {
+            void openLinkInWorkspaceInternal(url, workspace.uuid);
+          }));
+        }
+      }
+
+      if (folders.length === 0) {
+        folderPopup.appendChild(createNativeMenuItem(w, "No folders", null, false));
+      } else {
+        for (const folder of folders) {
+          if (!folder?.id) continue;
+          const workspaceName = folder.workspaceId ? workspaceById.get(folder.workspaceId)?.name : "";
+          const label = workspaceName
+            ? `${safeMenuLabel(folder.name, "Folder")} - ${workspaceName}`
+            : safeMenuLabel(folder.name, "Folder");
+          folderPopup.appendChild(createNativeMenuItem(w, label, () => {
+            void openLinkInFolderInternal(url, folder.id);
+          }));
+        }
+      }
+    }
+
+    function installNativeLinkContextMenus() {
+      const w = getWin();
+      const doc = w?.document;
+      const contextMenu = doc?.getElementById("contentAreaContextMenu");
+      if (!w || !doc || !contextMenu) return;
+      if (doc.getElementById(NATIVE_LINK_WORKSPACE_MENU_ID)) return;
+
+      const workspaceMenu = doc.createXULElement("menu");
+      workspaceMenu.id = NATIVE_LINK_WORKSPACE_MENU_ID;
+      workspaceMenu.setAttribute("label", "Open Link in Workspace");
+      workspaceMenu.hidden = true;
+      workspaceMenu.appendChild(doc.createXULElement("menupopup"));
+
+      const folderMenu = doc.createXULElement("menu");
+      folderMenu.id = NATIVE_LINK_FOLDER_MENU_ID;
+      folderMenu.setAttribute("label", "Open Link in Folder");
+      folderMenu.hidden = true;
+      folderMenu.appendChild(doc.createXULElement("menupopup"));
+
+      const insertBefore = doc.getElementById("context-sep-open") || doc.getElementById("context-bookmarklink");
+      contextMenu.insertBefore(workspaceMenu, insertBefore || null);
+      contextMenu.insertBefore(folderMenu, insertBefore || null);
+
+      const onPopupShowing = (event) => {
+        if (event.target !== contextMenu) return;
+        populateNativeLinkContextMenus();
+      };
+      contextMenu.addEventListener("popupshowing", onPopupShowing);
+      contextMenu.__zenTabsPanelLinkContextMenuCleanup = () => {
+        try { contextMenu.removeEventListener("popupshowing", onPopupShowing); } catch (e) {}
+      };
+    }
+
+    function teardownNativeLinkContextMenus() {
+      const w = getWin();
+      const doc = w?.document;
+      const contextMenu = doc?.getElementById("contentAreaContextMenu");
+      try {
+        contextMenu?.__zenTabsPanelLinkContextMenuCleanup?.();
+        if (contextMenu) delete contextMenu.__zenTabsPanelLinkContextMenuCleanup;
+      } catch (e) {}
+      doc?.getElementById(NATIVE_LINK_WORKSPACE_MENU_ID)?.remove();
+      doc?.getElementById(NATIVE_LINK_FOLDER_MENU_ID)?.remove();
+    }
+
     function getProfileRows() {
       const ps = Cc["@mozilla.org/toolkit/profile-service;1"]
         .getService(Ci.nsIToolkitProfileService);
@@ -5008,6 +5143,91 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return true;
     }
 
+    function isOpenableExternalLinkUrl(url) {
+      return typeof url === "string" && /^https?:\/\//i.test(url);
+    }
+
+    function workspaceExists(w, workspaceId) {
+      if (!workspaceId) return true;
+      try {
+        return Array.from(w?.gZenWorkspaces?.getWorkspaces?.() || [])
+          .some((workspace) => workspace?.uuid === workspaceId);
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function placeTabAtTopOfUnpinnedSection(tab) {
+      const container = tab?.parentNode;
+      if (!container) return;
+      try {
+        const firstUnpinned = Array.from(container.children).find(
+          (candidate) => candidate.matches && candidate.matches(".tabbrowser-tab") && !candidate.pinned
+        );
+        if (firstUnpinned && firstUnpinned !== tab) {
+          container.insertBefore(tab, firstUnpinned);
+        }
+      } catch (e) {}
+    }
+
+    async function openExternalLinkTab(url, workspaceId) {
+      if (!isOpenableExternalLinkUrl(url)) return null;
+      const w = getWin();
+      if (!w?.gBrowser) return null;
+      if (workspaceId && (!w.gZenWorkspaces?.moveTabsToWorkspace || !workspaceExists(w, workspaceId))) return null;
+
+      let tab = null;
+      try {
+        tab = w.gBrowser.addTab(url, {
+          inBackground: true,
+          relatedToCurrent: true,
+          triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+        });
+        if (tab && typeof tab.then === "function") tab = await tab;
+      } catch (e) {
+        return null;
+      }
+      if (!tab) return null;
+
+      if (workspaceId) {
+        try {
+          await w.gZenWorkspaces.moveTabsToWorkspace([tab], workspaceId);
+        } catch (e) {
+          return null;
+        }
+      }
+      placeTabAtTopOfUnpinnedSection(tab);
+      return tab;
+    }
+
+    async function openLinkInWorkspaceInternal(url, workspaceId) {
+      return !!(await openExternalLinkTab(url, workspaceId));
+    }
+
+    async function openLinkInFolderInternal(url, folderId) {
+      if (!isOpenableExternalLinkUrl(url)) return false;
+      const w = getWin();
+      if (!w?.gBrowser?.getTabGroupById || !w.gBrowser.moveTabToExistingGroup) return false;
+      const group = w.gBrowser.getTabGroupById(folderId);
+      if (!group) return false;
+      const targetWorkspace = group.getAttribute?.("zen-workspace-id") || null;
+      const tab = await openExternalLinkTab(url, targetWorkspace);
+      if (!tab) return false;
+      try { w.gBrowser.moveTabToExistingGroup(tab, group); } catch (e) { return false; }
+      if (targetWorkspace) {
+        try {
+          tab.owner = null;
+          tab.setAttribute("zen-workspace-id", targetWorkspace);
+          const glanceTab = tab.querySelector?.(".tabbrowser-tab[zen-glance-tab]");
+          if (glanceTab) {
+            glanceTab.setAttribute("zen-workspace-id", targetWorkspace);
+          }
+        } catch (e) {}
+        try { w.gBrowser.tabContainer._invalidateCachedTabs(); } catch (e) {}
+      }
+      return true;
+    }
+
     async function moveSelectedTabsToWorkspaceInternal(workspaceId, switchToTarget) {
       const w = getWin();
       if (!w || !w.gBrowser || !w.gZenWorkspaces) return false;
@@ -5047,15 +5267,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       await w.gZenWorkspaces.moveTabsToWorkspace(tabs, workspaceId);
 
       for (let i = tabs.length - 1; i >= 0; i--) {
-        const tab = tabs[i];
-        const container = tab.parentNode;
-        if (!container) continue;
-        const firstUnpinned = Array.from(container.children).find(
-          t => t.matches && t.matches(".tabbrowser-tab") && !t.pinned
-        );
-        if (firstUnpinned && firstUnpinned !== tab) {
-          container.insertBefore(tab, firstUnpinned);
-        }
+        placeTabAtTopOfUnpinnedSection(tabs[i]);
       }
       if (switchToTarget && targetTab) {
         await activateNativeTab(targetTab);
@@ -5152,6 +5364,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     installChordStateInspector();
     installChromeShim();
     installContentShimFrameScript();
+    installNativeLinkContextMenus();
     installDuplicateLinkIndicator();
     installDuplicateLinkInterceptor();
 
