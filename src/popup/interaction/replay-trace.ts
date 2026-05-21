@@ -1,4 +1,6 @@
 import type { NavigationHistory } from "../runtime/history-client";
+import type { ViewId } from "../../shared/types";
+import { isNativePrefixView } from "../view-loaders/view-registry";
 
 export function replayKeyForBadgeIndex(index: number, shifted = false): string | null {
   if (!Number.isInteger(index) || index < 0 || index >= 9) return null;
@@ -13,4 +15,17 @@ export function replayKeyForNavigationIndex(history: NavigationHistory | null, i
     .filter((_, candidateIndex) => candidateIndex !== history.index)
     .length;
   return replayKeyForBadgeIndex(badgeIndex);
+}
+
+export function replayKeyForSelection(options: {
+  view: ViewId;
+  selectedIndex: number;
+  navigationHistory: NavigationHistory | null;
+  shifted?: boolean;
+}) {
+  if (options.view === "actions" || isNativePrefixView(options.view)) return null;
+  if (options.view === "navigation") {
+    return replayKeyForNavigationIndex(options.navigationHistory, options.selectedIndex);
+  }
+  return replayKeyForBadgeIndex(options.selectedIndex, options.shifted);
 }

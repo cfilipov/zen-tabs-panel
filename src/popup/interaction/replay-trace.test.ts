@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { replayKeyForBadgeIndex, replayKeyForNavigationIndex } from "./replay-trace";
+import { replayKeyForBadgeIndex, replayKeyForNavigationIndex, replayKeyForSelection } from "./replay-trace";
 
 describe("replay trace keys", () => {
   it("maps visible row badge indexes to replay keys", () => {
@@ -23,5 +23,38 @@ describe("replay trace keys", () => {
     expect(replayKeyForNavigationIndex(history, 0)).toBe("1");
     expect(replayKeyForNavigationIndex(history, 1)).toBeNull();
     expect(replayKeyForNavigationIndex(history, 2)).toBe("2");
+  });
+
+  it("maps current view selection to the replay key representation", () => {
+    const history = {
+      index: 1,
+      entries: [
+        { title: "Back", url: "https://back.test" },
+        { title: "Current", url: "https://current.test" },
+        { title: "Forward", url: "https://forward.test" },
+      ],
+    };
+
+    expect(replayKeyForSelection({
+      view: "actions",
+      selectedIndex: 0,
+      navigationHistory: null,
+    })).toBeNull();
+    expect(replayKeyForSelection({
+      view: "reorder-tabs",
+      selectedIndex: 0,
+      navigationHistory: null,
+    })).toBeNull();
+    expect(replayKeyForSelection({
+      view: "navigation",
+      selectedIndex: 2,
+      navigationHistory: history,
+    })).toBe("2");
+    expect(replayKeyForSelection({
+      view: "move-to-workspace",
+      selectedIndex: 0,
+      navigationHistory: null,
+      shifted: true,
+    })).toBe("Shift+1");
   });
 });

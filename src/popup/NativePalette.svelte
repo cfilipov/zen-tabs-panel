@@ -34,7 +34,7 @@
     rowInWindow,
     visibleRangeRequest,
   } from "./interaction/list-window";
-  import { replayKeyForBadgeIndex, replayKeyForNavigationIndex } from "./interaction/replay-trace";
+  import { replayKeyForBadgeIndex, replayKeyForNavigationIndex, replayKeyForSelection as replayKeyForSelectionState } from "./interaction/replay-trace";
   import { stableRowIdForActivation } from "./interaction/row-identity";
   import {
     duplicatePromptPreviewDomId,
@@ -370,11 +370,12 @@
   }
 
   function replayKeyForSelection(shifted = false) {
-    if (palette.currentView === "actions" || isNativePrefixView(palette.currentView)) return null;
-    if (palette.currentView === "navigation") {
-      return replayKeyForNavigationIndex(palette.navigationHistory, palette.selectedIndex);
-    }
-    return replayKeyForBadgeIndex(palette.selectedIndex, shifted);
+    return replayKeyForSelectionState({
+      view: palette.currentView,
+      selectedIndex: palette.selectedIndex,
+      navigationHistory: palette.navigationHistory,
+      shifted,
+    });
   }
 
   function stableRowIdentityContext() {
