@@ -1422,13 +1422,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
 
       try { browserAction.clearPopup?.(); } catch (e) {}
-      if (!isOverlayOpen()) {
+      if (!overlayController.isOpen()) {
         openOverlayWithView(null);
       }
       navStack.push({ view: currentViewName, params: currentViewParams || {} });
       currentViewName = "extension-popup";
       currentViewParams = { popupUrl, extensionId, viewType: "popup" };
-      morphToView("extension-popup", { popupUrl, extensionId, viewType: "popup" });
+      overlayController.morphTo("extension-popup", { popupUrl, extensionId, viewType: "popup" });
       return true;
     }
 
@@ -1607,13 +1607,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const found = extensionListCache.find((x) => x.id === extensionId);
       if (!found) return false;
       const popupUrl = getBrowserActionPopupUrl(extensionId) || found.popupUrl;
-      if (!isOverlayOpen()) {
+      if (!overlayController.isOpen()) {
         openOverlayWithView(null);
       }
       navStack.push({ view: currentViewName, params: currentViewParams || {} });
       currentViewName = "extension-popup";
       currentViewParams = { popupUrl, extensionId };
-      morphToView("extension-popup", { popupUrl, extensionId });
+      overlayController.morphTo("extension-popup", { popupUrl, extensionId });
       return true;
     }
 
@@ -1692,7 +1692,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // the DOMWindowClose handler for long enough that the morph
       // removes the old browser (and its listener) first.
       suppressAutoCloseUntil = Date.now() + 500;
-      if (!isOverlayOpen()) {
+      if (!overlayController.isOpen()) {
         openOverlayWithView(null);
       }
       navStack.push({ view: currentViewName, params: currentViewParams || {} });
@@ -1701,7 +1701,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // viewType: null so the hosted browser presents as a popout window
       // (no `webextension-view-type` attribute) — see createBrowserElement
       // for the reasoning. The icon-strip path stays at the default "popup".
-      morphToView("extension-popup", { popupUrl, extensionId: resolved.id, viewType: null });
+      overlayController.morphTo("extension-popup", { popupUrl, extensionId: resolved.id, viewType: null });
     }
 
     // Two-condition filter: features must look popup-style AND the args
@@ -1730,7 +1730,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const handler = {
         get(t, p) {
           if (p in t) return t[p];
-          if (p === "close") return () => { stub.closed = true; destroyOverlay(); };
+          if (p === "close") return () => { stub.closed = true; overlayController.destroy(); };
           if (p === "focus" || p === "blur") return () => {};
           if (p === "addEventListener" || p === "removeEventListener") return () => {};
           if (p === "gBrowser" || p === "selectedBrowser" || p === "contentWindow") return proxy;
@@ -2997,7 +2997,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function assertVisiblePopupOwnsKeys(why) {
-      if (!chordSession || !isOverlayVisible()) return;
+      if (!chordSession || !overlayController.isVisible()) return;
       const chromeArmed = !!(chromeShim && chromeShim.isArmed && chromeShim.isArmed());
       if (!chromeArmed && !chordSession.isArmed()) return;
       const error = new Error("[ChordSession] visible popup must own keys");
@@ -3279,7 +3279,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           overlayController.destroy({ silent: true });
           overlayController.create(requestedView);
           armRevealTimer();
-        } else if (isOverlayVisible()) {
+        } else if (overlayController.isVisible()) {
           overlayController.morphTo(requestedView || "actions", {});
         } else {
           overlayController.create(requestedView);
@@ -3399,7 +3399,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             {
               buffered: drained,
               invalidChord: pendingInvalidChordFeedback,
-              visible: !!pendingInvalidChordFeedback || isOverlayVisible(),
+              visible: !!pendingInvalidChordFeedback || overlayController.isVisible(),
             }
           );
         } catch (e) {}
@@ -3763,8 +3763,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function switchHiddenBridgeView(view, params, previousView, previousParams) {
-      if (hasPendingReveal()) destroyOverlay({ silent: true });
-      createOverlay(view, params || {});
+      if (hasPendingReveal()) overlayController.destroy({ silent: true });
+      overlayController.create(view, params || {});
       setActiveBridgeView(view, "switchHiddenBridgeView");
       if (previousView) {
         navStack = [{ view: previousView, params: previousParams || {} }];
@@ -3813,7 +3813,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "move-selected-tabs-to-workspace", workspaceId: row.uuid, switchToTarget: !!switchToTarget } });
           void (async () => {
-            if (destroy) destroyOverlay();
+            if (destroy) overlayController.destroy();
             await moveSelectedTabsToWorkspaceInternal(row.uuid, !!switchToTarget);
           })();
           return true;
@@ -3826,7 +3826,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "reopen-in-container", userContextId: row.userContextId } });
           void (async () => {
-            if (destroy) destroyOverlay();
+            if (destroy) overlayController.destroy();
             await reopenInContainerInternal(row.userContextId);
           })();
           return true;
@@ -3839,7 +3839,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "move-tab-to-folder", folderId: row.id, switchToTarget: !!switchToTarget } });
           void (async () => {
-            if (destroy) destroyOverlay();
+            if (destroy) overlayController.destroy();
             await moveTabToFolderInternal(row.id, !!switchToTarget);
           })();
           return true;
@@ -3851,7 +3851,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (expectedRowId && row.name !== expectedRowId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "launch-profile", name: row.name } });
-          if (destroy) destroyOverlay();
+          if (destroy) overlayController.destroy();
           launchProfileInternal(row.name);
           return true;
         }
@@ -3864,7 +3864,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (expectedRowId && String(target) !== expectedRowId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "navigate-to-history-index", index: target } });
-          if (destroy) destroyOverlay();
+          if (destroy) overlayController.destroy();
           navigateToHistoryIndexInternal(target);
           return true;
         }
@@ -3872,7 +3872,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!paletteRequestFire) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: MSG.RESTORE_CLOSED_TAB_BY_INDEX, index: rowIndex } });
-          if (destroy) destroyOverlay();
+          if (destroy) overlayController.destroy();
           paletteRequestFire.async({
             kind: "restore-recently-closed-index",
             index: rowIndex,
@@ -3891,7 +3891,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
           void (async () => {
-            if (destroy) destroyOverlay();
+            if (destroy) overlayController.destroy();
             const tab = findTabByDomId(row.domId);
             if (tab) await activateNativeTab(tab);
           })();
@@ -3908,7 +3908,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
           void (async () => {
-            if (destroy) destroyOverlay();
+            if (destroy) overlayController.destroy();
             const tab = findTabByDomId(row.domId);
             if (tab) await activateNativeTab(tab);
           })();
@@ -3926,7 +3926,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.id } });
           void (async () => {
-            if (destroy) destroyOverlay();
+            if (destroy) overlayController.destroy();
             await activateNativeTab(row);
           })();
           return true;
@@ -3942,7 +3942,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, viewParams);
           chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.domId } });
           void (async () => {
-            if (destroy) destroyOverlay();
+            if (destroy) overlayController.destroy();
             const tab = findTabByDomId(row.domId);
             if (tab) await activateNativeTab(tab);
           })();
@@ -4018,17 +4018,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return;
       }
       debugChordTrace("arm-leader", {
-        overlayVisible: isOverlayVisible(),
+        overlayVisible: overlayController.isVisible(),
         chromeArmed: !!(chordSession && chordSession.isArmed()),
       });
       // Leader-shortcut routing while the menu is visible:
       //   - on actions   -> dismiss (toggle off).
       //   - on submenu   -> navigate back to actions (regardless of depth).
       //   - menu hidden  -> arm ChordSession and capture shims.
-      if (isOverlayVisible()) {
+      if (overlayController.isVisible()) {
         if (!currentViewName || currentViewName === "actions") {
           debugChordTrace("arm-visible-destroy", {});
-          destroyOverlay();
+          overlayController.destroy();
           return;
         }
         navStack = [];
@@ -4127,7 +4127,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // while Command is still held. That second keydown is reported as
         // another Cmd+. leader shortcut, not as a plain "." chord key, so
         // translate it to the repeat action while the root chord is armed.
-        if (!isOverlayVisible() && chordSession && chordSession.isArmed()) {
+        if (!overlayController.isVisible() && chordSession && chordSession.isArmed()) {
           chordSession.markLeaderArm(Date.now());
           replayLastChordFromRepeatedLeader();
           return;
@@ -4138,10 +4138,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       const hostedPopupEscapeKeydown = (e) => {
         if (e.key !== "Escape") return;
-        if (currentViewName !== "extension-popup" || !isOverlayVisible()) return;
+        if (currentViewName !== "extension-popup" || !overlayController.isVisible()) return;
         try { e.preventDefault(); } catch (_) {}
         try { e.stopImmediatePropagation(); } catch (_) {}
-        destroyOverlay();
+        overlayController.destroy();
       };
       w.addEventListener("keydown", hostedPopupEscapeKeydown, { capture: true, mozSystemGroup: true });
       w.addEventListener("keydown", hostedPopupEscapeKeydown, true);
@@ -4858,7 +4858,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Hard-remove the warm overlay so its persistent popup browser
       // doesn't leak across an extension reload (soft-hide alone keeps
       // the DOM around).
-      try { destroyOverlay({ hard: true }); } catch (e) {}
+      try { if (overlayController) overlayController.destroy({ hard: true }); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Shutdown"); } catch (e) {}
       // Remove every delayed chord frame script we (or a prior
       // extension load) ever registered. Firefox doesn't unload frame
@@ -5235,7 +5235,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // than paying a 50-200ms cold-start cost. Subsequent chord arms also
     // reuse the same loaded popup — the browser never reloads, only
     // navigates internally via WarmRearm.
-    try { createOverlay(); } catch (e) {}
+    try { overlayController.create(); } catch (e) {}
 
     return {
       zenWorkspaces: {
@@ -6386,7 +6386,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
               // Defer one tick so the popup's init() has time to
               // render before we make it visible.
               const w = getWin();
-              if (w) w.setTimeout(() => { if (hasPendingReveal()) revealOverlay(); }, 0);
+              if (w) w.setTimeout(() => { if (hasPendingReveal()) overlayController.reveal(); }, 0);
             }
           }
           // Race-safety: if the user chorded during initial popup load,
@@ -6402,7 +6402,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             view: replyView,
             armRevealTimer: wasBridging || drained.length > 0,
             invalidChord: consumeInvalidChordFeedback(),
-            visible: isOverlayVisible(),
+            visible: overlayController.isVisible(),
           };
         },
 
@@ -6427,8 +6427,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
             view = viewOrOpts.view || null;
           }
 
-          if (isOverlayVisible()) {
-            destroyOverlay();
+          if (overlayController.isVisible()) {
+            overlayController.destroy();
             return { kind: "closed" };
           }
 
@@ -6437,7 +6437,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             const overlay = w && w.document.getElementById(OVERLAY_ID);
             const br = w && w.document.getElementById(BROWSER_ID);
             if (overlay && overlay.style.visibility === "hidden" && !browserHasCurrentGeneration(br)) {
-              destroyOverlay({ hard: true, silent: true });
+              overlayController.destroy({ hard: true, silent: true });
             }
           }
 
@@ -6465,14 +6465,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         async hidePalette() {
-          destroyOverlay();
+          overlayController.destroy();
         },
 
         // Duplicate-prompt outcomes. Each pops a saved pendingDuplicate
         // captured at openLinkIn intercept time.
 
         async duplicateSwitch() {
-          if (!pendingDuplicate) { destroyOverlay(); return false; }
+          if (!pendingDuplicate) { overlayController.destroy(); return false; }
           const w = getWin();
           let target = null;
           if (w?.gBrowser) {
@@ -6482,31 +6482,31 @@ this.zenWorkspaces = class extends ExtensionAPI {
             }
           }
           pendingDuplicate = null;
-          destroyOverlay();
+          overlayController.destroy();
           if (target) return activateNativeTab(target);
           return false;
         },
 
         async duplicateOpenAnyway() {
-          if (!pendingDuplicate || !origOpenLinkIn) { destroyOverlay(); return false; }
+          if (!pendingDuplicate || !origOpenLinkIn) { overlayController.destroy(); return false; }
           const { url, where, params } = pendingDuplicate;
           const w = getWin();
           approveDuplicateNavigationInternal(url, where === "current" ? (w?.gBrowser?.selectedTab || null) : null);
           pendingDuplicate = null;
-          destroyOverlay();
+          overlayController.destroy();
           try { origOpenLinkIn.call(null, url, where, params); return true; }
           catch (e) { return false; }
         },
 
         async duplicateOpenAndCloseOthers() {
-          if (!pendingDuplicate || !origOpenLinkIn) { destroyOverlay(); return false; }
+          if (!pendingDuplicate || !origOpenLinkIn) { overlayController.destroy(); return false; }
           const { url, where, params } = pendingDuplicate;
           const w = getWin();
           const sourceTab = where === "current" ? (w?.gBrowser?.selectedTab || null) : null;
           const beforeTabs = w?.gBrowser ? new Set(w.gBrowser.tabs) : new Set();
           approveDuplicateNavigationInternal(url, sourceTab);
           pendingDuplicate = null;
-          destroyOverlay();
+          overlayController.destroy();
           try {
             const result = origOpenLinkIn.call(null, url, where, params);
             if (w?.setTimeout) {
@@ -6593,7 +6593,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async revealPalette(inst) {
           if (!matchesPopupInstance(inst)) return;
           if (isRevealBlocked()) return;
-          if (hasPendingReveal()) revealOverlay();
+          if (hasPendingReveal()) overlayController.reveal();
         },
 
 
@@ -6609,7 +6609,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         async navigateToView(view, params) {
-          if (!isOverlayOpen()) return;
+          if (!overlayController.isOpen()) return;
           const parsed = params ? JSON.parse(params) : {};
           navStack.push({ view: currentViewName, params: currentViewParams || {} });
           const prevView = currentViewName;
@@ -6629,37 +6629,37 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // cross-fade at the current panel size and calls resizePanel
           // when it's done. That avoids reflow during the fade.
           if (view === "extension-popup" || prevView === "extension-popup") {
-            morphToView(view, parsed);
+            overlayController.morphTo(view, parsed);
           } else {
             scheduleNativePopupContentResize(view);
           }
         },
 
         async resizePanel(view, height, dynamicSidebarWidth, inst) {
-          if (!isOverlayOpen()) return;
+          if (!overlayController.isOpen()) return;
           if (!matchesPopupInstance(inst)) return;
           resizePanelToView(view, height, dynamicSidebarWidth);
           if (!overlayController.getExplicitRevealView() && isRevealDeferred() && hasPendingReveal() && (!hasBridgeBuffer() || getBridgeBufferLength() === 0)) {
             setRevealDeferred(false, "reveal-deferred-clear");
             const w = getWin();
-            if (w) w.setTimeout(() => { if (hasPendingReveal()) revealOverlay(); }, 0);
+            if (w) w.setTimeout(() => { if (hasPendingReveal()) overlayController.reveal(); }, 0);
           }
         },
 
         async navigateBack() {
-          if (!isOverlayOpen()) return null;
+          if (!overlayController.isOpen()) return null;
           if (navStack.length === 0) {
             if (currentViewName && currentViewName !== "actions") {
               const wasInForeign = currentViewName === "extension-popup";
               currentViewName = "actions";
               currentViewParams = {};
               if (wasInForeign) {
-                morphToView("actions", {});
+                overlayController.morphTo("actions", {});
                 return null;
               }
               return { view: "actions", params: {} };
             }
-            destroyOverlay();
+            overlayController.destroy();
             return null;
           }
           const prev = navStack.pop();
@@ -6667,7 +6667,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           currentViewName = prev.view;
           currentViewParams = prev.params || {};
           if (wasInForeign) {
-            morphToView(prev.view, prev.params);
+            overlayController.morphTo(prev.view, prev.params);
             return null;
           }
           // For our-view → our-view back nav, don't resize here. The
