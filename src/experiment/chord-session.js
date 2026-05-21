@@ -801,6 +801,22 @@
       return drained;
     }
 
+    function markPopupReady(why, options) {
+      const wasBridging = hasActiveBridge();
+      const drained = drainBridgeBuffer(why);
+      const readyView = bridgeState.readyTargetView || "actions";
+      bridgeState.popupReady = true;
+      if (wasBridging) {
+        transition("bridging-live", why || "popup-ready", { drained: drained.length, view: readyView });
+      }
+      if (options && options.clearReadyTarget) {
+        bridgeState.readyTargetView = null;
+        recentTransitions.push({ at: Date.now(), from: state, to: state, why: "ready-target-view-clear", data: { readyTargetView: null } });
+        if (recentTransitions.length > 50) recentTransitions.shift();
+      }
+      return { wasBridging, drained, readyView };
+    }
+
     function finishBridge(w, why) {
       clearBridgeTimer(w);
       clearRevealTimer(w);
@@ -916,6 +932,7 @@
       getBridgeBufferLength,
       pushBridgeKey,
       drainBridgeBuffer,
+      markPopupReady,
       finishBridge,
       clearBridgeTimer,
       armBridgeTimer,

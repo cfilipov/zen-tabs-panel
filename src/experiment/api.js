@@ -3339,9 +3339,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function forcePopupBridgeReady() {
-      const drained = drainBridgeBuffer("forcePopupBridgeReady");
-      setPopupReady(true, "popup-ready");
-      if (chordSession) chordSession.transition("bridging-live", "forcePopupBridgeReady", { drained: drained.length });
+      const ready = chordSession ? chordSession.markPopupReady("forcePopupBridgeReady") : { drained: [] };
+      const drained = ready.drained || [];
       observeChordSession("forcePopupBridgeReady");
 
       const w = getWin();
@@ -6298,15 +6297,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // "popup is ready; buffer empty" — readiness still flips true so
           // any subsequent bridge keys go live via DeliverKey rather than
           // queueing to a null buffer.
-          const wasBridging = hasActiveBridge();
-          const drained = drainBridgeBuffer("takeChordBridgeBuffer");
-          debugChordTrace("bridge-buffer-drain", { drained: drained.length, view: getReadyTargetView() || "actions" });
-          // Reset the bridge buffer to an empty array so future bridge keys
-          // before the ready check don't NPE — after readiness is true they get
-          // forwarded live, not buffered.
-          setPopupReady(true, "popup-ready");
-          if (wasBridging && chordSession) {
-            chordSession.transition("bridging-live", "takeChordBridgeBuffer", { drained: drained.length, view: getReadyTargetView() || "actions" });
+          const ready = chordSession
+            ? chordSession.markPopupReady("takeChordBridgeBuffer", { clearReadyTarget: true })
+            : { wasBridging: false, drained: [], readyView: "actions" };
+          const wasBridging = !!ready.wasBridging;
+          const drained = ready.drained || [];
+          const readyView = ready.readyView || "actions";
+          debugChordTrace("bridge-buffer-drain", { drained: drained.length, view: readyView });
+          if (wasBridging) {
             observeChordSession("takeChordBridgeBuffer");
           }
           // The chord chain may continue (popup invisible at this view,
@@ -6342,8 +6340,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // script wasn't registered yet. The popup's IIFE will see this
           // `view` in the reply and navigate before replaying buffered
           // keys, so chord-chain digits land at the right view.
-          const readyView = getReadyTargetView() || "actions";
-          setReadyTargetView(null, "ready-target-view-clear");
           const replyView = readyView !== "actions" ? readyView : null;
           return {
             buffered: drained,

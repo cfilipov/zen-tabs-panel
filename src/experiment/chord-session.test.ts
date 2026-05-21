@@ -35,7 +35,13 @@ type ChordSession = {
   beginArm: (now?: number) => void;
   beginBridgeFromOpenView: (view?: string | null, kind?: string, source?: string) => Record<string, unknown>;
   finishBridge: (w?: { clearTimeout?: (id: number) => void } | null, why?: string) => void;
+  markPopupReady: (why?: string, options?: { clearReadyTarget?: boolean }) => {
+    wasBridging: boolean;
+    drained: unknown[];
+    readyView: string;
+  };
   setPopupReady: (value: boolean, why?: string) => void;
+  setReadyTargetView: (view: string | null, why?: string) => void;
   setRevealDeferred: (value: boolean, why?: string) => void;
   pushBridgeKey: (event: Record<string, unknown>) => number | null;
   transition: (to: string, why: string, data?: unknown) => void;
@@ -505,6 +511,28 @@ describe("chord-session replay recording", () => {
       popupReady: false,
       revealDeferred: false,
       bridgeBufferLength: null,
+    });
+  });
+
+  it("drains buffered keys and marks popup ready in one bridge transition", () => {
+    const session = makeSession();
+
+    session.beginBridgeFromOpenView("last-visited", "chrome", "match");
+    session.pushBridgeKey({ key: "2" });
+    session.setReadyTargetView("last-visited", "ready-target-view");
+
+    const ready = session.markPopupReady("takeChordBridgeBuffer", { clearReadyTarget: true });
+
+    expect(ready).toMatchObject({
+      wasBridging: true,
+      drained: [{ key: "2" }],
+      readyView: "last-visited",
+    });
+    expect(session.getStateSnapshot()).toMatchObject({
+      state: "bridging-live",
+      popupReady: true,
+      readyTargetView: null,
+      bridgeBufferLength: 0,
     });
   });
 
