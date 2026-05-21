@@ -17,6 +17,7 @@
     type ForceReadyPayload,
     type InvalidChordFeedback,
   } from "./chord-bridge";
+  import { closeSelectionPlan } from "./interaction/close-plan";
   import {
     interpretStructuralInput,
     type InteractionCommand,
@@ -529,14 +530,21 @@
   }
 
   function closeSelectedTabRow() {
-    if (palette.currentView === "duplicates" && selectedDuplicateTabRow) {
+    const plan = closeSelectionPlan({
+      view: palette.currentView,
+      hasSelectedDuplicateTab: !!selectedDuplicateTabRow,
+      hasSelectedDuplicatePromptTab: !!selectedDuplicatePromptTabRow,
+      hasSelectedTabRow: !!selectedTabRow,
+    });
+    if (plan.kind === "duplicate-tab" && selectedDuplicateTabRow) {
       closeDuplicateTab(selectedDuplicateTabRow);
       return;
     }
-    if (palette.currentView === "duplicate-prompt" && selectedDuplicatePromptTabRow) {
+    if (plan.kind === "duplicate-prompt-tab" && selectedDuplicatePromptTabRow) {
       closeDuplicatePromptTab(selectedDuplicatePromptTabRow);
       return;
     }
+    if (plan.kind !== "native-tab-row") return;
     const row = selectedTabRow;
     if (!row) return;
     effects.closeTab(row.domId);
