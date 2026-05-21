@@ -146,12 +146,7 @@ export type ActionsViewModel = {
   sections: ActionSection[];
   prefixItemsByView: Partial<Record<ViewId, ActionSection["items"]>>;
   workspaces: WorkspaceRow[];
-  workspaceTabCounts: Record<string, number>;
   extensions: ExtensionRow[];
-  iconHtmlById: Record<string, string | null>;
-  previewsById: Record<string, ActionPreview | null>;
-  counts: Record<string, number>;
-  disabledIds: string[];
   selectedIndex: number;
 };
 

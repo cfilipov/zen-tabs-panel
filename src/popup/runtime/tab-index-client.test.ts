@@ -123,12 +123,7 @@ describe("tab index client", () => {
         sections: [],
         prefixItemsByView: {},
         workspaces: [],
-        workspaceTabCounts: {},
         extensions: [],
-        iconHtmlById: {},
-        previewsById: {},
-        counts: {},
-        disabledIds: [],
         selectedIndex: -1,
       } as T;
     });

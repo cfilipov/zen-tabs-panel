@@ -212,12 +212,7 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
       sections,
       prefixItemsByView,
       workspaces,
-      workspaceTabCounts,
       extensions: input.extensions || [],
-      iconHtmlById,
-      previewsById,
-      counts,
-      disabledIds: Array.from(disabledIds),
       selectedIndex: -1,
       model: {
         id: "actions",
