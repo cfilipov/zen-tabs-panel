@@ -1028,17 +1028,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function isRevealDeferred() {
       try { return !!(chordSession && chordSession.isRevealDeferred()); } catch (e) { return false; }
     }
-    function setActiveBridgeView(view, why) {
-      try { if (chordSession) chordSession.setActiveBridgeView(view || null, why); } catch (e) {}
-    }
     function getActiveBridgeView() {
       try { return chordSession ? chordSession.getActiveBridgeView() : null; } catch (e) { return null; }
     }
     function hasActiveBridge() {
       try { return !!(chordSession && chordSession.hasActiveBridge()); } catch (e) { return false; }
-    }
-    function setPopupReady(value, why) {
-      try { if (chordSession) chordSession.setPopupReady(!!value, why); } catch (e) {}
     }
     function isPopupReady() {
       try { return !!(chordSession && chordSession.isPopupReady()); } catch (e) { return false; }
@@ -1052,12 +1046,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function preparePopupLoad(view, why) {
       try { if (chordSession) chordSession.preparePopupLoad(view || "actions", why); } catch (e) {}
     }
-    function startBridgeBuffer(why) {
-      try { if (chordSession) chordSession.startBridgeBuffer(why); } catch (e) {}
-    }
-    function clearBridgeBuffer(why) {
-      try { if (chordSession) chordSession.clearBridgeBuffer(why); } catch (e) {}
-    }
     function hasBridgeBuffer() {
       try { return !!(chordSession && chordSession.hasBridgeBuffer()); } catch (e) { return false; }
     }
@@ -1066,9 +1054,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
     function pushBridgeKey(keyData) {
       try { return chordSession ? chordSession.pushBridgeKey(keyData) : null; } catch (e) { return null; }
-    }
-    function drainBridgeBuffer(why) {
-      try { return chordSession ? chordSession.drainBridgeBuffer(why) : []; } catch (e) { return []; }
     }
     function isBridgeTimerActive() {
       try { return !!(chordSession && chordSession.isBridgeTimerActive()); } catch (e) { return false; }
@@ -2717,7 +2702,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // when swapping the prerender's view mid-chord). In that case the
       // bridge state was JUST set up by the caller and we want to keep it.
       if (hasBridgeBuffer() && !silent) {
-        clearBridgeBuffer("destroyOverlay");
         finishBridge();
       }
 
@@ -3714,7 +3698,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function switchHiddenBridgeView(view, params, previousView, previousParams) {
       if (hasPendingReveal()) overlayController.destroy({ silent: true });
       overlayController.create(view, params || {});
-      setActiveBridgeView(view, "switchHiddenBridgeView");
+      try { if (chordSession) chordSession.setActiveBridgeView(view, "switchHiddenBridgeView"); } catch (e) {}
       if (previousView) {
         overlayController.setNavigationStack([{ view: previousView, params: previousParams || {} }]);
       }
