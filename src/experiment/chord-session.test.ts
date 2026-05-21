@@ -43,12 +43,9 @@ type ChordSession = {
     drained: unknown[];
     readyView: string;
   };
-  setPopupReady: (value: boolean, why?: string) => void;
-  setReadyTargetView: (view: string | null, why?: string) => void;
   prepareReadyTargetView: (view?: string | null, why?: string) => void;
   clearReadyTargetView: (why?: string) => void;
   preparePopupLoad: (view?: string | null, why?: string) => void;
-  setRevealDeferred: (value: boolean, why?: string) => void;
   deferReveal: (why?: string) => void;
   consumeDeferredReveal: (why?: string) => boolean;
   clearRevealTimer: (w?: { clearTimeout?: (id: number) => void } | null, why?: string) => void;
@@ -532,8 +529,8 @@ describe("chord-session replay recording", () => {
 
     session.beginBridgeFromOpenView("last-visited", "chrome", "match");
     session.pushBridgeKey({ key: "1" });
-    session.setPopupReady(true, "popup-ready");
-    session.setRevealDeferred(true, "reveal-deferred");
+    session.markPopupReady("popup-ready");
+    session.deferReveal("reveal-deferred");
 
     session.finishBridge(null, "finishBridge");
 
@@ -551,7 +548,7 @@ describe("chord-session replay recording", () => {
 
     session.beginBridgeFromOpenView("last-visited", "chrome", "match");
     session.pushBridgeKey({ key: "2" });
-    session.setReadyTargetView("last-visited", "ready-target-view");
+    session.prepareReadyTargetView("last-visited", "ready-target-view");
 
     const ready = session.markPopupReady("takeChordBridgeBuffer", { clearReadyTarget: true });
 
@@ -571,7 +568,7 @@ describe("chord-session replay recording", () => {
   it("prepares popup load readiness and target view together", () => {
     const session = makeSession();
 
-    session.setPopupReady(true, "popup-ready");
+    session.markPopupReady("popup-ready");
     session.preparePopupLoad("last-visited", "createOverlay");
 
     expect(session.getStateSnapshot()).toMatchObject({
@@ -602,7 +599,7 @@ describe("chord-session replay recording", () => {
   it("clears deferred reveal state when clearing the reveal timer", () => {
     const session = makeSession();
 
-    session.setRevealDeferred(true, "reveal-deferred");
+    session.deferReveal("reveal-deferred");
     session.clearRevealTimer(null, "reveal-deferred-clear");
 
     expect(session.getStateSnapshot().revealDeferred).toBe(false);

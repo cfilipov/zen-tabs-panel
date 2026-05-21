@@ -725,12 +725,6 @@
       transition("idle", why || "overlay-hidden");
     }
 
-    function setRevealDeferred(value, why) {
-      bridgeState.revealDeferred = !!value;
-      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { revealDeferred: bridgeState.revealDeferred } });
-      if (recentTransitions.length > 50) recentTransitions.shift();
-    }
-
     function isRevealDeferred() {
       return bridgeState.revealDeferred;
     }
@@ -759,12 +753,6 @@
       });
       if (recentTransitions.length > 50) recentTransitions.shift();
       return wasDeferred;
-    }
-
-    function setActiveBridgeView(view, why) {
-      bridgeState.activeView = view || null;
-      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { activeBridgeView: bridgeState.activeView } });
-      if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
     function retargetActiveBridgeView(view, why) {
@@ -809,20 +797,8 @@
       return { mode: "new-bridge", requestedView, activeView };
     }
 
-    function setPopupReady(value, why) {
-      bridgeState.popupReady = !!value;
-      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { popupReady: bridgeState.popupReady } });
-      if (recentTransitions.length > 50) recentTransitions.shift();
-    }
-
     function isPopupReady() {
       return bridgeState.popupReady;
-    }
-
-    function setReadyTargetView(view, why) {
-      bridgeState.readyTargetView = view || null;
-      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { readyTargetView: bridgeState.readyTargetView } });
-      if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
     function getReadyTargetView() {
@@ -865,18 +841,6 @@
         why: why || "preparePopupLoad",
         data: { popupReady: false, readyTargetView },
       });
-      if (recentTransitions.length > 50) recentTransitions.shift();
-    }
-
-    function startBridgeBuffer(why) {
-      bridgeState.buffer = [];
-      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { bridgeBufferLength: 0 } });
-      if (recentTransitions.length > 50) recentTransitions.shift();
-    }
-
-    function clearBridgeBuffer(why) {
-      bridgeState.buffer = null;
-      if (why) recentTransitions.push({ at: Date.now(), from: state, to: state, why, data: { bridgeBufferLength: null } });
       if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
@@ -1031,24 +995,18 @@
       markOverlayVisible,
       markOverlayDestroying,
       markOverlayHidden,
-      setRevealDeferred,
       isRevealDeferred,
       deferReveal,
       consumeDeferredReveal,
-      setActiveBridgeView,
       retargetActiveBridgeView,
       getActiveBridgeView,
       hasActiveBridge,
       beginBridgeFromOpenView,
-      setPopupReady,
       isPopupReady,
-      setReadyTargetView,
       getReadyTargetView,
       prepareReadyTargetView,
       clearReadyTargetView,
       preparePopupLoad,
-      startBridgeBuffer,
-      clearBridgeBuffer,
       hasBridgeBuffer,
       getBridgeBufferLength,
       pushBridgeKey,
