@@ -31,6 +31,7 @@ this.MSG = Object.freeze({
 
   // Tab queries
   GET_TAB_INFO:                   "get-tab-info",
+  GET_TAB_INFO_VIEW_MODEL:        "get-tab-info-view-model",
   GET_ACTIVE_TAB_INFO:             "get-active-tab-info",
   GET_DEFAULT_CLOSE_TARGET:       "get-default-close-target",
   GET_NAVIGATION_HISTORY:         "get-navigation-history",

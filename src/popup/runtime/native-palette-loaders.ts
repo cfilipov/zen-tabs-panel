@@ -4,7 +4,7 @@ import type { ExtensionRow } from "./extension-client";
 import type { FolderRow, FoldersViewModel } from "./folder-client";
 import type { NavigationHistory, RecentlyClosedRow } from "./history-client";
 import type { ProfileRow, ProfilesViewModel } from "./profile-client";
-import type { HistoryVisit, TabInfo } from "./tab-info-client";
+import type { HistoryVisit, TabInfo, TabInfoViewModel } from "./tab-info-client";
 import type { DomainIndexRow, TabIndexRow } from "./tab-index-client";
 import type { WorkspaceRow } from "./workspace-client";
 import type { ViewLoadController } from "./view-load-controller";
@@ -44,6 +44,7 @@ export type NativePaletteLoaderDeps = {
   tabInfoClient: {
     getTabInfo(domId: string): Promise<TabInfo | null>;
     getHistoryVisits(url: string): Promise<HistoryVisit[]>;
+    getTabInfoViewModel?(): Promise<TabInfoViewModel>;
   };
   getSelectedTabDomIds: () => Promise<string[]>;
 };

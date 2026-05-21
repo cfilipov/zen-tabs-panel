@@ -1,10 +1,11 @@
-import type { HistoryVisit, TabInfo } from "../runtime/tab-info-client";
+import type { HistoryVisit, TabInfo, TabInfoViewModel } from "../runtime/tab-info-client";
 import type { TabIndexRow } from "../runtime/tab-index-client";
 import type { WorkspaceRow } from "../runtime/workspace-client";
 
 export type TabInfoClient = {
   getTabInfo(domId: string): Promise<TabInfo | null>;
   getHistoryVisits(url: string): Promise<HistoryVisit[]>;
+  getTabInfoViewModel?(): Promise<TabInfoViewModel>;
 };
 
 export type TabInfoIndexClient = {
@@ -31,6 +32,10 @@ export async function loadTabInfoView(
   tabInfoClient: TabInfoClient,
   workspaceClient: TabInfoWorkspaceClient,
 ) {
+  if (tabInfoClient.getTabInfoViewModel) {
+    return tabInfoClient.getTabInfoViewModel();
+  }
+
   const active = await tabIndexClient.getActiveRow();
   if (!active) return emptyTabInfoView();
 

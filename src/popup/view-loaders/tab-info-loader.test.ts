@@ -27,6 +27,46 @@ function row(domId: string): TabIndexRow {
 }
 
 describe("tab info loader", () => {
+  it("prefers the completed tab info view model when available", async () => {
+    const result = await loadTabInfoView(
+      { getActiveRow: async () => { throw new Error("fallback should not run"); }, getRowsByDomIds: async () => [] },
+      {
+        getTabInfo: async () => { throw new Error("fallback should not run"); },
+        getHistoryVisits: async () => [],
+        getTabInfoViewModel: async () => ({
+          info: {
+            domId: "tab-1",
+            title: "Example",
+            url: "https://example.test",
+            favIconUrl: "",
+            pinned: false,
+            workspaceId: "ws-1",
+            lastAccessed: 0,
+            status: "loaded",
+            sessionEntries: [],
+            memory: null,
+            cpuTime: null,
+            duplicateDomIds: [],
+            panelTabUuid: null,
+            panelParentUuid: null,
+            panelStats: null,
+            parentTitle: null,
+            parentDomId: null,
+            parentFavIconUrl: null,
+          },
+          visits: [],
+          duplicates: [],
+          workspaces: [{ uuid: "ws-1", name: "One", svgContent: "", isActive: true }],
+          selectedIndex: -1,
+        }),
+      },
+      { getWorkspacesWithIcons: async () => { throw new Error("fallback should not run"); } },
+    );
+
+    expect(result.info?.domId).toBe("tab-1");
+    expect(result.workspaces[0]?.uuid).toBe("ws-1");
+  });
+
   it("loads active tab info, visits, workspaces, and duplicate rows from focused clients", async () => {
     const duplicateCalls: string[][] = [];
     const visitCalls: string[] = [];

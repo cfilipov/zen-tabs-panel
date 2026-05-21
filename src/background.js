@@ -458,6 +458,53 @@ function getRecentlyClosed() {
   );
 }
 
+function emptyTabInfoViewModel() {
+  return {
+    info: null,
+    visits: [],
+    duplicates: [],
+    workspaces: [],
+    selectedIndex: -1,
+  };
+}
+
+async function getTabInfoViewModel() {
+  const active = await api.getActiveRow();
+  if (!active) return emptyTabInfoViewModel();
+
+  const info = await api.getTabInfo(active.domId);
+  if (!info) return emptyTabInfoViewModel();
+
+  const titleByUrl = new Map();
+  for (const entry of info.sessionEntries || []) {
+    if (entry.url && !titleByUrl.has(entry.url)) titleByUrl.set(entry.url, entry.title);
+  }
+  if (info.url && !titleByUrl.has(info.url)) titleByUrl.set(info.url, info.title);
+
+  const urls = new Set();
+  if (info.url && !info.url.startsWith("about:")) urls.add(info.url);
+  for (const entry of info.sessionEntries || []) {
+    if (entry.url && !entry.url.startsWith("about:")) urls.add(entry.url);
+  }
+
+  const [visitLists, workspaces, duplicates] = await Promise.all([
+    Promise.all(Array.from(urls).map((url) => browser.history.getVisits({ url }).then(
+      (visits) => visits.map((visit) => ({ ...visit, url, title: titleByUrl.get(url) || url })),
+      () => []
+    ))),
+    api.getWorkspacesWithIcons().catch(() => []),
+    info.duplicateDomIds?.length ? api.getRowsByDomIds(JSON.stringify(info.duplicateDomIds)) : [],
+  ]);
+
+  return {
+    info,
+    visits: visitLists.flat(),
+    duplicates,
+    workspaces,
+    selectedIndex: -1,
+  };
+}
+
 async function restoreClosedSession(sessionId) {
   const restored = await browser.sessions.restore(sessionId).catch(() => null);
   const tabId = restored && restored.tab && restored.tab.id;
@@ -576,6 +623,7 @@ const QUERIES = Object.freeze({
   [MSG.GET_NAVIGATION_HISTORY]:        ()  => api.getNavigationHistory(),
   [MSG.GET_RECENTLY_CLOSED]:           ()  => getRecentlyClosed(),
   [MSG.GET_TAB_INFO]:                  (m) => api.getTabInfo(m.domId),
+  [MSG.GET_TAB_INFO_VIEW_MODEL]:       ()  => getTabInfoViewModel(),
   [MSG.GET_HISTORY_VISITS]:            (m) => browser.history.getVisits({ url: m.url }),
   [MSG.GET_SELECTED_TAB_DOM_IDS]:      ()  => api.getSelectedTabDomIds(),
   [MSG.GET_SELECTED_TAB_URLS]:         ()  => api.getSelectedTabUrls(),

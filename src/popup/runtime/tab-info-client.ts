@@ -1,4 +1,6 @@
 import { sendMessage } from "./ipc";
+import type { TabIndexRow } from "./tab-index-client";
+import type { WorkspaceRow } from "./workspace-client";
 
 export type HistoryVisit = {
   visitTime: number;
@@ -40,6 +42,14 @@ export type TabInfo = {
   parentFavIconUrl: string | null;
 };
 
+export type TabInfoViewModel = {
+  info: TabInfo | null;
+  visits: HistoryVisit[];
+  duplicates: TabIndexRow[];
+  workspaces: WorkspaceRow[];
+  selectedIndex: number;
+};
+
 export type Send = <T = unknown>(message: unknown) => Promise<T>;
 
 export function createTabInfoClient(send: Send = sendMessage) {
@@ -49,6 +59,9 @@ export function createTabInfoClient(send: Send = sendMessage) {
     },
     getHistoryVisits(url: string) {
       return send<HistoryVisit[]>({ type: "get-history-visits", url });
+    },
+    getTabInfoViewModel() {
+      return send<TabInfoViewModel>({ type: "get-tab-info-view-model" });
     },
   };
 }
