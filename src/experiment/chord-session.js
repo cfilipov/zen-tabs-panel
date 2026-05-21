@@ -803,6 +803,31 @@
       return bridgeState.readyTargetView;
     }
 
+    function prepareReadyTargetView(view, why) {
+      const readyTargetView = view || "actions";
+      bridgeState.readyTargetView = readyTargetView;
+      recentTransitions.push({
+        at: Date.now(),
+        from: state,
+        to: state,
+        why: why || "ready-target-view",
+        data: { readyTargetView },
+      });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
+    function clearReadyTargetView(why) {
+      bridgeState.readyTargetView = null;
+      recentTransitions.push({
+        at: Date.now(),
+        from: state,
+        to: state,
+        why: why || "ready-target-view-clear",
+        data: { readyTargetView: null },
+      });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+    }
+
     function preparePopupLoad(view, why) {
       const readyTargetView = view || "actions";
       bridgeState.popupReady = false;
@@ -991,6 +1016,8 @@
       isPopupReady,
       setReadyTargetView,
       getReadyTargetView,
+      prepareReadyTargetView,
+      clearReadyTargetView,
       preparePopupLoad,
       startBridgeBuffer,
       clearBridgeBuffer,

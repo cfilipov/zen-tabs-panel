@@ -45,6 +45,8 @@ type ChordSession = {
   };
   setPopupReady: (value: boolean, why?: string) => void;
   setReadyTargetView: (view: string | null, why?: string) => void;
+  prepareReadyTargetView: (view?: string | null, why?: string) => void;
+  clearReadyTargetView: (why?: string) => void;
   preparePopupLoad: (view?: string | null, why?: string) => void;
   setRevealDeferred: (value: boolean, why?: string) => void;
   clearRevealTimer: (w?: { clearTimeout?: (id: number) => void } | null, why?: string) => void;
@@ -574,6 +576,16 @@ describe("chord-session replay recording", () => {
       popupReady: false,
       readyTargetView: "last-visited",
     });
+  });
+
+  it("names ready-target view preparation and clearing", () => {
+    const session = makeSession();
+
+    session.prepareReadyTargetView("domain-tabs", "morphToView");
+    expect(session.getStateSnapshot().readyTargetView).toBe("domain-tabs");
+
+    session.clearReadyTargetView("destroyOverlay");
+    expect(session.getStateSnapshot().readyTargetView).toBeNull();
   });
 
   it("retargets the active bridge view with a named session operation", () => {

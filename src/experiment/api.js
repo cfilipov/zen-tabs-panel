@@ -1037,11 +1037,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function isPopupReady() {
       try { return !!(chordSession && chordSession.isPopupReady()); } catch (e) { return false; }
     }
-    function setReadyTargetView(view, why) {
-      try { if (chordSession) chordSession.setReadyTargetView(view || null, why); } catch (e) {}
-    }
     function getReadyTargetView() {
       try { return chordSession ? chordSession.getReadyTargetView() : null; } catch (e) { return null; }
+    }
+    function prepareReadyTargetView(view, why) {
+      try { if (chordSession) chordSession.prepareReadyTargetView(view || "actions", why); } catch (e) {}
+    }
+    function clearReadyTargetView(why) {
+      try { if (chordSession) chordSession.clearReadyTargetView(why); } catch (e) {}
     }
     function preparePopupLoad(view, why) {
       try { if (chordSession) chordSession.preparePopupLoad(view || "actions", why); } catch (e) {}
@@ -2267,7 +2270,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!panel || !oldBrowser) return;
 
       const gen = overlayController.nextMorphGeneration();
-      setReadyTargetView(view || "actions", "ready-target-view");
+      prepareReadyTargetView(view || "actions", "morphToView");
       // For extension-popup view, prefer the cached natural size from a
       // previous open so we morph straight there. For the first open
       // of a given extension we have no idea what size the popup wants,
@@ -2701,7 +2704,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
       overlayController.nextMorphGeneration();
       overlayController.clearViewState();
-      setReadyTargetView(null, "ready-target-view-clear");
+      clearReadyTargetView("destroyOverlay");
 
       // Prerender that never revealed (chord cancelled, action fired, view
       // mismatch on timeout). Usually the overlay is invisible — skip the
