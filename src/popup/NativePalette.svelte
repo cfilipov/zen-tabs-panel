@@ -482,11 +482,7 @@
   function recordSyntheticChordKey(key: string | null | undefined) {
     if (!key) return;
     try {
-      if (isChromeModelIntentView(palette.currentView)) {
-        effects.recordCurrentViewChordKey(key, "trace");
-      } else {
-        effects.synthChordKey(key, palette.currentView, "trace");
-      }
+      effects.synthChordKey(key, palette.currentView, "trace");
     } catch {
       // Replay tracing is best-effort; it must never block the command.
     }

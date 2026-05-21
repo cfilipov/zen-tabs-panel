@@ -71,9 +71,6 @@ export function createPaletteEffects() {
     synthChordKey(chordKey: string, view: ViewId, activation = "keydown") {
       fireMessage({ type: "synth-chord-key", chordKey, view, activation });
     },
-    recordCurrentViewChordKey(chordKey: string, activation = "trace") {
-      fireMessage({ type: "record-current-view-chord-key", chordKey, activation });
-    },
     bridgeDispatchSettled(inst: number | null) {
       fireMessage({ type: "bridge-dispatch-settled", inst });
     },

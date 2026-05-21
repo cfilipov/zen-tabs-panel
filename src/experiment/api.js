@@ -6140,17 +6140,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           });
         },
 
-        async recordCurrentViewChordKey(payload) {
-          if (!payload || typeof payload.chordKey !== "string" || !payload.chordKey) return;
-          const view = currentViewName || getActiveBridgeView() || null;
-          chordSession.recordEvent({
-            kind: "synthetic-key",
-            chordKey: payload.chordKey,
-            view,
-            activation: payload.activation || "trace",
-          });
-        },
-
         async bridgeDispatchSettled(inst) {
           if (typeof inst === "number" && inst !== popupInstance) return;
           if (isRevealBlocked() || !pendingReveal) return;

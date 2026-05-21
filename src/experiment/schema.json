@@ -601,15 +601,6 @@
         ]
       },
       {
-        "name": "recordCurrentViewChordKey",
-        "type": "function",
-        "async": true,
-        "description": "Record a chord key against chrome's current palette view for replay tracing.",
-        "parameters": [
-          { "name": "payload", "type": "any" }
-        ]
-      },
-      {
         "name": "bridgeDispatchSettled",
         "type": "function",
         "async": true,

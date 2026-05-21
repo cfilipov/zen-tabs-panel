@@ -25,7 +25,6 @@ this.MSG = Object.freeze({
   ACTIVATE_TAB:                   "activate-tab",
   ACTIVATE_VIEW_ROW:              "activate-view-row",
   ACTIVATE_CURRENT_VIEW_ROW:      "activate-current-view-row",
-  RECORD_CURRENT_VIEW_CHORD_KEY:  "record-current-view-chord-key",
   PREVIEW_TAB:                    "preview-tab",
   CLEAR_PREVIEW:                  "clear-preview",
   CLOSE_TAB:                      "close-tab",
