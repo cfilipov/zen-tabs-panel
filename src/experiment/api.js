@@ -3584,6 +3584,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
           })();
           return true;
         }
+        if (view === "tab-info") {
+          const w = getWin();
+          const sourceTab = w?.gBrowser?.selectedTab || null;
+          const url = sourceTab?.linkedBrowser?.currentURI?.spec || "";
+          if (!url) return false;
+          const tabs = getAllTabElements().filter((tab) => (tab.linkedBrowser?.currentURI?.spec || "") === url);
+          const row = tabs[rowIndex] || null;
+          if (!row || !row.id) return false;
+          if (expectedDomId && row.id !== expectedDomId) return false;
+          chordSession.recordEvent({ kind: "popup-action", message: { type: "activate-tab", domId: row.id } });
+          void (async () => {
+            if (destroy) destroyOverlay();
+            await activateNativeTab(row);
+          })();
+          return true;
+        }
         if (CHROME_OWNED_TAB_BRIDGE_VIEWS.has(view)) {
           tabIndex.start();
           if (expectedListVersion != null && tabIndex.getVersion() !== expectedListVersion) return false;

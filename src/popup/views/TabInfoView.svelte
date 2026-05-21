@@ -12,6 +12,7 @@
     duplicates?: TabIndexRow[];
     workspaces?: WorkspaceRow[];
     onactivate?: (row: TabIndexRow | { domId: string }) => void;
+    onduplicateactivate?: (row: TabIndexRow, index: number) => void | Promise<void>;
     onclose?: (row: TabIndexRow) => void;
     oncloseothers?: () => void;
     onpreview?: (row: TabIndexRow | { domId: string }) => void;
@@ -24,6 +25,7 @@
     duplicates = [],
     workspaces = [],
     onactivate,
+    onduplicateactivate,
     onclose,
     oncloseothers,
     onpreview,
@@ -193,7 +195,7 @@
             onmouseenter={() => onpreview?.(duplicate)}
             onmouseleave={() => onclearpreview?.()}
             onclick={() => {
-              if (!isSelf) onactivate?.(duplicate);
+              if (!isSelf) onduplicateactivate?.(duplicate, index);
             }}
           >
             <span class="dup-index">{index + 1}</span>

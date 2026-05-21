@@ -747,6 +747,11 @@
     await activateCurrentChromeModelRow(index, "shortcut");
   }
 
+  async function activateTabInfoDuplicate(row: TabIndexRow, index: number) {
+    if (row.active) return;
+    await activateChromeResolvedRow(index, "selection", false, { kind: "activate-tab", row });
+  }
+
 
   function previewTab(row: TabIndexRow) {
     effects.previewTab(row.domId);
@@ -1238,6 +1243,7 @@
     restoreClosedTabKeepOpen={(row) => restoreClosedTab(row, true)}
     {activateTab}
     {activateDuplicatePromptTab}
+    {activateTabInfoDuplicate}
     {closeDuplicateTab}
     {closeDuplicatePromptTab}
     {previewTab}

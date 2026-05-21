@@ -38,6 +38,7 @@
     restoreClosedTabKeepOpen: (row: NativePaletteState["recentlyClosedRows"][number]) => void;
     activateTab: (row: { domId: string }) => void;
     activateDuplicatePromptTab: (row: TabIndexRow, index: number) => void | Promise<void>;
+    activateTabInfoDuplicate: (row: TabIndexRow, index: number) => void | Promise<void>;
     closeDuplicateTab: (row: TabIndexRow) => void;
     closeDuplicatePromptTab: (row: TabIndexRow) => void;
     previewTab: (row: TabIndexRow) => void;
@@ -67,6 +68,7 @@
     restoreClosedTabKeepOpen,
     activateTab,
     activateDuplicatePromptTab,
+    activateTabInfoDuplicate,
     closeDuplicateTab,
     closeDuplicatePromptTab,
     previewTab,
@@ -157,7 +159,7 @@
         groups={palette.duplicateGroups}
         workspaces={palette.duplicateWorkspaces}
         selectedIndex={palette.selectedIndex}
-        onactivate={activateTab}
+        onactivate={activateRenderedRow}
         onclose={closeDuplicateTab}
         onpreview={previewTab}
         onclearpreview={clearPreview}
@@ -169,6 +171,7 @@
         duplicates={palette.tabInfoDuplicates}
         workspaces={palette.tabInfoWorkspaces}
         onactivate={activateTab}
+        onduplicateactivate={activateTabInfoDuplicate}
         onclose={closeTabInfoDuplicate}
         oncloseothers={closeOtherTabInfoDuplicates}
         onpreview={previewTabLike}

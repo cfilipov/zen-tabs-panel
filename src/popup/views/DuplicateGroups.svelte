@@ -7,7 +7,7 @@
     groups: DuplicateGroupRow[];
     workspaces?: WorkspaceRow[];
     selectedIndex?: number;
-    onactivate?: (row: TabIndexRow) => void;
+    onactivate?: (index: number) => void | Promise<void>;
     onclose?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
@@ -26,11 +26,12 @@
   const groupSections = $derived((() => {
     let offset = 0;
     return groups.map((group) => {
+      const start = offset;
       const groupSelectedIndex = selectedIndex >= offset && selectedIndex < offset + group.tabs.length
         ? selectedIndex - offset
         : -1;
       offset += group.tabs.length;
-      return { group, selectedIndex: groupSelectedIndex };
+      return { group, selectedIndex: groupSelectedIndex, start };
     });
   })());
 
@@ -44,7 +45,7 @@
       group={section.group}
       {workspaces}
       selectedIndex={section.selectedIndex}
-      {onactivate}
+      onactivate={(_, index) => onactivate?.(section.start + index)}
       {onclose}
       {onpreview}
       {onclearpreview}
