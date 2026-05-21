@@ -1616,15 +1616,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return true;
     }
 
-    async function openExtensionPopupByIndexInternal(index) {
+    async function extensionIdForPopupIndex(index) {
       const rowIndex = Number(index);
-      if (!Number.isInteger(rowIndex) || rowIndex < 0) return false;
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) return null;
       if (!extensionListCache) {
         extensionListCache = await buildExtensionList();
       }
-      const found = extensionListCache[rowIndex];
-      if (!found?.id) return false;
-      return openExtensionPopupInternal(found.id);
+      return extensionListCache[rowIndex]?.id || null;
     }
 
     function switchWorkspaceByIndexInternal(index) {
@@ -3713,6 +3711,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const expectedRowId = options && typeof options.expectedRowId === "string" && options.expectedRowId
         ? options.expectedRowId
         : null;
+      const expectedTabDomId = expectedDomId || expectedRowId;
       const replayChordKey = options && typeof options.replayChordKey === "string" && options.replayChordKey
         ? options.replayChordKey
         : null;
@@ -3810,7 +3809,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const tabs = groups.flatMap((group) => Array.isArray(group.tabs) ? group.tabs : []);
           const row = tabs[rowIndex];
           if (!row || !row.domId) return false;
-          if (expectedDomId && row.domId !== expectedDomId) return false;
+          if (expectedTabDomId && row.domId !== expectedTabDomId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           void (async () => {
             if (destroy) overlayController.destroy();
@@ -3826,7 +3825,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (promptTabIndex < 0) return false;
           const row = tabs[promptTabIndex];
           if (!row || !row.domId) return false;
-          if (expectedDomId && row.domId !== expectedDomId) return false;
+          if (expectedTabDomId && row.domId !== expectedTabDomId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           void (async () => {
             if (destroy) overlayController.destroy();
@@ -3843,7 +3842,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const tabs = getAllTabElements().filter((tab) => (tab.linkedBrowser?.currentURI?.spec || "") === url);
           const row = tabs[rowIndex] || null;
           if (!row || !row.id) return false;
-          const expectedTabId = expectedDomId || expectedRowId;
+          const expectedTabId = expectedTabDomId;
           if (expectedTabId && row.id !== expectedTabId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           void (async () => {
@@ -3859,7 +3858,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const win = tabIndex.getWindow(view, rowIndex, 1, viewParams);
           const row = win && Array.isArray(win.rows) ? win.rows[0] : null;
           if (!row || !row.domId) return false;
-          if (expectedDomId && row.domId !== expectedDomId) return false;
+          if (expectedTabDomId && row.domId !== expectedTabDomId) return false;
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, viewParams);
           void (async () => {
             if (destroy) overlayController.destroy();
@@ -6590,15 +6589,29 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // the overlay first if it isn't already open so the chord
         // shortcut path can use the same entry point.
         async openExtensionPopup(extensionId) {
-          return openExtensionPopupInternal(extensionId);
+          const ok = await openExtensionPopupInternal(extensionId);
+          if (ok && chordSession && extensionId) {
+            chordSession.recordTerminalAction({ type: "open-extension-popup", extensionId });
+          }
+          return ok;
         },
 
         async openExtensionPopupByIndex(index) {
-          return openExtensionPopupByIndexInternal(index);
+          const extensionId = await extensionIdForPopupIndex(index);
+          if (!extensionId) return false;
+          const ok = await openExtensionPopupInternal(extensionId);
+          if (ok && chordSession) {
+            chordSession.recordTerminalAction({ type: "open-extension-popup", extensionId });
+          }
+          return ok;
         },
 
         async switchWorkspaceByIndex(index) {
-          return switchWorkspaceByIndexInternal(index);
+          const ok = switchWorkspaceByIndexInternal(index);
+          if (ok && chordSession) {
+            chordSession.recordTerminalAction({ type: "switch-workspace", index: Number(index) });
+          }
+          return ok;
         },
 
         // Toggle the Services.ww.openWindow monkey-patch. Background.js

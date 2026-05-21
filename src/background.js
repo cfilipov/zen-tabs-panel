@@ -706,7 +706,6 @@ const SYNC_HANDLERS = Object.freeze({
   [MSG.SWITCH_WORKSPACE_BY_INDEX]: async (m) => {
     const ok = await api.switchWorkspaceByIndex(m.index);
     if (ok) {
-      recordChordAction(m);
       await api.hidePalette();
     }
     return ok;

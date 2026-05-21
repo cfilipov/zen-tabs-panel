@@ -86,6 +86,7 @@
     isNativePrefixView,
     isNativeTabView,
     isChromeModelIntentView,
+    isRecentlyClosedView,
     resolveViewTitle,
     resolveViewOpenPlan,
     type NativeListView,
@@ -401,6 +402,54 @@
     return replayKeyForBadgeIndex(palette.selectedIndex, shifted);
   }
 
+  function navigationEntryForShortcutIndex(index: number) {
+    const history = palette.navigationHistory;
+    if (!history || !Number.isInteger(index) || index < 0) return null;
+    return history.entries
+      .map((entry, navIndex) => ({ entry, navIndex }))
+      .filter((candidate) => candidate.navIndex !== history.index)[index] ?? null;
+  }
+
+  function expectedRowIdForActivation(index: number, source: "selection" | "shortcut") {
+    if (!Number.isInteger(index) || index < 0) return null;
+    if (palette.currentView === "navigation") {
+      const candidate = source === "shortcut"
+        ? navigationEntryForShortcutIndex(index)
+        : palette.navigationHistory?.entries[index]
+          ? { entry: palette.navigationHistory.entries[index], navIndex: index }
+          : null;
+      const target = candidate?.entry.historyIndex ?? candidate?.navIndex;
+      return target == null ? null : String(target);
+    }
+    if (isRecentlyClosedView(palette.currentView)) {
+      return palette.recentlyClosedRows[index]?.sessionId ?? null;
+    }
+    if (palette.currentView === "duplicates") {
+      return duplicateTabs[index]?.domId ?? null;
+    }
+    if (isNativeListView(palette.currentView)) {
+      const absoluteIndex = source === "shortcut" ? palette.offset + index : index;
+      const row = rowForIndex(absoluteIndex);
+      if (isDomainRow(row)) return row.domain;
+      if (isTabRow(row)) return row.domId;
+      return null;
+    }
+    if (palette.currentView === "move-to-workspace") {
+      return palette.workspaceRows[index]?.uuid ?? null;
+    }
+    if (palette.currentView === "open-in-container") {
+      const userContextId = palette.containerRows[index]?.userContextId;
+      return userContextId == null ? null : String(userContextId);
+    }
+    if (palette.currentView === "move-to-folder") {
+      return palette.folderRows[index]?.id ?? null;
+    }
+    if (palette.currentView === "profiles") {
+      return palette.profileRows[index]?.name ?? null;
+    }
+    return null;
+  }
+
   async function activateDomain(row: DomainIndexRow) {
     paletteStore.setCurrentDomain(row.domain);
     await openNativeView("domain-tabs", { domain: row.domain }, true);
@@ -430,6 +479,7 @@
     const chromeIndex = source === "shortcut" && isNativeListView(palette.currentView)
       ? palette.offset + index
       : index;
+    const stableRowId = expectedRowId ?? expectedRowIdForActivation(index, source);
     const result = await effects.activateCurrentViewRow(
       chromeIndex,
       source,
@@ -437,7 +487,7 @@
       palette.listVersion,
       chordKey,
       "trace",
-      expectedRowId,
+      stableRowId,
     );
     if (result && typeof result === "object" && result.kind === "open-view") {
       await openNativeView(result.view, result.params || {}, true);
@@ -606,7 +656,7 @@
   async function activateDuplicatePromptTab(row: TabIndexRow, index: number) {
     if (row.active) return;
     const key = replayKeyForBadgeIndex(index);
-    await activateCurrentChromeModelRow(index, "shortcut", false, key);
+    await activateCurrentChromeModelRow(index, "shortcut", false, key, row.domId);
   }
 
   async function activateTabInfoDuplicate(row: TabIndexRow, index: number) {

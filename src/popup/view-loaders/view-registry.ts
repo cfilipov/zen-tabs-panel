@@ -110,6 +110,10 @@ export function isChromeModelIntentView(view: ViewId | undefined) {
   return !!view && chromeModelIntentViews.has(view);
 }
 
+export function isRecentlyClosedView(view: ViewId | undefined): view is "recently-closed" {
+  return view === "recently-closed";
+}
+
 export function resolveViewTitle(
   view: ViewId,
   options: {
