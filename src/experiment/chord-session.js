@@ -719,6 +719,20 @@
       if (recentTransitions.length > 50) recentTransitions.shift();
     }
 
+    function retargetActiveBridgeView(view, why) {
+      const activeView = view || "actions";
+      bridgeState.activeView = activeView;
+      recentTransitions.push({
+        at: Date.now(),
+        from: state,
+        to: state,
+        why: why || "retargetActiveBridgeView",
+        data: { activeBridgeView: activeView },
+      });
+      if (recentTransitions.length > 50) recentTransitions.shift();
+      return activeView;
+    }
+
     function getActiveBridgeView() {
       return bridgeState.activeView;
     }
@@ -944,6 +958,7 @@
       setRevealDeferred,
       isRevealDeferred,
       setActiveBridgeView,
+      retargetActiveBridgeView,
       getActiveBridgeView,
       hasActiveBridge,
       beginBridgeFromOpenView,

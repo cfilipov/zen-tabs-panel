@@ -3695,7 +3695,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function switchHiddenBridgeView(view, params, previousView, previousParams) {
       if (hasPendingReveal()) overlayController.destroy({ silent: true });
       overlayController.create(view, params || {});
-      try { if (chordSession) chordSession.setActiveBridgeView(view, "switchHiddenBridgeView"); } catch (e) {}
+      try { if (chordSession) chordSession.retargetActiveBridgeView(view, "switchHiddenBridgeView"); } catch (e) {}
       if (previousView) {
         overlayController.setNavigationStack([{ view: previousView, params: previousParams || {} }]);
       }

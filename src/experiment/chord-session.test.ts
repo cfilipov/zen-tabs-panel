@@ -45,6 +45,7 @@ type ChordSession = {
   preparePopupLoad: (view?: string | null, why?: string) => void;
   setRevealDeferred: (value: boolean, why?: string) => void;
   clearRevealTimer: (w?: { clearTimeout?: (id: number) => void } | null, why?: string) => void;
+  retargetActiveBridgeView: (view?: string | null, why?: string) => string;
   pushBridgeKey: (event: Record<string, unknown>) => number | null;
   transition: (to: string, why: string, data?: unknown) => void;
   observeLegacyState: (snapshot: unknown, why: string) => void;
@@ -548,6 +549,15 @@ describe("chord-session replay recording", () => {
       popupReady: false,
       readyTargetView: "last-visited",
     });
+  });
+
+  it("retargets the active bridge view with a named session operation", () => {
+    const session = makeSession();
+
+    session.beginBridgeFromOpenView("last-visited", "chrome", "match");
+    expect(session.retargetActiveBridgeView("domain-tabs", "switchHiddenBridgeView")).toBe("domain-tabs");
+
+    expect(session.getStateSnapshot().activeBridgeView).toBe("domain-tabs");
   });
 
   it("clears deferred reveal state when clearing the reveal timer", () => {
