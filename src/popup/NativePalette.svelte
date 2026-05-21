@@ -2,6 +2,12 @@
   import { onMount, tick } from "svelte";
   import PaletteShell from "./components/PaletteShell.svelte";
   import ViewHost from "./views/ViewHost.svelte";
+  import {
+    activationPlanForRenderedRow,
+    activationPlanForSelection,
+    activationPlanForShortcut,
+    type ActivationPlan,
+  } from "./interaction/activation-plan";
   import { nextActionSectionIndex, nextActionsPage } from "./interaction/actions-navigation";
   import { createBridgeDispatchController } from "./interaction/bridge-dispatch";
   import {
@@ -48,7 +54,6 @@
   } from "./interaction/sort-filter";
   import {
     resolveDuplicatePromptActivation,
-    resolveDuplicatePromptSelectionActivation,
     type DuplicatePromptActivation,
     type DuplicatePromptActivationContext,
   } from "./interaction/duplicate-prompt-activation";
@@ -86,7 +91,6 @@
     isNativeListView,
     isNativePrefixView,
     isNativeTabView,
-    isChromeModelIntentView,
     resolveViewTitle,
     resolveViewOpenPlan,
     type NativeListView,
@@ -746,35 +750,32 @@
     }
   }
 
-  async function activateSelected(switchToTarget = false) {
-    if (palette.currentView === "actions") {
-      const item = visibleActionItems[palette.selectedIndex];
+  async function applyActivationPlan(plan: ActivationPlan) {
+    if (plan.kind === "action-selection") {
+      const item = visibleActionItems[plan.index];
       if (item) await activateVisibleActionItem(item, "selection");
-      return;
-    }
-
-    if (isNativePrefixView(palette.currentView)) {
-      const item = prefixItems[palette.selectedIndex];
+    } else if (plan.kind === "prefix-selection") {
+      const item = prefixItems[plan.index];
       if (item) await activateVisibleActionItem(item, "selection");
-      return;
-    }
-
-    if (isChromeModelIntentView(palette.currentView)) {
-      await activateCurrentChromeModelRow(
-        palette.selectedIndex,
-        "selection",
-        switchToTarget,
-        replayKeyForSelection(switchToTarget),
-      );
-      return;
-    }
-
-    if (palette.currentView === "duplicate-prompt") {
+    } else if (plan.kind === "chrome-model-row") {
+      const chordKey = plan.source === "selection"
+        ? replayKeyForSelection(plan.switchToTarget)
+        : replayKeyForBadgeIndex(plan.index, plan.switchToTarget);
+      await activateCurrentChromeModelRow(plan.index, plan.source, plan.switchToTarget, chordKey);
+    } else if (plan.kind === "duplicate-prompt") {
       await applyDuplicatePromptActivation(
-        resolveDuplicatePromptSelectionActivation(duplicatePromptActivationContext()),
-        "selection",
+        resolveDuplicatePromptActivation(duplicatePromptActivationContext(), plan.index, plan.source),
+        plan.source,
       );
     }
+  }
+
+  async function activateSelected(switchToTarget = false) {
+    await applyActivationPlan(activationPlanForSelection(
+      palette.currentView,
+      palette.selectedIndex,
+      switchToTarget,
+    ));
   }
 
   async function activateSelectedAndSwitch() {
@@ -782,37 +783,19 @@
   }
 
   async function activateRow(index: number, switchToTarget = false) {
-    if (isChromeModelIntentView(palette.currentView)) {
-      await activateCurrentChromeModelRow(
-        index,
-        "shortcut",
-        switchToTarget,
-        replayKeyForBadgeIndex(index, switchToTarget),
-      );
-      return;
-    }
-    if (palette.currentView === "duplicate-prompt") {
-      await applyDuplicatePromptActivation(
-        resolveDuplicatePromptActivation(duplicatePromptActivationContext(), index, "shortcut"),
-        "shortcut",
-      );
-    }
+    await applyActivationPlan(activationPlanForShortcut(palette.currentView, index, switchToTarget));
   }
 
   async function activateRenderedRow(index: number, switchToTarget = false) {
-    const chordKey = palette.currentView === "navigation"
-      ? replayKeyForNavigationIndex(palette.navigationHistory, index)
-      : replayKeyForBadgeIndex(index, switchToTarget);
-    if (isChromeModelIntentView(palette.currentView)) {
+    const plan = activationPlanForRenderedRow(palette.currentView, index, switchToTarget);
+    if (plan.kind === "chrome-model-row") {
+      const chordKey = palette.currentView === "navigation"
+        ? replayKeyForNavigationIndex(palette.navigationHistory, index)
+        : replayKeyForBadgeIndex(index, switchToTarget);
       await activateCurrentChromeModelRow(index, "selection", switchToTarget, chordKey);
       return;
     }
-    if (palette.currentView === "duplicate-prompt") {
-      await applyDuplicatePromptActivation(
-        resolveDuplicatePromptActivation(duplicatePromptActivationContext(), index, "selection"),
-        "selection",
-      );
-    }
+    await applyActivationPlan(plan);
   }
 
   async function activateRowAndSwitch(index: number) {
