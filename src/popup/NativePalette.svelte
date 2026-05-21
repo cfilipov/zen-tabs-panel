@@ -25,6 +25,7 @@
     visibleRangeRequest,
   } from "./interaction/list-window";
   import { replayKeyForBadgeIndex, replayKeyForNavigationIndex } from "./interaction/replay-trace";
+  import { stableRowIdForActivation } from "./interaction/row-identity";
   import {
     duplicatePromptPreviewDomId,
     nextDuplicatePromptSectionIndex,
@@ -86,7 +87,6 @@
     isNativePrefixView,
     isNativeTabView,
     isChromeModelIntentView,
-    isRecentlyClosedView,
     resolveViewTitle,
     resolveViewOpenPlan,
     type NativeListView,
@@ -402,52 +402,19 @@
     return replayKeyForBadgeIndex(palette.selectedIndex, shifted);
   }
 
-  function navigationEntryForShortcutIndex(index: number) {
-    const history = palette.navigationHistory;
-    if (!history || !Number.isInteger(index) || index < 0) return null;
-    return history.entries
-      .map((entry, navIndex) => ({ entry, navIndex }))
-      .filter((candidate) => candidate.navIndex !== history.index)[index] ?? null;
-  }
-
-  function expectedRowIdForActivation(index: number, source: "selection" | "shortcut") {
-    if (!Number.isInteger(index) || index < 0) return null;
-    if (palette.currentView === "navigation") {
-      const candidate = source === "shortcut"
-        ? navigationEntryForShortcutIndex(index)
-        : palette.navigationHistory?.entries[index]
-          ? { entry: palette.navigationHistory.entries[index], navIndex: index }
-          : null;
-      const target = candidate?.entry.historyIndex ?? candidate?.navIndex;
-      return target == null ? null : String(target);
-    }
-    if (isRecentlyClosedView(palette.currentView)) {
-      return palette.recentlyClosedRows[index]?.sessionId ?? null;
-    }
-    if (palette.currentView === "duplicates") {
-      return duplicateTabs[index]?.domId ?? null;
-    }
-    if (isNativeListView(palette.currentView)) {
-      const absoluteIndex = source === "shortcut" ? palette.offset + index : index;
-      const row = rowForIndex(absoluteIndex);
-      if (isDomainRow(row)) return row.domain;
-      if (isTabRow(row)) return row.domId;
-      return null;
-    }
-    if (palette.currentView === "move-to-workspace") {
-      return palette.workspaceRows[index]?.uuid ?? null;
-    }
-    if (palette.currentView === "open-in-container") {
-      const userContextId = palette.containerRows[index]?.userContextId;
-      return userContextId == null ? null : String(userContextId);
-    }
-    if (palette.currentView === "move-to-folder") {
-      return palette.folderRows[index]?.id ?? null;
-    }
-    if (palette.currentView === "profiles") {
-      return palette.profileRows[index]?.name ?? null;
-    }
-    return null;
+  function stableRowIdentityContext() {
+    return {
+      view: palette.currentView,
+      offset: palette.offset,
+      navigationHistory: palette.navigationHistory,
+      recentlyClosedRows: palette.recentlyClosedRows,
+      duplicateTabs,
+      rows: palette.rows,
+      workspaceRows: palette.workspaceRows,
+      containerRows: palette.containerRows,
+      folderRows: palette.folderRows,
+      profileRows: palette.profileRows,
+    };
   }
 
   async function activateDomain(row: DomainIndexRow) {
@@ -479,7 +446,7 @@
     const chromeIndex = source === "shortcut" && isNativeListView(palette.currentView)
       ? palette.offset + index
       : index;
-    const stableRowId = expectedRowId ?? expectedRowIdForActivation(index, source);
+    const stableRowId = expectedRowId ?? stableRowIdForActivation(stableRowIdentityContext(), index, source);
     const result = await effects.activateCurrentViewRow(
       chromeIndex,
       source,
