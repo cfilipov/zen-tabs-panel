@@ -124,27 +124,7 @@
   const workspaceClient = createWorkspaceClient();
   const effects = createPaletteEffects();
   const actionSections = buildActionsMenuModel();
-  const CHROME_RESOLVED_ROW_VIEWS = new Set<ViewId>([
-    "navigation",
-    "recently-closed",
-    "domains",
-    "child-tabs",
-    "sibling-tabs",
-    "parent-tabs",
-    "last-visited",
-    "unvisited-tabs",
-    "domain-tabs",
-    "tabs-by-age",
-    "most-visited",
-    "duplicates",
-    "move-to-workspace",
-    "open-in-container",
-    "move-to-folder",
-    "profiles",
-  ]);
-
   function shouldChromeResolveActivation(view: ViewId, activation: ViewActivation) {
-    if (CHROME_RESOLVED_ROW_VIEWS.has(view)) return activation.kind !== "none";
     return view === "duplicate-prompt" && activation.kind === "activate-tab";
   }
 
@@ -494,18 +474,6 @@
   }
 
   async function activateTab(row: { domId: string }) {
-    if (palette.currentView === "duplicate-prompt") {
-      const duplicateIndex = duplicatePromptTabs.findIndex((tab) => tab.domId === row.domId);
-      if (duplicateIndex >= 0) {
-        await activateChromeResolvedRow(
-          DUPLICATE_PROMPT_ACTIONS.length + duplicateIndex,
-          "selection",
-          false,
-          { kind: "activate-tab", row: duplicatePromptTabs[duplicateIndex] },
-        );
-        return;
-      }
-    }
     markTerminalCommandDispatched();
     revealController.clear();
     effects.activateTab(row.domId);
