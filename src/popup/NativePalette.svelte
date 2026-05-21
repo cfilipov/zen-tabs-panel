@@ -51,7 +51,6 @@
     type ViewActivation,
     type ViewActivationContext,
   } from "./interaction/view-activation";
-  import { commandForViewActivation, type ViewCommand } from "./interaction/view-command";
   import { buildSidebarModel, type SidebarHintId } from "./interaction/sidebar-model";
   import {
     canDrillSelectionInView,
@@ -453,30 +452,18 @@
   }
 
   async function navigateToHistoryIndex(index: number) {
-    await applyViewActivation({ kind: "navigate-history-index", index });
+    markTerminalCommandDispatched();
+    revealController.clear();
+    effects.sendViewCommand({ type: "navigate-to-history-index", index });
   }
 
   function expectedDomIdForActivation(activation: ViewActivation) {
     return activation.kind === "activate-tab" ? activation.row.domId : undefined;
   }
 
-  function expectedRowIdForActivation(activation: ViewActivation) {
-    if (activation.kind === "activate-domain") return activation.row.domain;
-    if (activation.kind === "navigate-history-index") return String(activation.index);
-    if (activation.kind === "restore-closed-tab") return activation.row.sessionId;
-    if (activation.kind === "move-to-workspace") return activation.row.uuid;
-    if (activation.kind === "reopen-in-container") return String(activation.row.userContextId);
-    if (activation.kind === "move-to-folder") return activation.row.id;
-    if (activation.kind === "launch-profile") return activation.row.name;
-    return undefined;
-  }
-
   async function activateChromeResolvedRow(index: number, source: "selection" | "shortcut", switchToTarget = false, activation: ViewActivation) {
-    const opensView = activation.kind === "activate-domain";
-    if (!opensView) {
-      markTerminalCommandDispatched();
-      revealController.clear();
-    }
+    markTerminalCommandDispatched();
+    revealController.clear();
     const chromeIndex = source === "shortcut" && isNativeListView(palette.currentView)
       ? palette.offset + index
       : index;
@@ -487,7 +474,7 @@
       switchToTarget,
       palette.listVersion,
       expectedDomIdForActivation(activation),
-      expectedRowIdForActivation(activation),
+      undefined,
       replayKeyForBadgeIndex(index, switchToTarget),
     );
     if (result && typeof result === "object" && result.kind === "open-view") {
@@ -829,7 +816,7 @@
       return;
     }
 
-    const activation = resolveSelectionActivation(viewActivationContext(), { switchToTarget });
+    const activation = resolveSelectionActivation(viewActivationContext());
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
       await activateChromeResolvedRow(palette.selectedIndex, "selection", switchToTarget, activation);
@@ -853,7 +840,7 @@
       );
       return;
     }
-    const activation = resolveViewActivation(viewActivationContext(), index, "shortcut", { switchToTarget });
+    const activation = resolveViewActivation(viewActivationContext(), index, "shortcut");
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
       await activateChromeResolvedRow(index, "shortcut", switchToTarget, activation);
@@ -870,7 +857,7 @@
       await activateCurrentChromeModelRow(index, "selection", switchToTarget, chordKey);
       return;
     }
-    const activation = resolveViewActivation(viewActivationContext(), index, "selection", { switchToTarget });
+    const activation = resolveViewActivation(viewActivationContext(), index, "selection");
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
       await activateChromeResolvedRow(index, "selection", switchToTarget, activation);
@@ -887,34 +874,13 @@
     return {
       view: palette.currentView,
       selectedIndex: palette.selectedIndex,
-      offset: palette.offset,
-      rows: palette.rows,
-      navigationHistory: palette.navigationHistory,
-      recentlyClosedRows: palette.recentlyClosedRows,
-      workspaceRows: palette.workspaceRows,
-      containerRows: palette.containerRows,
-      folderRows: palette.folderRows,
-      profileRows: palette.profileRows,
-      duplicateTabs,
       duplicatePromptTabs,
     };
   }
 
   async function applyViewActivation(activation: ViewActivation) {
-    await applyViewCommand(commandForViewActivation(activation));
-  }
-
-  async function applyViewCommand(command: ViewCommand) {
-    if (command.kind === "message") {
-      if (command.clearReveal) {
-        markTerminalCommandDispatched();
-        revealController.clear();
-      }
-      effects.sendViewCommand(command.message);
-    } else if (command.kind === "open-domain") {
-      await activateDomain({ kind: "domain", domain: command.domain, count: 0 });
-    } else if (command.kind === "duplicate-prompt-action") {
-      runDuplicatePromptAction(command.action);
+    if (activation.kind === "duplicate-prompt-action") {
+      runDuplicatePromptAction(activation.action);
     }
   }
 
