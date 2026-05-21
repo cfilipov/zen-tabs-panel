@@ -34,7 +34,6 @@ type ContextualIdentity = {
 };
 
 type BrowserWithContainers = {
-  getContainers?: () => Promise<ContextualIdentity[]>;
   getContainersViewModel?: () => Promise<ContainersViewModel>;
 };
 
@@ -56,12 +55,6 @@ export function normalizeContainer(row: ContextualIdentity): ContainerRow {
 
 export function createContainerClient(root: BrowserWithContainers | null = null) {
   return {
-    async getContainers() {
-      const rows = root?.getContainers
-        ? await root.getContainers()
-        : await sendMessage<ContextualIdentity[]>({ type: "get-containers" });
-      return rows.map(normalizeContainer);
-    },
     async getContainersViewModel() {
       if (root?.getContainersViewModel) return root.getContainersViewModel();
       return sendMessage<ContainersViewModel>({ type: "get-containers-view-model" });

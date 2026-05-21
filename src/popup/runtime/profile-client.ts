@@ -29,9 +29,6 @@ export type Send = <T = unknown>(message: unknown) => Promise<T>;
 
 export function createProfileClient(send: Send = sendMessage) {
   return {
-    getProfiles() {
-      return send<ProfileRow[]>({ type: "get-profiles" });
-    },
     getProfilesViewModel() {
       return send<ProfilesViewModel>({ type: "get-profiles-view-model" });
     },

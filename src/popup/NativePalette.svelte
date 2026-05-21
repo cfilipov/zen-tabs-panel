@@ -457,50 +457,13 @@
   }
 
   async function activateAction(item: ActionMenuItem) {
-    const activation = resolveActionItemActivation(item);
-    if (activation.kind === "none") return;
-    if (activation.kind === "switch-workspace-index") {
-      await switchWorkspaceByIndex(activation.index);
-      return;
-    }
-
-    const actionNodes = isNativePrefixView(palette.currentView) ? prefixNodes : allActionNodes;
-    const command = interpretVisibleInput(
-      { kind: "mouse", targetId: item.id },
-      { view: palette.currentView },
-      actionNodes,
-    );
-    if (command.kind !== "none") {
-      await runCommand(command);
-    }
+    await activateVisibleActionItem(item, "mouse");
   }
 
   async function activateTab(row: { domId: string }) {
     markTerminalCommandDispatched();
     revealController.clear();
     effects.activateTab(row.domId);
-  }
-
-  function recordReplayKey(key: string | null | undefined) {
-    if (!key) return;
-    try {
-      effects.recordReplayKey(key);
-    } catch {
-      // Replay tracing is best-effort; it must never block the command.
-    }
-  }
-
-  function traceReplayInput(input: BridgeKeyData) {
-    recordReplayKey(chordFromKey({ kind: "key", ...input }));
-  }
-
-  function traceReplayForListIndex(index: number, shifted = false) {
-    recordReplayKey(replayKeyForBadgeIndex(index, shifted));
-  }
-
-  function traceReplayForSelection(shifted = false) {
-    const key = replayKeyForSelection(shifted);
-    if (key) recordReplayKey(key);
   }
 
   function replayKeyForSelection(shifted = false) {
@@ -570,6 +533,7 @@
     source: "selection" | "shortcut",
     switchToTarget = false,
     chordKey: string | null = null,
+    expectedRowId: string | null = null,
   ) {
     markTerminalCommandDispatched();
     revealController.clear();
@@ -582,6 +546,38 @@
       switchToTarget,
       palette.listVersion,
       chordKey,
+      "trace",
+      expectedRowId,
+    );
+    if (result && typeof result === "object" && result.kind === "open-view") {
+      await openNativeView(result.view, result.params || {}, true);
+    }
+  }
+
+  async function activateVisibleActionItem(
+    item: ActionMenuItem,
+    source: "selection" | "shortcut" | "mouse" = "selection",
+  ) {
+    if (item.disabled) return;
+    const isTerminal = item.kind === "action" || item.kind === "workspace-switch";
+    if (isTerminal) {
+      markTerminalCommandDispatched();
+      revealController.clear();
+    }
+    const items = palette.currentView === "actions"
+      ? allActionItems
+      : isNativePrefixView(palette.currentView)
+      ? prefixItems
+      : [];
+    const index = Math.max(0, items.findIndex((candidate) => candidate.id === item.id));
+    const result = await effects.activateCurrentViewRow(
+      index,
+      source === "shortcut" ? "shortcut" : "selection",
+      false,
+      palette.listVersion,
+      item.hotkey || null,
+      source,
+      item.id,
     );
     if (result && typeof result === "object" && result.kind === "open-view") {
       await openNativeView(result.view, result.params || {}, true);
@@ -846,13 +842,13 @@
   async function activateSelected(switchToTarget = false) {
     if (palette.currentView === "actions") {
       const item = visibleActionItems[palette.selectedIndex];
-      if (item) await activateAction(item);
+      if (item) await activateVisibleActionItem(item, "selection");
       return;
     }
 
     if (isNativePrefixView(palette.currentView)) {
       const item = prefixItems[palette.selectedIndex];
-      if (item) await activateAction(item);
+      if (item) await activateVisibleActionItem(item, "selection");
       return;
     }
 
@@ -866,7 +862,6 @@
       return;
     }
 
-    traceReplayForSelection(switchToTarget);
     const activation = resolveSelectionActivation(viewActivationContext(), { switchToTarget });
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
@@ -891,7 +886,6 @@
       );
       return;
     }
-    traceReplayForListIndex(index, switchToTarget);
     const activation = resolveViewActivation(viewActivationContext(), index, "shortcut", { switchToTarget });
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
@@ -909,7 +903,6 @@
       await activateCurrentChromeModelRow(index, "selection", switchToTarget, chordKey);
       return;
     }
-    recordReplayKey(chordKey);
     const activation = resolveViewActivation(viewActivationContext(), index, "selection", { switchToTarget });
     if (shouldChromeResolveActivation(palette.currentView, activation)) {
       if (activation.kind === "none") return;
@@ -1037,7 +1030,13 @@
 
     clearInvalidChordHint();
     if (command.kind === "action" || command.kind === "open-view" || command.kind === "enter-prefix") {
-      traceReplayInput(input);
+      const chordKey = chordFromKey({ kind: "key", ...input });
+      const item = (palette.currentView === "actions" ? allActionItems : isNativePrefixView(palette.currentView) ? prefixItems : [])
+        .find((candidate) => !!chordKey && candidate.hotkey === chordKey);
+      if (item) {
+        await activateVisibleActionItem(item, "shortcut");
+        return true;
+      }
     }
     await runCommand(command);
     return true;

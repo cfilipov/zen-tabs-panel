@@ -317,15 +317,6 @@
         "parameters": []
       },
       {
-        "name": "getDuplicateGroups",
-        "type": "function",
-        "async": true,
-        "description": "Get duplicate URL groups from the tab index",
-        "parameters": [
-          { "name": "paramsJson", "type": "string", "optional": true }
-        ]
-      },
-      {
         "name": "getDuplicateGroupsViewModel",
         "type": "function",
         "async": true,
@@ -343,13 +334,6 @@
           { "name": "url", "type": "string" },
           { "name": "domId", "type": "string", "optional": true }
         ]
-      },
-      {
-        "name": "getActionsSnapshot",
-        "type": "function",
-        "async": true,
-        "description": "Get compact counts and previews for the actions menu",
-        "parameters": []
       },
       {
         "name": "getActionsViewModel",
@@ -639,15 +623,6 @@
         "parameters": []
       },
       {
-        "name": "recordReplayKey",
-        "type": "function",
-        "async": true,
-        "description": "Record a visible-popup chord key into the in-flight replay trace without firing an action.",
-        "parameters": [
-          { "name": "payload", "type": "any" }
-        ]
-      },
-      {
         "name": "bridgeDispatchSettled",
         "type": "function",
         "async": true,
@@ -869,13 +844,6 @@
         ]
       },
       {
-        "name": "getFolders",
-        "type": "function",
-        "async": true,
-        "description": "List all Zen tab-group folders",
-        "parameters": []
-      },
-      {
         "name": "getFoldersViewModel",
         "type": "function",
         "async": true,
@@ -893,13 +861,6 @@
         ]
       },
       {
-        "name": "getContainers",
-        "type": "function",
-        "async": true,
-        "description": "List Firefox contextual identities (containers)",
-        "parameters": []
-      },
-      {
         "name": "getContainersViewModel",
         "type": "function",
         "async": true,
@@ -914,13 +875,6 @@
         "parameters": [
           { "name": "userContextId", "type": "integer" }
         ]
-      },
-      {
-        "name": "getProfiles",
-        "type": "function",
-        "async": true,
-        "description": "Enumerate Firefox/Zen profiles from the toolkit profile service",
-        "parameters": []
       },
       {
         "name": "getProfilesViewModel",

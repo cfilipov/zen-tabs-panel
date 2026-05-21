@@ -622,9 +622,7 @@ const QUERIES = Object.freeze({
   [MSG.GET_ACTIVE_TAB_INFO]:           ()  => getActiveTabInfo(),
   [MSG.GET_NAVIGATION_HISTORY]:        ()  => api.getNavigationHistory(),
   [MSG.GET_RECENTLY_CLOSED]:           ()  => getRecentlyClosed(),
-  [MSG.GET_TAB_INFO]:                  (m) => api.getTabInfo(m.domId),
   [MSG.GET_TAB_INFO_VIEW_MODEL]:       ()  => getTabInfoViewModel(),
-  [MSG.GET_HISTORY_VISITS]:            (m) => browser.history.getVisits({ url: m.url }),
   [MSG.GET_SELECTED_TAB_DOM_IDS]:      ()  => api.getSelectedTabDomIds(),
   [MSG.GET_SELECTED_TAB_URLS]:         ()  => api.getSelectedTabUrls(),
   [MSG.GET_WORKSPACES_WITH_ICONS]:     ()  => api.getWorkspacesWithIcons(),
@@ -638,22 +636,17 @@ const QUERIES = Object.freeze({
   [MSG.TAB_INDEX_GET_ACTIVE_ROW]:      ()  => api.getActiveRow(),
   [MSG.TAB_INDEX_GET_ROWS_BY_DOM_IDS]: (m) => api.getRowsByDomIds(JSON.stringify(m.domIds || [])),
   [MSG.TAB_INDEX_GET_WORKSPACE_COUNTS]: () => api.getWorkspaceTabCounts(),
-  [MSG.TAB_INDEX_GET_ACTIONS_SNAPSHOT]: () => api.getActionsSnapshot(),
   [MSG.TAB_INDEX_GET_ACTIONS_MODEL]:    async () => {
     const recentlyClosed = await getRecentlyClosed().catch(() => []);
     return api.getActionsViewModel(recentlyClosed.length);
   },
-  [MSG.TAB_INDEX_GET_DUPLICATE_GROUPS]: (m) => api.getDuplicateGroups(JSON.stringify(m.params || {})),
   [MSG.TAB_INDEX_GET_DUPLICATE_GROUPS_MODEL]: (m) => api.getDuplicateGroupsViewModel(m.workspaceFilter || "all"),
   [MSG.TAB_INDEX_GET_DUPLICATE_PROMPT_MODEL]: (m) => api.getDuplicatePromptViewModel(m.url || "", m.domId || null),
-  [MSG.GET_CONTAINERS]:                ()  => api.getContainers(),
   [MSG.GET_CONTAINERS_VIEW_MODEL]:     ()  => api.getContainersViewModel(),
-  [MSG.GET_FOLDERS]:                   ()  => api.getFolders(),
   [MSG.GET_FOLDERS_VIEW_MODEL]:        ()  => api.getFoldersViewModel(),
   [MSG.CHECK_COMPANION_MOD]:           ()  => api.getCompanionMods(),
   [MSG.INSTALL_COMPANION_MOD]:         (m) => api.installCompanionMod(m.modId),
   [MSG.REMOVE_COMPANION_MOD]:          (m) => api.removeCompanionMod(m.modId),
-  [MSG.GET_PROFILES]:                  ()  => api.getProfiles(),
   [MSG.GET_PROFILES_VIEW_MODEL]:       ()  => api.getProfilesViewModel(),
   [MSG.LIST_EXTENSIONS]:               ()  => api.listBrowserActionExtensions(),
 });
@@ -725,6 +718,7 @@ const SYNC_HANDLERS = Object.freeze({
       m.listVersion,
       m.chordKey || "",
       m.activation || null,
+      m.expectedRowId || "",
     );
     if (result && typeof result === "object" && result.kind === "open-view") {
       return result;
@@ -733,7 +727,6 @@ const SYNC_HANDLERS = Object.freeze({
     return result;
   },
   [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view, m.height, m.dynamicSidebarWidth, m.inst),
-  [MSG.RECORD_REPLAY_KEY]:    (m) => api.recordReplayKey({ chordKey: m.chordKey }),
   [MSG.BRIDGE_DISPATCH_SETTLED]: (m) => api.bridgeDispatchSettled(m.inst),
 });
 

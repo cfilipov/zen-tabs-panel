@@ -28,9 +28,6 @@ export type Send = <T = unknown>(message: unknown) => Promise<T>;
 
 export function createFolderClient(send: Send = sendMessage) {
   return {
-    getFolders() {
-      return send<FolderRow[]>({ type: "get-folders" });
-    },
     getFoldersViewModel() {
       return send<FoldersViewModel>({ type: "get-folders-view-model" });
     },

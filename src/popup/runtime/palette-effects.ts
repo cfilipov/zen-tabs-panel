@@ -60,6 +60,7 @@ export function createPaletteEffects() {
       listVersion?: number,
       chordKey?: string | null,
       activation = "trace",
+      expectedRowId?: string | null,
     ) {
       return sendMessage<ActivateViewRowResult>({
         type: "activate-current-view-row",
@@ -68,10 +69,8 @@ export function createPaletteEffects() {
         ...(switchToTarget ? { switchToTarget: true } : {}),
         ...(typeof listVersion === "number" && listVersion > 0 ? { listVersion } : {}),
         ...(chordKey ? { chordKey, activation } : {}),
+        ...(expectedRowId ? { expectedRowId } : {}),
       });
-    },
-    recordReplayKey(chordKey: string) {
-      fireMessage({ type: "record-replay-key", chordKey });
     },
     bridgeDispatchSettled(inst: number | null) {
       fireMessage({ type: "bridge-dispatch-settled", inst });

@@ -54,12 +54,6 @@ export type Send = <T = unknown>(message: unknown) => Promise<T>;
 
 export function createTabInfoClient(send: Send = sendMessage) {
   return {
-    getTabInfo(domId: string) {
-      return send<TabInfo | null>({ type: "get-tab-info", domId });
-    },
-    getHistoryVisits(url: string) {
-      return send<HistoryVisit[]>({ type: "get-history-visits", url });
-    },
     getTabInfoViewModel() {
       return send<TabInfoViewModel>({ type: "get-tab-info-view-model" });
     },

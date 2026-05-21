@@ -30,13 +30,11 @@ this.MSG = Object.freeze({
   CLOSE_TAB:                      "close-tab",
 
   // Tab queries
-  GET_TAB_INFO:                   "get-tab-info",
   GET_TAB_INFO_VIEW_MODEL:        "get-tab-info-view-model",
   GET_ACTIVE_TAB_INFO:             "get-active-tab-info",
   GET_DEFAULT_CLOSE_TARGET:       "get-default-close-target",
   GET_NAVIGATION_HISTORY:         "get-navigation-history",
   GET_RECENTLY_CLOSED:            "get-recently-closed",
-  GET_HISTORY_VISITS:             "get-history-visits",
   GET_SELECTED_TAB_DOM_IDS:       "get-selected-tab-dom-ids",
   GET_SELECTED_TAB_URLS:          "get-selected-tab-urls",
   GET_WORKSPACES_WITH_ICONS:      "get-workspaces-with-icons",
@@ -50,9 +48,7 @@ this.MSG = Object.freeze({
   TAB_INDEX_GET_ACTIVE_ROW:       "tab-index:get-active-row",
   TAB_INDEX_GET_ROWS_BY_DOM_IDS:  "tab-index:get-rows-by-dom-ids",
   TAB_INDEX_GET_WORKSPACE_COUNTS: "tab-index:get-workspace-counts",
-  TAB_INDEX_GET_ACTIONS_SNAPSHOT: "tab-index:get-actions-snapshot",
   TAB_INDEX_GET_ACTIONS_MODEL: "tab-index:get-actions-model",
-  TAB_INDEX_GET_DUPLICATE_GROUPS: "tab-index:get-duplicate-groups",
   TAB_INDEX_GET_DUPLICATE_GROUPS_MODEL: "tab-index:get-duplicate-groups-model",
   TAB_INDEX_GET_DUPLICATE_PROMPT_MODEL: "tab-index:get-duplicate-prompt-model",
 
@@ -136,9 +132,7 @@ this.MSG = Object.freeze({
   UNVISITED_OLDEST:               "unvisited-oldest",
   MOVE_TAB_TO_FOLDER:             "move-tab-to-folder",
   REOPEN_IN_CONTAINER:            "reopen-in-container",
-  GET_CONTAINERS:                 "get-containers",
   GET_CONTAINERS_VIEW_MODEL:      "get-containers-view-model",
-  GET_FOLDERS:                    "get-folders",
   GET_FOLDERS_VIEW_MODEL:         "get-folders-view-model",
 
   // Replay the most recently fired chord-action (cmd+.,.). Background
@@ -147,7 +141,6 @@ this.MSG = Object.freeze({
   // presses keep replaying the SAME prior action.
   REPLAY_LAST_CHORD:              "replay-last-chord",
 
-  RECORD_REPLAY_KEY:             "record-replay-key",
   BRIDGE_DISPATCH_SETTLED:        "bridge-dispatch-settled",
 
   // Duplicate-link intercept: popup-fired actions for the buttons
@@ -164,7 +157,6 @@ this.MSG = Object.freeze({
   REMOVE_COMPANION_MOD:           "remove-companion-mod",
 
   // Profiles
-  GET_PROFILES:                   "get-profiles",
   GET_PROFILES_VIEW_MODEL:        "get-profiles-view-model",
   LAUNCH_PROFILE:                 "launch-profile",
 

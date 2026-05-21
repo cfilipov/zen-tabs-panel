@@ -42,21 +42,6 @@ describe("tab index client", () => {
         getActiveRow: async () => null,
         getRowsByDomIds: async () => [],
         getWorkspaceTabCounts: async () => ({}),
-        getDuplicateGroups: async () => [],
-        getActionsSnapshot: async () => ({
-          version: 1,
-          currentTabHasParent: false,
-          currentTabIsPinned: false,
-          currentTabCanReaderMode: false,
-          childTabCount: 0,
-          siblingTabCount: 0,
-          parentTabCount: 0,
-          unvisitedTabCount: 0,
-          domainCount: 0,
-          duplicateGroupCount: 0,
-          workspaceTabCounts: {},
-          previews: {},
-        }),
       },
     );
 
@@ -104,20 +89,6 @@ describe("tab index client", () => {
         globals.browser = previousBrowser;
       }
     }
-  });
-
-  it("loads duplicate groups through the message fallback", async () => {
-    const sent: unknown[] = [];
-    const client = createTabIndexClient(async <T>(message: unknown) => {
-      sent.push(message);
-      return [] as T;
-    });
-
-    await client.getDuplicateGroups({ workspaceId: "ws-1" });
-
-    expect(sent).toEqual([
-      { type: "tab-index:get-duplicate-groups", params: { workspaceId: "ws-1" } },
-    ]);
   });
 
   it("loads the chrome-owned duplicate groups model through the message fallback", async () => {

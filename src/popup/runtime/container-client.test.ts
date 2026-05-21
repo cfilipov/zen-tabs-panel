@@ -17,16 +17,6 @@ describe("container client", () => {
     });
   });
 
-  it("queries container rows through the supplied model source", async () => {
-    const client = createContainerClient({
-      getContainers: async () => [{ cookieStoreId: "firefox-container-7", name: "Personal" }],
-    });
-
-    await expect(client.getContainers()).resolves.toMatchObject([
-      { userContextId: 7, name: "Personal" },
-    ]);
-  });
-
   it("requests the chrome-owned container view model", async () => {
     const client = createContainerClient({
       getContainersViewModel: async () => ({

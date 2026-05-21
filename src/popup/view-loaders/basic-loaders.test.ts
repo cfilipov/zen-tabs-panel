@@ -70,20 +70,8 @@ describe("basic view loaders", () => {
     expect(result.selectedIndex).toBe(-1);
   });
 
-  it("keeps the active workspace visible so row numbering matches the workspace list", async () => {
+  it("loads the chrome-owned workspace model", async () => {
     const result = await loadMoveToWorkspaceView({
-      getWorkspacesWithIcons: async () => [
-        { uuid: "active", name: "Active", svgContent: "", isActive: true },
-        { uuid: "other", name: "Other", svgContent: "", isActive: false },
-      ],
-    });
-
-    expect(result.rows.map((row) => row.uuid)).toEqual(["active", "other"]);
-  });
-
-  it("prefers the chrome-owned workspace model when available", async () => {
-    const result = await loadMoveToWorkspaceView({
-      getWorkspacesWithIcons: async () => { throw new Error("fallback should not run"); },
       getWorkspacesViewModel: async () => ({
         version: 3,
         view: "move-to-workspace",
@@ -111,31 +99,8 @@ describe("basic view loaders", () => {
     expect(result.model!.rowIntents[0]?.rowId).toBe("main");
   });
 
-  it("loads containers and profiles", async () => {
+  it("loads chrome-owned container and profile models", async () => {
     const containers = await loadOpenInContainerView({
-      getContainers: async () => [{
-        cookieStoreId: "firefox-container-1",
-        userContextId: 1,
-        name: "Work",
-        colorCode: "#00f",
-        iconUrl: "",
-      }],
-    });
-    const profiles = await loadProfilesView({
-      getProfiles: async () => [{
-        name: "default",
-        isCurrent: true,
-        isDefault: true,
-      }],
-    });
-
-    expect(containers.rows[0]?.name).toBe("Work");
-    expect(profiles.rows[0]?.isCurrent).toBe(true);
-  });
-
-  it("prefers chrome-owned container and profile models when available", async () => {
-    const containers = await loadOpenInContainerView({
-      getContainers: async () => { throw new Error("fallback should not run"); },
       getContainersViewModel: async () => ({
         version: 2,
         view: "open-in-container",
@@ -155,7 +120,6 @@ describe("basic view loaders", () => {
       }),
     });
     const profiles = await loadProfilesView({
-      getProfiles: async () => { throw new Error("fallback should not run"); },
       getProfilesViewModel: async () => ({
         version: 4,
         view: "profiles",
@@ -175,20 +139,9 @@ describe("basic view loaders", () => {
     expect(profiles.model!.rowIntents[0]?.disabled).toBe(true);
   });
 
-  it("loads folders and treats workspace-icon failures as optional", async () => {
-    const result = await loadMoveToFolderView(
-      { getFolders: async () => [{ id: "f1", name: "Folder", workspaceId: null }] },
-      { getWorkspacesWithIcons: async () => { throw new Error("no icons"); } },
-    );
-
-    expect(result.folders).toEqual([{ id: "f1", name: "Folder", workspaceId: null }]);
-    expect(result.workspaces).toEqual([]);
-  });
-
-  it("prefers the chrome-owned folder model when available", async () => {
+  it("loads the chrome-owned folder model", async () => {
     const result = await loadMoveToFolderView(
       {
-        getFolders: async () => { throw new Error("fallback should not run"); },
         getFoldersViewModel: async () => ({
           version: 5,
           view: "move-to-folder",

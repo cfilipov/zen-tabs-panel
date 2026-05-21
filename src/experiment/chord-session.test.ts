@@ -236,29 +236,6 @@ describe("chord-session replay recording", () => {
     expect(() => session.assertInvariant()).toThrow("[ChordSession] invalid transition");
   });
 
-  it("records replay keys without firing or committing actions", () => {
-    const session = makeSession();
-    session.recordEvent({ kind: "replay-key", chordKey: "3" });
-
-    expect(session.getReplayState()).toMatchObject({
-      lastChordReplay: null,
-      currentChordReplay: null,
-    });
-  });
-
-  it("uses replay-key events as replay bridge keys", () => {
-    const session = makeSession();
-    session.recordEvent({ kind: "open-view", view: "last-visited" });
-    session.recordEvent({ kind: "replay-key", chordKey: "3" });
-    session.recordEvent({ kind: "popup-action", message: { type: "activate-tab", tabId: 42 } });
-
-    expect(session.getReplayState().lastChordReplay).toMatchObject({
-      kind: "open-view",
-      view: "last-visited",
-      bridgeKeys: ["3"],
-    });
-  });
-
   it("commits chrome model row intents instead of popup bridge replays", () => {
     const session = makeSession();
     session.recordEvent({ kind: "open-view", view: "last-visited" });

@@ -889,6 +889,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
     );
     const KEYBINDINGS = chordSupportScope.ZEN_KEYBINDINGS || [];
     const WORKSPACE_DIGIT_CHORDS = chordSupportScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
+    function flattenNavigationBindings(nodes) {
+      const out = [];
+      for (const node of nodes || []) {
+        out.push(node);
+        if (node.kind === "prefix") out.push(...flattenNavigationBindings(node.children || []));
+      }
+      return out;
+    }
+    const NAV_BINDINGS = flattenNavigationBindings(KEYBINDINGS);
+    const NAV_BINDING_BY_ID = new Map(NAV_BINDINGS.map((node) => [node.id, node]));
+    function prefixBindingForView(view) {
+      return (KEYBINDINGS || []).find((node) => node && node.kind === "prefix" && node.view === view) || null;
+    }
     const tabIndexScope = {};
     Services.scriptloader.loadSubScript(
       context.extension.getURL("experiment/tab-index.js"),
@@ -3614,6 +3627,66 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return !!result;
     }
 
+    function rootBindingForChord(chordKey) {
+      if (!chordKey) return null;
+      return (KEYBINDINGS || []).find((node) => node && node.chord === chordKey) || null;
+    }
+
+    function prefixChildBindingForChord(view, chordKey) {
+      if (!chordKey) return null;
+      const prefix = prefixBindingForView(view);
+      return (prefix && Array.isArray(prefix.children) ? prefix.children : [])
+        .find((node) => node && node.chord === chordKey) || null;
+    }
+
+    function visibleActionBinding(view, expectedRowId, replayChordKey) {
+      if (view === "actions") {
+        if (expectedRowId && String(expectedRowId).startsWith("workspace-switch:")) {
+          return { kind: "workspace-switch", workspaceId: String(expectedRowId).slice("workspace-switch:".length) };
+        }
+        const byId = expectedRowId ? NAV_BINDING_BY_ID.get(expectedRowId) : null;
+        return byId ? { kind: "binding", node: byId } : { kind: "binding", node: rootBindingForChord(replayChordKey) };
+      }
+      const prefix = prefixBindingForView(view);
+      if (!prefix) return null;
+      const children = Array.isArray(prefix.children) ? prefix.children : [];
+      const byId = expectedRowId ? children.find((node) => node && node.id === expectedRowId) : null;
+      return byId
+        ? { kind: "binding", node: byId }
+        : { kind: "binding", node: prefixChildBindingForChord(view, replayChordKey) };
+    }
+
+    function activateVisibleActionIntent(view, expectedRowId, replayChordKey) {
+      const resolved = visibleActionBinding(view, expectedRowId, replayChordKey);
+      if (!resolved) return null;
+
+      if (resolved.kind === "workspace-switch") {
+        const rows = getWorkspaceRows(false);
+        const index = rows.findIndex((row) => row && row.uuid === resolved.workspaceId);
+        if (index < 0 || rows[index].isActive) return false;
+        chordSession.recordEvent({ kind: "terminal-action", payload: { type: "switch-workspace", index } });
+        void switchWorkspaceByIndexInternal(index);
+        return true;
+      }
+
+      const node = resolved.node;
+      if (!node) return false;
+      if (node.kind === "action") {
+        if (chordSession.hasCurrentOpenViewReplay() && replayChordKey) {
+          trackChordBridgeKey({ key: replayChordKey });
+        }
+        if (paletteRequestFire) {
+          paletteRequestFire.async({ kind: "chord-action", actionId: node.id });
+        }
+        return true;
+      }
+      if (node.kind === "open-view" || node.kind === "prefix") {
+        trackChordOpenView(node.view);
+        return { kind: "open-view", view: node.view, params: {} };
+      }
+      return false;
+    }
+
     function switchHiddenBridgeView(view, params, previousView, previousParams) {
       if (pendingReveal) destroyOverlay({ silent: true });
       createOverlay(view, params || {});
@@ -3643,6 +3716,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
         ? options.params
         : (currentViewParams || {});
       try {
+        if (view === "actions" || prefixBindingForView(view)) {
+          const result = activateVisibleActionIntent(view, expectedRowId, replayChordKey);
+          if (result !== null) return result;
+        }
         if (view === "domains") {
           tabIndex.start();
           const win = tabIndex.getWindow("domains", rowIndex, 1, params);
@@ -5140,13 +5217,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
           });
         },
 
-        async activateCurrentViewRow(index, source, switchToTarget, listVersion, chordKey, activation) {
+        async activateCurrentViewRow(index, source, switchToTarget, listVersion, chordKey, activation, expectedRowId) {
           const view = currentViewName || getActiveBridgeView();
-          if (!view || view === "actions") return false;
+          if (!view) return false;
           return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, {
             destroyOverlay: false,
             listVersion,
             replayChordKey: typeof chordKey === "string" ? chordKey : null,
+            expectedRowId: typeof expectedRowId === "string" ? expectedRowId : null,
             params: currentViewParams || {},
           });
         },
@@ -5645,13 +5723,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return activateUnvisitedByOrder("oldest", excludeDomIds);
         },
 
-        // List Zen folders (tab groups) for the move-to-folder menu.
-        // Folders are tab groups under gBrowser; gZenFolders adds the
-        // workspace-aware UI on top, but the data lives on gBrowser.
-        async getFolders() {
-          return getFolderRows();
-        },
-
         async getFoldersViewModel() {
           return getFoldersViewModelInternal();
         },
@@ -5660,21 +5731,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return moveTabToFolderInternal(folderId, switchToTarget);
         },
 
-        // List Firefox contextual identities (containers). Kept in chrome so
-        // hidden chords and visible rows resolve against the same model.
-        async getContainers() {
-          return getContainerRows();
-        },
-
         async getContainersViewModel() {
           return getContainersViewModelInternal();
-        },
-
-        // Enumerate Firefox/Zen profiles from the toolkit profile service.
-        // Same source `about:profiles` reads — rootDir is the unique key
-        // (names can technically collide), so identity checks use it.
-        async getProfiles() {
-          return getProfileRows();
         },
 
         async getProfilesViewModel() {
@@ -5828,16 +5886,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return tabIndex.getWorkspaceTabCounts();
         },
 
-        async getDuplicateGroups(paramsJson) {
-          let params = {};
-          if (typeof paramsJson === "string" && paramsJson) {
-            try { params = JSON.parse(paramsJson); } catch (e) { params = {}; }
-          } else if (paramsJson && typeof paramsJson === "object") {
-            params = paramsJson;
-          }
-          return tabIndex.getDuplicateGroups(params);
-        },
-
         async getDuplicateGroupsViewModel(workspaceFilter) {
           return getDuplicateGroupsViewModelInternal(workspaceFilter);
         },
@@ -5845,10 +5893,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async getDuplicatePromptViewModel(url, domId) {
           tabIndex.start();
           return getDuplicatePromptViewModelInternal(url, domId);
-        },
-
-        async getActionsSnapshot() {
-          return getActionsSnapshotInternal();
         },
 
         async getActionsViewModel(recentlyClosedCount) {
@@ -6424,14 +6468,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // back to its own popup-action recording if this returns false.
         async replayLastChord() {
           return replayLastChordTrace();
-        },
-
-        async recordReplayKey(payload) {
-          if (!payload || typeof payload.chordKey !== "string" || !payload.chordKey) return;
-          chordSession.recordEvent({
-            kind: "replay-key",
-            chordKey: payload.chordKey,
-          });
         },
 
         async bridgeDispatchSettled(inst) {

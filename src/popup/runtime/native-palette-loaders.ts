@@ -4,7 +4,7 @@ import type { ExtensionRow } from "./extension-client";
 import type { FolderRow, FoldersViewModel } from "./folder-client";
 import type { NavigationHistory, RecentlyClosedRow } from "./history-client";
 import type { ProfileRow, ProfilesViewModel } from "./profile-client";
-import type { HistoryVisit, TabInfo, TabInfoViewModel } from "./tab-info-client";
+import type { TabInfoViewModel } from "./tab-info-client";
 import type { DomainIndexRow, TabIndexRow } from "./tab-index-client";
 import type { WorkspaceRow, WorkspacesViewModel } from "./workspace-client";
 import type { ViewLoadController } from "./view-load-controller";
@@ -32,19 +32,17 @@ export type NativePaletteLoaderDeps = {
   paletteStore: ReturnType<typeof createNativePaletteState>;
   viewLoad: ViewLoadController<ViewId>;
   tabIndexClient: TabIndexClient;
-  workspaceClient: { getWorkspacesWithIcons(): Promise<WorkspaceRow[]>; getWorkspacesViewModel?(): Promise<WorkspacesViewModel> };
+  workspaceClient: { getWorkspacesWithIcons(): Promise<WorkspaceRow[]>; getWorkspacesViewModel(): Promise<WorkspacesViewModel> };
   extensionClient: { listExtensions(): Promise<ExtensionRow[]> };
   historyClient: {
     getNavigationHistory(): Promise<NavigationHistory | null>;
     getRecentlyClosed(): Promise<RecentlyClosedRow[]>;
   };
-  containerClient: { getContainers(): Promise<ContainerRow[]>; getContainersViewModel?(): Promise<ContainersViewModel> };
-  folderClient: { getFolders(): Promise<FolderRow[]>; getFoldersViewModel?(): Promise<FoldersViewModel> };
-  profileClient: { getProfiles(): Promise<ProfileRow[]>; getProfilesViewModel?(): Promise<ProfilesViewModel> };
+  containerClient: { getContainersViewModel(): Promise<ContainersViewModel> };
+  folderClient: { getFoldersViewModel(): Promise<FoldersViewModel> };
+  profileClient: { getProfilesViewModel(): Promise<ProfilesViewModel> };
   tabInfoClient: {
-    getTabInfo(domId: string): Promise<TabInfo | null>;
-    getHistoryVisits(url: string): Promise<HistoryVisit[]>;
-    getTabInfoViewModel?(): Promise<TabInfoViewModel>;
+    getTabInfoViewModel(): Promise<TabInfoViewModel>;
   };
   getSelectedTabDomIds: () => Promise<string[]>;
 };
@@ -76,10 +74,6 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
     try {
       const data = await loadActionsMenuData({
         tabIndexClient: deps.tabIndexClient,
-        workspaceClient: deps.workspaceClient,
-        extensionClient: deps.extensionClient,
-        historyClient: deps.historyClient,
-        getSelectedTabDomIds: deps.getSelectedTabDomIds,
       });
       paletteStore.applyActionsMenuData(data);
     } catch {

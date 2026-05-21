@@ -14,8 +14,7 @@ export type DuplicatePromptData = {
 export type DuplicatePromptParams = URLSearchParams | Record<string, unknown>;
 
 export type DuplicatePromptTabIndexClient = {
-  getDuplicateGroups(params?: Record<string, unknown>): Promise<DuplicateGroupRow[]>;
-  getDuplicatePromptViewModel?(url: string, domId?: string | null): Promise<DuplicatePromptViewModel>;
+  getDuplicatePromptViewModel(url: string, domId?: string | null): Promise<DuplicatePromptViewModel>;
 };
 
 export type DuplicatePromptWorkspaceClient = {
@@ -28,16 +27,6 @@ function paramValue(params: DuplicatePromptParams, key: "url" | "domId") {
   return typeof value === "string" ? value : null;
 }
 
-function prioritizeExistingTab(group: DuplicateGroupRow | null, domId: string | null) {
-  if (!group || !domId) return group;
-  const existingIndex = group.tabs.findIndex((tab) => tab.domId === domId);
-  if (existingIndex <= 0) return group;
-  const tabs = group.tabs.slice();
-  const [existing] = tabs.splice(existingIndex, 1);
-  tabs.unshift(existing);
-  return { ...group, tabs };
-}
-
 export async function loadDuplicatePromptView(
   tabIndexClient: DuplicatePromptTabIndexClient,
   workspaceClient: DuplicatePromptWorkspaceClient,
@@ -45,33 +34,18 @@ export async function loadDuplicatePromptView(
 ): Promise<DuplicatePromptData> {
   const url = paramValue(params, "url") || "";
   const domId = paramValue(params, "domId");
-  const [model, groups, workspaces] = await Promise.all([
-    url && tabIndexClient.getDuplicatePromptViewModel
-      ? tabIndexClient.getDuplicatePromptViewModel(url, domId).catch(() => null)
-      : Promise.resolve(null),
-    url && !tabIndexClient.getDuplicatePromptViewModel
-      ? tabIndexClient.getDuplicateGroups({ url, includeSingleton: true }).catch(() => [])
-      : Promise.resolve([]),
+  const [model, workspaces] = await Promise.all([
+    tabIndexClient.getDuplicatePromptViewModel(url, domId),
     workspaceClient.getWorkspacesWithIcons().catch(() => []),
   ]);
 
-  if (model) {
-    return {
-      url: model.url,
-      domId: model.domId,
-      group: model.group,
-      workspaces,
-      selectedIndex: model.selectedIndex,
-      version: model.version,
-      model: model.model,
-    };
-  }
-
   return {
-    url,
-    domId,
-    group: prioritizeExistingTab(groups[0] ?? null, domId),
+    url: model.url,
+    domId: model.domId,
+    group: model.group,
     workspaces,
-    selectedIndex: -1,
+    selectedIndex: model.selectedIndex,
+    version: model.version,
+    model: model.model,
   };
 }

@@ -25,7 +25,7 @@
     const raw = String(key || "");
     const shiftedDigit = /^Shift\+([1-9])$/.exec(raw);
     if (shiftedDigit) {
-    return {
+      return {
         key: raw,
         code: "Digit" + shiftedDigit[1],
         shiftKey: true,
@@ -272,8 +272,6 @@
       } else if (event.kind === "armed") {
         resetCurrentReplay();
         transition("armed-root", "armed");
-      } else if (event.kind === "replay-key") {
-        trackBridgeKey({ key: event.chordKey });
       } else if (event.kind === "model-row-intent") {
         trackModelRowIntent(event);
       }

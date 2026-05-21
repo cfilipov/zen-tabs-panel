@@ -11,23 +11,23 @@ export type HistoryClient = {
 };
 
 export type WorkspaceClient = {
-  getWorkspacesWithIcons(): Promise<WorkspaceRow[]>;
-  getWorkspacesViewModel?(): Promise<WorkspacesViewModel>;
+  getWorkspacesViewModel(): Promise<WorkspacesViewModel>;
 };
 
 export type ContainerClient = {
-  getContainers(): Promise<ContainerRow[]>;
-  getContainersViewModel?(): Promise<ContainersViewModel>;
+  getContainersViewModel(): Promise<ContainersViewModel>;
 };
 
 export type FolderClient = {
-  getFolders(): Promise<FolderRow[]>;
-  getFoldersViewModel?(): Promise<FoldersViewModel>;
+  getFoldersViewModel(): Promise<FoldersViewModel>;
 };
 
 export type ProfileClient = {
-  getProfiles(): Promise<ProfileRow[]>;
-  getProfilesViewModel?(): Promise<ProfilesViewModel>;
+  getProfilesViewModel(): Promise<ProfilesViewModel>;
+};
+
+export type FolderWorkspaceClient = {
+  getWorkspacesWithIcons(): Promise<WorkspaceRow[]>;
 };
 
 export type MoveToWorkspaceViewData = {
@@ -75,47 +75,27 @@ export async function loadRecentlyClosedView(historyClient: HistoryClient) {
 }
 
 export async function loadMoveToWorkspaceView(workspaceClient: WorkspaceClient): Promise<MoveToWorkspaceViewData> {
-  if (workspaceClient.getWorkspacesViewModel) {
-    return workspaceClient.getWorkspacesViewModel();
-  }
-  return {
-    rows: await workspaceClient.getWorkspacesWithIcons(),
-    selectedIndex: -1,
-  };
+  return workspaceClient.getWorkspacesViewModel();
 }
 
 export async function loadOpenInContainerView(containerClient: ContainerClient): Promise<OpenInContainerViewData> {
-  if (containerClient.getContainersViewModel) {
-    return containerClient.getContainersViewModel();
-  }
-  return {
-    rows: await containerClient.getContainers(),
-    selectedIndex: -1,
-  };
+  return containerClient.getContainersViewModel();
 }
 
-export async function loadMoveToFolderView(folderClient: FolderClient, workspaceClient: WorkspaceClient): Promise<MoveToFolderViewData> {
+export async function loadMoveToFolderView(folderClient: FolderClient, workspaceClient: FolderWorkspaceClient): Promise<MoveToFolderViewData> {
   const [folderResult, workspaces] = await Promise.all([
-    folderClient.getFoldersViewModel ? folderClient.getFoldersViewModel() : folderClient.getFolders(),
+    folderClient.getFoldersViewModel(),
     workspaceClient.getWorkspacesWithIcons().catch(() => []),
   ]);
-  const folderModel = Array.isArray(folderResult) ? null : folderResult;
-  const folders = Array.isArray(folderResult) ? folderResult : folderResult.rows;
   return {
-    folders,
+    folders: folderResult.rows,
     workspaces,
-    selectedIndex: folderModel ? folderModel.selectedIndex : -1,
-    version: folderModel ? folderModel.version : undefined,
-    model: folderModel ? folderModel.model : undefined,
+    selectedIndex: folderResult.selectedIndex,
+    version: folderResult.version,
+    model: folderResult.model,
   };
 }
 
 export async function loadProfilesView(profileClient: ProfileClient): Promise<ProfilesViewData> {
-  if (profileClient.getProfilesViewModel) {
-    return profileClient.getProfilesViewModel();
-  }
-  return {
-    rows: await profileClient.getProfiles(),
-    selectedIndex: -1,
-  };
+  return profileClient.getProfilesViewModel();
 }

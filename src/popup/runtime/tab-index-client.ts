@@ -139,21 +139,6 @@ export type ActionPreview = {
   isHistory?: boolean;
 };
 
-export type ActionsSnapshot = {
-  version: number;
-  currentTabHasParent: boolean;
-  currentTabIsPinned: boolean;
-  currentTabCanReaderMode: boolean;
-  childTabCount: number;
-  siblingTabCount: number;
-  parentTabCount: number;
-  unvisitedTabCount: number;
-  domainCount: number;
-  duplicateGroupCount: number;
-  workspaceTabCounts: Record<string, number>;
-  previews: Record<string, ActionPreview | null>;
-};
-
 export type ActionsViewModel = {
   version: number;
   view: "actions";
@@ -184,9 +169,7 @@ type ZenWorkspacesApi = {
   getActiveRow(): Promise<TabIndexRow | null>;
   getRowsByDomIds(domIdsJson?: string): Promise<TabIndexRow[]>;
   getWorkspaceTabCounts(): Promise<Record<string, number>>;
-  getActionsSnapshot(): Promise<ActionsSnapshot>;
   getActionsViewModel?(recentlyClosedCount?: number): Promise<ActionsViewModel>;
-  getDuplicateGroups(paramsJson?: string): Promise<DuplicateGroupRow[]>;
   getDuplicateGroupsViewModel?(workspaceFilter?: string): Promise<DuplicateGroupsViewModel>;
   getDuplicatePromptViewModel?(url: string, domId?: string | null): Promise<DuplicatePromptViewModel>;
 };
@@ -242,17 +225,9 @@ export function createTabIndexClient(send: Send = sendMessage, directApi: ZenWor
       if (directApi) return directApi.getWorkspaceTabCounts();
       return send<Record<string, number>>({ type: "tab-index:get-workspace-counts" });
     },
-    getActionsSnapshot() {
-      if (directApi) return directApi.getActionsSnapshot();
-      return send<ActionsSnapshot>({ type: "tab-index:get-actions-snapshot" });
-    },
     getActionsViewModel() {
       if (directApi?.getActionsViewModel) return directApi.getActionsViewModel();
       return send<ActionsViewModel>({ type: "tab-index:get-actions-model" });
-    },
-    getDuplicateGroups(params: Record<string, unknown> = {}) {
-      if (directApi) return directApi.getDuplicateGroups(encodeParams(params));
-      return send<DuplicateGroupRow[]>({ type: "tab-index:get-duplicate-groups", params });
     },
     getDuplicateGroupsViewModel(workspaceFilter = "all") {
       if (directApi?.getDuplicateGroupsViewModel) return directApi.getDuplicateGroupsViewModel(workspaceFilter);
