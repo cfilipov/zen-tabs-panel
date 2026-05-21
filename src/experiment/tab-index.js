@@ -488,6 +488,29 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     return filteredRows(view, params);
   }
 
+  function rowChordKey(absoluteIndex) {
+    return absoluteIndex >= 0 && absoluteIndex < 9 ? String(absoluteIndex + 1) : null;
+  }
+
+  function rowIntentForViewRow(view, row, absoluteIndex) {
+    const chordKey = rowChordKey(absoluteIndex);
+    if (!chordKey) return null;
+    if (view === "domains") {
+      return {
+        rowId: row?.domain || null,
+        index: absoluteIndex,
+        chordKey,
+        action: "open-domain-tabs",
+      };
+    }
+    return {
+      rowId: row?.domId || null,
+      index: absoluteIndex,
+      chordKey,
+      action: "activate-tab",
+    };
+  }
+
   function start() {
     if (started) return;
     started = true;
@@ -557,7 +580,8 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       };
     },
     getWindow(view, offset, limit, params) {
-      const viewRows = rowsForView(view || "all", params || {});
+      const viewName = view || "all";
+      const viewRows = rowsForView(viewName, params || {});
       const start = Math.max(0, Number(offset) || 0);
       const size = Math.max(0, Math.min(Number(limit) || 50, 200));
       const faviconRefs = { next: 1, byUrl: new Map(), map: Object.create(null) };
@@ -566,12 +590,20 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
         .map((row) => row.kind === "domain" ? row : compactTabRowForWindow(row, faviconRefs));
       return {
         version,
-        view: view || "all",
+        view: viewName,
         offset: start,
         limit: size,
         total: viewRows.length,
         rows: windowRows,
         favicons: faviconRefs.map,
+        model: {
+          id: viewName,
+          view: viewName,
+          version,
+          rowIntents: windowRows
+            .map((row, index) => rowIntentForViewRow(viewName, row, start + index))
+            .filter((intent) => !!intent),
+        },
       };
     },
     getRowTarget(domId) {

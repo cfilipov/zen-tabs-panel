@@ -241,6 +241,27 @@ test("tab index payloads stay bounded for 10000-tab sessions", () => {
   assert.ok(JSON.stringify(win).length < 50000);
 });
 
+test("tab index windows include chrome-owned row intents", () => {
+  const index = makeIndex([
+    fakeTab("tab-1", "https://example.test/a", "ws-1", { lastAccessed: 3 }),
+    fakeTab("tab-2", "https://example.test/b", "ws-1", { lastAccessed: 2 }),
+  ]);
+
+  const tabs = index.getWindow("last-visited", 0, 10, {});
+  assert.deepEqual(tabs.model.rowIntents, [
+    { rowId: "tab-1", index: 0, chordKey: "1", action: "activate-tab" },
+    { rowId: "tab-2", index: 1, chordKey: "2", action: "activate-tab" },
+  ]);
+
+  const domains = index.getWindow("domains", 0, 10, {});
+  assert.deepEqual(domains.model.rowIntents[0], {
+    rowId: "example.test",
+    index: 0,
+    chordKey: "1",
+    action: "open-domain-tabs",
+  });
+});
+
 test("domain windows use lightweight tab reads for large tab sets", () => {
   const tabs = Array.from({ length: 3000 }, (_, i) =>
     fakeTab(`tab-${i + 1}`, `https://site-${i % 100}.test/${i + 1}`, i % 2 ? "ws-1" : "ws-2", {

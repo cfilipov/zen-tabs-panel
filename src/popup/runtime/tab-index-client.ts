@@ -67,6 +67,7 @@ export type ViewWindow<T = TabIndexRow | DomainIndexRow> = {
   total: number;
   rows: T[];
   favicons?: Record<string, string>;
+  model?: RowIntentModel;
 };
 
 export type RowIntentModel = {
