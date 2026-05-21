@@ -12,6 +12,9 @@ type OverlayControllerScope = {
     matchesInstance: (inst?: number | null) => boolean;
     isVisible: () => boolean;
     hasPendingReveal: () => boolean;
+    setPendingReveal: (reveal: (() => void) | null) => (() => void) | null;
+    clearPendingReveal: (expected?: (() => void) | null) => boolean;
+    runPendingReveal: () => boolean;
   };
 };
 
@@ -48,7 +51,6 @@ describe("overlay controller", () => {
       create,
       reveal,
       isVisible: () => true,
-      hasPendingReveal: () => false,
     });
 
     expect(controller.create("actions", { source: "test" })).toBe("created");
@@ -57,5 +59,23 @@ describe("overlay controller", () => {
     expect(reveal).toHaveBeenCalledOnce();
     expect(controller.isVisible()).toBe(true);
     expect(controller.hasPendingReveal()).toBe(false);
+  });
+
+  it("owns pending reveal closure identity", () => {
+    const controller = loadOverlayControllerScope().createOverlayController();
+    const first = vi.fn(() => {
+      controller.clearPendingReveal(first);
+    });
+    const stale = vi.fn();
+
+    expect(controller.hasPendingReveal()).toBe(false);
+    controller.setPendingReveal(first);
+    expect(controller.hasPendingReveal()).toBe(true);
+    expect(controller.clearPendingReveal(stale)).toBe(false);
+    expect(controller.hasPendingReveal()).toBe(true);
+    expect(controller.runPendingReveal()).toBe(true);
+    expect(first).toHaveBeenCalledOnce();
+    expect(controller.hasPendingReveal()).toBe(false);
+    expect(controller.runPendingReveal()).toBe(false);
   });
 });

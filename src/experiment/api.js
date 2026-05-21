@@ -994,7 +994,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // during its wait window (via onArmed), this is what enterBridgeFromOpenView
     // / revealOverlay surface to display the already-loaded popup with no
     // further delay.
-    let pendingReveal = null;
     let explicitRevealToken = 0;
     let explicitRevealView = null;
     let explicitRevealScheduledToken = 0;
@@ -1093,6 +1092,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function matchesPopupInstance(inst) {
       return overlayController ? overlayController.matchesInstance(inst) : typeof inst !== "number";
+    }
+
+    function setPendingReveal(reveal) {
+      return overlayController ? overlayController.setPendingReveal(reveal) : null;
+    }
+
+    function clearPendingReveal(expected) {
+      return overlayController ? overlayController.clearPendingReveal(expected) : true;
+    }
+
+    function hasPendingReveal() {
+      return !!(overlayController && overlayController.hasPendingReveal());
+    }
+
+    function runPendingReveal() {
+      return !!(overlayController && overlayController.runPendingReveal());
     }
 
     // Reveal-blocked flag: set the moment destroyOverlay starts tearing
@@ -1934,8 +1949,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       scheduleNativePopupContentResize(viewName);
 
       const reveal = () => {
-        if (pendingReveal !== reveal) return;
-        pendingReveal = null;
+        if (!clearPendingReveal(reveal)) return;
         overlay.style.visibility = "visible";
         overlay.style.opacity = "1";
         overlay.style.pointerEvents = "auto";
@@ -1950,7 +1964,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         });
         br.focus();
       };
-      pendingReveal = reveal;
+      setPendingReveal(reveal);
 
       return overlay;
     }
@@ -2007,7 +2021,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       setReadyTargetView(viewName, "ready-target-view");
       const panel = w.document.getElementById(PANEL_ID);
       const br = w.document.getElementById(BROWSER_ID);
-      const idleHidden = overlay.style.visibility === "hidden" && !pendingReveal;
+      const idleHidden = overlay.style.visibility === "hidden" && !hasPendingReveal();
 
       // Intentionally NOT resizing panel here. The popup has been alive
       // (and at its last measured size) since extension startup;
@@ -2036,8 +2050,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       delete overlay.dataset.closing;
 
       const reveal = () => {
-        if (pendingReveal !== reveal) return;
-        pendingReveal = null;
+        if (!clearPendingReveal(reveal)) return;
         overlay.style.visibility = "visible";
         overlay.style.opacity = "1";
         overlay.style.pointerEvents = "auto";
@@ -2056,7 +2069,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
         if (br) br.focus();
       };
-      pendingReveal = reveal;
+      setPendingReveal(reveal);
 
       // Generation-tagged so stale frame scripts (from prior extension
       // loads) ignore it and only the current popup-process listener
@@ -2087,8 +2100,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function revealOverlay() {
-      const reveal = pendingReveal;
-      if (reveal) reveal();
+      runPendingReveal();
       disarmChordShims("visible");
       if (chordSession) chordSession.transition("visible", "revealOverlay");
 
@@ -2103,7 +2115,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         overlay.style.opacity === "0" ||
         overlay.style.pointerEvents === "none"
       ) {
-        pendingReveal = null;
+        clearPendingReveal();
         overlay.style.visibility = "visible";
         overlay.style.opacity = "1";
         overlay.style.pointerEvents = "auto";
@@ -2136,7 +2148,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const br = w.document.getElementById(BROWSER_ID);
       if (!overlay || overlay.dataset.closing) return;
       disarmChordShims("visible");
-      pendingReveal = null;
+      clearPendingReveal();
       overlay.style.visibility = "visible";
       overlay.style.opacity = "1";
       overlay.style.pointerEvents = "auto";
@@ -2153,7 +2165,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function revealExplicitViewIfReady(view) {
       const viewName = view || "actions";
-      if (explicitRevealView !== viewName || !pendingReveal) return false;
+      if (explicitRevealView !== viewName || !hasPendingReveal()) return false;
 
       const w = getWin();
       if (!w) return false;
@@ -2184,7 +2196,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         explicitRevealScheduledToken = 0;
         explicitRevealView = null;
         setRevealDeferred(false, "reveal-deferred-clear");
-        if (pendingReveal) revealOverlay();
+        if (hasPendingReveal()) revealOverlay();
         else forceRevealOverlay();
       };
       if (skipOverlayAnimations) {
@@ -2219,7 +2231,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             if (currentViewName !== (view || "actions")) return;
             explicitRevealView = null;
             setRevealDeferred(false, "reveal-deferred-clear");
-            if (pendingReveal) revealOverlay();
+            if (hasPendingReveal()) revealOverlay();
             else forceRevealOverlay();
           });
         });
@@ -2252,7 +2264,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         if (Date.now() - startedAt < 2000) {
           w2.setTimeout(tryReveal, 100);
-        } else if (pendingReveal) {
+        } else if (hasPendingReveal()) {
           explicitRevealView = null;
           setRevealDeferred(false, "reveal-deferred-clear");
           revealOverlay();
@@ -2429,10 +2441,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const height = Number(msg.data && msg.data.height);
         if (height > 0) {
           resizePanelToView(view, height, undefined, { allowExplicitReveal: false });
-          if (!explicitRevealView && isRevealDeferred() && pendingReveal && (!hasBridgeBuffer() || getBridgeBufferLength() === 0)) {
+          if (!explicitRevealView && isRevealDeferred() && hasPendingReveal() && (!hasBridgeBuffer() || getBridgeBufferLength() === 0)) {
             setRevealDeferred(false, "reveal-deferred-clear");
             const w2 = getWin();
-            if (w2) w2.setTimeout(() => { if (pendingReveal) revealOverlay(); }, 0);
+            if (w2) w2.setTimeout(() => { if (hasPendingReveal()) revealOverlay(); }, 0);
           }
         }
       }
@@ -2733,8 +2745,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // popup-side reveal-on-pause timer fired between an earlier
       // destroy and this one's rearm (the race that left the menu stuck
       // open on the second cmd+.,p). In that case still force-hide.
-      if (pendingReveal) {
-        pendingReveal = null;
+      if (hasPendingReveal()) {
+        clearPendingReveal();
         if (hard) {
           overlay.remove();
           focusSelectedTabBrowser();
@@ -2835,7 +2847,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!w) return false;
       const overlay = w.document.getElementById(OVERLAY_ID);
       if (!overlay || overlay.dataset.closing) return false;
-      if (pendingReveal) return false;
+      if (hasPendingReveal()) return false;
       return overlay.style.visibility !== "hidden" && overlay.style.opacity !== "0";
     }
 
@@ -2848,7 +2860,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       morphTo: morphToView,
       isVisible: isOverlayVisible,
       isOpen: isOverlayOpen,
-      hasPendingReveal: () => !!pendingReveal,
+      hasPendingReveal,
     });
 
     // -----------------------------------------------------------------------
@@ -2949,7 +2961,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           exists: !!overlay,
           closing: overlay && overlay.dataset ? overlay.dataset.closing || "" : "",
           visibility: overlay && w ? w.getComputedStyle(overlay).visibility : null,
-          pendingReveal: !!pendingReveal,
+          pendingReveal: hasPendingReveal(),
           explicitRevealToken,
           explicitRevealView,
           explicitRevealScheduledToken,
@@ -3048,7 +3060,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Swap the existing prerender (typically the actions-view one from
       // onArmed) for one at the prefix's view. Silent destroy preserves
       // any in-flight bridge state.
-      if (pendingReveal) destroyOverlay({ silent: true });
+      if (hasPendingReveal()) destroyOverlay({ silent: true });
       createOverlay(view);
     }
 
@@ -3103,7 +3115,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       onCancel: () => {
         debugChordTrace("chrome-on-cancel", {});
         disarmChordShims("cancel");
-        if (pendingReveal) destroyOverlay();
+        if (hasPendingReveal()) destroyOverlay();
       },
       onBridgeKey: (keyData) => {
         debugChordTrace("chrome-on-bridge-key", keyData);
@@ -3214,7 +3226,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
       trackChordTerminalAction(payload);
       disarmChordShims("terminal-action");
-      if (pendingReveal) destroyOverlay();
+      if (hasPendingReveal()) destroyOverlay();
       if (payload.type === "action") {
         if (paletteRequestFire) {
           paletteRequestFire.async({ kind: "chord-action", actionId: payload.actionId });
@@ -3265,7 +3277,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (chordSession) chordSession.armBridgeTimer(w, BRIDGE_TIMEOUT_MS, () => {
           finishBridge();
         });
-        if (pendingReveal) {
+        if (hasPendingReveal()) {
           destroyOverlay({ silent: true });
           createOverlay(requestedView);
           armRevealTimer();
@@ -3300,7 +3312,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // prerenderPrefixView swapped to on descent). Otherwise
         // destroy+recreate. silent destroy preserves bridge state for
         // the new popup to drain on POPUP_READY.
-        const prerenderMatches = pendingReveal && (
+        const prerenderMatches = hasPendingReveal() && (
           (!requestedView && currentViewName === "actions") ||
           (!!requestedView && currentViewName === requestedView)
         );
@@ -3313,7 +3325,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           setRevealDeferred(false, "reveal-deferred-clear");
           revealOverlay();
         } else {
-          if (pendingReveal) destroyOverlay({ silent: true });
+          if (hasPendingReveal()) destroyOverlay({ silent: true });
           openOverlayWithView(requestedView);
         }
         return;
@@ -3323,10 +3335,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Keep popup hidden; start reveal-on-pause timer. Same silent-swap
       // requirement as above so the bridge state isn't torn down by the
       // prerender-replacement destroyOverlay.
-      if (pendingReveal && !requestedView) {
+      if (hasPendingReveal() && !requestedView) {
         // Already prerendered at the right default view — keep it hidden.
       } else {
-        if (pendingReveal && requestedView) {
+        if (hasPendingReveal() && requestedView) {
           // Direct submenu chords (cmd+.,r / cmd+.,o) need the popup to
           // boot at the requested view, not rely on a warm root popup
           // receiving WarmRearm before reveal. A missed WarmRearm leaves
@@ -3334,7 +3346,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // which then reports the valid submenu key as invalid.
           createFreshOverlayForDirectOpen(requestedView);
         } else {
-          if (pendingReveal) destroyOverlay({ silent: true });
+          if (hasPendingReveal()) destroyOverlay({ silent: true });
           createOverlay(requestedView);
         }
       }
@@ -3358,7 +3370,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       if (!w) return;
       w.setTimeout(() => {
-        if (!pendingReveal || !isRevealDeferred()) return;
+        if (!hasPendingReveal() || !isRevealDeferred()) return;
         // If the user has already typed chord-chain keys, do not fake
         // readiness. Those keys must be delivered through the popup's real
         // POPUP_READY drain so Svelte's bridge listener is definitely
@@ -3402,7 +3414,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!w) return;
       if (!chordSession) return;
       chordSession.armRevealTimer(w, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700, () => {
-        if (!pendingReveal) return;
+        if (!hasPendingReveal()) return;
         // Don't reveal an empty popup. If the popup hasn't drained yet
         // we'd just paint a blank panel for a beat before the popup's
         // first view rendered (visible flash). Defer the reveal — once
@@ -3423,7 +3435,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!w) return;
       if (!chordSession) return;
       chordSession.armRevealTimer(w, CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS || 700, () => {
-        if (!pendingReveal || isPopupReady()) return;
+        if (!hasPendingReveal() || isPopupReady()) return;
         revealOverlay();
       });
     }
@@ -3753,7 +3765,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function switchHiddenBridgeView(view, params, previousView, previousParams) {
-      if (pendingReveal) destroyOverlay({ silent: true });
+      if (hasPendingReveal()) destroyOverlay({ silent: true });
       createOverlay(view, params || {});
       setActiveBridgeView(view, "switchHiddenBridgeView");
       if (previousView) {
@@ -4146,7 +4158,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const t = e && e.target;
         const name = (t && (t.tagName || t.nodeName) || "").toLowerCase();
         if (
-          pendingReveal &&
+          hasPendingReveal() &&
           chordSession.hasCurrentOpenViewReplay() &&
           t &&
           t.id !== BROWSER_ID
@@ -6372,11 +6384,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // chord chain and the popup will decide reveal timing.
           if (!explicitRevealView && isRevealDeferred()) {
             setRevealDeferred(false, "reveal-deferred-clear");
-            if (drained.length === 0 && pendingReveal) {
+            if (drained.length === 0 && hasPendingReveal()) {
               // Defer one tick so the popup's init() has time to
               // render before we make it visible.
               const w = getWin();
-              if (w) w.setTimeout(() => { if (pendingReveal) revealOverlay(); }, 0);
+              if (w) w.setTimeout(() => { if (hasPendingReveal()) revealOverlay(); }, 0);
             }
           }
           // Race-safety: if the user chorded during initial popup load,
@@ -6547,7 +6559,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         async bridgeDispatchSettled(inst) {
           if (!matchesPopupInstance(inst)) return;
-          if (isRevealBlocked() || !pendingReveal) return;
+          if (isRevealBlocked() || !hasPendingReveal()) return;
           armRevealTimer();
         },
 
@@ -6583,7 +6595,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async revealPalette(inst) {
           if (!matchesPopupInstance(inst)) return;
           if (isRevealBlocked()) return;
-          if (pendingReveal) revealOverlay();
+          if (hasPendingReveal()) revealOverlay();
         },
 
 
@@ -6629,10 +6641,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!isOverlayOpen()) return;
           if (!matchesPopupInstance(inst)) return;
           resizePanelToView(view, height, dynamicSidebarWidth);
-          if (!explicitRevealView && isRevealDeferred() && pendingReveal && (!hasBridgeBuffer() || getBridgeBufferLength() === 0)) {
+          if (!explicitRevealView && isRevealDeferred() && hasPendingReveal() && (!hasBridgeBuffer() || getBridgeBufferLength() === 0)) {
             setRevealDeferred(false, "reveal-deferred-clear");
             const w = getWin();
-            if (w) w.setTimeout(() => { if (pendingReveal) revealOverlay(); }, 0);
+            if (w) w.setTimeout(() => { if (hasPendingReveal()) revealOverlay(); }, 0);
           }
         },
 

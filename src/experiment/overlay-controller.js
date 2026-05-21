@@ -46,6 +46,16 @@
  * @property {() => boolean} hasPendingReveal
  * True while the overlay has a reveal closure waiting to run.
  *
+ * @property {(reveal: Function | null) => Function | null} setPendingReveal
+ * Store the reveal closure for the currently hidden overlay.
+ *
+ * @property {(expected?: Function | null) => boolean} clearPendingReveal
+ * Clear the reveal closure. If `expected` is provided, clear only if it is
+ * still the current closure; returns false for stale closures.
+ *
+ * @property {() => boolean} runPendingReveal
+ * Invoke the current reveal closure if one exists.
+ *
  * @property {() => number} currentInstance
  * Return the live popup instance id used to reject stale POPUP_READY and
  * REVEAL_PALETTE messages.
@@ -66,6 +76,7 @@
 
   function createOverlayController(impl) {
     let popupInstance = 0;
+    let pendingReveal = null;
 
     function nextInstance() {
       popupInstance++;
@@ -80,6 +91,28 @@
       return typeof inst !== "number" || inst === popupInstance;
     }
 
+    function setPendingReveal(reveal) {
+      pendingReveal = typeof reveal === "function" ? reveal : null;
+      return pendingReveal;
+    }
+
+    function clearPendingReveal(expected) {
+      if (typeof expected === "function" && pendingReveal !== expected) return false;
+      pendingReveal = null;
+      return true;
+    }
+
+    function hasPendingReveal() {
+      return typeof pendingReveal === "function";
+    }
+
+    function runPendingReveal() {
+      const reveal = pendingReveal;
+      if (typeof reveal !== "function") return false;
+      reveal();
+      return true;
+    }
+
     return {
       create(view, params) { return call(impl, "create", [view, params]); },
       rearm(view, params) { return call(impl, "rearm", [view, params]); },
@@ -89,7 +122,10 @@
       morphTo(view, params) { return call(impl, "morphTo", [view, params]); },
       isVisible() { return !!call(impl, "isVisible", []); },
       isOpen() { return !!call(impl, "isOpen", []); },
-      hasPendingReveal() { return !!call(impl, "hasPendingReveal", []); },
+      hasPendingReveal,
+      setPendingReveal,
+      clearPendingReveal,
+      runPendingReveal,
       nextInstance,
       currentInstance,
       matchesInstance,
