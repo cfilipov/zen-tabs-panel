@@ -1,14 +1,8 @@
-import type { ActionEffectId } from "../../shared/navigation-tree";
-import type { ViewId } from "../../shared/types";
 import type { NavigationHistory } from "../runtime/history-client";
 import type { DuplicatePromptAction } from "./duplicate-prompt-options";
 import type { InteractionRuntimeHandlers } from "./runtime";
-import { isActionEffectId } from "./action-registry";
 
 export type NativePaletteRuntimeDeps = {
-  fireActionEffect: (actionId: ActionEffectId) => Promise<void> | void;
-  activateVisibleAction: (actionId: string) => Promise<void> | void;
-  openView: (view: ViewId) => Promise<void> | void;
   runDuplicatePromptAction: (action: DuplicatePromptAction) => Promise<void> | void;
   getNavigationHistory: () => NavigationHistory | null;
   navigateToHistoryIndex: (index: number) => Promise<void> | void;
@@ -44,14 +38,6 @@ function navigateHistoryDelta(deps: NativePaletteRuntimeDeps, delta: 1 | -1) {
 
 export function createNativePaletteInteractionRuntime(deps: NativePaletteRuntimeDeps): InteractionRuntimeHandlers {
   return {
-    runAction: async (actionId) => {
-      if (isActionEffectId(actionId)) {
-        await deps.fireActionEffect(actionId);
-        return;
-      }
-      await deps.activateVisibleAction(actionId);
-    },
-    openView: deps.openView,
     runDuplicatePromptAction: deps.runDuplicatePromptAction,
     navigateHistoryDelta: (delta) => navigateHistoryDelta(deps, delta),
     cancel: deps.cancel,

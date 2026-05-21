@@ -18,9 +18,6 @@ export type InteractionContext = {
 
 export type InteractionCommand =
   | { kind: "none" }
-  | { kind: "action"; actionId: string; source: "tree" | "view" | "mouse" }
-  | { kind: "open-view"; view: ViewId; source: "tree" | "view" | "mouse" }
-  | { kind: "enter-prefix"; view: ViewId; path: string[]; source: "tree" | "view" }
   | { kind: "duplicate-prompt-action"; action: DuplicatePromptAction }
   | { kind: "navigate-history-delta"; delta: 1 | -1 }
   | { kind: "cancel" }

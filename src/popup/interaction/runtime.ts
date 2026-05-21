@@ -1,4 +1,3 @@
-import type { ViewId } from "../../shared/types";
 import type { DuplicatePromptAction } from "./duplicate-prompt-options";
 import type { InteractionCommand } from "./interpreter";
 
@@ -8,8 +7,6 @@ import type { InteractionCommand } from "./interpreter";
 type MaybePromise<T> = T | Promise<T>;
 
 export type InteractionRuntimeHandlers = {
-  runAction: (actionId: string) => MaybePromise<void>;
-  openView: (view: ViewId) => MaybePromise<void>;
   runDuplicatePromptAction: (action: DuplicatePromptAction) => MaybePromise<void>;
   navigateHistoryDelta: (delta: 1 | -1) => MaybePromise<void>;
   cancel: () => MaybePromise<void>;
@@ -38,13 +35,6 @@ export async function applyInteractionCommand(
   runtime: InteractionRuntimeHandlers,
 ) {
   switch (command.kind) {
-    case "action":
-      await runtime.runAction(command.actionId);
-      return;
-    case "open-view":
-    case "enter-prefix":
-      await runtime.openView(command.view);
-      return;
     case "duplicate-prompt-action":
       await runtime.runDuplicatePromptAction(command.action);
       return;

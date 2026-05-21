@@ -2,7 +2,6 @@
   import { onMount, tick } from "svelte";
   import PaletteShell from "./components/PaletteShell.svelte";
   import ViewHost from "./views/ViewHost.svelte";
-  import { resolveActionItemActivation, type ActionItemActivation } from "./interaction/action-activation";
   import { nextActionSectionIndex, nextActionsPage } from "./interaction/actions-navigation";
   import { createBridgeDispatchController } from "./interaction/bridge-dispatch";
   import {
@@ -330,12 +329,6 @@
   const sidebarHidden = $derived(sidebarModel.hidden);
   const dynamicSidebarWidth = $derived(!sidebarHidden && !isWorkspaceFilterView(palette.currentView));
   const interactionRuntime = createNativePaletteInteractionRuntime({
-    fireActionEffect: (actionId) => performActionItemActivation({ kind: "fire-action", actionId }),
-    activateVisibleAction: async (actionId) => {
-      const item = [...allActionItems, ...prefixItems].find((candidate) => candidate.id === actionId);
-      if (item) await performActionItem(item);
-    },
-    openView: (view) => openNativeView(view, undefined, true),
     runDuplicatePromptAction,
     getNavigationHistory: () => palette.navigationHistory,
     navigateToHistoryIndex,
@@ -428,28 +421,6 @@
     }
 
     return finishOpenView(view);
-  }
-
-  async function performActionItemActivation(activation: ActionItemActivation) {
-    if (activation.kind === "fire-action") {
-      markTerminalCommandDispatched();
-      revealController.clear();
-      effects.runAction(activation.actionId);
-      return;
-    }
-    if (activation.kind === "switch-workspace-index") {
-      markTerminalCommandDispatched();
-      await switchWorkspaceByIndex(activation.index);
-      return;
-    }
-    if (activation.kind === "open-view") {
-      await openNativeView(activation.view, undefined, true);
-      return;
-    }
-  }
-
-  async function performActionItem(item: ActionMenuItem) {
-    await performActionItemActivation(resolveActionItemActivation(item));
   }
 
   async function activateAction(item: ActionMenuItem) {

@@ -7,8 +7,6 @@ function createRuntime(calls: string[]): InteractionRuntimeHandlers {
     calls.push(call);
   };
   return {
-    runAction: (actionId) => record(`action:${actionId}`),
-    openView: (view) => record(`view:${view}`),
     runDuplicatePromptAction: (action) => record(`dup:${action}`),
     navigateHistoryDelta: (delta) => record(`history:${delta}`),
     cancel: () => record("cancel"),
@@ -41,9 +39,6 @@ function createNativeRuntime(
     calls.push(call);
   };
   return createNativePaletteInteractionRuntime({
-    fireActionEffect: (actionId) => record(`effect:${actionId}`),
-    activateVisibleAction: (actionId) => record(`visible:${actionId}`),
-    openView: (view) => record(`view:${view}`),
     runDuplicatePromptAction: (action) => record(`dup:${action}`),
     getNavigationHistory: () => null,
     navigateToHistoryIndex: (index) => record(`history-index:${index}`),
@@ -71,21 +66,6 @@ function createNativeRuntime(
 }
 
 describe("interaction runtime", () => {
-  it("applies tree commands through injected side-effect handlers", async () => {
-    const calls: string[] = [];
-    const runtime = createRuntime(calls);
-
-    await applyInteractionCommand({ kind: "action", actionId: "go-to-previous-tab", source: "view" }, runtime);
-    await applyInteractionCommand({ kind: "open-view", view: "last-visited", source: "view" }, runtime);
-    await applyInteractionCommand({ kind: "enter-prefix", view: "reorder-tabs", path: ["reorder-tabs"], source: "view" }, runtime);
-
-    expect(calls).toEqual([
-      "action:go-to-previous-tab",
-      "view:last-visited",
-      "view:reorder-tabs",
-    ]);
-  });
-
   it("applies structural commands through injected side-effect handlers", async () => {
     const calls: string[] = [];
     const runtime = createRuntime(calls);
@@ -109,21 +89,6 @@ describe("interaction runtime", () => {
       "activate-row-switch:3",
       "filter-workspace:4",
       "extension:1",
-    ]);
-  });
-
-  it("routes native action effects and visible action ids through separate adapters", async () => {
-    const calls: string[] = [];
-    const runtime = createNativeRuntime(calls);
-
-    await runtime.runAction("go-to-previous-tab");
-    await runtime.runAction("custom-visible-item");
-    await runtime.openView("last-visited");
-
-    expect(calls).toEqual([
-      "effect:go-to-previous-tab",
-      "visible:custom-visible-item",
-      "view:last-visited",
     ]);
   });
 
