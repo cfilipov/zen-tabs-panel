@@ -85,6 +85,7 @@
     isNativeListView,
     isNativePrefixView,
     isNativeTabView,
+    isChromeModelIntentView,
     resolveViewTitle,
     resolveViewOpenPlan,
     type NativeListView,
@@ -122,29 +123,6 @@
   const fallbackActionSections = buildActionsMenuModel();
   function shouldChromeResolveActivation(view: ViewId, activation: ViewActivation) {
     return view === "duplicate-prompt" && activation.kind === "activate-tab";
-  }
-
-  const CHROME_MODEL_INTENT_VIEWS = new Set<ViewId>([
-    "navigation",
-    "recently-closed",
-    "child-tabs",
-    "sibling-tabs",
-    "parent-tabs",
-    "last-visited",
-    "unvisited-tabs",
-    "domain-tabs",
-    "tabs-by-age",
-    "most-visited",
-    "domains",
-    "duplicates",
-    "move-to-workspace",
-    "open-in-container",
-    "move-to-folder",
-    "profiles",
-  ]);
-
-  function isChromeModelIntentView(view: ViewId) {
-    return CHROME_MODEL_INTENT_VIEWS.has(view);
   }
 
   const paletteStore = createNativePaletteState();

@@ -4,6 +4,7 @@ import {
   isNativeListView,
   isNativePrefixView,
   isNativeTabView,
+  isChromeModelIntentView,
   resolveViewTitle,
   resolveViewOpenPlan,
 } from "./view-registry";
@@ -16,6 +17,13 @@ describe("view registry", () => {
     expect(isNativeTabView("last-visited")).toBe(true);
     expect(isNativePrefixView("reorder-tabs")).toBe(true);
     expect(LIST_VIEW_TITLES["last-visited"]).toBe("Recent");
+  });
+
+  it("centralizes chrome-owned intent view classification", () => {
+    expect(isChromeModelIntentView("last-visited")).toBe(true);
+    expect(isChromeModelIntentView("move-to-workspace")).toBe(true);
+    expect(isChromeModelIntentView("duplicate-prompt")).toBe(false);
+    expect(isChromeModelIntentView("actions")).toBe(false);
   });
 
   it("plans list opens with params and optional domain", () => {

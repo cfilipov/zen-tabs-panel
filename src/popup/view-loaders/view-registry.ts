@@ -36,6 +36,27 @@ const listViews = new Set<ViewId>([...nativeTabViews, ...nativeDomainViews]);
 const tabViews = new Set<ViewId>(nativeTabViews);
 const prefixViews = new Set<ViewId>(prefixViewIds);
 
+const chromeModelIntentViewIds = [
+  "navigation",
+  "recently-closed",
+  "child-tabs",
+  "sibling-tabs",
+  "parent-tabs",
+  "last-visited",
+  "unvisited-tabs",
+  "domain-tabs",
+  "tabs-by-age",
+  "most-visited",
+  "domains",
+  "duplicates",
+  "move-to-workspace",
+  "open-in-container",
+  "move-to-folder",
+  "profiles",
+] as const satisfies readonly ViewId[];
+
+const chromeModelIntentViews = new Set<ViewId>(chromeModelIntentViewIds);
+
 export const VIEW_LOADERS = {
   navigation: "navigation",
   "recently-closed": "recently-closed",
@@ -83,6 +104,10 @@ export function isNativeListView(view: ViewId | undefined): view is NativeListVi
 
 export function isNativePrefixView(view: ViewId | undefined): view is NativePrefixView {
   return !!view && prefixViews.has(view);
+}
+
+export function isChromeModelIntentView(view: ViewId | undefined) {
+  return !!view && chromeModelIntentViews.has(view);
 }
 
 export function resolveViewTitle(
