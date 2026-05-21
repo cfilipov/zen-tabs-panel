@@ -43,6 +43,7 @@ this.MSG = Object.freeze({
   TAB_INDEX_GET_VERSION:          "tab-index:get-version",
   TAB_INDEX_GET_SUMMARY:          "tab-index:get-summary",
   TAB_INDEX_GET_WINDOW:           "tab-index:get-window",
+  TAB_INDEX_GET_RECENTS_MODEL:    "tab-index:get-recents-model",
   TAB_INDEX_GET_ROW_TARGET:       "tab-index:get-row-target",
   TAB_INDEX_GET_ACTIVE_ROW:       "tab-index:get-active-row",
   TAB_INDEX_GET_ROWS_BY_DOM_IDS:  "tab-index:get-rows-by-dom-ids",

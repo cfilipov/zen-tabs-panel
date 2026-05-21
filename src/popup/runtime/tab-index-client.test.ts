@@ -120,6 +120,28 @@ describe("tab index client", () => {
     ]);
   });
 
+  it("loads the chrome-owned recents model through the message fallback", async () => {
+    const sent: unknown[] = [];
+    const client = createTabIndexClient(async <T>(message: unknown) => {
+      sent.push(message);
+      return {
+        version: 1,
+        view: "last-visited",
+        offset: 0,
+        limit: 80,
+        total: 0,
+        rows: [],
+        model: { id: "recents", view: "last-visited", rowIntents: [] },
+      } as T;
+    });
+
+    await client.getRecentsViewModel(0, 80, { workspaceId: "all" });
+
+    expect(sent).toEqual([
+      { type: "tab-index:get-recents-model", offset: 0, limit: 80, params: { workspaceId: "all" } },
+    ]);
+  });
+
   it("loads active and dom-id rows through focused tab-index requests", async () => {
     const sent: unknown[] = [];
     const client = createTabIndexClient(async <T>(message: unknown) => {

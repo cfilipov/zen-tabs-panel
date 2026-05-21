@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ViewWindow } from "../runtime/tab-index-client";
-import { loadNativeListWindow, type NativeListRow, type TabIndexClient } from "./list-loader";
+import type { RecentsViewModel, ViewWindow } from "../runtime/tab-index-client";
+import { loadNativeListWindow, loadRecentsViewModelWindow, type NativeListRow, type TabIndexClient } from "./list-loader";
 
 function createClient(window: ViewWindow<NativeListRow>) {
   const calls: string[] = [];
@@ -86,5 +86,59 @@ describe("list loader", () => {
     const result = await loadNativeListWindow(client, { view: "last-visited", offset: 0, limit: 80 });
 
     expect("favIconUrl" in result.rows[0] && result.rows[0].favIconUrl).toBe(icon);
+  });
+
+  it("loads recents through the chrome-owned recents model", async () => {
+    const calls: string[] = [];
+    const icon = "data:image/png;base64,recents";
+    const client = {
+      ensureStarted: async () => {
+        calls.push("ensure");
+        return true;
+      },
+      getRecentsViewModel: async (
+        offset: number,
+        limit: number,
+        params: Record<string, unknown>,
+      ): Promise<RecentsViewModel> => {
+        calls.push(`recents:${offset}:${limit}:${JSON.stringify(params)}`);
+        return {
+          version: 2,
+          view: "last-visited",
+          offset,
+          limit,
+          total: 1,
+          favicons: { f1: icon },
+          rows: [{
+            index: 0,
+            domId: "tab-1",
+            title: "Recent",
+            domain: "example.test",
+            workspaceId: "ws-1",
+            pinned: false,
+            essential: false,
+            active: false,
+            favIconUrl: "ztt-favicon:f1",
+            pending: false,
+          }],
+          model: {
+            id: "recents",
+            view: "last-visited",
+            version: 2,
+            rowIntents: [{ rowId: "tab-1", index: 0, chordKey: "1", action: "activate-tab" }],
+          },
+        };
+      },
+    } as unknown as TabIndexClient;
+
+    const result = await loadRecentsViewModelWindow(client, {
+      offset: 0,
+      limit: 80,
+      params: { workspaceId: "all" },
+    });
+
+    expect(calls).toEqual(["ensure", 'recents:0:80:{"workspaceId":"all"}']);
+    expect(result.model.rowIntents).toEqual([{ rowId: "tab-1", index: 0, chordKey: "1", action: "activate-tab" }]);
+    expect(result.rows[0].favIconUrl).toBe(icon);
   });
 });

@@ -904,6 +904,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       ensureTabUuid,
       recordInterval,
     });
+    const recentsModelScope = {};
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("experiment/recents-model.js"),
+      recentsModelScope
+    );
+    const recentsModel = recentsModelScope.createZenRecentsModel({ tabIndex });
     context.callOnClose({
       close() {
         try { tabIndex.stop(); } catch (e) {}
@@ -5621,6 +5627,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
             params = paramsJson;
           }
           return tabIndex.getWindow(view, offset, limit, params);
+        },
+
+        async getRecentsViewModel(offset, limit, paramsJson) {
+          let params = {};
+          if (typeof paramsJson === "string" && paramsJson) {
+            try { params = JSON.parse(paramsJson); } catch (e) { params = {}; }
+          } else if (paramsJson && typeof paramsJson === "object") {
+            params = paramsJson;
+          }
+          return recentsModel.getWindow(offset, limit, params);
         },
 
         async getRowTarget(domId) {

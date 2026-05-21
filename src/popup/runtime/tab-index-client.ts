@@ -69,6 +69,22 @@ export type ViewWindow<T = TabIndexRow | DomainIndexRow> = {
   favicons?: Record<string, string>;
 };
 
+export type RowIntentModel = {
+  id: string;
+  view: string;
+  version?: number;
+  rowIntents: Array<{
+    rowId: string | null;
+    index: number;
+    chordKey: string | null;
+    action: string;
+  }>;
+};
+
+export type RecentsViewModel = ViewWindow<TabIndexRow> & {
+  model: RowIntentModel;
+};
+
 export type ActionPreview = {
   title: string;
   url?: string;
@@ -107,6 +123,7 @@ type ZenWorkspacesApi = {
     limit: number,
     paramsJson?: string,
   ): Promise<ViewWindow<T>>;
+  getRecentsViewModel?(offset: number, limit: number, paramsJson?: string): Promise<RecentsViewModel>;
   getRowTarget(domId: string): Promise<{ domId: string; workspaceId: string | null; url: string; title: string } | null>;
   getActiveRow(): Promise<TabIndexRow | null>;
   getRowsByDomIds(domIdsJson?: string): Promise<TabIndexRow[]>;
@@ -137,6 +154,15 @@ export function createTabIndexClient(send: Send = sendMessage, directApi: ZenWor
     ) {
       if (directApi) return directApi.getViewWindow<T>(view, offset, limit, encodeParams(params));
       return send<ViewWindow<T>>({ type: "tab-index:get-window", view, offset, limit, params });
+    },
+    getRecentsViewModel(
+      offset: number,
+      limit: number,
+      params: Record<string, unknown> = {},
+    ) {
+      if (directApi?.getRecentsViewModel) return directApi.getRecentsViewModel(offset, limit, encodeParams(params));
+      if (directApi) return directApi.getViewWindow<TabIndexRow>("last-visited", offset, limit, encodeParams(params)) as Promise<RecentsViewModel>;
+      return send<RecentsViewModel>({ type: "tab-index:get-recents-model", offset, limit, params });
     },
     getRowTarget(domId: string) {
       if (directApi) return directApi.getRowTarget(domId);

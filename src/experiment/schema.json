@@ -265,6 +265,17 @@
         ]
       },
       {
+        "name": "getRecentsViewModel",
+        "type": "function",
+        "async": true,
+        "description": "Get the chrome-owned Recents view model",
+        "parameters": [
+          { "name": "offset", "type": "integer" },
+          { "name": "limit", "type": "integer" },
+          { "name": "paramsJson", "type": "string", "optional": true }
+        ]
+      },
+      {
         "name": "getRowTarget",
         "type": "function",
         "async": true,

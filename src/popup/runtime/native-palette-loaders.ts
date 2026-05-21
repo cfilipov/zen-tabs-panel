@@ -22,7 +22,7 @@ import {
 } from "../view-loaders/basic-loaders";
 import { loadDuplicateGroupsView } from "../view-loaders/duplicates-loader";
 import { loadDuplicatePromptView } from "../view-loaders/duplicate-prompt-loader";
-import { loadNativeListWindow, type NativeListRow, type TabIndexClient } from "../view-loaders/list-loader";
+import { loadNativeListWindow, loadRecentsViewModelWindow, type NativeListRow, type TabIndexClient } from "../view-loaders/list-loader";
 import { loadTabInfoView } from "../view-loaders/tab-info-loader";
 import { runViewLoad } from "../view-loaders/view-load-runner";
 import type { NativeListView, ViewLoaderId } from "../view-loaders/view-registry";
@@ -101,12 +101,18 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
         paletteStore.beginListWindowLoad(nextOffset);
         void refreshSidebarWorkspaces(load.id);
       },
-      load: async () => loadNativeListWindow<DomainIndexRow | TabIndexRow>(deps.tabIndexClient, {
-        view,
-        offset: nextOffset,
-        limit,
-        params,
-      }),
+      load: async () => view === "last-visited"
+        ? loadRecentsViewModelWindow(deps.tabIndexClient, {
+            offset: nextOffset,
+            limit,
+            params,
+          })
+        : loadNativeListWindow<DomainIndexRow | TabIndexRow>(deps.tabIndexClient, {
+            view,
+            offset: nextOffset,
+            limit,
+            params,
+          }),
       commit: (win) => paletteStore.commitListWindow(win, resetSelection),
       fail: paletteStore.failListWindow,
     });
