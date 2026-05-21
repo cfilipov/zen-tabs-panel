@@ -120,6 +120,28 @@ describe("tab index client", () => {
     ]);
   });
 
+  it("loads the chrome-owned duplicate prompt model through the message fallback", async () => {
+    const sent: unknown[] = [];
+    const client = createTabIndexClient(async <T>(message: unknown) => {
+      sent.push(message);
+      return {
+        version: 1,
+        view: "duplicate-prompt",
+        url: "https://example.test",
+        domId: "tab-1",
+        group: null,
+        selectedIndex: -1,
+        model: { id: "duplicate-prompt", view: "duplicate-prompt", rowIntents: [] },
+      } as T;
+    });
+
+    await client.getDuplicatePromptViewModel("https://example.test", "tab-1");
+
+    expect(sent).toEqual([
+      { type: "tab-index:get-duplicate-prompt-model", url: "https://example.test", domId: "tab-1" },
+    ]);
+  });
+
   it("loads the chrome-owned recents model through the message fallback", async () => {
     const sent: unknown[] = [];
     const client = createTabIndexClient(async <T>(message: unknown) => {

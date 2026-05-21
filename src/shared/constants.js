@@ -51,6 +51,7 @@ this.MSG = Object.freeze({
   TAB_INDEX_GET_WORKSPACE_COUNTS: "tab-index:get-workspace-counts",
   TAB_INDEX_GET_ACTIONS_SNAPSHOT: "tab-index:get-actions-snapshot",
   TAB_INDEX_GET_DUPLICATE_GROUPS: "tab-index:get-duplicate-groups",
+  TAB_INDEX_GET_DUPLICATE_PROMPT_MODEL: "tab-index:get-duplicate-prompt-model",
 
   // Tab navigation
   GO_TO_PREVIOUS_TAB:             "go-to-previous-tab",

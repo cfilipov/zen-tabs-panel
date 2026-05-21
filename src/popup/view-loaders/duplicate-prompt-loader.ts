@@ -1,4 +1,4 @@
-import type { DuplicateGroupRow } from "../runtime/tab-index-client";
+import type { DuplicateGroupRow, DuplicatePromptViewModel } from "../runtime/tab-index-client";
 import type { WorkspaceRow } from "../runtime/workspace-client";
 
 export type DuplicatePromptData = {
@@ -7,12 +7,15 @@ export type DuplicatePromptData = {
   group: DuplicateGroupRow | null;
   workspaces: WorkspaceRow[];
   selectedIndex: number;
+  version?: number;
+  model?: DuplicatePromptViewModel["model"];
 };
 
 export type DuplicatePromptParams = URLSearchParams | Record<string, unknown>;
 
 export type DuplicatePromptTabIndexClient = {
   getDuplicateGroups(params?: Record<string, unknown>): Promise<DuplicateGroupRow[]>;
+  getDuplicatePromptViewModel?(url: string, domId?: string | null): Promise<DuplicatePromptViewModel>;
 };
 
 export type DuplicatePromptWorkspaceClient = {
@@ -42,10 +45,27 @@ export async function loadDuplicatePromptView(
 ): Promise<DuplicatePromptData> {
   const url = paramValue(params, "url") || "";
   const domId = paramValue(params, "domId");
-  const [groups, workspaces] = await Promise.all([
-    url ? tabIndexClient.getDuplicateGroups({ url, includeSingleton: true }).catch(() => []) : Promise.resolve([]),
+  const [model, groups, workspaces] = await Promise.all([
+    url && tabIndexClient.getDuplicatePromptViewModel
+      ? tabIndexClient.getDuplicatePromptViewModel(url, domId).catch(() => null)
+      : Promise.resolve(null),
+    url && !tabIndexClient.getDuplicatePromptViewModel
+      ? tabIndexClient.getDuplicateGroups({ url, includeSingleton: true }).catch(() => [])
+      : Promise.resolve([]),
     workspaceClient.getWorkspacesWithIcons().catch(() => []),
   ]);
+
+  if (model) {
+    return {
+      url: model.url,
+      domId: model.domId,
+      group: model.group,
+      workspaces,
+      selectedIndex: model.selectedIndex,
+      version: model.version,
+      model: model.model,
+    };
+  }
 
   return {
     url,

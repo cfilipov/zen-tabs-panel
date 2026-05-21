@@ -52,6 +52,25 @@ export type DuplicateGroupRow = {
   tabs: TabIndexRow[];
 };
 
+export type DuplicatePromptViewModel = {
+  version: number;
+  view: "duplicate-prompt";
+  url: string;
+  domId: string | null;
+  group: DuplicateGroupRow | null;
+  selectedIndex: number;
+  model: {
+    id: "duplicate-prompt";
+    view: "duplicate-prompt";
+    rowIntents: Array<{
+      rowId: string | null;
+      index: number;
+      chordKey: string | null;
+      action: string;
+    }>;
+  };
+};
+
 export type ViewSummary = {
   version: number;
   view: string;
@@ -131,6 +150,7 @@ type ZenWorkspacesApi = {
   getWorkspaceTabCounts(): Promise<Record<string, number>>;
   getActionsSnapshot(): Promise<ActionsSnapshot>;
   getDuplicateGroups(paramsJson?: string): Promise<DuplicateGroupRow[]>;
+  getDuplicatePromptViewModel?(url: string, domId?: string | null): Promise<DuplicatePromptViewModel>;
 };
 
 function encodeParams(params: Record<string, unknown>) {
@@ -191,6 +211,10 @@ export function createTabIndexClient(send: Send = sendMessage, directApi: ZenWor
     getDuplicateGroups(params: Record<string, unknown> = {}) {
       if (directApi) return directApi.getDuplicateGroups(encodeParams(params));
       return send<DuplicateGroupRow[]>({ type: "tab-index:get-duplicate-groups", params });
+    },
+    getDuplicatePromptViewModel(url: string, domId: string | null = null) {
+      if (directApi?.getDuplicatePromptViewModel) return directApi.getDuplicatePromptViewModel(url, domId);
+      return send<DuplicatePromptViewModel>({ type: "tab-index:get-duplicate-prompt-model", url, domId });
     },
   };
 }

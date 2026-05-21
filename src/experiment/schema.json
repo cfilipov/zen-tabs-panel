@@ -326,6 +326,16 @@
         ]
       },
       {
+        "name": "getDuplicatePromptViewModel",
+        "type": "function",
+        "async": true,
+        "description": "Get the chrome-owned duplicate-prompt view model",
+        "parameters": [
+          { "name": "url", "type": "string" },
+          { "name": "domId", "type": "string", "optional": true }
+        ]
+      },
+      {
         "name": "getActionsSnapshot",
         "type": "function",
         "async": true,

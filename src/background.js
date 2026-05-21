@@ -592,6 +592,7 @@ const QUERIES = Object.freeze({
   [MSG.TAB_INDEX_GET_WORKSPACE_COUNTS]: () => api.getWorkspaceTabCounts(),
   [MSG.TAB_INDEX_GET_ACTIONS_SNAPSHOT]: () => api.getActionsSnapshot(),
   [MSG.TAB_INDEX_GET_DUPLICATE_GROUPS]: (m) => api.getDuplicateGroups(JSON.stringify(m.params || {})),
+  [MSG.TAB_INDEX_GET_DUPLICATE_PROMPT_MODEL]: (m) => api.getDuplicatePromptViewModel(m.url || "", m.domId || null),
   [MSG.GET_CONTAINERS]:                ()  => api.getContainers(),
   [MSG.GET_CONTAINERS_VIEW_MODEL]:     ()  => api.getContainersViewModel(),
   [MSG.GET_FOLDERS]:                   ()  => api.getFolders(),

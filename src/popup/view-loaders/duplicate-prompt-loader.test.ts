@@ -41,6 +41,43 @@ function clients(groups: DuplicateGroupRow[] = []) {
 }
 
 describe("duplicate prompt loader", () => {
+  it("prefers the chrome-owned duplicate prompt model", async () => {
+    const params = new URLSearchParams({
+      url: group.url,
+      domId: "tab-2",
+    });
+    const calls: string[] = [];
+    const tabIndex = {
+      getDuplicateGroups: async () => { throw new Error("fallback should not run"); },
+      getDuplicatePromptViewModel: async (url: string, domId?: string | null) => {
+        calls.push(`${url}:${domId}`);
+        return {
+          version: 7,
+          view: "duplicate-prompt" as const,
+          url,
+          domId: domId || null,
+          group,
+          selectedIndex: -1,
+          model: {
+            id: "duplicate-prompt" as const,
+            view: "duplicate-prompt" as const,
+            rowIntents: [{ rowId: "tab-1", index: 0, chordKey: "1", action: "activate-tab" }],
+          },
+        };
+      },
+    };
+
+    await expect(loadDuplicatePromptView(tabIndex, { getWorkspacesWithIcons: async () => [] }, params))
+      .resolves.toMatchObject({
+        version: 7,
+        url: group.url,
+        domId: "tab-2",
+        group,
+        model: { id: "duplicate-prompt" },
+      });
+    expect(calls).toEqual([`${group.url}:tab-2`]);
+  });
+
   it("reads the duplicate URL and existing tab dom id from URL params", async () => {
     const params = new URLSearchParams({
       url: group.url,

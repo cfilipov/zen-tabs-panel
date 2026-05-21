@@ -3482,6 +3482,37 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return duplicatePromptTabsForParams(currentViewParams || {});
     }
 
+    function getDuplicatePromptViewModelInternal(url, domId) {
+      const params = { url: url || "", domId: domId || "" };
+      const tabs = duplicatePromptTabsForParams(params);
+      const sample = tabs[0] || null;
+      return {
+        version: tabIndex.getVersion(),
+        view: "duplicate-prompt",
+        url: params.url,
+        domId: params.domId || null,
+        group: sample ? {
+          kind: "duplicate-group",
+          url: params.url || sample.url,
+          title: sample.title || params.url,
+          domain: sample.domain || "",
+          favIconUrl: sample.favIconUrl || "",
+          tabs,
+        } : null,
+        selectedIndex: -1,
+        model: {
+          id: "duplicate-prompt",
+          view: "duplicate-prompt",
+          rowIntents: tabs.map((tab, index) => ({
+            rowId: tab.domId || null,
+            index,
+            chordKey: index < 9 ? String(index + 1) : null,
+            action: "activate-tab",
+          })),
+        },
+      };
+    }
+
     function cloneReplayParams(params) {
       if (!params || typeof params !== "object") return null;
       try { return JSON.parse(JSON.stringify(params)); }
@@ -5747,6 +5778,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
             params = paramsJson;
           }
           return tabIndex.getDuplicateGroups(params);
+        },
+
+        async getDuplicatePromptViewModel(url, domId) {
+          tabIndex.start();
+          return getDuplicatePromptViewModelInternal(url, domId);
         },
 
         async getActionsSnapshot() {

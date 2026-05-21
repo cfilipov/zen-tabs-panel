@@ -357,6 +357,7 @@ export function createNativePaletteState() {
     state.duplicatePromptGroup = result.group;
     state.duplicatePromptWorkspaces = result.workspaces;
     state.selectedIndex = result.selectedIndex;
+    state.listVersion = result.version || 0;
   }
 
   function failDuplicatePrompt(message: string) {
