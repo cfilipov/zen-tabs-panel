@@ -280,6 +280,25 @@ describe("chord-session replay recording", () => {
     });
   });
 
+  it("rejects unknown state transitions", () => {
+    const session = makeSession();
+
+    expect(() => session.transition("spooky-state", "unit-test")).toThrow("[ChordSession] unknown state");
+    expect(session.getStateSnapshot().state).toBe("idle");
+  });
+
+  it("records cancel as a first-class terminal state", () => {
+    const env = makeInteractiveSession();
+    env.session.arm();
+    env.session.acceptKey({ kind: "key", key: "Escape", code: "Escape", shimTs: 10 });
+
+    expect(env.session.getStateSnapshot().state).toBe("idle");
+    expect(env.session.getStateSnapshot().recentTransitions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: "armed-root", to: "cancelled", why: "cancel" }),
+      expect.objectContaining({ from: "cancelled", to: "idle", why: "cancel-idle" }),
+    ]));
+  });
+
   it("throws when legacy state disagrees", () => {
     const session = makeSession();
     session.recordEvent({ kind: "armed" });

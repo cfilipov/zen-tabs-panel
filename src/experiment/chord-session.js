@@ -4,6 +4,18 @@
 // diagnostics, and replay recording. Per-process shims only capture and
 // forward keys.
 (function (scope) {
+  const VALID_STATES = new Set([
+    "idle",
+    "armed-root",
+    "armed-prefix",
+    "bridging-buffering",
+    "bridging-live",
+    "visible",
+    "destroying",
+    "completed",
+    "cancelled",
+  ]);
+
   function clonePlain(value) {
     if (value == null) return value;
     try { return JSON.parse(JSON.stringify(value)); }
@@ -114,7 +126,13 @@
 
     function transition(to, why, data) {
       const from = state;
-      state = to || "idle";
+      const next = to || "idle";
+      if (!VALID_STATES.has(next)) {
+        const error = new Error("[ChordSession] unknown state");
+        error.details = { from, to: next, why: why || "", validStates: Array.from(VALID_STATES) };
+        throw error;
+      }
+      state = next;
       recentTransitions.push({ at: Date.now(), from, to: state, why: why || "", data: clonePlain(data || null) });
       if (recentTransitions.length > 50) recentTransitions.shift();
     }
@@ -450,8 +468,12 @@
 
     function cancelTraversal() {
       const wasArmed = isArmed();
-      resetTraversal("idle");
-      if (wasArmed) callOption("onCancel");
+      resetTraversal();
+      if (wasArmed) {
+        transition("cancelled", "cancel");
+        transition("idle", "cancel-idle");
+        callOption("onCancel");
+      }
     }
 
     function acceptKey(keyData) {
