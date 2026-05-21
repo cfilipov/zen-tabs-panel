@@ -341,6 +341,41 @@ integration check for the extension/popup dispatch path, not a replacement for
 manual checks of the configurable browser command shortcut (`Cmd+.` by
 default). It leaves the palette hidden when it finishes.
 
+### Chord/popup refactor checklist
+
+`npm run smoke:popup` is the default must-still-work check after touching the
+chord session, overlay controller, popup bridge, or chrome-owned view-model
+activation paths. It covers the fragile bridge/reveal/menu-render paths better
+than a prose-only checklist, but use this mapping to decide when to add manual
+checks:
+
+- `src/experiment/chord-session.js`, `src/shared/chord-shim.js`,
+  `src/experiment/api.js` chord/shim handlers: run `npm test`,
+  `npm run build`, reload live Zen, then manually verify a fast chord, a slow
+  chord, a bridge chord, repeated leader replay (`Cmd+.,.`), and a focused
+  content-input chord.
+- `src/experiment/overlay-controller.js` or overlay create/destroy/reveal code
+  in `src/experiment/api.js`: also verify prerender swap, skip-animations,
+  direct submenu open, duplicate prompt open, and that live state ends idle via
+  `window.__ztpChordState()`.
+- `src/popup/chord-bridge.ts`,
+  `src/popup/interaction/bridge-dispatch.ts`,
+  `src/popup/runtime/palette-reveal.ts`, or popup key dispatch in
+  `src/popup/NativePalette.svelte`: run `npm run smoke:popup` and manually
+  check visible-menu arrow/Enter activation, row number activation, invalid
+  chord feedback, and Backspace/Escape dismissal behavior.
+- Chrome-owned view-model or row-intent paths (`src/experiment/*-model.js`,
+  `src/popup/runtime/*-client.ts`, `src/popup/view-loaders/*`,
+  `src/popup/interaction/row-identity.ts`): verify row activation by click,
+  Enter, number key, shifted number where applicable, and replay for the same
+  view. For large-list work, profile or test with a high tab count before
+  changing snapshot/windowing behavior.
+- Runtime replay paths (`src/background.js`,
+  `src/experiment/chord-session.js`,
+  `src/popup/interaction/replay-trace.ts`): verify direct action replay,
+  chrome-owned row replay, recents cycling replay, and that duplicate-prompt
+  outcomes do not overwrite the previous replayable chord.
+
 Do not use `tools/firefox-eval.py` to validate chord key delivery by
 dispatching DOM `KeyboardEvent`s. Those events are synthetic
 (`isTrusted === false`) and the key-capture shim intentionally ignores them in
