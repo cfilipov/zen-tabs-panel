@@ -1,15 +1,15 @@
 "use strict";
 
-// Contract sketch for a future ChordSession-owned overlay lifecycle.
+// Adapter boundary for a future ChordSession-owned overlay lifecycle.
 //
 // ChordSession should decide *when* the palette overlay is created, rearmed,
 // revealed, swapped, or destroyed. The implementation should stay here in
 // chrome/XUL land because it touches DOM nodes, XUL <browser> elements, panel
 // sizing, animation settings, hosted extension popups, and focus.
 //
-// This file intentionally exports no runtime implementation yet. It records
-// the adapter boundary so future lifecycle moves are explicit instead of
-// smuggling DOM closures into ChordSession.
+// The controller starts with popup-instance ownership because that is pure
+// overlay state: it exists only to reject stale POPUP_READY / REVEAL_PALETTE
+// messages from a replaced hosted browser.
 
 /**
  * @typedef {Object} OverlayController
@@ -49,5 +49,52 @@
  * @property {() => number} currentInstance
  * Return the live popup instance id used to reject stale POPUP_READY and
  * REVEAL_PALETTE messages.
+ *
+ * @property {() => number} nextInstance
+ * Increment and return the live popup instance id for a cold overlay create.
+ *
+ * @property {(inst?: number | null) => boolean} matchesInstance
+ * True when `inst` is absent or matches the live popup instance id.
  */
 
+(function (scope) {
+  function call(impl, name, args) {
+    const fn = impl && impl[name];
+    if (typeof fn !== "function") return undefined;
+    return fn.apply(null, args || []);
+  }
+
+  function createOverlayController(impl) {
+    let popupInstance = 0;
+
+    function nextInstance() {
+      popupInstance++;
+      return popupInstance;
+    }
+
+    function currentInstance() {
+      return popupInstance;
+    }
+
+    function matchesInstance(inst) {
+      return typeof inst !== "number" || inst === popupInstance;
+    }
+
+    return {
+      create(view, params) { return call(impl, "create", [view, params]); },
+      rearm(view, params) { return call(impl, "rearm", [view, params]); },
+      destroy(opts) { return call(impl, "destroy", [opts]); },
+      reveal() { return call(impl, "reveal", []); },
+      forceReveal() { return call(impl, "forceReveal", []); },
+      morphTo(view, params) { return call(impl, "morphTo", [view, params]); },
+      isVisible() { return !!call(impl, "isVisible", []); },
+      isOpen() { return !!call(impl, "isOpen", []); },
+      hasPendingReveal() { return !!call(impl, "hasPendingReveal", []); },
+      nextInstance,
+      currentInstance,
+      matchesInstance,
+    };
+  }
+
+  scope.createOverlayController = createOverlayController;
+})(this);

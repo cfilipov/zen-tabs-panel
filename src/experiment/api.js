@@ -887,6 +887,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       context.extension.getURL("experiment/chord-session.js"),
       chordSessionScope
     );
+    const overlayControllerScope = {};
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("experiment/overlay-controller.js"),
+      overlayControllerScope
+    );
     const KEYBINDINGS = chordSupportScope.ZEN_KEYBINDINGS || [];
     const WORKSPACE_DIGIT_CHORDS = chordSupportScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
     function flattenNavigationBindings(nodes) {
@@ -993,6 +998,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let explicitRevealToken = 0;
     let explicitRevealView = null;
     let explicitRevealScheduledToken = 0;
+    let overlayController = null;
 
     let chromeShim = null;
     // Per-content-process frame script registration handle. Populated once
@@ -1077,14 +1083,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function isRevealTimerActive() {
       try { return !!(chordSession && chordSession.isRevealTimerActive()); } catch (e) { return false; }
     }
-    // Popup-instance counter. Incremented in createOverlay; the popup
-    // reads it from its URL (?inst=N) and echoes it back in POPUP_READY.
-    // takeChordBridgeBuffer ignores POPUP_READY whose inst doesn't match
-    // the current popup. Without this, a destroyed prerender popup's
-    // POPUP_READY (delivered to chrome after the prerender was torn down
-    // by a prerender swap) would drain the bridge buffer that the NEW
-    // popup is supposed to consume, losing the chord-chain digits.
-    let popupInstance = 0;
+    function currentPopupInstance() {
+      return overlayController ? overlayController.currentInstance() : 0;
+    }
+
+    function nextPopupInstance() {
+      return overlayController ? overlayController.nextInstance() : 0;
+    }
+
+    function matchesPopupInstance(inst) {
+      return overlayController ? overlayController.matchesInstance(inst) : typeof inst !== "number";
+    }
+
     // Reveal-blocked flag: set the moment destroyOverlay starts tearing
     // down a popup, cleared the next time createOverlay runs. Any
     // revealPalette call landing in this window (e.g. the popup's own
@@ -1118,7 +1128,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function getPaletteURL(view, params) {
       const isDark = isChromeDark();
       let url = context.extension.getURL("popup/popup.html") + "?theme=" + (isDark ? "dark" : "light");
-      url += "&inst=" + popupInstance;
+      url += "&inst=" + currentPopupInstance();
       url += "&gen=" + encodeURIComponent(CHORD_GENERATION);
       // Current chord-delay setting — popup's keyboard.js reads it and
       // overrides its reveal-timer duration.
@@ -1804,7 +1814,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // (prerender-swap case) — otherwise the stale POPUP_READY drains
       // the bridge buffer meant for the new popup, eating the chord-chain
       // digits the user typed.
-      popupInstance++;
+      nextPopupInstance();
       // A new popup is being constructed — any reveal-block from the
       // previous destroy is no longer relevant.
       setRevealBlocked(false, "createOverlay");
@@ -2064,7 +2074,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (mm) {
         try {
           mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
-            inst: popupInstance,
+            inst: currentPopupInstance(),
             view: view || null,
             params: params || null,
             skipAnimations: skipOverlayAnimations,
@@ -2646,7 +2656,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
       try {
         mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
-          inst: popupInstance,
+          inst: currentPopupInstance(),
           view: null,
           params: null,
           skipAnimations: skipOverlayAnimations,
@@ -2829,6 +2839,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return overlay.style.visibility !== "hidden" && overlay.style.opacity !== "0";
     }
 
+    overlayController = overlayControllerScope.createOverlayController({
+      create: createOverlay,
+      rearm: rearmExistingOverlay,
+      destroy: destroyOverlay,
+      reveal: revealOverlay,
+      forceReveal: forceRevealOverlay,
+      morphTo: morphToView,
+      isVisible: isOverlayVisible,
+      isOpen: isOverlayOpen,
+      hasPendingReveal: () => !!pendingReveal,
+    });
+
     // -----------------------------------------------------------------------
     // Chord capture wiring — shims feed one chrome-side session
     // -----------------------------------------------------------------------
@@ -2935,7 +2957,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           panelHeight: panel ? Math.round(panel.getBoundingClientRect().height) : 0,
           browserSrc: browser ? browser.getAttribute("src") || "" : "",
           browserCurrentURI: browser && browser.currentURI ? String(browser.currentURI.spec || "") : "",
-          popupInstance,
+          popupInstance: currentPopupInstance(),
         },
         bridge: {
           active: hasActiveBridge(),
@@ -6310,7 +6332,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // Stale POPUP_READY from a popup we've since destroyed (prerender
           // swap during a chord chain). Ignore it — otherwise we drain the
           // bridge buffer that the live popup is waiting for.
-          if (typeof inst === "number" && inst !== popupInstance) {
+          if (!matchesPopupInstance(inst)) {
             return { buffered: [], stale: true };
           }
           // Warm popup may send POPUP_READY when no bridge is active (initial
@@ -6524,7 +6546,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         },
 
         async bridgeDispatchSettled(inst) {
-          if (typeof inst === "number" && inst !== popupInstance) return;
+          if (!matchesPopupInstance(inst)) return;
           if (isRevealBlocked() || !pendingReveal) return;
           armRevealTimer();
         },
@@ -6559,7 +6581,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // prerender swap and has since been destroyed) firing this and
         // unexpectedly revealing its replacement.
         async revealPalette(inst) {
-          if (typeof inst === "number" && inst !== popupInstance) return;
+          if (!matchesPopupInstance(inst)) return;
           if (isRevealBlocked()) return;
           if (pendingReveal) revealOverlay();
         },
@@ -6605,7 +6627,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         async resizePanel(view, height, dynamicSidebarWidth, inst) {
           if (!isOverlayOpen()) return;
-          if (typeof inst === "number" && inst !== popupInstance) return;
+          if (!matchesPopupInstance(inst)) return;
           resizePanelToView(view, height, dynamicSidebarWidth);
           if (!explicitRevealView && isRevealDeferred() && pendingReveal && (!hasBridgeBuffer() || getBridgeBufferLength() === 0)) {
             setRevealDeferred(false, "reveal-deferred-clear");
@@ -6701,7 +6723,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (mm) {
             try {
               mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
-                inst: popupInstance,
+                inst: currentPopupInstance(),
                 view: currentViewName || "actions",
                 params: currentViewParams || {},
                 skipAnimations: skipOverlayAnimations,
