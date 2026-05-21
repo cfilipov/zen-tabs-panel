@@ -34,6 +34,10 @@ type ChordSession = {
   markLeaderArm: (now?: number) => number;
   beginArm: (now?: number) => void;
   beginBridgeFromOpenView: (view?: string | null, kind?: string, source?: string) => Record<string, unknown>;
+  finishBridge: (w?: { clearTimeout?: (id: number) => void } | null, why?: string) => void;
+  setPopupReady: (value: boolean, why?: string) => void;
+  setRevealDeferred: (value: boolean, why?: string) => void;
+  pushBridgeKey: (event: Record<string, unknown>) => number | null;
   transition: (to: string, why: string, data?: unknown) => void;
   observeLegacyState: (snapshot: unknown, why: string) => void;
   assertInvariant: (snapshot?: unknown) => true;
@@ -483,6 +487,25 @@ describe("chord-session replay recording", () => {
       activeView: "tabs-by-age",
     });
     expect(session.getStateSnapshot().activeBridgeView).toBe("tabs-by-age");
+  });
+
+  it("owns bridge finish bookkeeping", () => {
+    const session = makeSession();
+
+    session.beginBridgeFromOpenView("last-visited", "chrome", "match");
+    session.pushBridgeKey({ key: "1" });
+    session.setPopupReady(true, "popup-ready");
+    session.setRevealDeferred(true, "reveal-deferred");
+
+    session.finishBridge(null, "finishBridge");
+
+    expect(session.getStateSnapshot()).toMatchObject({
+      state: "idle",
+      activeBridgeView: null,
+      popupReady: false,
+      revealDeferred: false,
+      bridgeBufferLength: null,
+    });
   });
 
   it("commits chrome model row intents instead of popup bridge replays", () => {

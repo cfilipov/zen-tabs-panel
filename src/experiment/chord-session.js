@@ -801,6 +801,17 @@
       return drained;
     }
 
+    function finishBridge(w, why) {
+      clearBridgeTimer(w);
+      clearRevealTimer(w);
+      bridgeState.buffer = null;
+      bridgeState.popupReady = false;
+      bridgeState.revealDeferred = false;
+      exitBridge();
+      bridgeState.activeView = null;
+      transition("idle", why || "finishBridge");
+    }
+
     function clearBridgeTimer(w) {
       if (bridgeTimer !== null && w) {
         try { w.clearTimeout(bridgeTimer); } catch (e) {}
@@ -905,6 +916,7 @@
       getBridgeBufferLength,
       pushBridgeKey,
       drainBridgeBuffer,
+      finishBridge,
       clearBridgeTimer,
       armBridgeTimer,
       isBridgeTimerActive,

@@ -3440,14 +3440,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Called from takeChordBridgeBuffer when popup signals ready, or from
     // the safety timer, or from destroyOverlay if the bridge is aborted.
     function finishBridge() {
-      clearBridgeTimer();
-      clearRevealTimer();
-      clearBridgeBuffer("finishBridge");
-      setPopupReady(false, "popup-ready-clear");
-      try { chordSession.exitBridge(); } catch (e) {}
+      const w = getWin();
+      try { if (chordSession) chordSession.finishBridge(w, "finishBridge"); } catch (e) {}
       disarmChordShims("finish-bridge");
-      setActiveBridgeView(null, "finishBridge");
-      if (chordSession) chordSession.transition("idle", "finishBridge");
       observeChordSession("finishBridge");
     }
 
