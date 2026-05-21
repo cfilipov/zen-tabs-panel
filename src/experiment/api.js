@@ -3297,10 +3297,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     function clearRevealTimer() {
       const w = getWin();
-      try { if (chordSession) chordSession.clearRevealTimer(w); } catch (e) {}
-      // Reset any stale "fired-but-popup-wasn't-ready" flag. A new
-      // chord chain starts fresh.
-      setRevealDeferred(false, "reveal-deferred-clear");
+      try { if (chordSession) chordSession.clearRevealTimer(w, "reveal-deferred-clear"); } catch (e) {}
     }
 
     function scheduleDeferredRevealFallback() {

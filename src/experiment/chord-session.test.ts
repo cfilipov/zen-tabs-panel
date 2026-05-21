@@ -44,6 +44,7 @@ type ChordSession = {
   setReadyTargetView: (view: string | null, why?: string) => void;
   preparePopupLoad: (view?: string | null, why?: string) => void;
   setRevealDeferred: (value: boolean, why?: string) => void;
+  clearRevealTimer: (w?: { clearTimeout?: (id: number) => void } | null, why?: string) => void;
   pushBridgeKey: (event: Record<string, unknown>) => number | null;
   transition: (to: string, why: string, data?: unknown) => void;
   observeLegacyState: (snapshot: unknown, why: string) => void;
@@ -547,6 +548,15 @@ describe("chord-session replay recording", () => {
       popupReady: false,
       readyTargetView: "last-visited",
     });
+  });
+
+  it("clears deferred reveal state when clearing the reveal timer", () => {
+    const session = makeSession();
+
+    session.setRevealDeferred(true, "reveal-deferred");
+    session.clearRevealTimer(null, "reveal-deferred-clear");
+
+    expect(session.getStateSnapshot().revealDeferred).toBe(false);
   });
 
   it("commits chrome model row intents instead of popup bridge replays", () => {

@@ -862,11 +862,22 @@
       return bridgeTimer != null;
     }
 
-    function clearRevealTimer(w) {
+    function clearRevealTimer(w, why) {
       if (revealTimer !== null && w) {
         try { w.clearTimeout(revealTimer); } catch (e) {}
       }
       revealTimer = null;
+      if (bridgeState.revealDeferred) {
+        bridgeState.revealDeferred = false;
+        recentTransitions.push({
+          at: Date.now(),
+          from: state,
+          to: state,
+          why: why || "reveal-deferred-clear",
+          data: { revealDeferred: false },
+        });
+        if (recentTransitions.length > 50) recentTransitions.shift();
+      }
     }
 
     function armRevealTimer(w, delay, callback) {
