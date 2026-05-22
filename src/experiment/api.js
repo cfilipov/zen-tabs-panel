@@ -319,10 +319,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return true;
     }
 
-    function sortTabsInternal(actionId, visitCounts) {
+    function sortTabsInternal(actionId, visitCountsJson) {
       const rows = sortableTabRows();
       if (rows.length < 2) return false;
-      const counts = visitCounts && typeof visitCounts === "object" ? visitCounts : {};
+      let counts = {};
+      if (typeof visitCountsJson === "string" && visitCountsJson) {
+        try { counts = JSON.parse(visitCountsJson) || {}; } catch (e) { counts = {}; }
+      }
       switch (actionId) {
         case "sort-tabs-recent-desc":
           rows.sort((a, b) => (b.lastAccessed - a.lastAccessed) || (a.index - b.index));
@@ -6441,8 +6444,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return getReorderTabUrlsInternal();
         },
 
-        async sortTabs(actionId, visitCounts) {
-          return sortTabsInternal(actionId, visitCounts);
+        async sortTabs(actionId, visitCountsJson) {
+          return sortTabsInternal(actionId, visitCountsJson);
         },
 
         async getSelectedTabUrls() {

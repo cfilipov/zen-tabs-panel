@@ -410,7 +410,7 @@ async function runSortAction(actionId) {
       );
     });
   }
-  await api.sortTabs(actionId, visitCounts);
+  await api.sortTabs(actionId, JSON.stringify(visitCounts));
 }
 
 // ---------------------------------------------------------------------------

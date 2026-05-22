@@ -403,7 +403,7 @@
         "description": "Sort the chrome-owned reorder-tab cohort and move tabs through Zen's native tab API.",
         "parameters": [
           { "name": "actionId", "type": "string" },
-          { "name": "visitCounts", "type": "object", "optional": true }
+          { "name": "visitCountsJson", "type": "string", "optional": true }
         ]
       },
       {
