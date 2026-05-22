@@ -266,12 +266,55 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
 
       const moving = tabs.slice(prefix, tabs.length - suffix);
-      const startIndex = current[prefix]._tPos;
+      try {
+        if (typeof w.gBrowser.zenHandleTabMove === "function" && w.gBrowser.tabContainer) {
+          const movingSet = new Set(tabs);
+          let target = null;
+          if (suffix > 0) {
+            target = current[tabs.length - suffix];
+          } else {
+            target = current[current.length - 1]?.nextElementSibling || null;
+            while (target && movingSet.has(target)) target = target.nextElementSibling;
+          }
+          const beforeBoundary = current[prefix - 1] || current[0]?.previousElementSibling || null;
+          if (target || beforeBoundary) {
+            w.gBrowser.zenHandleTabMove(moving[0], () => {
+              const fragment = w.document.createDocumentFragment();
+              for (const tab of moving) fragment.appendChild(tab);
+              if (target) {
+                w.gBrowser.tabContainer.insertBefore(fragment, target);
+              } else {
+                w.gBrowser.tabContainer.insertBefore(fragment, beforeBoundary.nextElementSibling);
+              }
+            }, { isUserTriggered: true });
+            return true;
+          }
+        }
+
+        if (suffix > 0 && typeof w.gBrowser.moveTabsBefore === "function") {
+          w.gBrowser.moveTabsBefore(moving, current[tabs.length - suffix]);
+          return true;
+        }
+
+        const movingSet = new Set(tabs);
+        let afterBoundary = current[current.length - 1]?.nextElementSibling || null;
+        while (afterBoundary && movingSet.has(afterBoundary)) afterBoundary = afterBoundary.nextElementSibling;
+        if (afterBoundary && typeof w.gBrowser.moveTabsBefore === "function") {
+          w.gBrowser.moveTabsBefore(moving, afterBoundary);
+          return true;
+        }
+
+        const beforeBoundary = current[prefix - 1] || current[0]?.previousElementSibling || null;
+        if (beforeBoundary && typeof w.gBrowser.moveTabsAfter === "function") {
+          w.gBrowser.moveTabsAfter(moving, beforeBoundary);
+          return true;
+        }
+      } catch (e) {}
+
+      const startIndex = current[prefix]?._tPos;
       if (!Number.isFinite(startIndex)) return false;
       for (let i = moving.length - 1; i >= 0; i--) {
-        try {
-          w.gBrowser.moveTabTo(moving[i], { tabIndex: startIndex, isUserTriggered: true });
-        } catch (e) {}
+        try { w.gBrowser.moveTabTo(moving[i], { tabIndex: startIndex, isUserTriggered: true }); } catch (e) {}
       }
       return true;
     }
