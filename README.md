@@ -97,8 +97,9 @@ This means two `about:config` flags must be enabled to install it.
 - **Domains** - browse tabs grouped by domain with drill-down
 - **Tabs by age** - list all tabs by age with age badges and close buttons for cleaning up old tabs
 - **Most visited** - list tabs sorted by browser history visit count, most visited first
-- **Move to workspace** - move tabs to another workspace without switching away (placed at top of target workspace's tab list). Supports multiselected tabs (⌘-click).
-- **Move to folder** - move the current tab to a Zen folder
+- **Move to workspace** - move tabs to another workspace without switching away, addressing a common Zen user request. An optional switch-on-move action takes you to the destination workspace when you want it.
+- **Move to folder** - move tabs to a Zen folder without switching workspaces by default, with an optional switch-on-move action when you do want to follow them.
+- **Multiselected tab actions** - many tab actions act on every selected tab, including moving to a workspace or folder, closing, unloading, copying URLs, and other cleanup flows.
 - **New container tab** - reopen the active tab in a Firefox container
 - **Move tab to start / end of tab bar**
 - **Reorder tabs** - submenu with sort options: by recent, by domain (alphabetical or popularity), by age, most visited, inactive at bottom, group duplicates
@@ -115,10 +116,10 @@ This means two `about:config` flags must be enabled to install it.
 - **Extension popup hosting** - extension toolbar popups can appear in ErgoZen's centered overlay, including badge indicators on the extension icons in the main menu
 - **Profiles** - list and launch Zen profiles from the palette
 - **Page and browser tools** - reload, hard reload, duplicate tab, reader mode, mute, fullscreen, picture-in-picture, page source/info, screenshots, downloads, add-ons, Firefox View, developer tools, browser toolbox, reset and re-pin tabs, and add tabs to Essentials on page 2 of the palette
+- **Duplicate link status** - hovered links that are already open get called out in Zen's bottom status bar before you click them.
+- **Context menus** - right-click selected tabs to copy all selected URLs, or right-click a link to open it directly in a workspace or Zen folder.
 - **Repeat last chord** - replay the most recent leaf action with `⌘.` then `.`
 - **Settings**
-- **"Copy selected tab URLs" right click menu item** when multiple tabs are selected
-- **Top-level link right click menus** to open a link directly in a workspace or Zen folder
 
 **Cross-workspace tab switching** - Zen's workspace system isolates tabs at the API level. `browser.tabs.query()` only returns tabs in the current workspace, and `browser.tabs.update()` silently fails for tabs in other workspaces. Every other Firefox tab-switching extension is broken by this. ErgoZen uses a privileged Experiment API to access Zen's internal workspace APIs directly, making it the only extension that can reliably switch to any tab regardless of which workspace it's in.
 
