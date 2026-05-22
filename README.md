@@ -9,22 +9,31 @@ Formerly **Zen Tabs Panel**.
 >
 > **Version 0.4.4** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
 
-ErgoZen gives you keyboard access to far more tab and workspace actions than Zen exposes by default. It is built around one leader shortcut: `⌘.` on macOS, or `⌃.` on Windows/Linux. After pressing the leader, you type a sequence of follow-up keys, one after another, instead of holding a complicated shortcut all at once. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. These sequences mirror the same keys you would press when navigating the menu visually. If you type quickly, the action runs immediately without showing the menu. If you pause, the menu appears and shows the available options, helping you find the right key when you forget. Over time, common actions become muscle memory while less-used tools remain easy to discover. The palette is designed for fast keyboard use, but it is also fully mouse-friendly and can be navigated with the arrow keys.
+ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more — far more than Zen exposes by default. Everything starts with one leader chord (`⌘.` on macOS, `⌃.` on Windows/Linux), followed by a short sequence of keys. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. The same sequence works whether you see the menu or not: type it quickly and the action fires immediately; pause, and the menu pops up showing every available next key. Common actions become muscle memory while less-used ones stay easy to discover. The palette is keyboard-first but fully mouse-friendly.
 
 > [!NOTE]
-> Windows and Linux have not been tested yet, but should work in theory.
+> Windows and Linux have not been tested, but should work in theory.
 
-![Main menu](screenshot@2x.png)
+<p align="center">
+  <img src="screenshot@2x.png" alt="Main menu" width="900">
+</p>
 
-![Main menu page 2](screenshot-actions-page-2@2x.png)
+<p align="center">
+  <img src="screenshot-actions-page-2@2x.png" alt="Main menu page 2" width="900">
+</p>
 
-![Reorder tabs menu](screenshot-reorder-tabs@2x.png)
+<p align="center">
+  <img src="screenshot-reorder-tabs@2x.png" alt="Reorder tabs menu" width="420">
+  <img src="screenshot-close-select@2x.png" alt="Close and select menu" width="420">
+</p>
 
-![Close and select menu](screenshot-close-select@2x.png)
+<p align="center">
+  <img src="screenshot-tabinfo@2x.png" alt="Tab info view" width="600">
+</p>
 
-![Tab info view](screenshot-tabinfo@2x.png)
-
-![Duplicate tab prompt](screenshot-duplicate-prompt@2x.png)
+<p align="center">
+  <img src="screenshot-duplicate-prompt@2x.png" alt="Duplicate tab prompt" width="420">
+</p>
 
 ## Install
 
