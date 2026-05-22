@@ -196,21 +196,29 @@ html, body {
   min-width: 0;
 }
 
-/* Actions menu pager: each page renders as a full-width pane laid out in
-   a flex row inside #list. translateX on the pager flips between panes.
-   Each pane scrolls independently so list overflow within a page works. */
+/* Actions menu pager: each page renders as a full-width scroll-snap pane.
+   Trackpad/touch swipes use native scrolling, while keyboard/page-dot jumps
+   scroll the same container to the requested page. */
 .actions-pager {
   display: flex;
   flex-direction: row;
   width: 100%;
-  transition: transform 200ms ease;
-  will-change: transform;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.actions-pager::-webkit-scrollbar {
+  display: none;
 }
 
 /* Suppress the slide animation on first paint so the initial page doesn't
    visibly translate in. JS removes this class after the first frame. */
 .actions-pager.no-anim {
-  transition: none;
+  scroll-behavior: auto;
 }
 
 .actions-page {
@@ -218,6 +226,8 @@ html, body {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
 /* Page-1 footer strip: row of foreign-extension launch icons. Each button

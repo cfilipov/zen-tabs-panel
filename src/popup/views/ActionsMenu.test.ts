@@ -79,7 +79,7 @@ describe("ActionsMenu", () => {
     expect(page2?.textContent).toContain("⇧L");
   });
 
-  it("only suppresses page-slide animation when skip animations is enabled", () => {
+  it("only suppresses smooth page scrolling when skip animations is enabled", () => {
     const animated = render(ActionsMenu, {
       props: {
         sections: testSections(),

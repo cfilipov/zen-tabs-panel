@@ -58,6 +58,7 @@
     drillParentRow: (row: TabIndexRow) => void | Promise<void>;
     loadVisibleRange: (offset: number, limit: number) => void;
     tabSubtitle: (row: TabIndexRow) => string | null;
+    setActionsPage: (page: number) => void;
   };
 
   let {
@@ -96,6 +97,7 @@
     drillParentRow,
     loadVisibleRange,
     tabSubtitle,
+    setActionsPage,
   }: Props = $props();
 
   function hasRenderableRows() {
@@ -131,6 +133,7 @@
         onextension={openExtensionPopup}
         onpreview={(domId) => previewTabLike({ domId })}
         onclearpreview={clearPreview}
+        onpage={setActionsPage}
       />
     {:else if isNativePrefixView(palette.currentView)}
       <PrefixMenu view={palette.currentView} items={prefixItems} onactivate={activateAction} />

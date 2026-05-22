@@ -1109,5 +1109,6 @@
     {drillParentRow}
     {loadVisibleRange}
     {tabSubtitle}
+    {setActionsPage}
   />
 </PaletteShell>

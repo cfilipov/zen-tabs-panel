@@ -3,6 +3,7 @@
   import { iconHtml } from "../components/icons";
   import type { ExtensionRow } from "../runtime/extension-client";
   import type { WorkspaceRow } from "../runtime/workspace-client";
+  import { snappedActionsPage } from "../interaction/actions-navigation";
   import type { ActionMenuItem, ActionSection } from "./actions-model";
   import { domainOf } from "./url";
 
@@ -16,6 +17,7 @@
     onextension?: (index: number) => void;
     onpreview?: (domId: string) => void;
     onclearpreview?: () => void;
+    onpage?: (page: number) => void;
   };
 
   type SectionBlock = {
@@ -95,8 +97,11 @@
     onextension,
     onpreview,
     onclearpreview,
+    onpage,
   }: Props = $props();
   const pageModels = $derived(buildPageModels(sections));
+  let pagerElement = $state<HTMLDivElement | undefined>();
+  let scrollPageSync: number | null = null;
 
   function actionIcon(item: ActionMenuItem) {
     if (item.iconHtml) return item.iconHtml;
@@ -110,6 +115,42 @@
   function badgeLabel(value: string | null | undefined) {
     return value ? String(value) : "";
   }
+
+  function pageIndexFor(page: number) {
+    return Math.max(0, pageModels.findIndex((model) => model.page === page));
+  }
+
+  function scrollToCurrentPage() {
+    if (!pagerElement) return;
+    const left = pageIndexFor(currentPage) * pagerElement.clientWidth;
+    if (pagerElement.scrollTo) {
+      pagerElement.scrollTo({
+        left,
+        behavior: skipAnimations ? "auto" : "smooth",
+      });
+    } else {
+      pagerElement.scrollLeft = left;
+    }
+  }
+
+  function syncPageFromScroll() {
+    scrollPageSync = null;
+    if (!pagerElement || pagerElement.clientWidth <= 0) return;
+    const page = snappedActionsPage(pagerElement.scrollLeft, pagerElement.clientWidth, pageModels.map((model) => model.page));
+    if (page && page !== currentPage) onpage?.(page);
+  }
+
+  function schedulePageSyncFromScroll() {
+    if (scrollPageSync !== null) window.clearTimeout(scrollPageSync);
+    scrollPageSync = window.setTimeout(syncPageFromScroll, 80);
+  }
+
+  $effect(() => {
+    currentPage;
+    pageModels.length;
+    pagerElement;
+    requestAnimationFrame(scrollToCurrentPage);
+  });
 
   function scrollOverflow(node: HTMLElement) {
     const column = node.closest(".scrollable-column");
@@ -229,7 +270,7 @@
   </button>
 {/snippet}
 
-<div class="actions-pager" class:no-anim={skipAnimations} style={`transform: translateX(-${(currentPage - 1) * 100}%)`}>
+<div class="actions-pager" class:no-anim={skipAnimations} bind:this={pagerElement} onscroll={schedulePageSyncFromScroll}>
   {#each pageModels as page (page.page)}
     <div class="actions-page" data-page={page.page}>
       {#each page.blocks as block (blockKey(block))}

@@ -11,6 +11,12 @@ export function nextActionsPage(currentPage: number, targetPage: number, pageCou
   return nextPage === currentPage ? null : nextPage;
 }
 
+export function snappedActionsPage(scrollLeft: number, pageWidth: number, pages: readonly number[]) {
+  if (pageWidth <= 0 || pages.length === 0) return null;
+  const index = Math.round(scrollLeft / pageWidth);
+  return pages[Math.max(0, Math.min(pages.length - 1, index))] ?? null;
+}
+
 export function actionSectionStarts(
   sections: readonly ActionSectionShape[],
   currentPage: number,
