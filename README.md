@@ -113,7 +113,7 @@ This means two `about:config` flags must be enabled to install it.
 - **Split** - submenu for Zen's split view: New, Close, Horizontal (top/bottom panes), Vertical (side-by-side panes)
 - **Extension popup hosting** - extension toolbar popups can appear in ErgoZen's centered overlay, including badge indicators on the extension icons in the main menu
 - **Profiles** - list and launch Zen profiles from the palette
-- **Page and browser tools** - reload, hard reload, duplicate tab, reader mode, mute, fullscreen, picture-in-picture, page source/info, screenshots, downloads, add-ons, Firefox View, developer tools, browser toolbox, reset/replace pinned URLs, and add tabs to Essentials on page 2 of the palette
+- **Page and browser tools** - reload, hard reload, duplicate tab, reader mode, mute, fullscreen, picture-in-picture, page source/info, screenshots, downloads, add-ons, Firefox View, developer tools, browser toolbox, reset and re-pin tabs, and add tabs to Essentials on page 2 of the palette
 - **Repeat last chord** - replay the most recent leaf action with `⌘.` then `.`
 - **Settings**
 - **"Copy selected tab URLs" right click menu item** when multiple tabs are selected
@@ -220,8 +220,8 @@ Page 2 contains browser, page, profile, and workspace utilities:
 
 | Panel key | Action |
 |---|---|
-| `⇧P` | Reset pinned URL |
-| `⇧C` | Replace pinned URL |
+| `⇧P` | Reset pinned tab |
+| `⇧C` | Re-pin tab |
 | `⇧E` | Add to Essentials |
 | `⇧N` | New container tab |
 
