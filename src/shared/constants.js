@@ -39,6 +39,7 @@ this.MSG = Object.freeze({
   GET_SELECTED_TAB_URLS:          "get-selected-tab-urls",
   GET_WORKSPACES_WITH_ICONS:      "get-workspaces-with-icons",
   GET_WORKSPACES_VIEW_MODEL:      "get-workspaces-view-model",
+  SET_ACTIVE_WORKSPACE_ICON:      "set-active-workspace-icon",
   TAB_INDEX_ENSURE_STARTED:       "tab-index:ensure-started",
   TAB_INDEX_GET_VERSION:          "tab-index:get-version",
   TAB_INDEX_GET_SUMMARY:          "tab-index:get-summary",
@@ -264,6 +265,7 @@ this.VIEW_IDS = new Set([
   "move-to-folder",
   "open-in-container",
   "profiles",
+  "workspace-icons",
   "duplicate-prompt",
   "extension-popup",
 ]);

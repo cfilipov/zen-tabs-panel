@@ -106,6 +106,7 @@ export const NAVIGATION_TREE = [
   // for switching/launching. Previously inlined as a column on page 2;
   // moved to its own view so the actions menu stays compact.
   { id: "profiles",           kind: "open-view", chord: "'", view: "profiles", label: "Profiles", icon: "svg:user", page: 2 },
+  { id: "workspace-icons",    kind: "open-view", chord: "Shift+K", view: "workspace-icons", label: "Workspace icon", icon: "svg:palette", page: 2 },
 
   // Page 2 — Repeat the most recent chord-action. Chord is "." after
   // the leader, so cmd+.,. fires whatever cmd+.,X you did last —
@@ -198,6 +199,7 @@ const ALL_VIEW_IDS = [
   "move-to-workspace",
   "open-in-container",
   "profiles",
+  "workspace-icons",
   "move-to-folder",
   "reorder-tabs",
   "split-view",

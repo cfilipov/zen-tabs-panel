@@ -42,7 +42,7 @@ describe("stable row identity", () => {
     const rows = [
       { kind: "tab", domId: "tab-20" },
       { kind: "domain", domain: "example.test" },
-    ] as StableRowIdentityContext["rows"];
+    ] as unknown as StableRowIdentityContext["rows"];
 
     const base = context({ view: "last-visited", offset: 20, rows });
 

@@ -1024,6 +1024,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "split-view":         { width: 360, height: 604 },
       "open-in-container":  { width: 320, height: 604 },
       "profiles":           { width: 360, height: 604 },
+      "workspace-icons":    { width: 600, height: 604 },
       "duplicate-prompt":   { width: 420, height: 604 },
       "extension-popup":    { width: 360, height: 500 },
     };
@@ -5007,6 +5008,44 @@ this.zenWorkspaces = class extends ExtensionAPI {
       try { Services.mm.removeMessageListener("ZenDuplicate:ContentLinkClick", onDuplicateContentLinkClick); } catch (e) {}
     }
 
+    function lucideIconNameFromWorkspaceIcon(icon) {
+      const match = /#lucide-([a-z0-9-]+)\.svg$/.exec(String(icon || ""));
+      return match ? match[1] : null;
+    }
+
+    function lucideIconUrl(iconName) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(String(iconName || ""))) return null;
+      return context.extension.getURL("lucide-icons/" + iconName + ".svg");
+    }
+
+    async function setWorkspaceLucideIcon(workspaceId, iconName) {
+      const w = getWin();
+      if (!w || !w.gZenWorkspaces) return { success: false, error: "Zen workspaces are unavailable" };
+      const url = lucideIconUrl(iconName);
+      if (!url) return { success: false, error: "Unknown icon" };
+
+      let svg = "";
+      try {
+        const resp = await w.fetch(url);
+        if (!resp || !resp.ok) return { success: false, error: "Icon asset is unavailable" };
+        svg = await resp.text();
+      } catch (e) {
+        return { success: false, error: "Icon asset is unavailable" };
+      }
+      if (!/<svg[\s>]/.test(svg)) return { success: false, error: "Icon asset is invalid" };
+
+      const id = workspaceId || w.gZenWorkspaces.activeWorkspace;
+      const workspace = w.gZenWorkspaces.getWorkspaceFromId(id);
+      if (!workspace) return { success: false, error: "Workspace not found" };
+
+      const previousIcon = workspace.icon;
+      workspace.icon = "data:image/svg+xml," + encodeURIComponent(svg) + "#lucide-" + iconName + ".svg";
+      workspaceSvgCache.delete(previousIcon);
+      workspaceSvgCache.delete(workspace.icon);
+      await w.gZenWorkspaces.saveWorkspace(workspace);
+      return { success: true };
+    }
+
     function getWorkspaceRows(includeIcons) {
       const w = getWin();
       if (!w || !w.gZenWorkspaces) return [];
@@ -5017,6 +5056,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         name: ws.name,
         svgContent: includeIcons && ws.icon ? null : "",
         icon: includeIcons ? ws.icon || "" : "",
+        lucideIconName: lucideIconNameFromWorkspaceIcon(ws.icon),
         isActive: ws.uuid === activeId,
       }));
     }
@@ -6657,6 +6697,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
             delete row.icon;
           }
           return model;
+        },
+
+        async setActiveWorkspaceIcon(iconName) {
+          return setWorkspaceLucideIcon(null, iconName);
         },
 
         // Move gBrowser.selectedTabs to the given workspace, placed at top

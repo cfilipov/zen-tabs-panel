@@ -13,4 +13,16 @@ describe("workspace client", () => {
 
     expect(sent).toEqual([{ type: "get-workspaces-with-icons" }]);
   });
+
+  it("sets the active workspace icon by Lucide name", async () => {
+    const sent: unknown[] = [];
+    const client = createWorkspaceClient(async <T>(message: unknown) => {
+      sent.push(message);
+      return { success: true } as T;
+    });
+
+    await client.setActiveWorkspaceIcon("briefcase");
+
+    expect(sent).toEqual([{ type: "set-active-workspace-icon", iconName: "briefcase" }]);
+  });
 });

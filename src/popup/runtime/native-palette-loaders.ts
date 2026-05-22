@@ -173,6 +173,16 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
     });
   }
 
+  async function loadWorkspaceIcons() {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "workspace-icons",
+      load: async () => ({ workspaces: await deps.workspaceClient.getWorkspacesWithIcons() }),
+      commit: paletteStore.commitWorkspaceIcons,
+      fail: paletteStore.failWorkspaceIcons,
+    });
+  }
+
   async function loadDuplicates() {
     await runViewLoad({
       controller: viewLoad,
@@ -223,6 +233,7 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
     "open-in-container": loadOpenInContainer,
     "move-to-folder": loadMoveToFolder,
     profiles: loadProfiles,
+    "workspace-icons": loadWorkspaceIcons,
     duplicates: loadDuplicates,
     "tab-info": loadTabInfo,
     "duplicate-prompt": loadDuplicatePrompt,

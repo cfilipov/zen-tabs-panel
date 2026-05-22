@@ -4,6 +4,7 @@ export type WorkspaceRow = {
   uuid: string;
   name: string;
   svgContent: string;
+  lucideIconName?: string | null;
   isActive: boolean;
   tabCount?: number;
   chordKey?: string | null;
@@ -37,6 +38,9 @@ export function createWorkspaceClient(send: Send = sendMessage) {
     },
     getWorkspacesViewModel() {
       return send<WorkspacesViewModel>({ type: "get-workspaces-view-model" });
+    },
+    setActiveWorkspaceIcon(iconName: string) {
+      return send<{ success: boolean; error?: string }>({ type: "set-active-workspace-icon", iconName });
     },
   };
 }

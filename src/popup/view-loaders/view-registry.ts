@@ -64,6 +64,7 @@ export const VIEW_LOADERS = {
   "open-in-container": "open-in-container",
   "move-to-folder": "move-to-folder",
   profiles: "profiles",
+  "workspace-icons": "workspace-icons",
   duplicates: "duplicates",
   "tab-info": "tab-info",
   "duplicate-prompt": "duplicate-prompt",
@@ -85,6 +86,7 @@ const CONCRETE_VIEW_TITLES: Partial<Record<ViewId, string>> = {
   "open-in-container": "New container tab",
   "move-to-folder": "Move to folder",
   profiles: "Profiles",
+  "workspace-icons": "Workspace icon",
 };
 
 export type ViewOpenPlan =

@@ -81,6 +81,9 @@ export function createPaletteEffects() {
     switchWorkspaceByIndex(index: number) {
       return sendMessage<boolean>({ type: "switch-workspace-by-index", index });
     },
+    setActiveWorkspaceIcon(iconName: string) {
+      return sendMessage<{ success: boolean; error?: string }>({ type: "set-active-workspace-icon", iconName });
+    },
     openExtensionPopupByIndex(index: number) {
       return sendMessage<boolean>({ type: "open-extension-popup-by-index", index });
     },

@@ -12,6 +12,7 @@
   import RecentlyClosedList from "./RecentlyClosedList.svelte";
   import TabInfoView from "./TabInfoView.svelte";
   import TabList from "./TabList.svelte";
+  import WorkspaceIconPicker from "./WorkspaceIconPicker.svelte";
   import WorkspaceList from "./WorkspaceList.svelte";
   import type { ActionMenuItem, ActionSection } from "./actions-model";
   import type { DuplicatePromptAction } from "../interaction/duplicate-prompt-options";
@@ -51,6 +52,7 @@
     closeTabInfoDuplicate: (row: TabIndexRow) => void;
     closeOtherTabInfoDuplicates: () => void;
     runDuplicatePromptAction: (action: DuplicatePromptAction) => void;
+    setActiveWorkspaceIcon: (iconName: string) => void | Promise<void>;
     drillParentRow: (row: TabIndexRow) => void | Promise<void>;
     loadVisibleRange: (offset: number, limit: number) => void;
     tabSubtitle: (row: TabIndexRow) => string | null;
@@ -87,6 +89,7 @@
     closeTabInfoDuplicate,
     closeOtherTabInfoDuplicates,
     runDuplicatePromptAction,
+    setActiveWorkspaceIcon,
     drillParentRow,
     loadVisibleRange,
     tabSubtitle,
@@ -101,6 +104,7 @@
     if (palette.currentView === "open-in-container") return palette.containerRows.length > 0;
     if (palette.currentView === "move-to-folder") return palette.folderRows.length > 0;
     if (palette.currentView === "profiles") return palette.profileRows.length > 0;
+    if (palette.currentView === "workspace-icons") return palette.workspaceIconWorkspaces.length > 0;
     if (palette.currentView === "duplicates") return palette.duplicateGroups.length > 0;
     if (palette.currentView === "tab-info") return !!tabInfo;
     if (palette.currentView === "duplicate-prompt") return !!palette.duplicatePromptUrl;
@@ -165,6 +169,11 @@
         rows={palette.profileRows}
         selectedIndex={palette.selectedIndex}
         onactivate={activateRenderedRow}
+      />
+    {:else if palette.currentView === "workspace-icons"}
+      <WorkspaceIconPicker
+        workspaces={palette.workspaceIconWorkspaces}
+        onselect={setActiveWorkspaceIcon}
       />
     {:else if palette.currentView === "duplicates"}
       <DuplicateGroups

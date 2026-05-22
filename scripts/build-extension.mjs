@@ -70,6 +70,7 @@ for (const entry of entriesToCopy) {
   await copyEntry(entry);
 }
 
+await run("node", ["scripts/generate-lucide-assets.mjs"]);
 await run("node", ["scripts/generate-keybindings.mjs"]);
 await run("npx", ["vite", "build"]);
 

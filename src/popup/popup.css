@@ -1803,3 +1803,120 @@ html, body {
 .nav-direction {
   font-size: 14px;
 }
+
+/* Workspace icon picker */
+.workspace-icon-picker {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.workspace-icon-toolbar {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, 320px);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid var(--ztt-border);
+}
+
+.workspace-icon-target {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ztt-text);
+}
+
+.workspace-icon-target-glyph {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 18px;
+}
+
+.workspace-icon-target-glyph svg {
+  width: 18px;
+  height: 18px;
+}
+
+.workspace-icon-target-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 650;
+}
+
+.workspace-icon-search {
+  width: 100%;
+  height: 34px;
+  box-sizing: border-box;
+  border: 1px solid var(--ztt-border);
+  border-radius: 6px;
+  background: var(--ztt-bg-elevated);
+  color: var(--ztt-text);
+  padding: 0 10px;
+  font: inherit;
+  outline: none;
+}
+
+.workspace-icon-search:focus {
+  border-color: AccentColor;
+  box-shadow: 0 0 0 2px color-mix(in srgb, AccentColor 24%, transparent);
+}
+
+.workspace-icon-grid {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+  gap: 8px;
+  padding: 12px;
+}
+
+.workspace-icon-choice {
+  min-width: 0;
+  height: 76px;
+  display: grid;
+  grid-template-rows: 26px 1fr;
+  place-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ztt-text-muted);
+  cursor: pointer;
+  padding: 8px 6px;
+}
+
+.workspace-icon-choice:hover,
+.workspace-icon-choice:focus-visible {
+  background: var(--ztt-bg-hover);
+  color: var(--ztt-text);
+  outline: none;
+}
+
+.workspace-icon-choice.selected {
+  border-color: AccentColor;
+  background: color-mix(in srgb, AccentColor 14%, transparent);
+  color: var(--ztt-text);
+}
+
+.workspace-icon-choice img {
+  width: 24px;
+  height: 24px;
+  -moz-context-properties: fill, fill-opacity;
+  fill: currentColor;
+}
+
+.workspace-icon-choice span {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 1.2;
+}

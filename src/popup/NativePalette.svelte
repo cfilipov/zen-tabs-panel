@@ -479,6 +479,17 @@
     await effects.openExtensionPopupByIndex(index);
   }
 
+  async function setActiveWorkspaceIcon(iconName: string) {
+    markTerminalCommandDispatched();
+    revealController.clear();
+    const result = await effects.setActiveWorkspaceIcon(iconName);
+    if (result?.success) {
+      effects.hidePalette();
+    } else {
+      paletteStore.setError(result?.error || "Could not set workspace icon");
+    }
+  }
+
   function closeDuplicateTab(row: TabIndexRow) {
     effects.closeTab(row.domId);
     const groups = removeTabFromDuplicateGroups(palette.duplicateGroups, row.domId);
@@ -1081,6 +1092,7 @@
     {closeTabInfoDuplicate}
     {closeOtherTabInfoDuplicates}
     {runDuplicatePromptAction}
+    {setActiveWorkspaceIcon}
     {drillParentRow}
     {loadVisibleRange}
     {tabSubtitle}

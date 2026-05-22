@@ -18,6 +18,7 @@ export type ViewId =
   | "move-to-workspace"
   | "open-in-container"
   | "profiles"
+  | "workspace-icons"
   | "move-to-folder"
   | "reorder-tabs"
   | "split-view"

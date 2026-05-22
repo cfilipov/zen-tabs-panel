@@ -30,6 +30,7 @@ export type NativePaletteState = {
   folderRows: FolderRow[];
   folderWorkspaces: WorkspaceRow[];
   profileRows: ProfileRow[];
+  workspaceIconWorkspaces: WorkspaceRow[];
   duplicateGroups: DuplicateGroupRow[];
   duplicateWorkspaces: WorkspaceRow[];
   tabInfo: TabInfo | null;
@@ -69,6 +70,7 @@ function defaultNativePaletteState(): NativePaletteState {
     folderRows: [],
     folderWorkspaces: [],
     profileRows: [],
+    workspaceIconWorkspaces: [],
     duplicateGroups: [],
     duplicateWorkspaces: [],
     tabInfo: null,
@@ -145,6 +147,7 @@ export function createNativePaletteState() {
     state.folderRows = [];
     state.folderWorkspaces = [];
     state.profileRows = [];
+    state.workspaceIconWorkspaces = [];
     state.duplicateGroups = [];
     state.duplicateWorkspaces = [];
     state.tabInfo = null;
@@ -292,6 +295,17 @@ export function createNativePaletteState() {
     state.error = message;
   }
 
+  function commitWorkspaceIcons(result: { workspaces: WorkspaceRow[] }) {
+    state.workspaceIconWorkspaces = result.workspaces;
+    state.selectedIndex = -1;
+  }
+
+  function failWorkspaceIcons(message: string) {
+    state.workspaceIconWorkspaces = [];
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
   function commitDuplicates(result: {
     groups: DuplicateGroupRow[];
     workspaces: WorkspaceRow[];
@@ -401,6 +415,8 @@ export function createNativePaletteState() {
     failMoveToFolder,
     commitProfiles,
     failProfiles,
+    commitWorkspaceIcons,
+    failWorkspaceIcons,
     commitDuplicates,
     failDuplicates,
     replaceDuplicateGroups,
