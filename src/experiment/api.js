@@ -2218,6 +2218,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       } catch (e) {}
     }
 
+    function restoreOverlayFocusAfterDestroy(silent) {
+      if (silent) releaseHiddenPaletteFocus();
+      else focusSelectedTabBrowser();
+    }
+
     // Warm popup is mounted from a previous chord chain (or initial
     // pre-create at extension load). Reset state for a fresh chord arm,
     // tell the popup to navigate to the requested view, and arm a new
@@ -2239,7 +2244,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Popup will signal ready again after it processes WarmRearm; any
       // chord-chain keys that land in this window are buffered (just like
       // the cold-create case).
-      overlayController.resetViewState(view || "actions", {});
+      overlayController.resetViewState(view || "actions", params || {});
       const readyGen = nextReadinessGeneration();
 
       const viewName = view || "actions";
@@ -2960,7 +2965,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         clearPendingReveal();
         if (hard) {
           overlay.remove();
-          focusSelectedTabBrowser();
+          restoreOverlayFocusAfterDestroy(silent);
         } else if (overlay.style.visibility !== "hidden") {
           const panel = w.document.getElementById(PANEL_ID);
           overlay.style.visibility = "hidden";
@@ -2968,7 +2973,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           overlay.style.pointerEvents = "none";
           overlay.style.animation = "";
           if (panel) panel.style.animation = "";
-          focusSelectedTabBrowser();
+          restoreOverlayFocusAfterDestroy(silent);
         }
         if (!silent && chordSession) chordSession.markOverlayHidden("destroyOverlay-pending-hidden");
         observeChordSession("destroyOverlay-pending-hidden");
@@ -2979,7 +2984,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // to animate. Hard mode removes the DOM; soft mode is a no-op.
       if (overlay.style.visibility === "hidden") {
         if (hard) overlay.remove();
-        focusSelectedTabBrowser();
+        restoreOverlayFocusAfterDestroy(silent);
         if (!silent && chordSession) chordSession.markOverlayHidden("destroyOverlay-idle-hidden");
         observeChordSession("destroyOverlay-idle-hidden");
         return;
@@ -2995,7 +3000,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (!hard && overlay.dataset.closing !== "true") return;
         if (hard) {
           if (overlay.isConnected) overlay.remove();
-          focusSelectedTabBrowser();
+          restoreOverlayFocusAfterDestroy(silent);
           return;
         }
         overlay.style.visibility = "hidden";
@@ -3004,7 +3009,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         overlay.style.animation = "";
         if (panel) panel.style.animation = "";
         delete overlay.dataset.closing;
-        focusSelectedTabBrowser();
+        restoreOverlayFocusAfterDestroy(silent);
         if (!silent && chordSession) chordSession.markOverlayHidden("destroyOverlay-finish");
         observeChordSession("destroyOverlay-finish");
         // Tell the popup to navigate back to the default actions view
@@ -3478,7 +3483,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
           finishBridge();
         });
         if (hasPendingReveal()) {
-          overlayController.destroy({ silent: true });
           overlayController.create(requestedView);
           armRevealTimer();
         } else if (overlayController.isVisible()) {
@@ -3534,17 +3538,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (hasPendingReveal() && !requestedView) {
         // Already prerendered at the right default view — keep it hidden.
       } else {
-        if (hasPendingReveal() && requestedView) {
-          // Direct submenu chords (cmd+.,r / cmd+.,o) need the popup to
-          // boot at the requested view, not rely on a warm root popup
-          // receiving WarmRearm before reveal. A missed WarmRearm leaves
-          // chrome in the submenu while Svelte still renders actions,
-          // which then reports the valid submenu key as invalid.
-          createFreshOverlayForDirectOpen(requestedView);
-        } else {
-          if (hasPendingReveal()) overlayController.destroy({ silent: true });
-          overlayController.create(requestedView);
-        }
+        // Chord-driven submenu opens should rearm the hidden prerender
+        // instead of destroying and replacing its remote browser. A fresh
+        // browser swap can steal focus away from a content editor between
+        // chord keys, which makes subsequent keys miss the content-process
+        // shim and leak into the page. Readiness generations now guard the
+        // warm-rearm handshake, so the existing hidden popup can safely
+        // retarget to the requested view.
+        overlayController.create(requestedView);
       }
       armRevealTimer();
     }
@@ -3972,8 +3973,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function switchHiddenBridgeView(view, params, previousView, previousParams) {
-      if (hasPendingReveal()) createFreshOverlayForDirectOpen(view, params || {});
-      else overlayController.create(view, params || {});
+      overlayController.create(view, params || {});
       try { if (chordSession) chordSession.retargetActiveBridgeView(view, "switchHiddenBridgeView"); } catch (e) {}
       if (previousView) {
         overlayController.setNavigationStack([{ view: previousView, params: previousParams || {} }]);
@@ -4180,6 +4180,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!row || !row.domain) return false;
           const nextParams = { domain: row.domain };
           switchHiddenBridgeView("domain-tabs", nextParams, "domains", params);
+          armRevealTimer();
           return true;
         } catch (e) {
           return false;
@@ -4310,6 +4311,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const w = getWin();
       if (!w) return;
       chromeShim.attach(w);
+      const browserFallbackDelayMs = 45;
 
       // Intra-window focus shifts: when the user clicks between URL bar
       // and content (or vice versa) mid-chord, the chrome shim/session needs
@@ -4387,14 +4389,23 @@ this.zenWorkspaces = class extends ExtensionAPI {
             ctrlKey: !!e.ctrlKey,
             metaKey: !!e.metaKey,
             isTrusted: !!e.isTrusted,
+            ingressAt: Date.now(),
             source: "fallback",
             timeStamp: typeof e.timeStamp === "number" ? e.timeStamp : undefined,
             target: name === "browser" ? null : e.target,
             preventDefault: () => { try { e.preventDefault(); } catch (_) {} },
             stopPropagation: () => { try { e.stopPropagation(); } catch (_) {} },
           };
-          if (chordKeyIngress) chordKeyIngress.submit(fallbackKey, "fallback");
-          else chordSession.acceptKey(fallbackKey);
+          const submitFallback = () => {
+            if (!chordSession || !chordSession.isArmed()) return;
+            if (chordKeyIngress) chordKeyIngress.submit(fallbackKey, "fallback");
+            else chordSession.acceptKey(fallbackKey);
+          };
+          if (name === "browser") {
+            w.setTimeout(submitFallback, browserFallbackDelayMs);
+          } else {
+            submitFallback();
+          }
           try { e.stopImmediatePropagation(); } catch (_) {}
           return;
         }
@@ -4436,6 +4447,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           ctrlKey: !!e.ctrlKey,
           metaKey: !!e.metaKey,
           isTrusted: !!e.isTrusted,
+          ingressAt: Date.now(),
           source: "fallback",
           timeStamp: typeof e.timeStamp === "number" ? e.timeStamp : undefined,
           target: name === "browser" ? null : e.target,

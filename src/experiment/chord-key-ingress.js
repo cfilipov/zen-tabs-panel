@@ -23,7 +23,7 @@
     const chordSession = options.chordSession;
     const debugTrace = typeof options.debugTrace === "function" ? options.debugTrace : null;
     const nowMs = typeof options.nowMs === "function" ? options.nowMs : Date.now;
-    const echoWindowMs = typeof options.echoWindowMs === "number" ? options.echoWindowMs : 1200;
+    const echoWindowMs = typeof options.echoWindowMs === "number" ? options.echoWindowMs : 70;
     const maxRecent = typeof options.maxRecent === "number" ? options.maxRecent : 16;
 
     let recent = [];
@@ -64,7 +64,7 @@
       const actualSource = source || keyData.source || "unknown";
       const signature = keySignature(keyData);
       if (!signature) return "ignored";
-      const now = nowMs();
+      const now = typeof keyData.ingressAt === "number" ? keyData.ingressAt : nowMs();
       prune(now);
 
       const duplicate = consumeDuplicate(signature, actualSource, now);

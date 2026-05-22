@@ -12,6 +12,7 @@ type KeyData = {
   ctrlKey?: boolean;
   metaKey?: boolean;
   source?: string;
+  ingressAt?: number;
 };
 
 type Ingress = {
@@ -61,7 +62,7 @@ describe("chord key ingress", () => {
     });
 
     expect(ingress.submit(key("q"), "fallback")).toBe("consumed");
-    now = 800;
+    now = 50;
     expect(ingress.submit(key("q"), "content-shim")).toBe("duplicate");
 
     expect(acceptKey).toHaveBeenCalledTimes(1);
@@ -83,11 +84,11 @@ describe("chord key ingress", () => {
     });
 
     expect(ingress.submit(key("1"), "fallback")).toBe("consumed");
-    now = 50;
+    now = 20;
     expect(ingress.submit(key("1"), "fallback")).toBe("consumed");
-    now = 200;
+    now = 40;
     expect(ingress.submit(key("1"), "content-shim")).toBe("duplicate");
-    now = 220;
+    now = 60;
     expect(ingress.submit(key("1"), "content-shim")).toBe("duplicate");
 
     expect(acceptKey).toHaveBeenCalledTimes(2);
@@ -105,6 +106,23 @@ describe("chord key ingress", () => {
 
     expect(ingress.submit(key("1"), "content-shim")).toBe("consumed");
     now = 10;
+    expect(ingress.submit(key("1"), "content-shim")).toBe("consumed");
+
+    expect(acceptKey).toHaveBeenCalledTimes(2);
+    expect(ingress.stats()).toEqual(expect.objectContaining({ consumed: 2, duplicates: 0 }));
+  });
+
+  it("preserves repeated cross-source keys after the echo window", () => {
+    const scope = loadScope();
+    let now = 0;
+    const acceptKey = vi.fn();
+    const ingress = scope.createChordKeyIngress({
+      chordSession: { acceptKey },
+      nowMs: () => now,
+    });
+
+    expect(ingress.submit(key("1"), "fallback")).toBe("consumed");
+    now = 90;
     expect(ingress.submit(key("1"), "content-shim")).toBe("consumed");
 
     expect(acceptKey).toHaveBeenCalledTimes(2);
