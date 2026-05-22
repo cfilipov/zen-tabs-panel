@@ -18,6 +18,7 @@
   --ztt-border: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.06));
   --ztt-badge-bg: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
   --ztt-badge-text: light-dark(#6b6b80, #9d9db5);
+  --ztt-keyboard-ring: color-mix(in srgb, AccentColor 24%, transparent);
   --ztt-radius: 12px;
   --ztt-item-radius: 8px;
   --ztt-item-height: 48px;
@@ -352,6 +353,7 @@ html, body {
   text-align: left;
   user-select: none;
   width: 100%;
+  position: relative;
   transition: background 0.08s ease;
 }
 
@@ -368,7 +370,9 @@ html, body {
 }
 
 .list-item.selected {
-  background: var(--ztt-bg-selected);
+  z-index: 1;
+  background: var(--ztt-bg-hover);
+  box-shadow: inset 0 0 0 1px AccentColor, 0 0 0 2px var(--ztt-keyboard-ring);
 }
 
 .duplicate-prompt-divider {
@@ -395,7 +399,7 @@ html, body {
   contain: layout paint;
 }
 
-/* Activation flash: distinct from .selected (gray arrow-key cursor). Uses
+/* Activation flash: distinct from .selected (arrow-key cursor). Uses
    the system accent color so the user can see which item they activated
    via chord key, click, or Enter. Briefly applied then removed by
    flashActivated() in keyboard.js. !important so column-specific styles
@@ -404,7 +408,9 @@ html, body {
    pushes white AccentColorText into low-contrast territory — darken the
    accent so the foreground reads cleanly. */
 .list-item.activated {
+  z-index: 2;
   background: light-dark(AccentColor, color-mix(in srgb, AccentColor, black 30%)) !important;
+  box-shadow: none !important;
   color: AccentColorText !important;
 }
 /* Text descendants — the row's color: AccentColorText doesn't reach
@@ -927,6 +933,7 @@ html, body {
   font: inherit;
   text-align: inherit;
   width: 100%;
+  position: relative;
   cursor: pointer;
   transition: background 0.08s ease;
 }
@@ -936,7 +943,9 @@ html, body {
 }
 
 .duplicate-tab-row.selected {
-  background: var(--ztt-bg-selected);
+  z-index: 1;
+  background: var(--ztt-bg-hover);
+  box-shadow: inset 0 0 0 1px AccentColor, 0 0 0 2px var(--ztt-keyboard-ring);
 }
 
 .duplicate-tab-actions {
@@ -1638,6 +1647,7 @@ html, body {
   border-radius: 6px;
   cursor: pointer;
   color: var(--ztt-text-muted);
+  position: relative;
   transition: background 0.08s ease, color 0.08s ease;
 }
 
@@ -1653,8 +1663,10 @@ html, body {
 
 .sidebar-item.focused,
 .sidebar-sort.focused {
-  background: var(--ztt-bg-selected);
+  z-index: 1;
+  background: var(--ztt-bg-hover);
   color: var(--ztt-text);
+  box-shadow: inset 0 0 0 1px AccentColor, 0 0 0 2px var(--ztt-keyboard-ring);
 }
 
 .sidebar-ws-icon {
@@ -1706,6 +1718,7 @@ html, body {
   border-radius: 6px;
   cursor: pointer;
   color: var(--ztt-text-muted);
+  position: relative;
   transition: background 0.08s ease;
 }
 
@@ -1884,7 +1897,7 @@ html, body {
 
 .workspace-icon-search:focus {
   border-color: AccentColor;
-  box-shadow: 0 0 0 2px color-mix(in srgb, AccentColor 24%, transparent);
+  box-shadow: 0 0 0 2px var(--ztt-keyboard-ring);
 }
 
 .workspace-icon-clear {
@@ -1941,7 +1954,7 @@ html, body {
 
 .workspace-icon-pages button:focus-visible {
   border-color: AccentColor;
-  box-shadow: 0 0 0 2px color-mix(in srgb, AccentColor 24%, transparent);
+  box-shadow: 0 0 0 2px var(--ztt-keyboard-ring);
 }
 
 .workspace-icon-pages button.active {
@@ -1956,7 +1969,7 @@ html, body {
 
 .workspace-icon-pages button.section-active {
   border-color: AccentColor;
-  box-shadow: 0 0 0 2px color-mix(in srgb, AccentColor 24%, transparent);
+  box-shadow: 0 0 0 2px var(--ztt-keyboard-ring);
 }
 
 .workspace-icon-pages .item-badge {
@@ -2003,14 +2016,14 @@ html, body {
 
 .workspace-icon-choice.highlighted:focus-visible {
   border-color: AccentColor;
-  box-shadow: 0 0 0 2px color-mix(in srgb, AccentColor 24%, transparent);
+  box-shadow: 0 0 0 2px var(--ztt-keyboard-ring);
 }
 
 .workspace-icon-choice.section-active {
   border-color: AccentColor;
   background: var(--ztt-bg-hover);
   color: var(--ztt-text);
-  box-shadow: 0 0 0 2px color-mix(in srgb, AccentColor 24%, transparent);
+  box-shadow: 0 0 0 2px var(--ztt-keyboard-ring);
 }
 
 .workspace-icon-choice img {
