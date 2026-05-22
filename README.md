@@ -6,9 +6,6 @@ Formerly **Zen Tabs Panel**.
 
 ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more — far more than Zen exposes by default. Everything starts with one leader chord (`⌘.` on macOS, `⌃.` on Windows/Linux), followed by a short sequence of keys. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. The same sequence works whether you see the menu or not: type it quickly and the action fires immediately; pause, and the menu pops up showing every available next key. Common actions become muscle memory while less-used ones stay easy to discover. The palette is keyboard-first but fully mouse-friendly.
 
-> [!NOTE]
-> Windows and Linux have not been tested, but should work in theory.
-
 <p align="center">
   <img src="screenshot@2x.png" alt="Main menu" width="900">
 </p>
@@ -46,6 +43,9 @@ ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more —
 This automatically sets the required `about:config` flags, downloads the latest release, and installs it into your Zen profile. Run the same command to update. Restart Zen after installing.
 
 ### Manual install
+
+> [!NOTE]
+> Windows and Linux have not been tested, but should work in theory.
 
 #### 1. Set required `about:config` flags
 
