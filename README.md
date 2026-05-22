@@ -32,7 +32,7 @@ ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more - f
 > [!CAUTION]
 > This extension uses internal Zen APIs which could change and break with any Zen update. Use at your own risk.
 >
-> **Version 0.4.4** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
+> **Version 0.4.5** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
 
 ### Quick install (macOS)
 
