@@ -1,13 +1,13 @@
 # ErgoZen
 
-**Version 0.4.4** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
-
-A keyboard-driven tab management extension for [Zen Browser](https://zen-browser.app/) with a command palette UI and optional companion Zen Mods.
+A command palette for [Zen Browser](https://zen-browser.app/). Discoverable chord shortcuts for tabs, workspaces, splits, and more — drive it from the keyboard or the mouse.
 
 Formerly **Zen Tabs Panel**.
 
 > [!CAUTION]
 > This extension uses internal Zen APIs which could change and break with any Zen update. Use at your own risk.
+>
+> **Version 0.4.4** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
 
 ErgoZen gives you keyboard access to far more tab and workspace actions than Zen exposes by default. It is built around one leader shortcut: `⌘.` on macOS, or `⌃.` on Windows/Linux. After pressing the leader, you type a sequence of follow-up keys, one after another, instead of holding a complicated shortcut all at once. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. These sequences mirror the same keys you would press when navigating the menu visually. If you type quickly, the action runs immediately without showing the menu. If you pause, the menu appears and shows the available options, helping you find the right key when you forget. Over time, common actions become muscle memory while less-used tools remain easy to discover. The palette is designed for fast keyboard use, but it is also fully mouse-friendly and can be navigated with the arrow keys.
 
@@ -25,6 +25,49 @@ ErgoZen gives you keyboard access to far more tab and workspace actions than Zen
 ![Tab info view](screenshot-tabinfo@2x.png)
 
 ![Duplicate tab prompt](screenshot-duplicate-prompt@2x.png)
+
+## Install
+
+### Quick install (macOS)
+
+```sh
+/bin/sh -c "$(curl -fsSL https://raw.githubusercontent.com/cfilipov/ergozen/main/install.sh)"
+```
+
+This automatically sets the required `about:config` flags, downloads the latest release, and installs it into your Zen profile. Run the same command to update. Restart Zen after installing.
+
+### Manual install
+
+#### 1. Set required `about:config` flags
+
+Open `about:config` in Zen and set both of these:
+
+| Flag | Value | Purpose |
+|---|---|---|
+| `xpinstall.signatures.required` | `false` | Allows installing extensions without a Mozilla signature |
+| `extensions.experiments.enabled` | `true` | Allows extensions to use Experiment APIs |
+| `extensions.autoDisableScopes` | `14` | Keeps profile-installed add-ons from being disabled as sideloaded extensions |
+
+#### 2. Install the extension
+
+1. Download `ergozen.xpi` from the [latest release](../../releases/latest).
+2. Open `about:addons` in Zen
+3. Click the gear icon (⚙) › **Install Add-on From File...**
+4. Select the downloaded `.xpi` file
+
+The extension will persist across browser restarts.
+
+#### 3. Install companion mods (optional)
+
+1. Open the command palette (`⌘.` or `⌘⌥.`) and press `,` to open settings
+2. Under **Companion Zen Mods**, click **Install** next to any mods you want
+3. The mods will appear in `about:preferences` › Zen Mods where you can toggle them
+
+### Why Installation Isn't Straightforward
+
+This extension uses a Firefox **Experiment API** to access Zen's internal browser APIs (workspace switching, cross-workspace tab management, chrome DOM manipulation). Experiment APIs are a privileged extension mechanism that aren't allowed on the public Firefox Add-ons site (AMO), so the extension can't be distributed through normal channels.
+
+This means two `about:config` flags must be enabled to install it.
 
 ## Features
 
@@ -316,49 +359,6 @@ If you don't press a follow-up key, the main menu opens after the timeout. Press
 | Split View Header on Hover | Hides the split view toolbar until you hover near the top edge |
 
 Each mod installs as a proper Zen Mod visible in `about:preferences` › Zen Mods, where you can enable/disable them independently.
-
-## Why installation isn't straightforward
-
-This extension uses a Firefox **Experiment API** to access Zen's internal browser APIs (workspace switching, cross-workspace tab management, chrome DOM manipulation). Experiment APIs are a privileged extension mechanism that aren't allowed on the public Firefox Add-ons site (AMO), so the extension can't be distributed through normal channels.
-
-This means two `about:config` flags must be enabled to install it.
-
-## Install
-
-### Quick install (macOS)
-
-```sh
-/bin/sh -c "$(curl -fsSL https://raw.githubusercontent.com/cfilipov/ergozen/main/install.sh)"
-```
-
-This automatically sets the required `about:config` flags, downloads the latest release, and installs it into your Zen profile. Run the same command to update. Restart Zen after installing.
-
-### Manual install
-
-#### 1. Set required `about:config` flags
-
-Open `about:config` in Zen and set both of these:
-
-| Flag | Value | Purpose |
-|---|---|---|
-| `xpinstall.signatures.required` | `false` | Allows installing extensions without a Mozilla signature |
-| `extensions.experiments.enabled` | `true` | Allows extensions to use Experiment APIs |
-| `extensions.autoDisableScopes` | `14` | Keeps profile-installed add-ons from being disabled as sideloaded extensions |
-
-#### 2. Install the extension
-
-1. Download `ergozen.xpi` from the [latest release](../../releases/latest).
-2. Open `about:addons` in Zen
-3. Click the gear icon (⚙) › **Install Add-on From File...**
-4. Select the downloaded `.xpi` file
-
-The extension will persist across browser restarts.
-
-#### 3. Install companion mods (optional)
-
-1. Open the command palette (`⌘.` or `⌘⌥.`) and press `,` to open settings
-2. Under **Companion Zen Mods**, click **Install** next to any mods you want
-3. The mods will appear in `about:preferences` › Zen Mods where you can toggle them
 
 ## Development
 

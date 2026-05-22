@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "ErgoZen",
   "version": "0.4.4",
-  "description": "Tab management command palette and utilities for Zen Browser",
+  "description": "Command palette for Zen Browser. Discoverable chord shortcuts for tabs, workspaces, splits, and more.",
   "author": "c13v",
   "browser_specific_settings": {
     "gecko": {
