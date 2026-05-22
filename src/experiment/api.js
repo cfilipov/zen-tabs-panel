@@ -3932,6 +3932,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return !!(result && typeof result === "object" && result.kind && result.kind !== "noop");
     }
 
+    function applyBridgeActivationResult(result, context) {
+      if (!result || typeof result !== "object" || result.kind === "noop") return false;
+      if (result.kind === "terminal") return true;
+      if (result.kind === "open-view") {
+        switchHiddenBridgeView(
+          result.view,
+          result.params || {},
+          context && context.previousView,
+          context && context.previousParams
+        );
+        armRevealTimer();
+        return true;
+      }
+      return false;
+    }
+
     function activateVisibleActionIntent(view, expectedRowId, replayChordKey, destroyBeforeAction) {
       const resolved = visibleActionBinding(view, expectedRowId, replayChordKey);
       if (!resolved) return null;
@@ -4169,59 +4185,58 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function tryHandleChromeOwnedBridgeKey(keyData) {
-      if (getActiveBridgeView() === "domains") {
+      const activeView = getActiveBridgeView();
+      const activeParams = currentViewParams() || {};
+      const context = { previousView: activeView, previousParams: activeParams };
+
+      if (activeView === "domains") {
         const rowIndex = rowIndexFromDigitKey(keyData);
         if (rowIndex == null) return false;
-        try {
-          tabIndex.start();
-          const params = currentViewParams() || {};
-          const win = tabIndex.getWindow("domains", 0, rowIndex + 1, params);
-          const row = win && Array.isArray(win.rows) ? win.rows[rowIndex] : null;
-          if (!row || !row.domain) return false;
-          const nextParams = { domain: row.domain };
-          switchHiddenBridgeView("domain-tabs", nextParams, "domains", params);
-          armRevealTimer();
-          return true;
-        } catch (e) {
-          return false;
-        }
+        return applyBridgeActivationResult(activateChromeOwnedRowIntent(activeView, rowIndex, "shortcut", false, {
+          destroyOverlay: false,
+          replayChordKey: replayChordKeyFromKeyData(keyData),
+          params: activeParams,
+        }), context);
       }
 
-      if (CHROME_OWNED_COMPACT_BRIDGE_VIEWS.has(getActiveBridgeView())) {
+      if (CHROME_OWNED_COMPACT_BRIDGE_VIEWS.has(activeView)) {
         const intent = bridgeRowIntentFromKey(keyData);
         if (!intent) return false;
-        return activationHandled(activateChromeOwnedRowIntent(getActiveBridgeView(), intent.index, "shortcut", intent.switchToTarget, {
+        return applyBridgeActivationResult(activateChromeOwnedRowIntent(activeView, intent.index, "shortcut", intent.switchToTarget, {
           destroyOverlay: true,
           replayChordKey: replayChordKeyFromKeyData(keyData),
-        }));
+          params: activeParams,
+        }), context);
       }
 
-      if (CHROME_OWNED_HISTORY_BRIDGE_VIEWS.has(getActiveBridgeView())) {
+      if (CHROME_OWNED_HISTORY_BRIDGE_VIEWS.has(activeView)) {
         const rowIndex = rowIndexFromDigitKey(keyData);
         if (rowIndex == null) return false;
-        return activationHandled(activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, {
+        return applyBridgeActivationResult(activateChromeOwnedRowIntent(activeView, rowIndex, "shortcut", false, {
           destroyOverlay: true,
           replayChordKey: replayChordKeyFromKeyData(keyData),
-        }));
+          params: activeParams,
+        }), context);
       }
 
-      if (BACKGROUND_OWNED_BRIDGE_VIEWS.has(getActiveBridgeView())) {
+      if (BACKGROUND_OWNED_BRIDGE_VIEWS.has(activeView)) {
         const rowIndex = rowIndexFromDigitKey(keyData);
         if (rowIndex == null) return false;
-        return activationHandled(activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, {
+        return applyBridgeActivationResult(activateChromeOwnedRowIntent(activeView, rowIndex, "shortcut", false, {
           destroyOverlay: true,
           replayChordKey: replayChordKeyFromKeyData(keyData),
-        }));
+          params: activeParams,
+        }), context);
       }
 
-      if (!CHROME_OWNED_TAB_BRIDGE_VIEWS.has(getActiveBridgeView())) return false;
+      if (!CHROME_OWNED_TAB_BRIDGE_VIEWS.has(activeView)) return false;
       const rowIndex = rowIndexFromDigitKey(keyData);
       if (rowIndex == null) return false;
-      return activationHandled(activateChromeOwnedRowIntent(getActiveBridgeView(), rowIndex, "shortcut", false, {
+      return applyBridgeActivationResult(activateChromeOwnedRowIntent(activeView, rowIndex, "shortcut", false, {
         destroyOverlay: true,
         replayChordKey: replayChordKeyFromKeyData(keyData),
-        params: currentViewParams() || {},
-      }));
+        params: activeParams,
+      }), context);
     }
 
     // ---- Chrome chord-session + shim instance ---------------------------
