@@ -209,9 +209,10 @@ this.MSG = Object.freeze({
 // the user types the next key right at the boundary — but the
 // the destroy-time reveal block and the popup-not-ready deferred reveal guard
 // catch the common race cases.
-// Initial defaults — overridden at runtime by the chordDelayMs setting
-// (see api.js applyChordDelay, the ZenChord:SetDelay IPC for frame
-// scripts, and the popup's reading of ?delay=N from its URL).
+// Initial defaults — overridden at runtime by the chordDelayMs and
+// chordPrefixDelayMs settings (see api.js applyChordDelays, the
+// ZenChord:SetDelay IPC for frame scripts, and the popup's reading of
+// ?delay=N from its URL).
 this.CHORD_ROOT_TIMEOUT_MS = 500;
 this.CHORD_PREFIX_TIMEOUT_MS = 500;
 this.CHORD_REVEAL_TIMEOUT_MS = 500;
@@ -234,14 +235,12 @@ this.STORAGE_DEFAULTS = Object.freeze({
   // transparent and clicks outside the panel still dismiss (the
   // overlay div continues to fill the viewport and capture mousedown).
   dimBackdrop: true,
-  // Single user-facing delay for all chord timeouts: root timeout
-  // (after leader, before menu reveals if no chord key), prefix
-  // timeout (after descending into a prefix node), and reveal timeout
-  // (after an open-view chord match before the menu shows). 0 means
-  // "show the menu immediately on arm" — the menu itself becomes the
-  // chord HUD. Pushed to ChordSession/content shims where needed and the
-  // popup (via ?delay=N URL param).
+  // Leader timeout: after leader, before the menu reveals if no chord key.
   chordDelayMs: 500,
+  // Prefix/reveal timeout: after the first chord key, including prefix
+  // menus and popup reveal after open-view chords. 0 means reveal the menu
+  // immediately at that stage.
+  chordPrefixDelayMs: 750,
   // Intercept link clicks that would open / navigate to a URL already
   // open in another tab, and show a Switch / Open anyway / Cancel
   // prompt. The orange URL pill always shows on hover regardless;

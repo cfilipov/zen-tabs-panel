@@ -1151,27 +1151,38 @@ this.zenWorkspaces = class extends ExtensionAPI {
         try { tabIndex.stop(); } catch (e) {}
       },
     });
-    // Mutable so the user's chordDelayMs setting can override at runtime.
+    // Mutable so the user's chordDelayMs/chordPrefixDelayMs settings can
+    // override at runtime.
     // ChordSession reads `constants.CHORD_*_TIMEOUT_MS` on each timer set,
     // so mutations apply to the next chord without rebuilding the session.
-    // applyChordDelay below mutates the same object and broadcasts the
+    // applyChordDelays below mutates the same object and broadcasts the
     // new value to content frame scripts.
     const CHORD_CONSTANTS = {
       CHORD_ROOT_TIMEOUT_MS:   chordSupportScope.CHORD_ROOT_TIMEOUT_MS   || 500,
       CHORD_PREFIX_TIMEOUT_MS: chordSupportScope.CHORD_PREFIX_TIMEOUT_MS || 500,
       CHORD_REVEAL_TIMEOUT_MS: chordSupportScope.CHORD_REVEAL_TIMEOUT_MS || 500,
     };
-    // Current chord delay (for getPaletteURL's ?delay=N param, etc.).
     let chordDelayMs = CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS;
-    function applyChordDelay(ms) {
-      if (typeof ms !== "number" || ms < 0) return;
-      chordDelayMs = ms;
-      CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS = ms;
-      CHORD_CONSTANTS.CHORD_PREFIX_TIMEOUT_MS = ms;
-      CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS = ms;
+    let chordPrefixDelayMs = Number(chordSupportScope.STORAGE_DEFAULTS?.chordPrefixDelayMs);
+    if (!Number.isFinite(chordPrefixDelayMs) || chordPrefixDelayMs < 0) {
+      chordPrefixDelayMs = CHORD_CONSTANTS.CHORD_PREFIX_TIMEOUT_MS;
+    }
+    CHORD_CONSTANTS.CHORD_PREFIX_TIMEOUT_MS = chordPrefixDelayMs;
+    CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS = chordPrefixDelayMs;
+    function applyChordDelays(rootMs, prefixMs) {
+      if (typeof rootMs !== "number" || rootMs < 0) return;
+      if (typeof prefixMs !== "number" || prefixMs < 0) return;
+      chordDelayMs = rootMs;
+      chordPrefixDelayMs = prefixMs;
+      CHORD_CONSTANTS.CHORD_ROOT_TIMEOUT_MS = rootMs;
+      CHORD_CONSTANTS.CHORD_PREFIX_TIMEOUT_MS = prefixMs;
+      CHORD_CONSTANTS.CHORD_REVEAL_TIMEOUT_MS = prefixMs;
       try {
-        Services.mm.broadcastAsyncMessage("ZenChord:SetDelay", { ms });
+        Services.mm.broadcastAsyncMessage("ZenChord:SetDelay", { ms: rootMs, rootMs, prefixMs });
       } catch (e) {}
+    }
+    function applyChordDelay(ms) {
+      applyChordDelays(ms, ms);
     }
     // Mutable so the dynamic Shift+1..9 extension-popup chords (added by
     // buildExtensionList below) can be appended after the static tree is
@@ -1363,9 +1374,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       url += "&inst=" + currentPopupInstance();
       url += "&readyGen=" + currentReadinessGeneration();
       url += "&gen=" + encodeURIComponent(CHORD_GENERATION);
-      // Current chord-delay setting — popup's keyboard.js reads it and
-      // overrides its reveal-timer duration.
-      url += "&delay=" + chordDelayMs;
+      // Popup reveal is a post-leader timer, so mirror the prefix delay.
+      url += "&delay=" + chordPrefixDelayMs;
       url += "&skipAnimations=" + (skipOverlayAnimations ? "1" : "0");
       if (view) url += "&view=" + encodeURIComponent(view);
       if (params) {
@@ -3142,6 +3152,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return cloneChordInspectorValue({
         generation: CHORD_GENERATION,
         chordDelayMs,
+        chordPrefixDelayMs,
         view: {
           currentViewName: overlayDebug.currentViewName || null,
           currentViewParams: overlayDebug.currentViewParams || {},
@@ -4558,18 +4569,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "});\n" +
         // The chord-shim path runs only on non-extension pages. The popup
         // and foreign extension popups own their own keybindings.
-        // Mutable constants object — chrome's setChordDelay broadcasts
-        // ZenChord:SetDelay to mutate these at runtime.
+        // Mutable constants object — chrome broadcasts ZenChord:SetDelay
+        // to mutate these at runtime.
         "var __constants = {\n" +
         "  CHORD_ROOT_TIMEOUT_MS: __scope.CHORD_ROOT_TIMEOUT_MS || 500,\n" +
         "  CHORD_PREFIX_TIMEOUT_MS: __scope.CHORD_PREFIX_TIMEOUT_MS || 500,\n" +
         "};\n" +
         "addMessageListener('ZenChord:SetDelay', function(m){\n" +
         "  if (__shutdown) return;\n" +
-        "  var ms = m && m.data && m.data.ms;\n" +
-        "  if (typeof ms === 'number' && ms >= 0) {\n" +
-        "    __constants.CHORD_ROOT_TIMEOUT_MS = ms;\n" +
-        "    __constants.CHORD_PREFIX_TIMEOUT_MS = ms;\n" +
+        "  var data = (m && m.data) || {};\n" +
+        "  var rootMs = typeof data.rootMs === 'number' ? data.rootMs : data.ms;\n" +
+        "  var prefixMs = typeof data.prefixMs === 'number' ? data.prefixMs : rootMs;\n" +
+        "  if (typeof rootMs === 'number' && rootMs >= 0) {\n" +
+        "    __constants.CHORD_ROOT_TIMEOUT_MS = rootMs;\n" +
+        "  }\n" +
+        "  if (typeof prefixMs === 'number' && prefixMs >= 0) {\n" +
+        "    __constants.CHORD_PREFIX_TIMEOUT_MS = prefixMs;\n" +
         "  }\n" +
         "});\n" +
         "addMessageListener('ZenDuplicate:SetIntercept', function(m){\n" +
@@ -7525,13 +7540,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
           } catch (e) {}
         },
 
-        // User-facing single delay for chord timeouts. Background
-        // pushes this from the chordDelayMs setting. applyChordDelay
-        // updates ChordSession's constants and broadcasts to
-        // content frame scripts. The popup picks it up from its URL
-        // ?delay=N param at load time.
+        // Back-compat setter for older backgrounds: apply one delay to all
+        // chord timers.
         async setChordDelay(ms) {
           applyChordDelay(ms);
+        },
+
+        // Split user-facing delays: leader -> first key, then every
+        // subsequent prefix/reveal timer. The popup picks up the prefix
+        // value from its URL ?delay=N param at load time.
+        async setChordDelays(rootMs, prefixMs) {
+          applyChordDelays(rootMs, prefixMs);
         },
 
       },

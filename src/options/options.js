@@ -11,6 +11,7 @@ const els = {
   dimBackdrop: document.getElementById("dimBackdrop"),
   duplicateTabIntercept: document.getElementById("duplicateTabIntercept"),
   chordDelayMs: document.getElementById("chordDelayMs"),
+  chordPrefixDelayMs: document.getElementById("chordPrefixDelayMs"),
   status: document.getElementById("status"),
   companionMods: document.getElementById("companion-mods"),
 };
@@ -27,6 +28,7 @@ async function loadSettings() {
   els.dimBackdrop.checked = settings.dimBackdrop;
   els.duplicateTabIntercept.checked = settings.duplicateTabIntercept;
   els.chordDelayMs.value = String(settings.chordDelayMs);
+  els.chordPrefixDelayMs.value = String(settings.chordPrefixDelayMs);
 }
 
 async function loadShortcuts() {
@@ -78,6 +80,7 @@ async function saveSettings() {
     dimBackdrop: els.dimBackdrop.checked,
     duplicateTabIntercept: els.duplicateTabIntercept.checked,
     chordDelayMs: Math.max(0, Number(els.chordDelayMs.value) || 0),
+    chordPrefixDelayMs: Math.max(0, Number(els.chordPrefixDelayMs.value) || 0),
   });
 
   els.status.classList.remove("hidden");

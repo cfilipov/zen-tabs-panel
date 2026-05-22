@@ -71,9 +71,14 @@ function pushDuplicateInterceptSetting() {
 }
 
 function pushChordDelaySetting() {
-  const ms = Number(settings.chordDelayMs);
-  if (Number.isFinite(ms) && ms >= 0) {
-    api.setChordDelay(ms).catch(() => {});
+  const rootMs = Number(settings.chordDelayMs);
+  const prefixMs = Number(settings.chordPrefixDelayMs);
+  if (Number.isFinite(rootMs) && rootMs >= 0 && Number.isFinite(prefixMs) && prefixMs >= 0) {
+    if (typeof api.setChordDelays === "function") {
+      api.setChordDelays(rootMs, prefixMs).catch(() => {});
+    } else {
+      api.setChordDelay(rootMs).catch(() => {});
+    }
   }
 }
 
@@ -95,7 +100,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
       if (key === "skipOverlayAnimations") skipAnimationsTouched = true;
       if (key === "dimBackdrop") dimBackdropTouched = true;
       if (key === "duplicateTabIntercept") dupInterceptTouched = true;
-      if (key === "chordDelayMs") chordDelayTouched = true;
+      if (key === "chordDelayMs" || key === "chordPrefixDelayMs") chordDelayTouched = true;
     }
   }
   if (autoCloseTouched) syncAutoCloseAlarm();
