@@ -330,19 +330,22 @@ npm run screenshots:readme
 This creates/reuses a dedicated Zen profile at
 `~/Library/Application Support/zen-ergozen-readme-screenshots`, installs the
 current built extension into it, creates enough fixture workspaces to keep the
-profile at 10 workspaces, opens a deterministic set of generic tabs, and
-captures the palette images referenced at the top of this README. By default,
-each README PNG is a generated diagonal composite: dark mode on the left, light
-mode on the right. Use `--theme light` or `--theme dark` to capture only one
-theme. The script captures at 2x for clean text edges and writes PNG density
-metadata equivalent to the retina scale so viewers that honor it can display the
-images at the menu's logical size. It uses remote debugging on port `6100` so it
-can run alongside the normal live debugging port `6000`.
+profile at 10 workspaces, gives those workspaces realistic names/icons,
+installs a few signed AMO extensions for the main-menu icon strip, opens a
+deterministic set of generic tabs, and captures the palette images referenced
+at the top of this README. By default, each README PNG is a generated diagonal
+composite: dark mode on the left, light mode on the right. Use `--theme light`
+or `--theme dark` to capture only one theme. The script captures at 2x for
+clean text edges and writes PNG density metadata equivalent to the retina scale
+so viewers that honor it can display the images at the menu's logical size. It
+uses remote debugging on port `6100` so it can run alongside the normal live
+debugging port `6000`.
 
 Useful options:
 
 ```bash
 python3 tools/readme-screenshots.py --reset-profile
+python3 tools/readme-screenshots.py --no-showcase-extensions
 python3 tools/readme-screenshots.py --output-dir /tmp/ergozen-shots
 python3 tools/readme-screenshots.py --theme light
 python3 tools/readme-screenshots.py --theme dark

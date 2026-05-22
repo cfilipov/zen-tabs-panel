@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.request
 import zipfile
 import struct
 import zlib
@@ -35,16 +36,78 @@ DEFAULT_PORT = 6100
 WORKSPACE_COUNT = 10
 DEFAULT_CAPTURE_SCALE = 2
 WORKSPACE_FIXTURES = [
-    ("Research", "chrome://browser/skin/zen-icons/selectable/compass.svg"),
-    ("Docs", "chrome://browser/skin/zen-icons/selectable/file.svg"),
-    ("Build", "chrome://browser/skin/zen-icons/selectable/code.svg"),
+    ("Inbox", "chrome://browser/skin/zen-icons/selectable/folder.svg"),
+    ("Product", "chrome://browser/skin/zen-icons/selectable/book.svg"),
+    ("Engineering", "chrome://browser/skin/zen-icons/selectable/code.svg"),
     ("Design", "chrome://browser/skin/zen-icons/selectable/brush.svg"),
-    ("Review", "chrome://browser/skin/zen-icons/selectable/check.svg"),
-    ("Planning", "chrome://browser/skin/zen-icons/selectable/calendar.svg"),
+    ("Research", "chrome://browser/skin/zen-icons/selectable/book.svg"),
+    ("Writing", "chrome://browser/skin/zen-icons/selectable/check.svg"),
+    ("Finance", "chrome://browser/skin/zen-icons/selectable/check.svg"),
     ("Support", "chrome://browser/skin/zen-icons/selectable/chat.svg"),
-    ("Archive", "chrome://browser/skin/zen-icons/selectable/folder.svg"),
-    ("Playground", "chrome://browser/skin/zen-icons/selectable/sparkles.svg"),
     ("Reading", "chrome://browser/skin/zen-icons/selectable/book.svg"),
+    ("Personal", "chrome://browser/skin/zen-icons/selectable/sparkles.svg"),
+]
+WORKSPACE_TAB_FIXTURES = [
+    [
+        "https://zen-browser.app/",
+        "https://zen-browser.app/release-notes/",
+        "https://zen-browser.app/release-notes/",
+        "https://zen-browser.app/release-notes/",
+        "https://zen-browser.app/release-notes/",
+        "https://github.com/cfilipov/ergozen",
+        "https://en.wikipedia.org/wiki/Zen_Browser",
+        "https://www.mozilla.org/firefox/",
+    ],
+    [
+        "https://linear.app/",
+        "https://www.figma.com/",
+        "https://www.notion.so/product",
+    ],
+    [
+        "https://github.com/",
+        "https://developer.mozilla.org/",
+        "https://vite.dev/",
+    ],
+    [
+        "https://www.figma.com/community",
+        "https://www.radix-ui.com/",
+        "https://lucide.dev/",
+    ],
+    [
+        "https://www.wikipedia.org/",
+        "https://news.ycombinator.com/",
+        "https://arxiv.org/",
+    ],
+    [
+        "https://docs.google.com/",
+        "https://www.grammarly.com/",
+        "https://obsidian.md/",
+    ],
+    [
+        "https://stripe.com/",
+        "https://www.irs.gov/",
+        "https://www.google.com/finance/",
+    ],
+    [
+        "https://support.mozilla.org/",
+        "https://statuspage.io/",
+        "https://www.zendesk.com/",
+    ],
+    [
+        "https://readwise.io/",
+        "https://www.newyorker.com/",
+        "https://longform.org/",
+    ],
+    [
+        "https://calendar.google.com/",
+        "https://maps.google.com/",
+        "https://www.youtube.com/",
+    ],
+]
+SHOWCASE_EXTENSIONS = [
+    ("uBlock Origin", "ublock-origin"),
+    ("Bitwarden", "bitwarden-password-manager"),
+    ("Dark Reader", "darkreader"),
 ]
 SEED_TABS = [
     "https://zen-browser.app/",
@@ -124,6 +187,49 @@ def package_xpi(profile: Path, build: bool) -> Path:
             if path.is_file():
                 archive.write(path, path.relative_to(ROOT / "dist"))
     return xpi
+
+
+def fetch_json(url: str, timeout: int = 60) -> Any:
+    request = urllib.request.Request(url, headers={"User-Agent": "ErgoZen README screenshot fixture"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def download_file(url: str, output: Path, timeout: int = 180) -> None:
+    request = urllib.request.Request(url, headers={"User-Agent": "ErgoZen README screenshot fixture"})
+    total = 0
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        with output.open("wb") as fh:
+            while True:
+                chunk = response.read(1024 * 256)
+                if not chunk:
+                    break
+                total += len(chunk)
+                fh.write(chunk)
+    if total <= 0:
+        raise RuntimeError(f"downloaded empty file from {url}")
+
+
+def install_showcase_extensions(profile: Path) -> list[str]:
+    extensions_dir = profile / "extensions"
+    extensions_dir.mkdir(parents=True, exist_ok=True)
+    installed: list[str] = []
+    for label, slug in SHOWCASE_EXTENSIONS:
+        print(f"Installing showcase extension: {label}", flush=True)
+        info = fetch_json(f"https://addons.mozilla.org/api/v5/addons/addon/{slug}/")
+        guid = info.get("guid")
+        url = (((info.get("current_version") or {}).get("file") or {}).get("url"))
+        if not guid or not url:
+            raise RuntimeError(f"AMO metadata for {slug} did not include a signed XPI URL")
+        target = extensions_dir / f"{guid}.xpi"
+        if not target.exists() or target.stat().st_size == 0:
+            tmp = extensions_dir / f".{slug}.download"
+            if tmp.exists():
+                tmp.unlink()
+            download_file(url, tmp)
+            tmp.replace(target)
+        installed.append(label)
+    return installed
 
 
 def ensure_profile(profile: Path) -> None:
@@ -541,7 +647,13 @@ def seed_tabs(client: RdpClient, urls: list[str]) -> None:
   w.resizeTo(1280, 900);
   const principal = Services.scriptSecurityManager.getSystemPrincipal();
   const urls = {js_json(urls)};
+  const workspaceTabFixtures = {js_json(WORKSPACE_TAB_FIXTURES)};
+  const workspaces = Array.from(w.gZenWorkspaces?.getWorkspaces?.() || []);
   const fixtureTabs = new Set();
+  const firstWorkspace = workspaces[0];
+  if (firstWorkspace?.uuid && w.gZenWorkspaces.activeWorkspace !== firstWorkspace.uuid) {{
+    await w.gZenWorkspaces.changeWorkspaceWithID(firstWorkspace.uuid);
+  }}
   const first = w.gBrowser.addTab(urls[0], {{ triggeringPrincipal: principal, inBackground: false }});
   fixtureTabs.add(first);
   w.gBrowser.selectedTab = first;
@@ -553,19 +665,34 @@ def seed_tabs(client: RdpClient, urls: list[str]) -> None:
   for (const url of urls.slice(1)) {{
     fixtureTabs.add(w.gBrowser.addTab(url, {{ triggeringPrincipal: principal, inBackground: true }}));
   }}
+  for (let i = 1; i < Math.min(workspaces.length, workspaceTabFixtures.length); i++) {{
+    const workspace = workspaces[i];
+    const workspaceTabs = [];
+    for (const url of workspaceTabFixtures[i]) {{
+      const tab = w.gBrowser.addTab(url, {{ triggeringPrincipal: principal, inBackground: true }});
+      fixtureTabs.add(tab);
+      workspaceTabs.push(tab);
+    }}
+    if (workspace?.uuid && workspaceTabs.length && w.gZenWorkspaces?.moveTabsToWorkspace) {{
+      await w.gZenWorkspaces.moveTabsToWorkspace(workspaceTabs, workspace.uuid);
+    }}
+  }}
   await new Promise(resolve => w.setTimeout(resolve, 2500));
-  const fixtureUrls = new Set(urls);
+  const fixtureUrls = new Set(workspaceTabFixtures.flat());
   for (const tab of [...w.gBrowser.tabs]) {{
     const url = tab.linkedBrowser?.currentURI?.spec || "";
     if (!fixtureTabs.has(tab) && !fixtureUrls.has(url)) {{
       try {{ w.gBrowser.removeTab(tab, {{ animate: false, closeWindowWithLastTab: false }}); }} catch (e) {{}}
     }}
   }}
+  if (firstWorkspace?.uuid && w.gZenWorkspaces.activeWorkspace !== firstWorkspace.uuid) {{
+    await w.gZenWorkspaces.changeWorkspaceWithID(firstWorkspace.uuid);
+  }}
   w.gBrowser.selectedTab = first;
   return {{ tabCount: w.gBrowser.tabs.length, selected: w.gBrowser.selectedBrowser.currentURI.spec }};
 }})()
 """,
-        timeout=8,
+        timeout=20,
     )
 
 
@@ -590,6 +717,13 @@ def ensure_workspaces(client: RdpClient, count: int) -> None:
     await new Promise(resolve => w.setTimeout(resolve, 120));
   }}
   workspaces = Array.from(zen.getWorkspaces() || []);
+  for (let i = 0; i < Math.min(fixtures.length, workspaces.length); i++) {{
+    const [name, icon] = fixtures[i];
+    const workspace = {{ ...workspaces[i], name, icon }};
+    zen.saveWorkspace(workspace);
+  }}
+  await new Promise(resolve => w.setTimeout(resolve, 300));
+  workspaces = Array.from(zen.getWorkspaces() || []);
   if (workspaces.length < {int(count)}) {{
     throw new Error("only created " + workspaces.length + " workspaces; wanted {int(count)}");
   }}
@@ -598,12 +732,13 @@ def ensure_workspaces(client: RdpClient, count: int) -> None:
     if (first?.uuid && zen.activeWorkspace !== first.uuid) await zen.changeWorkspaceWithID(first.uuid);
   }} catch (e) {{}}
   await new Promise(resolve => w.setTimeout(resolve, 300));
-  return {{ count: workspaces.length, created }};
+  return {{ count: workspaces.length, created, names: workspaces.slice(0, fixtures.length).map(ws => ws.name) }};
 }})()
 """,
         timeout=30,
     )
-    print(f"Workspace fixtures ready: {result['count']} workspaces", flush=True)
+    names = ", ".join(result.get("names") or [])
+    print(f"Workspace fixtures ready: {result['count']} workspaces ({names})", flush=True)
 
 
 def force_theme(client: RdpClient, theme: str) -> None:
@@ -902,8 +1037,8 @@ def combine_diagonal(client: RdpClient, dark: Path, light: Path, output: Path, o
   ctx.clearRect(0, 0, width, height);
   ctx.drawImage(light, 0, 0, width, height);
 
-  const topX = Math.round(width * 0.58);
-  const bottomX = Math.round(width * 0.42);
+  const topX = Math.round(width * 0.61);
+  const bottomX = Math.round(width * 0.45);
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(0, 0);
@@ -952,6 +1087,9 @@ def generate(args: argparse.Namespace) -> None:
     if args.reset_profile and profile.exists():
         shutil.rmtree(profile)
     ensure_profile(profile)
+    if not args.no_showcase_extensions:
+        installed = install_showcase_extensions(profile)
+        print(f"Installed showcase extensions: {', '.join(installed)}", flush=True)
     xpi = package_xpi(profile, build=not args.no_build)
     print(f"Using screenshot profile: {profile}", flush=True)
     print(f"Installed extension package: {xpi}", flush=True)
@@ -1019,6 +1157,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Remote debugger port for the screenshot Zen instance")
     parser.add_argument("--reset-profile", action="store_true", help="Delete and recreate the screenshot profile before running")
     parser.add_argument("--no-build", action="store_true", help="Do not run npm run build before packaging dist/")
+    parser.add_argument("--no-showcase-extensions", action="store_true", help="Do not download/install AMO extensions for the screenshot profile")
     parser.add_argument("--keep-open", action="store_true", help="Leave the screenshot Zen instance open after capture")
     parser.add_argument("--workspace-count", type=int, default=WORKSPACE_COUNT, help="Minimum number of workspaces in the screenshot profile")
     parser.add_argument("--capture-scale", type=float, default=DEFAULT_CAPTURE_SCALE, help="Snapshot scale before compositing; defaults to 2 for retina-sharp pixels")
