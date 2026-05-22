@@ -1441,6 +1441,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return null;
     }
 
+    function sendPopupOptions(br) {
+      const mm = browserMessageManager(br);
+      if (!mm) return;
+      try {
+        mm.sendAsyncMessage("ZenChord:SetPopupOptions:" + CHORD_GENERATION, {
+          skipAnimations: skipOverlayAnimations,
+        });
+      } catch (e) {}
+    }
+
     function createBrowserElement(w, size, opts) {
       const br = w.document.createXULElement("browser");
       br.id = BROWSER_ID;
@@ -2315,13 +2325,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
         } catch (e) {}
       }
       if (mm) {
+        sendPopupOptions(br);
         try {
           mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
             inst: currentPopupInstance(),
             readyGen,
             view: view || null,
             params: params || null,
-            skipAnimations: skipOverlayAnimations,
           });
         } catch (e) {}
       }
@@ -2893,12 +2903,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return;
       }
       try {
+        sendPopupOptions(br);
         mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
           inst: currentPopupInstance(),
           readyGen,
           view: null,
           params: null,
-          skipAnimations: skipOverlayAnimations,
         });
       } catch (e) {}
     }
@@ -4578,6 +4588,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "addMessageListener('ZenChord:WarmRearm:' + __GEN, function(m){\n" +
         "  if (__shutdown) return;\n" +
         "  bridgeEvent('warm-rearm', (m && m.data) || {});\n" +
+        "});\n" +
+        // Runtime popup options. Unlike WarmRearm this does not reset
+        // lifecycle state, bump readiness, or drain bridge keys.
+        "addMessageListener('ZenChord:SetPopupOptions:' + __GEN, function(m){\n" +
+        "  if (__shutdown) return;\n" +
+        "  bridgeEvent('popup-options', (m && m.data) || {});\n" +
         "});\n" +
         // Safety fallback for a visible popup whose POPUP_READY handshake
         // was missed. Chrome treats this like a late empty drain so live
@@ -7558,18 +7574,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (panel) panel.style.transition = transition;
           if (br) br.style.transition = transition;
           if (skipOverlayAnimations) clearPanelAnimations(overlay, panel);
-          const mm = browserMessageManager(br);
-          if (mm) {
-            try {
-              mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
-                inst: currentPopupInstance(),
-                readyGen: currentReadinessGeneration(),
-                view: currentViewName() || "actions",
-                params: currentViewParams() || {},
-                skipAnimations: skipOverlayAnimations,
-              });
-            } catch (e) {}
-          }
+          sendPopupOptions(br);
         },
 
         // Toggle the backdrop dim behind the palette. Background pushes

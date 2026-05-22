@@ -13,6 +13,7 @@ describe("chord bridge", () => {
     const uninstall = installChordBridgeHandlers({
       onDeliverKey: (input) => keys.push(input),
       onWarmRearm: () => {},
+      onPopupOptions: () => {},
       onForceReady: () => {},
       onInvalidChord: () => {},
       onPaletteRevealed: () => {},
@@ -31,6 +32,7 @@ describe("chord bridge", () => {
     const uninstall = installChordBridgeHandlers({
       onDeliverKey: () => {},
       onWarmRearm: (data) => calls.push(`warm:${data.view}`),
+      onPopupOptions: (data) => calls.push(`options:${data.skipAnimations ? "skip" : "animate"}`),
       onForceReady: (data) => calls.push(`force:${data.buffered?.length ?? 0}`),
       onInvalidChord: (data) => calls.push(`invalid:${data.key}`),
       onPaletteRevealed: () => calls.push("revealed"),
@@ -39,6 +41,7 @@ describe("chord bridge", () => {
     });
 
     dispatchBridge("warm-rearm", { view: "actions" });
+    dispatchBridge("popup-options", { skipAnimations: true });
     dispatchBridge("force-ready", { buffered: [{ key: " " }] });
     dispatchBridge("invalid-chord", { key: "\\" });
     dispatchBridge("palette-revealed");
@@ -46,6 +49,6 @@ describe("chord bridge", () => {
     dispatchBridge("go-to-actions");
     uninstall();
 
-    expect(calls).toEqual(["warm:actions", "force:1", "invalid:\\", "revealed", "cancel", "actions"]);
+    expect(calls).toEqual(["warm:actions", "options:skip", "force:1", "invalid:\\", "revealed", "cancel", "actions"]);
   });
 });

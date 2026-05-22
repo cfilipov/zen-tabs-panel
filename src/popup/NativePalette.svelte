@@ -983,11 +983,10 @@
     suppressViewTransition = false;
   }
 
-  async function handleWarmRearm(data: { inst?: number; readyGen?: number; view?: ViewId; params?: Record<string, unknown>; skipAnimations?: boolean }) {
+  async function handleWarmRearm(data: { inst?: number; readyGen?: number; view?: ViewId; params?: Record<string, unknown> }) {
     const generation = bridgeDispatch.resetForWarmRearm();
     revealController.updateInst(data.inst);
     revealController.updateReadyGen(data.readyGen);
-    skipAnimations = !!data.skipAnimations;
     suppressViewTransition = true;
     paletteRevealed = false;
     clearInvalidChordHint();
@@ -1023,6 +1022,7 @@
     const uninstallBridge = installChordBridgeHandlers({
       onDeliverKey: handleBridgeKey,
       onWarmRearm: (data) => void handleWarmRearm(data),
+      onPopupOptions: (data) => { skipAnimations = !!data.skipAnimations; },
       onForceReady: handleForceReady,
       onInvalidChord: showInvalidChord,
       onPaletteRevealed: () => { paletteRevealed = true; },

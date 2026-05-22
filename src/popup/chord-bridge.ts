@@ -29,6 +29,9 @@ export type WarmRearmPayload = {
   readyGen?: number;
   view?: ViewId;
   params?: Record<string, unknown>;
+};
+
+export type PopupOptionsPayload = {
   skipAnimations?: boolean;
 };
 
@@ -41,6 +44,7 @@ export type ForceReadyPayload = {
 type BridgeMessage =
   | { type: "deliver-key"; data?: BridgeKeyData }
   | { type: "warm-rearm"; data?: WarmRearmPayload }
+  | { type: "popup-options"; data?: PopupOptionsPayload }
   | { type: "force-ready"; data?: ForceReadyPayload }
   | { type: "invalid-chord"; data?: InvalidChordFeedback }
   | { type: "palette-revealed" }
@@ -50,6 +54,7 @@ type BridgeMessage =
 export type ChordBridgeHandlers = {
   onDeliverKey: (input: BridgeKeyData) => void;
   onWarmRearm: (data: WarmRearmPayload) => void;
+  onPopupOptions: (data: PopupOptionsPayload) => void;
   onForceReady: (data: ForceReadyPayload) => void;
   onInvalidChord: (data: InvalidChordFeedback) => void;
   onPaletteRevealed: () => void;
@@ -81,6 +86,9 @@ export function installChordBridgeHandlers(handlers: ChordBridgeHandlers) {
         return;
       case "warm-rearm":
         handlers.onWarmRearm(message.data ?? {});
+        return;
+      case "popup-options":
+        handlers.onPopupOptions(message.data ?? {});
         return;
       case "force-ready":
         handlers.onForceReady(message.data ?? {});
