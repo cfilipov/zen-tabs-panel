@@ -417,8 +417,6 @@
     chordKey: string | null = null,
     expectedRowId: string | null = null,
   ) {
-    markTerminalCommandDispatched();
-    revealController.clear();
     const chromeIndex = source === "shortcut" && isNativeListView(palette.currentView)
       ? palette.offset + index
       : index;
@@ -432,8 +430,13 @@
       "trace",
       stableRowId,
     );
-    if (result && typeof result === "object" && result.kind === "open-view") {
+    if (result?.kind === "open-view") {
       await openNativeView(result.view, result.params || {}, true);
+      return;
+    }
+    if (result?.kind === "terminal") {
+      markTerminalCommandDispatched();
+      revealController.clear();
     }
   }
 
@@ -442,11 +445,6 @@
     source: "selection" | "shortcut" | "mouse" = "selection",
   ) {
     if (item.disabled) return;
-    const isTerminal = item.kind === "action" || item.kind === "workspace-switch";
-    if (isTerminal) {
-      markTerminalCommandDispatched();
-      revealController.clear();
-    }
     const items = palette.currentView === "actions"
       ? allActionItems
       : isNativePrefixView(palette.currentView)
@@ -462,8 +460,13 @@
       source,
       item.id,
     );
-    if (result && typeof result === "object" && result.kind === "open-view") {
+    if (result?.kind === "open-view") {
       await openNativeView(result.view, result.params || {}, true);
+      return;
+    }
+    if (result?.kind === "terminal") {
+      markTerminalCommandDispatched();
+      revealController.clear();
     }
   }
 

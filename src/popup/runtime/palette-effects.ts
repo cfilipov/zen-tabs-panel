@@ -4,8 +4,9 @@ import { chromeNavigationMessage } from "../interaction/view-navigation";
 import { fireMessage, sendMessage } from "./ipc";
 
 export type ActivateViewRowResult =
-  | boolean
-  | { kind: "open-view"; view: ViewId; params?: Record<string, unknown> };
+  | { kind: "open-view"; view: ViewId; params?: Record<string, unknown> }
+  | { kind: "terminal" }
+  | { kind: "noop" };
 
 export function createPaletteEffects() {
   return {
