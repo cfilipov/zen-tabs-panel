@@ -390,6 +390,23 @@
         "parameters": []
       },
       {
+        "name": "getReorderTabUrls",
+        "type": "function",
+        "async": true,
+        "description": "Get unique URLs for the chrome-owned reorder-tab cohort, used by background for history visit counts.",
+        "parameters": []
+      },
+      {
+        "name": "sortTabs",
+        "type": "function",
+        "async": true,
+        "description": "Sort the chrome-owned reorder-tab cohort and move tabs through Zen's native tab API.",
+        "parameters": [
+          { "name": "actionId", "type": "string" },
+          { "name": "visitCounts", "type": "object", "optional": true }
+        ]
+      },
+      {
         "name": "scrollCurrentTabIntoView",
         "type": "function",
         "async": true,

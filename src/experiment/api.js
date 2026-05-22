@@ -194,6 +194,140 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return active ? [active] : [];
     }
 
+    function sortDomainOf(url) {
+      try {
+        const URLCtor = getWin()?.URL;
+        return URLCtor ? new URLCtor(url).hostname : "";
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function sortableTabRows() {
+      const w = getWin();
+      if (!w?.gBrowser) return [];
+      const active = w.gBrowser.selectedTab;
+      if (!active) return [];
+      const activeWorkspaceId = active.getAttribute("zen-workspace-id") || "";
+      const activeIsSortablePinned = !!(active.pinned && !active.hasAttribute("zen-essential"));
+      const nativeTabs = Array.from(w.gBrowser.tabs || []).filter((tab) => {
+        if (!tab || tab.closing || tab.hasAttribute("zen-essential")) return false;
+        if (activeIsSortablePinned) return !!tab.pinned;
+        if (tab.pinned) return false;
+        return !activeWorkspaceId || tab.getAttribute("zen-workspace-id") === activeWorkspaceId;
+      });
+      return nativeTabs.map((tab, index) => ({
+        tab,
+        index,
+        extId: getExtTabId(tab) || 0,
+        url: tab.linkedBrowser?.currentURI?.spec || "",
+        lastAccessed: tab.lastAccessed || 0,
+        discarded: tab.hasAttribute("pending") || !!tab.linkedBrowser?.isBrowserDiscarded,
+      }));
+    }
+
+    function buildSortDomainCounts(rows) {
+      const counts = Object.create(null);
+      for (const row of rows) {
+        const domain = sortDomainOf(row.url);
+        counts[domain] = (counts[domain] || 0) + 1;
+      }
+      return counts;
+    }
+
+    function groupSortDuplicateRows(rows) {
+      const counts = Object.create(null);
+      for (const row of rows) counts[row.url] = (counts[row.url] || 0) + 1;
+      const dups = [];
+      const singles = [];
+      for (const row of rows) {
+        if (counts[row.url] > 1) dups.push(row);
+        else singles.push(row);
+      }
+      dups.sort((a, b) => a.url.localeCompare(b.url));
+      return dups.concat(singles);
+    }
+
+    function moveSortedNativeTabs(tabs) {
+      const w = getWin();
+      if (!w?.gBrowser?.moveTabTo || !Array.isArray(tabs) || tabs.length < 2) return false;
+
+      const current = tabs.slice().sort((a, b) => a._tPos - b._tPos);
+      let prefix = 0;
+      while (prefix < tabs.length && tabs[prefix] === current[prefix]) prefix++;
+      if (prefix >= tabs.length) return true;
+
+      let suffix = 0;
+      while (
+        suffix < tabs.length - prefix &&
+        tabs[tabs.length - 1 - suffix] === current[current.length - 1 - suffix]
+      ) {
+        suffix++;
+      }
+
+      const moving = tabs.slice(prefix, tabs.length - suffix);
+      const startIndex = current[prefix]._tPos;
+      if (!Number.isFinite(startIndex)) return false;
+      for (let i = moving.length - 1; i >= 0; i--) {
+        try {
+          w.gBrowser.moveTabTo(moving[i], { tabIndex: startIndex, isUserTriggered: true });
+        } catch (e) {}
+      }
+      return true;
+    }
+
+    function sortTabsInternal(actionId, visitCounts) {
+      const rows = sortableTabRows();
+      if (rows.length < 2) return false;
+      const counts = visitCounts && typeof visitCounts === "object" ? visitCounts : {};
+      switch (actionId) {
+        case "sort-tabs-recent-desc":
+          rows.sort((a, b) => (b.lastAccessed - a.lastAccessed) || (a.index - b.index));
+          break;
+        case "sort-tabs-recent-asc":
+          rows.sort((a, b) => (a.lastAccessed - b.lastAccessed) || (a.index - b.index));
+          break;
+        case "sort-tabs-domain-alpha":
+          rows.sort((a, b) =>
+            sortDomainOf(a.url).localeCompare(sortDomainOf(b.url)) ||
+            (b.lastAccessed - a.lastAccessed) ||
+            (a.index - b.index)
+          );
+          break;
+        case "sort-tabs-domain-pop": {
+          const domainCounts = buildSortDomainCounts(rows);
+          rows.sort((a, b) =>
+            ((domainCounts[sortDomainOf(b.url)] || 0) - (domainCounts[sortDomainOf(a.url)] || 0)) ||
+            (b.lastAccessed - a.lastAccessed) ||
+            (a.index - b.index)
+          );
+          break;
+        }
+        case "sort-tabs-age-asc":
+          rows.sort((a, b) => (a.extId - b.extId) || (a.index - b.index));
+          break;
+        case "sort-tabs-age-desc":
+          rows.sort((a, b) => (b.extId - a.extId) || (a.index - b.index));
+          break;
+        case "sort-tabs-inactive-bottom":
+          rows.sort((a, b) => ((a.discarded ? 1 : 0) - (b.discarded ? 1 : 0)) || (a.index - b.index));
+          break;
+        case "sort-tabs-most-visited":
+          rows.sort((a, b) => ((counts[b.url] || 0) - (counts[a.url] || 0)) || (a.index - b.index));
+          break;
+        case "sort-tabs-group-dups":
+          rows.splice(0, rows.length, ...groupSortDuplicateRows(rows));
+          break;
+        default:
+          return false;
+      }
+      return moveSortedNativeTabs(rows.map((row) => row.tab));
+    }
+
+    function getReorderTabUrlsInternal() {
+      return Array.from(new Set(sortableTabRows().map((row) => row.url).filter(Boolean)));
+    }
+
     // -----------------------------------------------------------------------
     // Persistent per-tab metadata (rides SessionStore.extData; survives restart)
     //
@@ -6258,6 +6392,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
             if (id != null) ids.push(id);
           }
           return ids;
+        },
+
+        async getReorderTabUrls() {
+          return getReorderTabUrlsInternal();
+        },
+
+        async sortTabs(actionId, visitCounts) {
+          return sortTabsInternal(actionId, visitCounts);
         },
 
         async getSelectedTabUrls() {

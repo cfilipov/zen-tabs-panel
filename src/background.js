@@ -388,67 +388,29 @@ async function openOptions() {
 // Sort actions
 // ---------------------------------------------------------------------------
 
+async function forEachWithConcurrency(items, limit, fn) {
+  let next = 0;
+  const workerCount = Math.min(Math.max(1, limit), items.length);
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await fn(item);
+    }
+  }));
+}
+
 async function runSortAction(actionId) {
-  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-  const allTabs = await browser.tabs.query({ currentWindow: true });
-  const essentialIds = new Set(await api.getEssentialTabIds());
-  const operateOnPinned = activeTab?.pinned && !essentialIds.has(activeTab?.id);
-
-  let tabs, startIndex;
-  if (operateOnPinned) {
-    const essentialCount = allTabs.filter((t) => essentialIds.has(t.id)).length;
-    tabs = allTabs.filter((t) => t.pinned && !essentialIds.has(t.id));
-    startIndex = essentialCount;
-  } else {
-    const pinnedCount = allTabs.filter((t) => t.pinned).length;
-    tabs = allTabs.filter((t) => !t.pinned);
-    startIndex = pinnedCount;
+  let visitCounts = {};
+  if (actionId === MSG.SORT_TABS_MOST_VISITED) {
+    const uniqueUrls = await api.getReorderTabUrls();
+    await forEachWithConcurrency(uniqueUrls, 32, async (url) => {
+      await browser.history.getVisits({ url }).then(
+        (visits) => { visitCounts[url] = visits.length; },
+        () => { visitCounts[url] = 0; }
+      );
+    });
   }
-
-  // Comparators and group helpers come from lib/tab-sort.js.
-  switch (actionId) {
-    case MSG.SORT_TABS_RECENT_DESC:
-      tabs.sort(compareByRecentDesc);
-      break;
-    case MSG.SORT_TABS_RECENT_ASC:
-      tabs.sort(compareByRecentAsc);
-      break;
-    case MSG.SORT_TABS_DOMAIN_ALPHA:
-      tabs.sort(compareByDomainAlpha);
-      break;
-    case MSG.SORT_TABS_DOMAIN_POP:
-      tabs.sort(makeCompareByDomainPop(buildDomainCounts(tabs)));
-      break;
-    case MSG.SORT_TABS_AGE_ASC:
-      tabs.sort(compareByAgeAsc);
-      break;
-    case MSG.SORT_TABS_AGE_DESC:
-      tabs.sort(compareByAgeDesc);
-      break;
-    case MSG.SORT_TABS_INACTIVE_BOTTOM:
-      tabs.sort(compareInactiveBottom);
-      break;
-    case MSG.SORT_TABS_MOST_VISITED: {
-      const uniqueUrls = [...new Set(tabs.map((t) => t.url))];
-      const visitCounts = {};
-      await Promise.all(uniqueUrls.map((url) =>
-        browser.history.getVisits({ url }).then(
-          (visits) => { visitCounts[url] = visits.length; },
-          () => { visitCounts[url] = 0; }
-        )
-      ));
-      tabs.sort(makeCompareByVisits(visitCounts));
-      break;
-    }
-    case MSG.SORT_TABS_GROUP_DUPS: {
-      const grouped = groupDuplicatesFirst(tabs);
-      tabs.length = 0;
-      tabs.push(...grouped);
-      break;
-    }
-  }
-
-  await browser.tabs.move(tabs.map((t) => t.id), { index: startIndex });
+  await api.sortTabs(actionId, visitCounts);
 }
 
 // ---------------------------------------------------------------------------
