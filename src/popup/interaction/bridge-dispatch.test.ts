@@ -180,7 +180,7 @@ describe("bridge dispatch controller", () => {
     expect(events).toEqual(["clear", "key:stale", "clear", "clear", "key:visible", "visible-arm"]);
   });
 
-  it("visible popup keys preempt a stale live dispatch", async () => {
+  it("visible popup keys preempt a stale live dispatch without dropping queued keys", async () => {
     const events: string[] = [];
     let release: () => void = () => {};
     const controller = createBridgeDispatchController({
@@ -199,15 +199,16 @@ describe("bridge dispatch controller", () => {
 
     await controller.drainReply({ buffered: [] });
     controller.queueOrHold(key("stale"));
+    controller.queueOrHold(key("next"));
     await Promise.resolve();
     controller.visibleKeydownInput(key("visible"));
     await flushDispatchQueue();
 
-    expect(events).toEqual(["clear", "key:stale", "clear", "key:visible", "visible-arm"]);
+    expect(events).toEqual(["clear", "key:stale", "clear", "clear", "key:next", "key:visible", "visible-arm"]);
     release();
     await flushDispatchQueue();
 
-    expect(events).toEqual(["clear", "key:stale", "clear", "key:visible", "visible-arm"]);
+    expect(events).toEqual(["clear", "key:stale", "clear", "clear", "key:next", "key:visible", "visible-arm"]);
   });
 
   it("arms reveal only after a single async buffered key finishes", async () => {

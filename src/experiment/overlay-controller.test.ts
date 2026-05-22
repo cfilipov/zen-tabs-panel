@@ -37,6 +37,7 @@ type OverlayControllerScope = {
     getCurrentView: () => string | null;
     getCurrentParams: () => Record<string, unknown>;
     setCurrentView: (view?: string | null, params?: Record<string, unknown> | null) => string;
+    setCurrentViewName: (view?: string | null) => string;
     pushNavigation: (view?: string | null, params?: Record<string, unknown> | null) => void;
     pushCurrentNavigation: () => void;
     clearNavigation: () => void;
@@ -201,6 +202,9 @@ describe("overlay controller", () => {
       currentViewParams: { domain: "example.com" },
       navStack: [{ view: "last-visited", params: { source: "test" } }],
     });
+
+    controller.setCurrentViewName("domain-tabs");
+    expect(controller.getCurrentParams()).toEqual({ domain: "example.com" });
 
     expect(controller.popNavigation()).toEqual({ view: "last-visited", params: { source: "test" } });
     controller.clearViewState();

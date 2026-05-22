@@ -31,27 +31,51 @@ describe("chrome view transition boundary", () => {
     expect(body).toMatch(/applyBridgeActivationResult\s*\(/);
   });
 
+  it("keeps domain drill params on the open-view activation path", () => {
+    const activation = functionBody("activateChromeOwnedRowIntent");
+    const coordinator = functionBody("createChromeViewTransitionCoordinator");
+
+    expect(activation).toMatch(/const nextParams = \{ domain: row\.domain \}/);
+    expect(activation).toMatch(/activationOpenView\("domain-tabs", nextParams\)/);
+    expect(coordinator).toMatch(/switchHiddenBridgeView\(\s*result\.view,\s*result\.params \|\| \{\}/);
+  });
+
   it("keeps WarmRearm sends behind the coordinator helper", () => {
     const sends = [...apiSource.matchAll(/sendAsyncMessage\("ZenChord:WarmRearm:/g)];
     const helper = functionBody("sendWarmRearmMessage");
     const settings = functionBody("setSkipOverlayAnimations");
+    const coordinator = functionBody("createChromeViewTransitionCoordinator");
 
     expect(sends).toHaveLength(1);
     expect(helper).toMatch(/sendAsyncMessage\("ZenChord:WarmRearm:/);
     expect(settings).not.toMatch(/WarmRearm/);
+    expect(coordinator).toMatch(/sendWarmRearmForTransition\s*\(/);
+    expect(coordinator).not.toMatch(/sendWarmRearm\s*:\s*sendWarmRearmMessage/);
+    expect(apiSource).not.toMatch(/chromeViewTransitions\.sendWarmRearm/);
+  });
+
+  it("keeps resetViewState inside the chrome transition coordinator", () => {
+    const coordinator = functionBody("createChromeViewTransitionCoordinator");
+    const sourceWithoutCoordinator = apiSource.replace(coordinator, "");
+
+    expect(coordinator).toMatch(/overlayController\.resetViewState/);
+    expect(sourceWithoutCoordinator).not.toMatch(/overlayController\.resetViewState/);
   });
 
   it("keeps resize messages from rewriting chrome-owned view params", () => {
     const body = functionBody("resizePanelToView");
+    const coordinator = functionBody("createChromeViewTransitionCoordinator");
 
     expect(body).toMatch(/reapplyCurrentViewForResize\s*\(view\)/);
     expect(body).not.toMatch(/setCurrentView\s*\(\s*view\s*\|\|\s*["']actions["']\s*,/);
+    expect(coordinator).toMatch(/setCurrentViewName\s*\(nextView\)/);
   });
 
-  it("traces params mismatches before WarmRearm payloads leave chrome", () => {
+  it("rejects params mismatches before WarmRearm payloads leave chrome", () => {
     const helper = functionBody("sendWarmRearmMessage");
 
     expect(apiSource).toMatch(/function traceChromeViewInvariant/);
-    expect(helper).toMatch(/traceChromeViewInvariant\("sendWarmRearm"/);
+    expect(helper).toMatch(/if \(!traceChromeViewInvariant\("sendWarmRearm"/);
+    expect(helper).toMatch(/return false/);
   });
 });

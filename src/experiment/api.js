@@ -1089,6 +1089,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       context.extension.getURL("experiment/overlay-controller.js"),
       overlayControllerScope
     );
+    const popupReadinessGuardScope = {};
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("experiment/popup-readiness-guard.js"),
+      popupReadinessGuardScope
+    );
     const KEYBINDINGS = chordSupportScope.ZEN_KEYBINDINGS || [];
     const ACTION_SECTIONS = chordSupportScope.ZEN_ACTION_SECTIONS || [];
     const WORKSPACE_DIGIT_CHORDS = chordSupportScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
@@ -1475,14 +1480,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
           expectedParams,
           currentParams,
         });
+        return false;
       }
+      return true;
     }
 
     function sendWarmRearmMessage(br, payload) {
       const mm = browserMessageManager(br);
       if (!mm) return false;
       sendPopupOptions(br);
-      traceChromeViewInvariant("sendWarmRearm", payload && payload.view, payload && payload.params);
+      if (!traceChromeViewInvariant("sendWarmRearm", payload && payload.view, payload && payload.params)) {
+        return false;
+      }
       try {
         mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
           inst: payload && payload.inst,
@@ -2154,8 +2163,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const viewName = view || "actions";
       const initialSize = initialViewSize(viewName);
 
-      overlayController.resetViewState(viewName, params || {});
-      preparePopupLoad(viewName, "createOverlay");
+      if (!chromeViewTransitions) return null;
+      chromeViewTransitions.prepareFreshOverlay(view, params, "createOverlay");
 
       const overlay = w.document.createElement("div");
       overlay.id = OVERLAY_ID;
@@ -2293,11 +2302,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // Popup will signal ready again after it processes WarmRearm; any
       // chord-chain keys that land in this window are buffered (just like
       // the cold-create case).
-      overlayController.resetViewState(view || "actions", params || {});
-      const readyGen = nextReadinessGeneration();
-
       const viewName = view || "actions";
-      preparePopupLoad(viewName, "rearmExistingOverlay");
       const panel = w.document.getElementById(PANEL_ID);
       const br = w.document.getElementById(BROWSER_ID);
       const idleHidden = overlay.style.visibility === "hidden" && !hasPendingReveal();
@@ -2356,20 +2361,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // sending: very small views can resize and signal ready in the same
       // turn as this message, and deferred explicit opens need a reveal
       // closure available when that happens.
-      if (idleHidden && viewName === "actions" && (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions")) {
-        try {
-          br.setAttribute("src", getPaletteURL(null, params || null));
-          scheduleBrowserLoadKicks(w, br);
-        } catch (e) {}
-      }
-      if (chromeViewTransitions) {
-        chromeViewTransitions.sendWarmRearm(br, {
-          inst: currentPopupInstance(),
-          readyGen,
-          view: view || null,
-          params: params || null,
-        });
-      }
+      if (chromeViewTransitions) chromeViewTransitions.rearmHiddenOverlay(br, view, params, { idleHidden });
       scheduleNativePopupContentResize(viewName);
       releaseHiddenPaletteFocus();
 
@@ -2927,24 +2919,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const br = w && w.document.getElementById(BROWSER_ID);
       const mm = browserMessageManager(br);
       if (!mm) return;
-      overlayController.resetViewState("actions", {});
-      const readyGen = nextReadinessGeneration();
-      preparePopupLoad("actions", "resetWarmPopupToActions");
-      if (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions") {
-        try {
-          br.setAttribute("src", getPaletteURL(null, null));
-          scheduleBrowserLoadKicks(w, br);
-        } catch (e) {}
-        return;
-      }
-      if (chromeViewTransitions) {
-        chromeViewTransitions.sendWarmRearm(br, {
-          inst: currentPopupInstance(),
-          readyGen,
-          view: null,
-          params: null,
-        });
-      }
+      if (chromeViewTransitions) chromeViewTransitions.resetWarmPopupToActions(br);
     }
 
     function destroyOverlay(opts) {
@@ -3261,9 +3236,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function acceptsPopupViewStateMessage(inst, readyGen) {
-      if (!matchesPopupInstance(inst)) return false;
-      if (typeof readyGen === "number") return matchesReadinessGeneration(readyGen);
-      return !hasActiveBridge() && !hasPendingReveal();
+      return popupReadinessGuardScope.acceptsPopupViewStateMessage({
+        matchesPopupInstance,
+        matchesReadinessGeneration,
+        hasActiveBridge,
+        hasPendingReveal,
+      }, inst, readyGen);
     }
 
     function assertVisiblePopupOwnsKeys(why) {
@@ -3993,6 +3971,72 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function createChromeViewTransitionCoordinator() {
+      function normalizeTransition(view, params) {
+        return {
+          viewName: view || "actions",
+          viewPayload: view || null,
+          params: params || {},
+          paramsPayload: params || null,
+        };
+      }
+
+      function prepareFreshOverlay(view, params, reason) {
+        const transition = normalizeTransition(view, params);
+        overlayController.resetViewState(transition.viewName, transition.params);
+        preparePopupLoad(transition.viewName, reason || "prepareFreshOverlay");
+        traceChromeViewInvariant(reason || "prepareFreshOverlay", transition.viewName, transition.params);
+        return transition;
+      }
+
+      function sendWarmRearmForTransition(br, transition) {
+        return sendWarmRearmMessage(br, {
+          inst: currentPopupInstance(),
+          readyGen: transition.readyGen,
+          view: transition.viewPayload,
+          params: transition.paramsPayload,
+        });
+      }
+
+      function rearmHiddenOverlay(br, view, params, options) {
+        const transition = normalizeTransition(view, params);
+        overlayController.resetViewState(transition.viewName, transition.params);
+        transition.readyGen = nextReadinessGeneration();
+        preparePopupLoad(transition.viewName, "rearmExistingOverlay");
+
+        if (
+          options &&
+          options.idleHidden &&
+          transition.viewName === "actions" &&
+          (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions")
+        ) {
+          try {
+            br.setAttribute("src", getPaletteURL(null, transition.paramsPayload));
+            const w = getWin();
+            if (w) scheduleBrowserLoadKicks(w, br);
+          } catch (e) {}
+        }
+
+        sendWarmRearmForTransition(br, transition);
+        return transition;
+      }
+
+      function resetWarmPopupToActions(br) {
+        const transition = normalizeTransition(null, null);
+        overlayController.resetViewState("actions", {});
+        transition.readyGen = nextReadinessGeneration();
+        preparePopupLoad("actions", "resetWarmPopupToActions");
+        if (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions") {
+          try {
+            br.setAttribute("src", getPaletteURL(null, null));
+            const w = getWin();
+            if (w) scheduleBrowserLoadKicks(w, br);
+          } catch (e) {}
+          return transition;
+        }
+        sendWarmRearmForTransition(br, transition);
+        return transition;
+      }
+
       function switchHiddenBridgeView(view, params, previousView, previousParams) {
         overlayController.create(view, params || {});
         try { if (chordSession) chordSession.retargetActiveBridgeView(view, "switchHiddenBridgeView"); } catch (e) {}
@@ -4023,9 +4067,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (nextView === "actions") {
           overlayController.setCurrentView("actions", {});
         } else {
-          // Preserve the params chrome already owns for this view. Resize
-          // messages are view-size reports, not a second source of params.
-          overlayController.setCurrentView(nextView);
+          overlayController.setCurrentViewName(nextView);
         }
         return currentViewName();
       }
@@ -4101,13 +4143,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
       }
 
       return {
+        prepareFreshOverlay,
+        rearmHiddenOverlay,
+        resetWarmPopupToActions,
         applyActivationResult,
         reapplyCurrentViewForResize,
         navigateToView,
         navigateBack,
         openExtensionPopup,
         goToActionsFromVisibleSubmenu,
-        sendWarmRearm: sendWarmRearmMessage,
       };
     }
 

@@ -84,10 +84,10 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
     void runLiveDispatchQueue();
   }
 
-  function cancelLiveDispatch() {
+  function cancelLiveDispatch(clearQueued = true) {
     generation += 1;
     dispatchRunning = false;
-    liveDispatchQueue.length = 0;
+    if (clearQueued) liveDispatchQueue.length = 0;
   }
 
   function queueOrHold(input: BridgeKeyData) {
@@ -124,7 +124,7 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       return { preventDefault: true, stopPropagation: !isLive() };
     },
     visibleKeydownInput(input) {
-      if (dispatchRunning) cancelLiveDispatch();
+      if (dispatchRunning) cancelLiveDispatch(false);
       state = { mode: "live" };
       options.clearRevealTimer();
       enqueue(input, "visible");

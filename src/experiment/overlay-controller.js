@@ -288,6 +288,11 @@
       return currentViewName;
     }
 
+    function setCurrentViewName(view) {
+      currentViewName = normalizeView(view);
+      return currentViewName;
+    }
+
     function pushNavigation(view, params) {
       navStack.push({ view: view || currentViewName, params: params || {} });
     }
@@ -374,6 +379,7 @@
       getCurrentView,
       getCurrentParams,
       setCurrentView,
+      setCurrentViewName,
       pushNavigation,
       pushCurrentNavigation,
       clearNavigation,
