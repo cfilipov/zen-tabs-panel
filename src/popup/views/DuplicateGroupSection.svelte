@@ -63,7 +63,10 @@
       <span class="dup-group-favicon-placeholder">○</span>
     {/if}
     <div class="dup-group-text">
-      <div class="dup-group-title">{title || group.title || "Untitled"}<span class="item-count">{group.tabs.length}</span></div>
+      <div class="dup-group-title">
+        <span class="dup-group-title-text">{title || group.title || "Untitled"}</span>
+        <span class="item-count">{group.tabs.length}</span>
+      </div>
       {#if group.domain && !title}
         <div class="dup-group-domain">{group.domain}</div>
       {/if}

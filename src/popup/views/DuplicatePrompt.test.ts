@@ -109,4 +109,21 @@ describe("DuplicatePrompt", () => {
     await fireEvent.click(screen.getAllByTitle("Close tab")[0]);
     expect(onclose).toHaveBeenCalledWith(group.tabs[0]);
   });
+
+  it("keeps the duplicate count separate from long prompt URLs", () => {
+    const { container } = render(DuplicatePrompt, {
+      props: {
+        url: "https://news.ycombinator.com/item?id=48225297",
+        existingDomId: "existing-tab",
+        group,
+        workspaces: [{ uuid: "main", name: "Main", svgContent: "", isActive: true }],
+      },
+    });
+
+    const title = container.querySelector(".dup-group-title-text");
+    const count = container.querySelector(".dup-group-title > .item-count");
+
+    expect(title?.textContent).toBe("https://news.ycombinator.com/item?id=48225297");
+    expect(count?.textContent).toBe("2");
+  });
 });

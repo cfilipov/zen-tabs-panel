@@ -879,11 +879,22 @@ html, body {
 }
 
 .dup-group-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.dup-group-title-text {
+  min-width: 0;
   font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.dup-group-title .item-count {
+  flex: 0 0 auto;
 }
 
 .dup-group-domain {
