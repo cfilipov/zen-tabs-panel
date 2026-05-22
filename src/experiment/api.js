@@ -2165,7 +2165,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       });
 
       w.document.documentElement.appendChild(overlay);
-      focusSelectedTabBrowser();
+      releaseHiddenPaletteFocus();
       scheduleBrowserLoadKicks(w, br);
       scheduleNativePopupContentResize(viewName);
 
@@ -2208,6 +2208,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function focusSelectedTabBrowser() {
       const w = getWin();
       try { w && w.gBrowser && w.gBrowser.selectedBrowser && w.gBrowser.selectedBrowser.focus(); } catch (e) {}
+    }
+
+    function releaseHiddenPaletteFocus() {
+      const w = getWin();
+      try {
+        const active = w && w.document && w.document.activeElement;
+        if (active && active.id === BROWSER_ID) focusSelectedTabBrowser();
+      } catch (e) {}
     }
 
     // Warm popup is mounted from a previous chord chain (or initial
@@ -2313,7 +2321,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         } catch (e) {}
       }
       scheduleNativePopupContentResize(viewName);
-      focusSelectedTabBrowser();
+      releaseHiddenPaletteFocus();
 
       return overlay;
     }
@@ -4368,6 +4376,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         ) {
           debugChordTrace("fallback-hidden-chain-key", { key: e.key, code: e.code, target: name });
           try { Object.defineProperty(e, "__zenTabsPanelFallbackHandled", { value: true }); } catch (_) {}
+          try { e.preventDefault(); } catch (_) {}
+          try { e.stopPropagation(); } catch (_) {}
           const fallbackKey = {
             kind: "key",
             key: e.key,
@@ -4415,6 +4425,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           hasRootChild: !!(chordKey && CHORD_TREE && CHORD_TREE.children && CHORD_TREE.children[chordKey]),
         });
         try { Object.defineProperty(e, "__zenTabsPanelFallbackHandled", { value: true }); } catch (_) {}
+        try { e.preventDefault(); } catch (_) {}
+        try { e.stopPropagation(); } catch (_) {}
         const fallbackKey = {
           kind: "key",
           key: e.key,
@@ -4602,6 +4614,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  filterEvent: function(){ return true; },\n" +
         "  setTimeoutFn: function(fn, ms){ return content ? content.setTimeout(fn, ms) : null; },\n" +
         "  clearTimeoutFn: function(id){ if (content && id != null) try { content.clearTimeout(id); } catch (e) {} },\n" +
+        "  disarmOnBlur: false,\n" +
         "  failsafeTimeoutMs: 5000,\n" +
         "  forwardKey: function(k){ try { sendAsyncMessage('ZenChord:Key:' + __GEN, tag(k)); } catch(e){} },\n" +
         "});\n" +
@@ -4616,7 +4629,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
         // document/body/etc.; stopPropagation here keeps the event from
         // reaching those inner nodes. Same-node system-group listeners
         // (our shim) still fire — propagation-stop only blocks travel
-        // to OTHER nodes, not other listeners on the same node.
+        // to OTHER nodes, not other listeners on the same node. We also
+        // block keypress/beforeinput while armed because chrome fallback can
+        // consume a browser-targeted keydown after Gecko has already queued
+        // the editor text-insertion path.
         "function blockDefaultGroup(e){\n" +
         "  if (__shutdown) return;\n" +
         "  if (!__shim.isArmed()) return;\n" +
@@ -4678,6 +4694,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    if (__shutdown) return;\n" +
         "    if (!content) return;\n" +
         "    try { content.removeEventListener('keydown', blockDefaultGroup, { capture: true }); } catch(_) {}\n" +
+        "    try { content.removeEventListener('keypress', blockDefaultGroup, { capture: true }); } catch(_) {}\n" +
+        "    try { content.removeEventListener('beforeinput', blockDefaultGroup, { capture: true }); } catch(_) {}\n" +
         "    try { content.removeEventListener('mouseover', onDuplicateLinkMouseover, { capture: true }); } catch(_) {}\n" +
         "    try { content.removeEventListener('click', onDuplicateLinkClick, { capture: true }); } catch(_) {}\n" +
         "    // The palette/hosted-popup browser owns its own key handling.\n" +
@@ -4691,6 +4709,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    // Detach-then-attach the default-group blocker so duplicate\n" +
         "    // DOMWindowCreated firings don't stack listeners.\n" +
         "    content.addEventListener('keydown', blockDefaultGroup, { capture: true });\n" +
+        "    content.addEventListener('keypress', blockDefaultGroup, { capture: true });\n" +
+        "    content.addEventListener('beforeinput', blockDefaultGroup, { capture: true });\n" +
         "    content.addEventListener('mouseover', onDuplicateLinkMouseover, { capture: true });\n" +
         "    content.addEventListener('click', onDuplicateLinkClick, { capture: true });\n" +
         "  } catch (err) { /* ignore */ }\n" +
@@ -4713,6 +4733,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "  try { if (content && content.__zenTabsPanelChordEngineGen === __GEN) content.__zenTabsPanelChordEngineGen = null; } catch(e){}\n" +
         "  try { __shim.detach(); } catch(e){}\n" +
         "  try { content && content.removeEventListener('keydown', blockDefaultGroup, { capture: true }); } catch(e){}\n" +
+        "  try { content && content.removeEventListener('keypress', blockDefaultGroup, { capture: true }); } catch(e){}\n" +
+        "  try { content && content.removeEventListener('beforeinput', blockDefaultGroup, { capture: true }); } catch(e){}\n" +
         "  try { content && content.removeEventListener('mouseover', onDuplicateLinkMouseover, { capture: true }); } catch(e){}\n" +
         "  try { content && content.removeEventListener('click', onDuplicateLinkClick, { capture: true }); } catch(e){}\n" +
         "});\n" +

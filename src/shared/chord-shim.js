@@ -36,6 +36,7 @@
     const filterEvent = opts.filterEvent;
     const onArmed = opts.onArmed;
     const onDisarmed = opts.onDisarmed;
+    const disarmOnBlur = opts.disarmOnBlur !== false;
     const failsafeTimeoutMs = typeof opts.failsafeTimeoutMs === "number" ? opts.failsafeTimeoutMs : 5000;
     const setT = opts.setTimeoutFn || (typeof globalThis !== "undefined" ? globalThis.setTimeout : null);
     const clearT = opts.clearTimeoutFn || (typeof globalThis !== "undefined" ? globalThis.clearTimeout : null);
@@ -100,6 +101,7 @@
 
     function handleBlur(e) {
       if (filterEvent && !filterEvent(e)) return;
+      if (!disarmOnBlur) return;
       disarm("blur");
     }
 

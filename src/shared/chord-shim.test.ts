@@ -203,4 +203,14 @@ describe("chord-shim", () => {
 
     expect(shim.isArmed()).toBe(false);
   });
+
+  it("can stay armed across blur for content-process chord chains", () => {
+    const shim = scope.createChordShim({ forwardKey: vi.fn(), failsafeTimeoutMs: 0, disarmOnBlur: false });
+    const node = target();
+    shim.attach(node);
+    shim.arm();
+    node.dispatch("blur", key("Blur"));
+
+    expect(shim.isArmed()).toBe(true);
+  });
 });
