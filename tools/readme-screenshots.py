@@ -1162,7 +1162,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--workspace-count", type=int, default=WORKSPACE_COUNT, help="Minimum number of workspaces in the screenshot profile")
     parser.add_argument("--capture-scale", type=float, default=DEFAULT_CAPTURE_SCALE, help="Snapshot scale before compositing; defaults to 2 for retina-sharp pixels")
     parser.add_argument("--output-scale", type=float, default=None, help="Final composite scale after capture; defaults to 1")
-    parser.add_argument("--theme", choices=["split", "both", "light", "dark"], default="split", help="Capture theme mode: split/both combines dark left + light right; light or dark captures one theme only")
+    parser.add_argument("--theme", choices=["split", "both", "light", "dark"], default="dark", help="Capture theme mode: dark captures one theme only by default; light captures light only; split/both combines dark left + light right")
     parser.add_argument("--no-density", action="store_false", dest="write_density", help="Do not write PNG density metadata")
     parser.add_argument("--tab", action="append", dest="tabs", help="Seed tab URL; repeat to override the default tab set")
     args = parser.parse_args(argv)

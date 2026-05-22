@@ -4,11 +4,6 @@ A command palette for [Zen Browser](https://zen-browser.app/). Discoverable chor
 
 Formerly **Zen Tabs Panel**.
 
-> [!CAUTION]
-> This extension uses internal Zen APIs which could change and break with any Zen update. Use at your own risk.
->
-> **Version 0.4.4** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
-
 ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more — far more than Zen exposes by default. Everything starts with one leader chord (`⌘.` on macOS, `⌃.` on Windows/Linux), followed by a short sequence of keys. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. The same sequence works whether you see the menu or not: type it quickly and the action fires immediately; pause, and the menu pops up showing every available next key. Common actions become muscle memory while less-used ones stay easy to discover. The palette is keyboard-first but fully mouse-friendly.
 
 > [!NOTE]
@@ -23,11 +18,6 @@ ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more —
 </p>
 
 <p align="center">
-  <img src="screenshot-reorder-tabs@2x.png" alt="Reorder tabs menu" width="420">
-  <img src="screenshot-close-select@2x.png" alt="Close and select menu" width="420">
-</p>
-
-<p align="center">
   <img src="screenshot-tabinfo@2x.png" alt="Tab info view" width="600">
 </p>
 
@@ -35,7 +25,17 @@ ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more —
   <img src="screenshot-duplicate-prompt@2x.png" alt="Duplicate tab prompt" width="420">
 </p>
 
+<p align="center">
+  <img src="screenshot-reorder-tabs@2x.png" alt="Reorder tabs menu" width="420">
+  <img src="screenshot-close-select@2x.png" alt="Close and select menu" width="420">
+</p>
+
 ## Install
+
+> [!CAUTION]
+> This extension uses internal Zen APIs which could change and break with any Zen update. Use at your own risk.
+>
+> **Version 0.4.4** · Tested on Zen Browser 1.19.11b (Firefox 150.0.1)
 
 ### Quick install (macOS)
 
@@ -440,12 +440,12 @@ current built extension into it, creates enough fixture workspaces to keep the
 profile at 10 workspaces, gives those workspaces realistic names/icons,
 installs a few signed AMO extensions for the main-menu icon strip, opens a
 deterministic set of generic tabs, and captures the palette images referenced
-at the top of this README. By default, each README PNG is a generated diagonal
-composite: dark mode on the left, light mode on the right. Use `--theme light`
-or `--theme dark` to capture only one theme. The script captures at 2x for
-clean text edges and writes PNG density metadata equivalent to the retina scale
-so viewers that honor it can display the images at the menu's logical size. It
-uses remote debugging on port `6100` so it can run alongside the normal live
+at the top of this README. By default, each README PNG is captured in dark mode.
+Use `--theme light` for light-only screenshots or `--theme split` for the older
+dark-left/light-right diagonal composites. The script captures at 2x for clean
+text edges and writes PNG density metadata equivalent to the retina scale so
+viewers that honor it can display the images at the menu's logical size. It uses
+remote debugging on port `6100` so it can run alongside the normal live
 debugging port `6000`.
 
 Useful options:
@@ -455,7 +455,7 @@ python3 tools/readme-screenshots.py --reset-profile
 python3 tools/readme-screenshots.py --no-showcase-extensions
 python3 tools/readme-screenshots.py --output-dir /tmp/ergozen-shots
 python3 tools/readme-screenshots.py --theme light
-python3 tools/readme-screenshots.py --theme dark
+python3 tools/readme-screenshots.py --theme split
 python3 tools/readme-screenshots.py --workspace-count 10
 python3 tools/readme-screenshots.py --capture-scale 1
 python3 tools/readme-screenshots.py --no-density
