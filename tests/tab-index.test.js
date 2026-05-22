@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { isDuplicateNavigationUrl } = require("../src/shared/navigation-url.js");
 
 const { createZenTabIndex } = require("../src/experiment/tab-index.js");
 
@@ -89,6 +90,7 @@ function makeIndexWithDeps(tabs) {
       return `uuid-${tab.id}`;
     },
     recordInterval() {},
+    isDuplicateNavigationUrl,
   });
   return { index, calls, win };
 }
@@ -173,6 +175,23 @@ test("tab index can return a singleton duplicate group for prompt previews", () 
 
   assert.deepEqual(groups.map((group) => [group.url, group.tabs.length]), [
     ["https://example.test/a", 1],
+  ]);
+});
+
+test("tab index prompt duplicate lookup uses navigation URL matching", () => {
+  const index = makeIndex([
+    fakeTab("tab-1", "https://example.test/release-notes/", "ws-1"),
+    fakeTab("tab-2", "https://example.test/release-notes", "ws-2"),
+    fakeTab("tab-3", "https://example.test/other", "ws-1"),
+  ]);
+
+  const groups = index.getDuplicateGroups({
+    url: "https://example.test/release-notes",
+    includeSingleton: true,
+  });
+
+  assert.deepEqual(groups.map((group) => [group.url, group.tabs.map((tab) => tab.domId)]), [
+    ["https://example.test/release-notes/", ["tab-1", "tab-2"]],
   ]);
 });
 

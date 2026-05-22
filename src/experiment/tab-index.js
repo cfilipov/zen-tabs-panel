@@ -42,6 +42,17 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     return row && !isNewTabUrl(row.url);
   }
 
+  function duplicateUrlMatches(candidateUrl, openTabUrl) {
+    if (!candidateUrl || !openTabUrl) return false;
+    if (candidateUrl === openTabUrl) return true;
+    try {
+      if (typeof deps.isDuplicateNavigationUrl === "function") {
+        return !!deps.isDuplicateNavigationUrl(candidateUrl, openTabUrl);
+      }
+    } catch (e) {}
+    return false;
+  }
+
   function compactFavicon(url) {
     if (!url) return "";
     let s = String(url);
@@ -461,10 +472,12 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
   function duplicateGroups(params) {
     const groups = new Map();
     for (const row of filteredRows("all", params)) {
-      if (params?.url && row.url !== params.url) continue;
-      const group = groups.get(row.url);
+      const requestedUrl = params?.url || "";
+      if (requestedUrl && !duplicateUrlMatches(requestedUrl, row.url)) continue;
+      const groupKey = requestedUrl || row.url;
+      const group = groups.get(groupKey);
       if (group) group.push(row);
-      else groups.set(row.url, [row]);
+      else groups.set(groupKey, [row]);
     }
     return [...groups.values()]
       .filter((group) => params?.includeSingleton ? group.length > 0 : group.length > 1)

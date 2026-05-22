@@ -927,6 +927,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       readTabStats,
       ensureTabUuid,
       recordInterval,
+      isDuplicateNavigationUrl: chordSupportScope.isDuplicateNavigationUrl,
     });
     const recentsModelScope = {};
     Services.scriptloader.loadSubScript(
