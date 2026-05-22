@@ -55,6 +55,15 @@ describe("bridge dispatch controller", () => {
     expect(events).toEqual([]);
   });
 
+  it("arms the reveal timer for an empty active bridge drain", async () => {
+    const { controller, events } = createHarness();
+
+    await controller.drainReply({ buffered: [], armRevealTimer: true });
+
+    expect(controller.ready).toBe(true);
+    expect(events).toEqual(["bridge-arm"]);
+  });
+
   it("reports keydown capture requirements while not ready", async () => {
     const { controller } = createHarness();
 

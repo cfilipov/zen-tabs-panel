@@ -608,7 +608,10 @@ const QUERIES = Object.freeze({
   // { buffered, view, armRevealTimer }: buffered contains any keys captured
   // while the hidden popup was loading, and the popup replays them before
   // processing live input.
-  [MSG.POPUP_READY]:                   (m) => api.takeChordBridgeBuffer(m && typeof m.inst === "number" ? m.inst : null),
+  [MSG.POPUP_READY]:                   (m) => api.takeChordBridgeBuffer(
+    m && typeof m.inst === "number" ? m.inst : null,
+    m && typeof m.readyGen === "number" ? m.readyGen : null
+  ),
   [MSG.REVEAL_PALETTE]:                (m) => api.revealPalette(m && typeof m.inst === "number" ? m.inst : null),
   [MSG.GET_DEFAULT_CLOSE_TARGET]:      ()  => api.getDefaultCloseTargetDomId(),
   [MSG.GET_ACTIVE_TAB_INFO]:           ()  => getActiveTabInfo(),

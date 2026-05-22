@@ -22,7 +22,7 @@ function timerHarness() {
 }
 
 describe("palette reveal controller", () => {
-  it("parses popup instance from the URL and includes it in ready messages", () => {
+  it("parses popup instance and readiness generation from the URL", () => {
     const timers = timerHarness();
     const controller = createPaletteRevealController({
       sendReveal: () => {},
@@ -30,10 +30,11 @@ describe("palette reveal controller", () => {
       clearTimeout: timers.clearTimeout,
     });
 
-    controller.configureFromSearch("?inst=42&delay=25");
+    controller.configureFromSearch("?inst=42&readyGen=9&delay=25");
 
     expect(controller.inst).toBe(42);
-    expect(controller.popupReadyMessage()).toEqual({ type: "popup-ready", inst: 42 });
+    expect(controller.readyGen).toBe(9);
+    expect(controller.popupReadyMessage()).toEqual({ type: "popup-ready", inst: 42, readyGen: 9 });
   });
 
   it("reveals after the configured delay unless cleared", () => {

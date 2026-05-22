@@ -26,6 +26,7 @@ export type BridgeReply = {
 
 export type WarmRearmPayload = {
   inst?: number;
+  readyGen?: number;
   view?: ViewId;
   params?: Record<string, unknown>;
   skipAnimations?: boolean;

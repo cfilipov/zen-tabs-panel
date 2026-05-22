@@ -1283,6 +1283,18 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return overlayController ? overlayController.matchesInstance(inst) : typeof inst !== "number";
     }
 
+    function currentReadinessGeneration() {
+      return overlayController ? overlayController.currentReadinessGeneration() : 0;
+    }
+
+    function nextReadinessGeneration() {
+      return overlayController ? overlayController.nextReadinessGeneration() : 0;
+    }
+
+    function matchesReadinessGeneration(gen) {
+      return overlayController ? overlayController.matchesReadinessGeneration(gen) : typeof gen !== "number";
+    }
+
     function setPendingReveal(reveal) {
       return overlayController ? overlayController.setPendingReveal(reveal) : null;
     }
@@ -1349,6 +1361,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const isDark = isChromeDark();
       let url = context.extension.getURL("popup/popup.html") + "?theme=" + (isDark ? "dark" : "light");
       url += "&inst=" + currentPopupInstance();
+      url += "&readyGen=" + currentReadinessGeneration();
       url += "&gen=" + encodeURIComponent(CHORD_GENERATION);
       // Current chord-delay setting — popup's keyboard.js reads it and
       // overrides its reveal-timer duration.
@@ -1426,6 +1439,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       br.setAttribute("maychangeremoteness", "true");
       br.setAttribute("disableglobalhistory", "true");
       br.setAttribute("messagemanagergroup", "webext-browsers");
+      br.setAttribute("noinitialfocus", "true");
       // webextension-view-type controls what browser.extension.getViews({type})
       // reports for this browser. Default "popup" matches the toolbar BAP
       // popup, which is right for our icon-strip flow. For windows.create
@@ -2030,6 +2044,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // the bridge buffer meant for the new popup, eating the chord-chain
       // digits the user typed.
       nextPopupInstance();
+      nextReadinessGeneration();
       // A new popup is being constructed — any reveal-block from the
       // previous destroy is no longer relevant.
       clearRevealBlock("createOverlay");
@@ -2140,6 +2155,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       });
 
       w.document.documentElement.appendChild(overlay);
+      focusSelectedTabBrowser();
       scheduleBrowserLoadKicks(w, br);
       scheduleNativePopupContentResize(viewName);
 
@@ -2206,6 +2222,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // chord-chain keys that land in this window are buffered (just like
       // the cold-create case).
       overlayController.resetViewState(view || "actions", {});
+      const readyGen = nextReadinessGeneration();
 
       const viewName = view || "actions";
       preparePopupLoad(viewName, "rearmExistingOverlay");
@@ -2278,6 +2295,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         try {
           mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
             inst: currentPopupInstance(),
+            readyGen,
             view: view || null,
             params: params || null,
             skipAnimations: skipOverlayAnimations,
@@ -2285,6 +2303,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         } catch (e) {}
       }
       scheduleNativePopupContentResize(viewName);
+      focusSelectedTabBrowser();
 
       return overlay;
     }
@@ -2841,6 +2860,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const mm = browserMessageManager(br);
       if (!mm) return;
       overlayController.resetViewState("actions", {});
+      const readyGen = nextReadinessGeneration();
       preparePopupLoad("actions", "resetWarmPopupToActions");
       if (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions") {
         try {
@@ -2852,6 +2872,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       try {
         mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
           inst: currentPopupInstance(),
+          readyGen,
           view: null,
           params: null,
           skipAnimations: skipOverlayAnimations,
@@ -3916,8 +3937,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function switchHiddenBridgeView(view, params, previousView, previousParams) {
-      if (hasPendingReveal()) overlayController.destroy({ silent: true });
-      overlayController.create(view, params || {});
+      if (hasPendingReveal()) createFreshOverlayForDirectOpen(view, params || {});
+      else overlayController.create(view, params || {});
       try { if (chordSession) chordSession.retargetActiveBridgeView(view, "switchHiddenBridgeView"); } catch (e) {}
       if (previousView) {
         overlayController.setNavigationStack([{ view: previousView, params: previousParams || {} }]);
@@ -7045,11 +7066,17 @@ this.zenWorkspaces = class extends ExtensionAPI {
         //
         // Returns { buffered } — the popup replays the buffered keys via
         // dispatchKey before processing live input.
-        async takeChordBridgeBuffer(inst) {
+        async takeChordBridgeBuffer(inst, readyGen) {
           // Stale POPUP_READY from a popup we've since destroyed (prerender
           // swap during a chord chain). Ignore it — otherwise we drain the
           // bridge buffer that the live popup is waiting for.
-          if (!matchesPopupInstance(inst)) {
+          if (!matchesPopupInstance(inst) || !matchesReadinessGeneration(readyGen)) {
+            debugChordTrace("bridge-buffer-stale-ready", {
+              inst,
+              currentInst: currentPopupInstance(),
+              readyGen,
+              currentReadyGen: currentReadinessGeneration(),
+            });
             return { buffered: [], stale: true };
           }
           // Warm popup may send POPUP_READY when no bridge is active (initial
@@ -7078,7 +7105,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
           // Pause-driven reveal is then the popup's responsibility (it
           // arms its own reveal timer in keyboard.js, since it owns
           // post-drain state).
-          if (drained.length > 0) clearRevealTimer();
+          const shouldArmRevealTimer = wasBridging || drained.length > 0;
+          if (drained.length > 0 || shouldArmRevealTimer) clearRevealTimer();
           // If the chrome reveal timer fired during popup load (which would
           // have painted a blank panel — visible flash), it deferred reveal and
           // waited for us. We've now drained;
@@ -7104,7 +7132,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return {
             buffered: drained,
             view: replyView,
-            armRevealTimer: wasBridging || drained.length > 0,
+            armRevealTimer: shouldArmRevealTimer,
             invalidChord: consumeInvalidChordFeedback(),
             visible: overlayController.isVisible(),
           };
@@ -7448,6 +7476,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             try {
               mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
                 inst: currentPopupInstance(),
+                readyGen: currentReadinessGeneration(),
                 view: currentViewName() || "actions",
                 params: currentViewParams() || {},
                 skipAnimations: skipOverlayAnimations,

@@ -93,6 +93,15 @@
  *
  * @property {(inst?: number | null) => boolean} matchesInstance
  * True when `inst` is absent or matches the live popup instance id.
+ *
+ * @property {() => number} nextReadinessGeneration
+ * Increment and return the popup readiness generation for a load/rearm cycle.
+ *
+ * @property {() => number} currentReadinessGeneration
+ * Return the current popup readiness generation.
+ *
+ * @property {(gen?: number | null) => boolean} matchesReadinessGeneration
+ * True when `gen` is absent or matches the current readiness generation.
  */
 
 (function (scope) {
@@ -104,6 +113,7 @@
 
   function createOverlayController(impl) {
     let popupInstance = 0;
+    let readinessGeneration = 0;
     let pendingReveal = null;
     let explicitRevealToken = 0;
     let explicitRevealView = null;
@@ -126,6 +136,19 @@
 
     function matchesInstance(inst) {
       return typeof inst !== "number" || inst === popupInstance;
+    }
+
+    function nextReadinessGeneration() {
+      readinessGeneration++;
+      return readinessGeneration;
+    }
+
+    function currentReadinessGeneration() {
+      return readinessGeneration;
+    }
+
+    function matchesReadinessGeneration(gen) {
+      return typeof gen !== "number" || gen === readinessGeneration;
     }
 
     function setPendingReveal(reveal) {
@@ -304,6 +327,7 @@
     function getDebugState() {
       return clonePlain({
         popupInstance,
+        readinessGeneration,
         pendingReveal: hasPendingReveal(),
         explicitRevealToken,
         explicitRevealView,
@@ -361,6 +385,9 @@
       nextInstance,
       currentInstance,
       matchesInstance,
+      nextReadinessGeneration,
+      currentReadinessGeneration,
+      matchesReadinessGeneration,
     };
   }
 

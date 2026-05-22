@@ -10,6 +10,9 @@ type OverlayControllerScope = {
     nextInstance: () => number;
     currentInstance: () => number;
     matchesInstance: (inst?: number | null) => boolean;
+    nextReadinessGeneration: () => number;
+    currentReadinessGeneration: () => number;
+    matchesReadinessGeneration: (gen?: number | null) => boolean;
     isVisible: () => boolean;
     hasPendingReveal: () => boolean;
     setPendingReveal: (reveal: (() => void) | null) => (() => void) | null;
@@ -80,6 +83,24 @@ describe("overlay controller", () => {
     expect(controller.nextInstance()).toBe(2);
     expect(controller.matchesInstance(1)).toBe(false);
     expect(controller.matchesInstance(2)).toBe(true);
+  });
+
+  it("owns readiness generation sequencing separately from popup instances", () => {
+    const controller = loadOverlayControllerScope().createOverlayController();
+
+    expect(controller.currentReadinessGeneration()).toBe(0);
+    expect(controller.matchesReadinessGeneration(undefined)).toBe(true);
+    expect(controller.matchesReadinessGeneration(null)).toBe(true);
+
+    expect(controller.nextReadinessGeneration()).toBe(1);
+    expect(controller.currentReadinessGeneration()).toBe(1);
+    expect(controller.currentInstance()).toBe(0);
+    expect(controller.matchesReadinessGeneration(1)).toBe(true);
+    expect(controller.matchesReadinessGeneration(0)).toBe(false);
+
+    expect(controller.nextReadinessGeneration()).toBe(2);
+    expect(controller.matchesReadinessGeneration(1)).toBe(false);
+    expect(controller.matchesReadinessGeneration(2)).toBe(true);
   });
 
   it("delegates overlay operations through the adapter boundary", () => {
@@ -194,12 +215,14 @@ describe("overlay controller", () => {
     const controller = loadOverlayControllerScope().createOverlayController();
 
     controller.nextInstance();
+    controller.nextReadinessGeneration();
     controller.resetViewState("actions", { root: true });
     controller.setPendingReveal(() => {});
     controller.beginExplicitReveal("actions");
 
     expect(controller.getDebugState()).toMatchObject({
       popupInstance: 1,
+      readinessGeneration: 1,
       pendingReveal: true,
       explicitRevealToken: 1,
       explicitRevealView: "actions",

@@ -144,7 +144,7 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       if (!(await dispatchDrained(drained, generation))) return;
       if (generation !== undefined && !isCurrentWarmGeneration(generation)) return;
       state = { mode: "live" };
-      void reply;
+      if (drained.length === 0 && reply?.armRevealTimer) options.armBridgeRevealTimer();
     },
     forceReady(data) {
       const buffered = forceBuffered(data);

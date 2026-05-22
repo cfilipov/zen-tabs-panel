@@ -974,9 +974,10 @@
     suppressViewTransition = false;
   }
 
-  async function handleWarmRearm(data: { inst?: number; view?: ViewId; params?: Record<string, unknown>; skipAnimations?: boolean }) {
+  async function handleWarmRearm(data: { inst?: number; readyGen?: number; view?: ViewId; params?: Record<string, unknown>; skipAnimations?: boolean }) {
     const generation = bridgeDispatch.resetForWarmRearm();
     revealController.updateInst(data.inst);
+    revealController.updateReadyGen(data.readyGen);
     skipAnimations = !!data.skipAnimations;
     suppressViewTransition = true;
     paletteRevealed = false;
