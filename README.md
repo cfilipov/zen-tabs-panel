@@ -1,10 +1,10 @@
 # ErgoZen
 
-A command palette for [Zen Browser](https://zen-browser.app/). Discoverable chord shortcuts for tabs, workspaces, splits, and more — drive it from the keyboard or the mouse.
+A command palette for [Zen Browser](https://zen-browser.app/). Discoverable chord shortcuts for tabs, workspaces, splits, and more - drive it from the keyboard or the mouse.
 
 Formerly **Zen Tabs Panel**.
 
-ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more — far more than Zen exposes by default. Everything starts with one leader chord (`⌘.` on macOS, `⌃.` on Windows/Linux), followed by a short sequence of keys. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. The same sequence works whether you see the menu or not: type it quickly and the action fires immediately; pause, and the menu pops up showing every available next key. Common actions become muscle memory while less-used ones stay easy to discover. The palette is keyboard-first but fully mouse-friendly.
+ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more - far more than Zen exposes by default. Everything starts with one leader chord (`⌘.` on macOS, `⌃.` on Windows/Linux), followed by a short sequence of keys. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. The same sequence works whether you see the menu or not: type it quickly and the action fires immediately; pause, and the menu pops up showing every available next key. Common actions become muscle memory while less-used ones stay easy to discover. The palette is keyboard-first but fully mouse-friendly.
 
 <p align="center">
   <img src="screenshot@2x.png?v=dark" alt="Main menu" width="900">
@@ -82,42 +82,42 @@ This means two `about:config` flags must be enabled to install it.
 
 **Command palette** (`⌘.` / `⌘⌥.` on macOS, `⌃.` on Windows/Linux, or toolbar icon) - a Zen-styled floating panel with:
 
-- Navigate section - directional actions for Previous, Parent, Above, and Below on the first page, with Back and Forward on the second page. Rows that target a tab show a live preview with the target favicon/title; hovering or arrow-keying highlights and scrolls to the target in the sidebar.
-- Child tabs - list all tabs spawned from the current tab
-- Sibling tabs - list all tabs that share the same parent as the current tab
-- Parent tabs - list tabs that have spawned children, with child counts and drill-down into each parent's children
-- Tab history - back/forward history of the current tab with B/F shortcuts for immediate back/forward
-- New tabs - list tabs opened in the background you haven't looked at
-- Newest/oldest unvisited - jump directly to the newest or oldest background tab you have not visited yet
-- Tabs by last visited - all tabs sorted by recency. Hovering or arrow-keying through any tab list highlights and scrolls to the tab in the sidebar.
-- Tab info - detailed view of the current tab: age, memory/CPU usage, visit history (grouped by date, collapsible), and duplicate tab detection with close buttons
-- Duplicates - view all duplicate tabs across all workspaces, grouped by URL, with workspace indicators, tab age, hover preview, and close buttons. Duplicate tabs are marked with an amber "D" badge in the sidebar; unvisited tabs use a matching blue "N" badge.
-- Duplicate tab prompt - optionally intercepts attempts to open a URL that is already open elsewhere, with choices to switch to the existing tab, open anyway, open and close the other duplicate tabs, or cancel. The switch option previews and scrolls to the existing tab.
-- Domains - browse tabs grouped by domain with drill-down
-- Tabs by age - list all tabs by age with age badges and close buttons for cleaning up old tabs
-- Most visited - list tabs sorted by browser history visit count, most visited first
-- Move to workspace - move tabs to another workspace without switching away (placed at top of target workspace's tab list). Supports multiselected tabs (⌘-click).
-- Move to folder - move the current tab to a Zen folder
-- New container tab - reopen the active tab in a Firefox container
-- Move tab to start / end of tab bar
-- Reorder tabs - submenu with sort options: by recent, by domain (alphabetical or popularity), by age, most visited, inactive at bottom, group duplicates
-- Scroll to current tab - scroll the sidebar to center the active tab
-- Unload tab - discard from memory
-- Close & select - close the current tab and explicitly choose which tab to focus next: default (whatever `⌘W` would do, with the predicted successor previewed live), previous (last-active), parent, next/previous sibling, next/previous tab in the vertical bar, or newest/oldest unvisited tab. Each row shows the actual target tab's favicon and title; hover or arrow-key to highlight it in the sidebar; rows with no available target are disabled.
-- Pin/unpin tab — toggle pinned state of the active tab (refuses to act on Essentials)
-- Copy URL as Markdown — copies the active tab as `[Title](URL)` to the clipboard
-- Restore closed tab — reopens the most recently closed tab in this window via SessionStore
-- Next/Previous workspace — cycle through workspaces with wraparound
-- Workspace tools - submenu for changing the active workspace icon, changing its name, editing its theme, setting its container profile, creating/deleting spaces, and unloading one space or all other spaces
-- Workspace icon picker - searchable emoji, Zen built-in icon, and Lucide icon picker with keyboard navigation; selections persist across Zen restarts
-- Split — submenu for Zen's split view: New, Close, Horizontal (top/bottom panes), Vertical (side-by-side panes)
-- Extension popup hosting - extension toolbar popups can appear in ErgoZen's centered overlay, including badge indicators on the extension icons in the main menu
-- Profiles - list and launch Zen profiles from the palette
-- Page and browser tools - reload, hard reload, duplicate tab, reader mode, mute, fullscreen, picture-in-picture, page source/info, screenshots, downloads, add-ons, Firefox View, developer tools, browser toolbox, reset/replace pinned URLs, and add tabs to Essentials on page 2 of the palette
-- Repeat last chord - replay the most recent leaf action with `⌘.` then `.`
-- Settings
-- "Copy selected tab URLs" right click menu item when multiple tabs are selected
-- Top-level link right click menus to open a link directly in a workspace or Zen folder
+- **Navigate section** - directional actions for Previous, Parent, Above, and Below on the first page, with Back and Forward on the second page. Rows that target a tab show a live preview with the target favicon/title; hovering or arrow-keying highlights and scrolls to the target in the sidebar.
+- **Child tabs** - list all tabs spawned from the current tab
+- **Sibling tabs** - list all tabs that share the same parent as the current tab
+- **Parent tabs** - list tabs that have spawned children, with child counts and drill-down into each parent's children
+- **Tab history** - back/forward history of the current tab with B/F shortcuts for immediate back/forward
+- **New tabs** - list tabs opened in the background you haven't looked at
+- **Newest/oldest unvisited** - jump directly to the newest or oldest background tab you have not visited yet
+- **Tabs by last visited** - all tabs sorted by recency. Hovering or arrow-keying through any tab list highlights and scrolls to the tab in the sidebar.
+- **Tab info** - detailed view of the current tab: age, memory/CPU usage, visit history (grouped by date, collapsible), and duplicate tab detection with close buttons
+- **Duplicates** - view all duplicate tabs across all workspaces, grouped by URL, with workspace indicators, tab age, hover preview, and close buttons. Duplicate tabs are marked with an amber "D" badge in the sidebar; unvisited tabs use a matching blue "N" badge.
+- **Duplicate tab prompt** - optionally intercepts attempts to open a URL that is already open elsewhere, with choices to switch to the existing tab, open anyway, open and close the other duplicate tabs, or cancel. The switch option previews and scrolls to the existing tab.
+- **Domains** - browse tabs grouped by domain with drill-down
+- **Tabs by age** - list all tabs by age with age badges and close buttons for cleaning up old tabs
+- **Most visited** - list tabs sorted by browser history visit count, most visited first
+- **Move to workspace** - move tabs to another workspace without switching away (placed at top of target workspace's tab list). Supports multiselected tabs (⌘-click).
+- **Move to folder** - move the current tab to a Zen folder
+- **New container tab** - reopen the active tab in a Firefox container
+- **Move tab to start / end of tab bar**
+- **Reorder tabs** - submenu with sort options: by recent, by domain (alphabetical or popularity), by age, most visited, inactive at bottom, group duplicates
+- **Scroll to current tab** - scroll the sidebar to center the active tab
+- **Unload tab** - discard from memory
+- **Close & select** - close the current tab and explicitly choose which tab to focus next: default (whatever `⌘W` would do, with the predicted successor previewed live), previous (last-active), parent, next/previous sibling, next/previous tab in the vertical bar, or newest/oldest unvisited tab. Each row shows the actual target tab's favicon and title; hover or arrow-key to highlight it in the sidebar; rows with no available target are disabled.
+- **Pin/unpin tab** - toggle pinned state of the active tab (refuses to act on Essentials)
+- **Copy URL as Markdown** - copies the active tab as `[Title](URL)` to the clipboard
+- **Restore closed tab** - reopens the most recently closed tab in this window via SessionStore
+- **Next/Previous workspace** - cycle through workspaces with wraparound
+- **Workspace tools** - submenu for changing the active workspace icon, changing its name, editing its theme, setting its container profile, creating/deleting spaces, and unloading one space or all other spaces
+- **Workspace icon picker** - searchable emoji, Zen built-in icon, and Lucide icon picker with keyboard navigation; selections persist across Zen restarts
+- **Split** - submenu for Zen's split view: New, Close, Horizontal (top/bottom panes), Vertical (side-by-side panes)
+- **Extension popup hosting** - extension toolbar popups can appear in ErgoZen's centered overlay, including badge indicators on the extension icons in the main menu
+- **Profiles** - list and launch Zen profiles from the palette
+- **Page and browser tools** - reload, hard reload, duplicate tab, reader mode, mute, fullscreen, picture-in-picture, page source/info, screenshots, downloads, add-ons, Firefox View, developer tools, browser toolbox, reset/replace pinned URLs, and add tabs to Essentials on page 2 of the palette
+- **Repeat last chord** - replay the most recent leaf action with `⌘.` then `.`
+- **Settings**
+- **"Copy selected tab URLs" right click menu item** when multiple tabs are selected
+- **Top-level link right click menus** to open a link directly in a workspace or Zen folder
 
 **Cross-workspace tab switching** - Zen's workspace system isolates tabs at the API level. `browser.tabs.query()` only returns tabs in the current workspace, and `browser.tabs.update()` silently fails for tabs in other workspaces. Every other Firefox tab-switching extension is broken by this. ErgoZen uses a privileged Experiment API to access Zen's internal workspace APIs directly, making it the only extension that can reliably switch to any tab regardless of which workspace it's in.
 
