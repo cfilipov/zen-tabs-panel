@@ -546,6 +546,17 @@
     paletteStore.replaceListWindow(result.rows, result.total, result.selectedIndex);
   }
 
+  function closeTabRow(row: TabIndexRow) {
+    effects.closeTab(row.domId);
+    const result = removeTabFromRows({
+      rows: palette.rows,
+      total: palette.total,
+      selectedIndex: palette.selectedIndex,
+      domId: row.domId,
+    });
+    paletteStore.replaceListWindow(result.rows, result.total, result.selectedIndex);
+  }
+
   async function closeAllRowsInView() {
     if (!isNativeTabView(palette.currentView)) return;
     const domIds = palette.rows.filter(isTabRow).map((row) => row.domId);
@@ -1100,6 +1111,7 @@
     {activateTabInfoDuplicate}
     {closeDuplicateTab}
     {closeDuplicatePromptTab}
+    {closeTabRow}
     {previewTab}
     {closeTabInfoDuplicate}
     {closeOtherTabInfoDuplicates}

@@ -14,6 +14,7 @@
     activeWorkspaceId?: string | null;
     onactivate?: (index: number) => void;
     ondrillchildren?: (row: TabIndexRow) => void;
+    onclose?: (row: TabIndexRow) => void;
     onpreview?: (row: TabIndexRow) => void;
     onclearpreview?: () => void;
   };
@@ -28,6 +29,7 @@
     activeWorkspaceId = null,
     onactivate,
     ondrillchildren,
+    onclose,
     onpreview,
     onclearpreview,
   }: Props = $props();
@@ -47,6 +49,12 @@
       return;
     }
     onactivate?.(index);
+  }
+
+  function closeRow(event: MouseEvent | KeyboardEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    onclose?.(row);
   }
 </script>
 
@@ -101,7 +109,17 @@
     {/if}
     <span class="item-badge-stack">
       <Badge value={badge} />
-      <span class="item-close" title="Close tab">✕</span>
+      <span
+        role="button"
+        tabindex="-1"
+        class="item-close"
+        title="Close tab"
+        onkeydown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          closeRow(event);
+        }}
+        onclick={closeRow}
+      >✕</span>
     </span>
   </span>
 </button>

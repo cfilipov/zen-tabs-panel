@@ -49,6 +49,7 @@
     activateTabInfoDuplicate: (row: TabIndexRow, index: number) => void | Promise<void>;
     closeDuplicateTab: (row: TabIndexRow) => void;
     closeDuplicatePromptTab: (row: TabIndexRow) => void;
+    closeTabRow: (row: TabIndexRow) => void;
     previewTab: (row: TabIndexRow) => void;
     closeTabInfoDuplicate: (row: TabIndexRow) => void;
     closeOtherTabInfoDuplicates: () => void;
@@ -88,6 +89,7 @@
     activateTabInfoDuplicate,
     closeDuplicateTab,
     closeDuplicatePromptTab,
+    closeTabRow,
     previewTab,
     closeTabInfoDuplicate,
     closeOtherTabInfoDuplicates,
@@ -232,6 +234,7 @@
         {activeWorkspaceId}
         onactivate={activateRenderedRow}
         ondrillchildren={drillParentRow}
+        onclose={closeTabRow}
         onpreview={previewTab}
         onclearpreview={clearPreview}
         onrange={loadVisibleRange}
