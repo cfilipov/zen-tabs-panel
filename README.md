@@ -82,6 +82,7 @@ This means two `about:config` flags must be enabled to install it.
 
 **Command palette** (`⌘.` / `⌘⌥.` on macOS, `⌃.` on Windows/Linux, or toolbar icon) - a Zen-styled floating panel with:
 
+- **Tree-style tabs, no tree** - all the navigation benefits of tree-style tabs (parent, children, siblings) surfaced as palette menu items rather than a sidebar tree. Relationships persist across Zen restarts.
 - **Navigate section** - directional actions for Previous, Parent, Above, and Below on the first page, with Back and Forward on the second page. Rows that target a tab show a live preview with the target favicon/title; hovering or arrow-keying highlights and scrolls to the target in the sidebar.
 - **Child tabs** - list all tabs spawned from the current tab
 - **Sibling tabs** - list all tabs that share the same parent as the current tab
