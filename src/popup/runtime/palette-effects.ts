@@ -84,6 +84,9 @@ export function createPaletteEffects() {
     setActiveWorkspaceIcon(kind: "emoji" | "zen" | "lucide", value: string) {
       return sendMessage<{ success: boolean; error?: string }>({ type: "set-active-workspace-icon", kind, value });
     },
+    setActiveWorkspaceName(name: string) {
+      return sendMessage<boolean>({ type: "set-active-workspace-name", name });
+    },
     openExtensionPopupByIndex(index: number) {
       return sendMessage<boolean>({ type: "open-extension-popup-by-index", index });
     },

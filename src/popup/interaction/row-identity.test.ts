@@ -68,6 +68,10 @@ describe("stable row identity", () => {
       containerRows: [{ userContextId: 4 } as never],
     }), 0, "shortcut")).toBe("4");
     expect(stableRowIdForActivation(context({
+      view: "workspace-profiles",
+      containerRows: [{ userContextId: 0 } as never],
+    }), 0, "shortcut")).toBe("0");
+    expect(stableRowIdForActivation(context({
       view: "move-to-folder",
       folderRows: [{ id: "folder-1" } as never],
     }), 0, "shortcut")).toBe("folder-1");

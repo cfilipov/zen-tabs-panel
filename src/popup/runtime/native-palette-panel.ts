@@ -8,6 +8,8 @@ export function usesFitContentHeight(view: ViewId) {
     view === "move-to-workspace" ||
     view === "move-to-folder" ||
     view === "open-in-container" ||
+    view === "workspace-name" ||
+    view === "workspace-profiles" ||
     view === "profiles" ||
     view === "duplicate-prompt";
 }

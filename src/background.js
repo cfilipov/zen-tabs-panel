@@ -527,6 +527,11 @@ const ACTIONS = Object.freeze({
   [MSG.UNLOAD_TAB]:                       ()  => unloadActiveTab(),
   [MSG.GO_TO_NEXT_WORKSPACE]:             ()  => api.goToNextWorkspace(),
   [MSG.GO_TO_PREV_WORKSPACE]:             ()  => api.goToPrevWorkspace(),
+  [MSG.WORKSPACE_EDIT_THEME]:             (m) => api.runWorkspaceAction(m.type),
+  [MSG.WORKSPACE_CREATE]:                 (m) => api.runWorkspaceAction(m.type),
+  [MSG.WORKSPACE_DELETE]:                 (m) => api.runWorkspaceAction(m.type),
+  [MSG.WORKSPACE_UNLOAD]:                 (m) => api.runWorkspaceAction(m.type),
+  [MSG.WORKSPACE_UNLOAD_OTHER_SPACES]:    (m) => api.runWorkspaceAction(m.type),
   [MSG.TOGGLE_PIN_TAB]:                   ()  => api.togglePinTab(),
   [MSG.COPY_URL_MARKDOWN]:                ()  => api.copyCurrentUrlMarkdown(),
   [MSG.RESTORE_LAST_CLOSED_TAB]:          ()  => api.restoreLastClosedTab(),
@@ -616,6 +621,8 @@ const QUERIES = Object.freeze({
   [MSG.GET_WORKSPACES_VIEW_MODEL]:     ()  => api.getWorkspacesViewModel(),
   [MSG.GET_ZEN_WORKSPACE_ICONS]:       ()  => api.getZenWorkspaceIcons(),
   [MSG.SET_ACTIVE_WORKSPACE_ICON]:     (m) => api.setActiveWorkspaceIcon(m.kind || "", m.value || ""),
+  [MSG.GET_ACTIVE_WORKSPACE_NAME]:     ()  => api.getActiveWorkspaceName(),
+  [MSG.SET_ACTIVE_WORKSPACE_NAME]:     (m) => api.setActiveWorkspaceName(m.name || ""),
   [MSG.TAB_INDEX_ENSURE_STARTED]:      ()  => api.ensureIndexStarted(),
   [MSG.TAB_INDEX_GET_VERSION]:         ()  => api.getIndexVersion(),
   [MSG.TAB_INDEX_GET_SUMMARY]:         (m) => api.getViewSummary(m.view, JSON.stringify(m.params || {})),
@@ -632,6 +639,7 @@ const QUERIES = Object.freeze({
   [MSG.TAB_INDEX_GET_DUPLICATE_GROUPS_MODEL]: (m) => api.getDuplicateGroupsViewModel(m.workspaceFilter || "all"),
   [MSG.TAB_INDEX_GET_DUPLICATE_PROMPT_MODEL]: (m) => api.getDuplicatePromptViewModel(m.url || "", m.domId || null),
   [MSG.GET_CONTAINERS_VIEW_MODEL]:     ()  => api.getContainersViewModel(),
+  [MSG.GET_WORKSPACE_PROFILES_VIEW_MODEL]: () => api.getWorkspaceProfilesViewModel(),
   [MSG.GET_FOLDERS_VIEW_MODEL]:        ()  => api.getFoldersViewModel(),
   [MSG.CHECK_COMPANION_MOD]:           ()  => api.getCompanionMods(),
   [MSG.INSTALL_COMPANION_MOD]:         (m) => api.installCompanionMod(m.modId),
@@ -687,7 +695,6 @@ const SYNC_HANDLERS = Object.freeze({
     if (result && typeof result === "object" && result.kind === "open-view") {
       return result;
     }
-    await api.hidePalette();
     return result;
   },
   [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view, m.height, m.dynamicSidebarWidth, m.inst),

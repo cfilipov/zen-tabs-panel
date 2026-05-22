@@ -894,6 +894,38 @@
         "parameters": []
       },
       {
+        "name": "getWorkspaceProfilesViewModel",
+        "type": "function",
+        "async": true,
+        "description": "Get the chrome-owned workspace profile picker view model",
+        "parameters": []
+      },
+      {
+        "name": "getActiveWorkspaceName",
+        "type": "function",
+        "async": true,
+        "description": "Get the active Zen workspace name",
+        "parameters": []
+      },
+      {
+        "name": "setActiveWorkspaceName",
+        "type": "function",
+        "async": true,
+        "description": "Set the active Zen workspace name",
+        "parameters": [
+          { "name": "name", "type": "string" }
+        ]
+      },
+      {
+        "name": "runWorkspaceAction",
+        "type": "function",
+        "async": true,
+        "description": "Run a Zen workspace action for the active workspace",
+        "parameters": [
+          { "name": "actionId", "type": "string" }
+        ]
+      },
+      {
         "name": "reopenInContainer",
         "type": "function",
         "async": true,

@@ -36,13 +36,17 @@ export type NativePaletteLoaderDeps = {
     getWorkspacesWithIcons(): Promise<WorkspaceRow[]>;
     getWorkspacesViewModel(): Promise<WorkspacesViewModel>;
     getZenWorkspaceIcons(): Promise<ZenWorkspaceIconRow[]>;
+    getActiveWorkspaceName(): Promise<{ name: string }>;
   };
   extensionClient: { listExtensions(): Promise<ExtensionRow[]> };
   historyClient: {
     getNavigationHistory(): Promise<NavigationHistory | null>;
     getRecentlyClosed(): Promise<RecentlyClosedRow[]>;
   };
-  containerClient: { getContainersViewModel(): Promise<ContainersViewModel> };
+  containerClient: {
+    getContainersViewModel(): Promise<ContainersViewModel>;
+    getWorkspaceProfilesViewModel(): Promise<ContainersViewModel>;
+  };
   folderClient: { getFoldersViewModel(): Promise<FoldersViewModel> };
   profileClient: { getProfilesViewModel(): Promise<ProfilesViewModel> };
   tabInfoClient: {
@@ -157,6 +161,16 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
     });
   }
 
+  async function loadWorkspaceProfiles() {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "workspace-profiles",
+      load: () => deps.containerClient.getWorkspaceProfilesViewModel(),
+      commit: paletteStore.commitOpenInContainer,
+      fail: paletteStore.failOpenInContainer,
+    });
+  }
+
   async function loadMoveToFolder() {
     await runViewLoad({
       controller: viewLoad,
@@ -190,6 +204,16 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
       },
       commit: paletteStore.commitWorkspaceIcons,
       fail: paletteStore.failWorkspaceIcons,
+    });
+  }
+
+  async function loadWorkspaceName() {
+    await runViewLoad({
+      controller: viewLoad,
+      view: "workspace-name",
+      load: () => deps.workspaceClient.getActiveWorkspaceName(),
+      commit: paletteStore.commitWorkspaceName,
+      fail: paletteStore.failWorkspaceName,
     });
   }
 
@@ -241,8 +265,10 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
     "recently-closed": loadRecentlyClosed,
     "move-to-workspace": loadMoveToWorkspace,
     "open-in-container": loadOpenInContainer,
+    "workspace-profiles": loadWorkspaceProfiles,
     "move-to-folder": loadMoveToFolder,
     profiles: loadProfiles,
+    "workspace-name": loadWorkspaceName,
     "workspace-icons": loadWorkspaceIcons,
     duplicates: loadDuplicates,
     "tab-info": loadTabInfo,

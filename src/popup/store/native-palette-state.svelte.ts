@@ -32,6 +32,7 @@ export type NativePaletteState = {
   profileRows: ProfileRow[];
   workspaceIconWorkspaces: WorkspaceRow[];
   zenWorkspaceIcons: ZenWorkspaceIconRow[];
+  workspaceName: string;
   duplicateGroups: DuplicateGroupRow[];
   duplicateWorkspaces: WorkspaceRow[];
   tabInfo: TabInfo | null;
@@ -73,6 +74,7 @@ function defaultNativePaletteState(): NativePaletteState {
     profileRows: [],
     workspaceIconWorkspaces: [],
     zenWorkspaceIcons: [],
+    workspaceName: "",
     duplicateGroups: [],
     duplicateWorkspaces: [],
     tabInfo: null,
@@ -151,6 +153,7 @@ export function createNativePaletteState() {
     state.profileRows = [];
     state.workspaceIconWorkspaces = [];
     state.zenWorkspaceIcons = [];
+    state.workspaceName = "";
     state.duplicateGroups = [];
     state.duplicateWorkspaces = [];
     state.tabInfo = null;
@@ -311,6 +314,17 @@ export function createNativePaletteState() {
     state.error = message;
   }
 
+  function commitWorkspaceName(result: { name: string }) {
+    state.workspaceName = result.name || "";
+    state.selectedIndex = -1;
+  }
+
+  function failWorkspaceName(message: string) {
+    state.workspaceName = "";
+    state.selectedIndex = -1;
+    state.error = message;
+  }
+
   function commitDuplicates(result: {
     groups: DuplicateGroupRow[];
     workspaces: WorkspaceRow[];
@@ -422,6 +436,8 @@ export function createNativePaletteState() {
     failProfiles,
     commitWorkspaceIcons,
     failWorkspaceIcons,
+    commitWorkspaceName,
+    failWorkspaceName,
     commitDuplicates,
     failDuplicates,
     replaceDuplicateGroups,

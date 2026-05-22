@@ -13,7 +13,7 @@ const nativeTabViews = [
 ] as const satisfies readonly ViewId[];
 
 const nativeDomainViews = ["domains"] as const satisfies readonly ViewId[];
-const prefixViewIds = ["reorder-tabs", "close-and-select", "split-view"] as const satisfies readonly NavigationViewId[];
+const prefixViewIds = ["reorder-tabs", "close-and-select", "split-view", "workspace-actions"] as const satisfies readonly NavigationViewId[];
 
 export type NativeTabView = (typeof nativeTabViews)[number];
 export type NativeDomainView = (typeof nativeDomainViews)[number];
@@ -53,6 +53,7 @@ const chromeModelIntentViewIds = [
   "open-in-container",
   "move-to-folder",
   "profiles",
+  "workspace-profiles",
 ] as const satisfies readonly ViewId[];
 
 const chromeModelIntentViews = new Set<ViewId>(chromeModelIntentViewIds);
@@ -64,6 +65,8 @@ export const VIEW_LOADERS = {
   "open-in-container": "open-in-container",
   "move-to-folder": "move-to-folder",
   profiles: "profiles",
+  "workspace-name": "workspace-name",
+  "workspace-profiles": "workspace-profiles",
   "workspace-icons": "workspace-icons",
   duplicates: "duplicates",
   "tab-info": "tab-info",
@@ -86,6 +89,9 @@ const CONCRETE_VIEW_TITLES: Partial<Record<ViewId, string>> = {
   "open-in-container": "New container tab",
   "move-to-folder": "Move to folder",
   profiles: "Profiles",
+  "workspace-actions": "Workspace",
+  "workspace-name": "Change name",
+  "workspace-profiles": "Set profile",
   "workspace-icons": "Workspace icon",
 };
 

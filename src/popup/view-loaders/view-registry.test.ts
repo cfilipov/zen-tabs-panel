@@ -16,12 +16,14 @@ describe("view registry", () => {
     expect(isNativeTabView("domains")).toBe(false);
     expect(isNativeTabView("last-visited")).toBe(true);
     expect(isNativePrefixView("reorder-tabs")).toBe(true);
+    expect(isNativePrefixView("workspace-actions")).toBe(true);
     expect(LIST_VIEW_TITLES["last-visited"]).toBe("Recent");
   });
 
   it("centralizes chrome-owned intent view classification", () => {
     expect(isChromeModelIntentView("last-visited")).toBe(true);
     expect(isChromeModelIntentView("move-to-workspace")).toBe(true);
+    expect(isChromeModelIntentView("workspace-profiles")).toBe(true);
     expect(isChromeModelIntentView("duplicate-prompt")).toBe(false);
     expect(isChromeModelIntentView("actions")).toBe(false);
   });
@@ -40,6 +42,8 @@ describe("view registry", () => {
   it("plans actions, prefixes, concrete loaders, and unsupported foreign popups", () => {
     expect(resolveViewOpenPlan("actions")).toEqual({ kind: "actions" });
     expect(resolveViewOpenPlan("split-view")).toEqual({ kind: "prefix", view: "split-view" });
+    expect(resolveViewOpenPlan("workspace-name")).toEqual({ kind: "loader", view: "workspace-name", loader: "workspace-name" });
+    expect(resolveViewOpenPlan("workspace-profiles")).toEqual({ kind: "loader", view: "workspace-profiles", loader: "workspace-profiles" });
     expect(resolveViewOpenPlan("tab-info")).toEqual({ kind: "loader", view: "tab-info", loader: "tab-info" });
     expect(resolveViewOpenPlan("extension-popup")).toEqual({ kind: "unsupported", view: "extension-popup" });
   });

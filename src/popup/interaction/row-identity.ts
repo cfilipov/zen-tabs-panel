@@ -73,7 +73,7 @@ export function stableRowIdForActivation(
     return context.workspaceRows[index]?.uuid ?? null;
   }
 
-  if (context.view === "open-in-container") {
+  if (context.view === "open-in-container" || context.view === "workspace-profiles") {
     const userContextId = context.containerRows[index]?.userContextId;
     return userContextId == null ? null : String(userContextId);
   }

@@ -15,7 +15,7 @@ export const ACTION_SECTIONS = [
   { id: "navigate", label: "Navigate", page: 2, navigateGrid: true, actionIds: ["go-back-in-tab", "go-forward-in-tab", "unvisited-newest", "unvisited-oldest"] },
   { id: "this-page", label: "This page", page: 2, column: true, actionIds: ["reload-tab", "reload-skip-cache", "duplicate-tab", "toggle-reader-mode", "toggle-mute", "toggle-fullscreen", "toggle-pip"] },
   { id: "tab", label: "Tab", page: 2, column: true, actionIds: ["reset-pinned-tab", "replace-pinned-url", "add-to-essentials", "open-in-container"] },
-  { id: "profiles", label: "Profiles", page: 2, column: true, stack: true, actionIds: ["profiles", "workspace-icons"] },
+  { id: "profiles", label: "Profiles", page: 2, column: true, stack: true, actionIds: ["profiles", "workspace-actions"] },
   { id: "developer", label: "Developer", page: 2, column: true, actionIds: ["toggle-devtools", "toggle-browser-toolbox"] },
   { id: "browser", label: "Browser", page: 2, column: true, stack: true, actionIds: ["open-downloads", "open-addons", "open-firefox-view"] },
   { id: "page-tools", label: "Page tools", page: 2, column: true, actionIds: ["view-page-source", "view-page-info", "take-screenshot", "copy-url", "copy-url-markdown"] },

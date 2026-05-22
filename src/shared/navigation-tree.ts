@@ -106,7 +106,27 @@ export const NAVIGATION_TREE = [
   // for switching/launching. Previously inlined as a column on page 2;
   // moved to its own view so the actions menu stays compact.
   { id: "profiles",           kind: "open-view", chord: "'", view: "profiles", label: "Profiles", icon: "svg:user", page: 2 },
-  { id: "workspace-icons",    kind: "open-view", chord: "Shift+K", view: "workspace-icons", label: "Workspace icon", icon: "svg:palette", page: 2 },
+
+  // Workspace submenu
+  {
+    id: "workspace-actions",
+    kind: "prefix",
+    chord: "Shift+K",
+    view: "workspace-actions",
+    label: "Workspace",
+    icon: "svg:columns",
+    page: 2,
+    children: [
+      { id: "workspace-icons",               kind: "open-view", chord: "I",       view: "workspace-icons",    label: "Change icon",             icon: "svg:palette" },
+      { id: "workspace-name",                kind: "open-view", chord: "N",       view: "workspace-name",     label: "Change name",             icon: "svg:user" },
+      { id: "workspace-edit-theme",          kind: "action",    chord: "T",       label: "Edit theme",              icon: "svg:palette" },
+      { id: "workspace-set-profile",         kind: "open-view", chord: "P",       view: "workspace-profiles", label: "Set profile",             icon: "svg:layers" },
+      { id: "workspace-create",              kind: "action",    chord: "C",       label: "Create space",            icon: "svg:plus" },
+      { id: "workspace-delete",              kind: "action",    chord: "D",       label: "Delete space",            icon: "svg:x-circle" },
+      { id: "workspace-unload",              kind: "action",    chord: "U",       label: "Unload space",            icon: "svg:moon" },
+      { id: "workspace-unload-other-spaces", kind: "action",    chord: "Shift+U", label: "Unload all other spaces", icon: "svg:moon" },
+    ],
+  },
 
   // Page 2 — Repeat the most recent chord-action. Chord is "." after
   // the leader, so cmd+.,. fires whatever cmd+.,X you did last —
@@ -200,6 +220,9 @@ const ALL_VIEW_IDS = [
   "open-in-container",
   "profiles",
   "workspace-icons",
+  "workspace-actions",
+  "workspace-name",
+  "workspace-profiles",
   "move-to-folder",
   "reorder-tabs",
   "split-view",

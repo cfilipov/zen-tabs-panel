@@ -490,6 +490,18 @@
     }
   }
 
+  async function setActiveWorkspaceName(name: string) {
+    markTerminalCommandDispatched();
+    revealController.clear();
+    const result = await effects.setActiveWorkspaceName(name);
+    if (result) {
+      effects.hidePalette();
+    } else {
+      clearTerminalCommandDispatched();
+      paletteStore.setError("Could not rename workspace");
+    }
+  }
+
   function closeDuplicateTab(row: TabIndexRow) {
     effects.closeTab(row.domId);
     const groups = removeTabFromDuplicateGroups(palette.duplicateGroups, row.domId);
@@ -1093,6 +1105,7 @@
     {closeOtherTabInfoDuplicates}
     {runDuplicatePromptAction}
     {setActiveWorkspaceIcon}
+    {setActiveWorkspaceName}
     {drillParentRow}
     {loadVisibleRange}
     {tabSubtitle}

@@ -19,6 +19,9 @@ export type ViewId =
   | "open-in-container"
   | "profiles"
   | "workspace-icons"
+  | "workspace-actions"
+  | "workspace-name"
+  | "workspace-profiles"
   | "move-to-folder"
   | "reorder-tabs"
   | "split-view"
@@ -66,11 +69,13 @@ export type OpenViewNode = NavBase & {
   viewCapabilities?: readonly ViewCapabilityId[];
 };
 
+export type PrefixChildNode = ActionNode | OpenViewNode;
+
 export type PrefixNode = NavBase & {
   kind: "prefix";
   view: ViewId;
   viewCapabilities?: readonly ViewCapabilityId[];
-  children: readonly ActionNode[];
+  children: readonly PrefixChildNode[];
 };
 
 export type NavNode = ActionNode | OpenViewNode | PrefixNode;

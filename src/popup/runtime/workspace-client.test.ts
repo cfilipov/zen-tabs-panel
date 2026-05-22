@@ -37,4 +37,20 @@ describe("workspace client", () => {
 
     expect(sent).toEqual([{ type: "set-active-workspace-icon", kind: "lucide", value: "briefcase" }]);
   });
+
+  it("gets and sets the active workspace name", async () => {
+    const sent: unknown[] = [];
+    const client = createWorkspaceClient(async <T>(message: unknown) => {
+      sent.push(message);
+      return { name: "Main" } as T;
+    });
+
+    await client.getActiveWorkspaceName();
+    await client.setActiveWorkspaceName("Focus");
+
+    expect(sent).toEqual([
+      { type: "get-active-workspace-name" },
+      { type: "set-active-workspace-name", name: "Focus" },
+    ]);
+  });
 });

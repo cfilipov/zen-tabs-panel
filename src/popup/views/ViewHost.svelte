@@ -13,6 +13,7 @@
   import TabInfoView from "./TabInfoView.svelte";
   import TabList from "./TabList.svelte";
   import WorkspaceIconPicker from "./WorkspaceIconPicker.svelte";
+  import WorkspaceNameEditor from "./WorkspaceNameEditor.svelte";
   import WorkspaceList from "./WorkspaceList.svelte";
   import type { ActionMenuItem, ActionSection } from "./actions-model";
   import type { DuplicatePromptAction } from "../interaction/duplicate-prompt-options";
@@ -53,6 +54,7 @@
     closeOtherTabInfoDuplicates: () => void;
     runDuplicatePromptAction: (action: DuplicatePromptAction) => void;
     setActiveWorkspaceIcon: (kind: "emoji" | "zen" | "lucide", value: string) => void | Promise<void>;
+    setActiveWorkspaceName: (name: string) => void | Promise<void>;
     drillParentRow: (row: TabIndexRow) => void | Promise<void>;
     loadVisibleRange: (offset: number, limit: number) => void;
     tabSubtitle: (row: TabIndexRow) => string | null;
@@ -90,6 +92,7 @@
     closeOtherTabInfoDuplicates,
     runDuplicatePromptAction,
     setActiveWorkspaceIcon,
+    setActiveWorkspaceName,
     drillParentRow,
     loadVisibleRange,
     tabSubtitle,
@@ -101,10 +104,11 @@
     if (palette.currentView === "navigation") return (palette.navigationHistory?.entries.length ?? 0) > 0;
     if (palette.currentView === "recently-closed") return palette.recentlyClosedRows.length > 0;
     if (palette.currentView === "move-to-workspace") return palette.workspaceRows.length > 0;
-    if (palette.currentView === "open-in-container") return palette.containerRows.length > 0;
+    if (palette.currentView === "open-in-container" || palette.currentView === "workspace-profiles") return palette.containerRows.length > 0;
     if (palette.currentView === "move-to-folder") return palette.folderRows.length > 0;
     if (palette.currentView === "profiles") return palette.profileRows.length > 0;
     if (palette.currentView === "workspace-icons") return palette.workspaceIconWorkspaces.length > 0;
+    if (palette.currentView === "workspace-name") return !loading;
     if (palette.currentView === "duplicates") return palette.duplicateGroups.length > 0;
     if (palette.currentView === "tab-info") return !!tabInfo;
     if (palette.currentView === "duplicate-prompt") return !!palette.duplicatePromptUrl;
@@ -151,7 +155,7 @@
         selectedIndex={palette.selectedIndex}
         onactivate={activateRenderedRow}
       />
-    {:else if palette.currentView === "open-in-container"}
+    {:else if palette.currentView === "open-in-container" || palette.currentView === "workspace-profiles"}
       <ContainerList
         rows={palette.containerRows}
         selectedIndex={palette.selectedIndex}
@@ -176,6 +180,8 @@
         zenIcons={palette.zenWorkspaceIcons}
         onselect={setActiveWorkspaceIcon}
       />
+    {:else if palette.currentView === "workspace-name"}
+      <WorkspaceNameEditor name={palette.workspaceName} onsave={setActiveWorkspaceName} />
     {:else if palette.currentView === "duplicates"}
       <DuplicateGroups
         groups={palette.duplicateGroups}

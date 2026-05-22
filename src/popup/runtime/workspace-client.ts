@@ -18,6 +18,10 @@ export type ZenWorkspaceIconRow = {
   svgContent: string;
 };
 
+export type ActiveWorkspaceName = {
+  name: string;
+};
+
 export type WorkspacesViewModel = {
   version: number;
   view: "move-to-workspace";
@@ -52,6 +56,12 @@ export function createWorkspaceClient(send: Send = sendMessage) {
     },
     setActiveWorkspaceIcon(kind: "emoji" | "zen" | "lucide", value: string) {
       return send<{ success: boolean; error?: string }>({ type: "set-active-workspace-icon", kind, value });
+    },
+    getActiveWorkspaceName() {
+      return send<ActiveWorkspaceName>({ type: "get-active-workspace-name" });
+    },
+    setActiveWorkspaceName(name: string) {
+      return send<boolean>({ type: "set-active-workspace-name", name });
     },
   };
 }

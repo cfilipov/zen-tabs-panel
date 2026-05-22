@@ -40,6 +40,7 @@ describe("selection transitions", () => {
     expect(selectionLength(context({ view: "reorder-tabs", isPrefixView: true, prefixCount: 5 }))).toBe(5);
     expect(selectionLength(context({ view: "navigation", navigationCount: 2 }))).toBe(2);
     expect(selectionLength(context({ view: "move-to-folder", folderCount: 9 }))).toBe(9);
+    expect(selectionLength(context({ view: "workspace-profiles", containerCount: 5 }))).toBe(5);
     expect(selectionLength(context({ view: "last-visited", rowCount: 80 }))).toBe(80);
     expect(selectionLength(context({ view: "duplicates", duplicateTabCount: 3 }))).toBe(3);
     expect(selectionLength(context({ view: "duplicate-prompt", duplicatePromptCount: 6 }))).toBe(6);

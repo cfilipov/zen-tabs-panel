@@ -1024,6 +1024,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "split-view":         { width: 360, height: 604 },
       "open-in-container":  { width: 320, height: 604 },
       "profiles":           { width: 360, height: 604 },
+      "workspace-actions":  { width: 360, height: 604 },
+      "workspace-name":     { width: 420, height: 604 },
+      "workspace-profiles": { width: 320, height: 604 },
       "workspace-icons":    { width: 600, height: 604 },
       "duplicate-prompt":   { width: 420, height: 604 },
       "extension-popup":    { width: 360, height: 500 },
@@ -1037,6 +1040,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "split-view",
       "open-in-container",
       "profiles",
+      "workspace-actions",
+      "workspace-name",
+      "workspace-profiles",
       "duplicate-prompt",
     ]);
 
@@ -3675,6 +3681,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "open-in-container",
       "move-to-folder",
       "profiles",
+      "workspace-profiles",
     ]);
 
     const CHROME_OWNED_HISTORY_BRIDGE_VIEWS = new Set([
@@ -3854,7 +3861,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         : { kind: "binding", node: prefixChildBindingForChord(view, replayChordKey) };
     }
 
-    function activateVisibleActionIntent(view, expectedRowId, replayChordKey) {
+    function activateVisibleActionIntent(view, expectedRowId, replayChordKey, destroyBeforeAction) {
       const resolved = visibleActionBinding(view, expectedRowId, replayChordKey);
       if (!resolved) return null;
 
@@ -3863,6 +3870,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         const index = rows.findIndex((row) => row && row.uuid === resolved.workspaceId);
         if (index < 0 || rows[index].isActive) return false;
         chordSession.recordTerminalAction({ type: "switch-workspace", index });
+        if (destroyBeforeAction) overlayController.destroy();
         void switchWorkspaceByIndexInternal(index);
         return true;
       }
@@ -3873,8 +3881,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (chordSession.hasCurrentOpenViewReplay() && replayChordKey) {
           trackChordBridgeKey({ key: replayChordKey });
         }
+        if (destroyBeforeAction) overlayController.destroy();
         if (paletteRequestFire) {
-          paletteRequestFire.async({ kind: "chord-action", actionId: node.id });
+          const fire = () => paletteRequestFire.async({ kind: "chord-action", actionId: node.id });
+          if (destroyBeforeAction && node.id === "workspace-edit-theme") {
+            const w = getWin();
+            if (w?.setTimeout) w.setTimeout(fire, 120);
+            else fire();
+          } else {
+            fire();
+          }
         }
         return true;
       }
@@ -3916,7 +3932,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         : (currentViewParams() || {});
       try {
         if (view === "actions" || prefixBindingForView(view)) {
-          const result = activateVisibleActionIntent(view, expectedRowId, replayChordKey);
+          const result = activateVisibleActionIntent(view, expectedRowId, replayChordKey, destroy);
           if (result !== null) return result;
         }
         if (view === "domains") {
@@ -3950,6 +3966,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
           void (async () => {
             if (destroy) overlayController.destroy();
             await reopenInContainerInternal(row.userContextId);
+          })();
+          return true;
+        }
+        if (view === "workspace-profiles") {
+          const rows = getWorkspaceProfileRows();
+          const row = rows[rowIndex];
+          if (!row) return false;
+          const userContextId = Number(row.userContextId) || 0;
+          if (expectedRowId && String(userContextId) !== expectedRowId) return false;
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
+          void (async () => {
+            if (destroy) overlayController.destroy();
+            await setActiveWorkspaceProfileInternal(userContextId);
           })();
           return true;
         }
@@ -5338,12 +5367,179 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return Array.from(rows || []).map((row) => ({
           cookieStoreId: row.cookieStoreId || `firefox-container-${row.userContextId || 0}`,
           userContextId: Number(row.userContextId) || 0,
-          name: row.name || "",
-          colorCode: row.colorCode || row.color || "currentColor",
-          iconUrl: row.iconUrl || row.icon || "",
+          name: containerLabel(ContextualIdentityService, row),
+          colorCode: containerColor(row),
+          iconUrl: containerIconUrl(row),
+          iconName: row.icon || "",
         }));
       } catch (e) {
         return [];
+      }
+    }
+
+    function containerLabel(contextualIdentityService, row) {
+      const id = Number(row?.userContextId) || 0;
+      if (row?.name) return row.name;
+      try {
+        if (typeof contextualIdentityService?.getUserContextLabel === "function") {
+          const label = contextualIdentityService.getUserContextLabel(id);
+          if (label) return label;
+        }
+      } catch (e) {}
+      const defaults = {
+        1: "Personal",
+        2: "Work",
+        3: "Banking",
+        4: "Shopping",
+      };
+      return defaults[id] || "";
+    }
+
+    function containerColor(row) {
+      return row?.colorCode || row?.color || "currentColor";
+    }
+
+    function containerIconUrl(row) {
+      if (row?.iconUrl) return row.iconUrl;
+      if (row?.icon) return `resource://usercontext-content/${row.icon}.svg`;
+      return "";
+    }
+
+    function getWorkspaceProfileRows() {
+      return [
+        {
+          cookieStoreId: "firefox-default",
+          userContextId: 0,
+          name: "No Container",
+          colorCode: "currentColor",
+          iconUrl: "",
+        },
+        ...getContainerRows(),
+      ];
+    }
+
+    function getActiveWorkspace() {
+      const w = getWin();
+      if (!w?.gZenWorkspaces?.activeWorkspace || !w.gZenWorkspaces.getWorkspaceFromId) return null;
+      try {
+        return w.gZenWorkspaces.getWorkspaceFromId(w.gZenWorkspaces.activeWorkspace);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function getActiveWorkspaceId() {
+      const w = getWin();
+      return w?.gZenWorkspaces?.activeWorkspace || "";
+    }
+
+    async function setActiveWorkspaceProfileInternal(userContextId) {
+      const w = getWin();
+      const workspace = getActiveWorkspace();
+      if (!w?.gZenWorkspaces?.saveWorkspace || !workspace) return false;
+      workspace.containerTabId = Number(userContextId) || 0;
+      await w.gZenWorkspaces.saveWorkspace(workspace);
+      return true;
+    }
+
+    function runZenCommand(commandId) {
+      const w = getWin();
+      const command = w?.document?.getElementById(commandId);
+      if (!command) return false;
+      try {
+        if (typeof command.doCommand === "function") command.doCommand();
+        else if (typeof command.click === "function") command.click();
+        else return false;
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function getActiveWorkspaceNameInternal() {
+      const workspace = getActiveWorkspace();
+      return { name: workspace?.name || "" };
+    }
+
+    async function setActiveWorkspaceNameInternal(name) {
+      const w = getWin();
+      const workspace = getActiveWorkspace();
+      if (!w?.gZenWorkspaces?.saveWorkspace || !workspace) return false;
+      const nextName = String(name || "").trim();
+      if (!nextName || nextName === workspace.name) return false;
+      workspace.name = nextName;
+      await w.gZenWorkspaces.saveWorkspace(workspace);
+      return true;
+    }
+
+    async function confirmDeleteActiveWorkspace() {
+      const w = getWin();
+      const workspace = getActiveWorkspace();
+      if (!w || !workspace) return false;
+      try {
+        const [title, body] = await w.document.l10n.formatValues([
+          { id: "zen-workspaces-delete-workspace-title" },
+          {
+            id: "zen-workspaces-delete-workspace-body",
+            args: { name: workspace.name || "Space" },
+          },
+        ]);
+        return Services.prompt.confirm(null, title, body);
+      } catch (e) {
+        return Services.prompt.confirm(null, "Delete Workspace", `Delete ${workspace.name || "this workspace"}?`);
+      }
+    }
+
+    async function deleteActiveWorkspaceInternal() {
+      const w = getWin();
+      const workspaceId = getActiveWorkspaceId();
+      if (!w?.gZenWorkspaces?.removeWorkspace || !workspaceId) return false;
+      if (!(await confirmDeleteActiveWorkspace())) return false;
+      w.gZenWorkspaces.removeWorkspace(workspaceId);
+      return true;
+    }
+
+    async function unloadWorkspaceTabs(workspaceId, otherWorkspaces) {
+      const w = getWin();
+      if (!w?.gBrowser?.explicitUnloadTabs || !workspaceId) return false;
+      const storedTabs = Array.from(w.gZenWorkspaces?.allStoredTabs || []);
+      const tabsToUnload = storedTabs.filter((tab) => {
+        const tabWorkspaceId = tab.getAttribute("zen-workspace-id");
+        const inScope = otherWorkspaces
+          ? tabWorkspaceId !== workspaceId
+          : tabWorkspaceId === workspaceId;
+        return inScope &&
+          !tab.hasAttribute("zen-empty-tab") &&
+          !tab.hasAttribute("zen-essential") &&
+          !tab.hasAttribute("pending");
+      });
+      if (tabsToUnload.length === 0) return false;
+      await w.gBrowser.explicitUnloadTabs(tabsToUnload);
+      return true;
+    }
+
+    async function runWorkspaceActionInternal(actionId) {
+      const w = getWin();
+      if (!w?.gZenWorkspaces) return false;
+      try {
+        switch (actionId) {
+          case "workspace-edit-theme":
+            return runZenCommand("cmd_zenOpenZenThemePicker");
+          case "workspace-create":
+            if (typeof w.gZenWorkspaces.openWorkspaceCreation !== "function") return false;
+            await w.gZenWorkspaces.openWorkspaceCreation();
+            return true;
+          case "workspace-delete":
+            return deleteActiveWorkspaceInternal();
+          case "workspace-unload":
+            return unloadWorkspaceTabs(getActiveWorkspaceId(), false);
+          case "workspace-unload-other-spaces":
+            return unloadWorkspaceTabs(getActiveWorkspaceId(), true);
+          default:
+            return false;
+        }
+      } catch (e) {
+        return false;
       }
     }
 
@@ -5387,6 +5583,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
         chordKey: compactRowChordKey(index),
         action: "reopen-in-container",
       }));
+    }
+
+    function getWorkspaceProfilesViewModelInternal() {
+      const rows = getWorkspaceProfileRows();
+      const activeUserContextId = Number(getActiveWorkspace()?.containerTabId) || 0;
+      const selectedIndex = rows.findIndex((row) => Number(row.userContextId) === activeUserContextId);
+      const model = buildCompactRowsViewModel("workspace-profiles", "workspace-profiles", rows, (row, index) => ({
+        rowId: String(Number(row.userContextId) || 0),
+        index,
+        chordKey: compactRowChordKey(index),
+        action: "set-workspace-profile",
+      }));
+      model.selectedIndex = selectedIndex;
+      return model;
     }
 
     function getProfilesViewModelInternal() {
@@ -5745,7 +5955,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           const view = currentViewName() || getActiveBridgeView();
           if (!view) return false;
           return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, {
-            destroyOverlay: false,
+            destroyOverlay: true,
             listVersion,
             replayChordKey: typeof chordKey === "string" ? chordKey : null,
             expectedRowId: typeof expectedRowId === "string" ? expectedRowId : null,
@@ -6266,6 +6476,22 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         async getContainersViewModel() {
           return getContainersViewModelInternal();
+        },
+
+        async getWorkspaceProfilesViewModel() {
+          return getWorkspaceProfilesViewModelInternal();
+        },
+
+        async getActiveWorkspaceName() {
+          return getActiveWorkspaceNameInternal();
+        },
+
+        async setActiveWorkspaceName(name) {
+          return setActiveWorkspaceNameInternal(name);
+        },
+
+        async runWorkspaceAction(actionId) {
+          return runWorkspaceActionInternal(actionId);
         },
 
         async getProfilesViewModel() {

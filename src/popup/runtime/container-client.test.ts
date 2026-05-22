@@ -14,6 +14,22 @@ describe("container client", () => {
       name: "Work",
       colorCode: "#00f",
       iconUrl: "resource://usercontext-content/briefcase.svg",
+      iconName: "",
+    });
+  });
+
+  it("fills default container labels and icon URLs from raw identity rows", () => {
+    expect(normalizeContainer({
+      cookieStoreId: "firefox-container-2",
+      color: "orange",
+      icon: "briefcase",
+    })).toEqual({
+      cookieStoreId: "firefox-container-2",
+      userContextId: 2,
+      name: "Work",
+      colorCode: "orange",
+      iconUrl: "resource://usercontext-content/briefcase.svg",
+      iconName: "briefcase",
     });
   });
 

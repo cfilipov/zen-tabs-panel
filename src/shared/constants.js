@@ -41,6 +41,8 @@ this.MSG = Object.freeze({
   GET_WORKSPACES_VIEW_MODEL:      "get-workspaces-view-model",
   GET_ZEN_WORKSPACE_ICONS:        "get-zen-workspace-icons",
   SET_ACTIVE_WORKSPACE_ICON:      "set-active-workspace-icon",
+  GET_ACTIVE_WORKSPACE_NAME:      "get-active-workspace-name",
+  SET_ACTIVE_WORKSPACE_NAME:      "set-active-workspace-name",
   TAB_INDEX_ENSURE_STARTED:       "tab-index:ensure-started",
   TAB_INDEX_GET_VERSION:          "tab-index:get-version",
   TAB_INDEX_GET_SUMMARY:          "tab-index:get-summary",
@@ -92,6 +94,11 @@ this.MSG = Object.freeze({
   SWITCH_WORKSPACE:               "switch-workspace",
   SWITCH_WORKSPACE_BY_INDEX:      "switch-workspace-by-index",
   MOVE_SELECTED_TABS_TO_WORKSPACE: "move-selected-tabs-to-workspace",
+  WORKSPACE_EDIT_THEME:            "workspace-edit-theme",
+  WORKSPACE_CREATE:                "workspace-create",
+  WORKSPACE_DELETE:                "workspace-delete",
+  WORKSPACE_UNLOAD:                "workspace-unload",
+  WORKSPACE_UNLOAD_OTHER_SPACES:   "workspace-unload-other-spaces",
 
   // Split view
   SPLIT_NEW:                      "split-new",
@@ -135,6 +142,7 @@ this.MSG = Object.freeze({
   MOVE_TAB_TO_FOLDER:             "move-tab-to-folder",
   REOPEN_IN_CONTAINER:            "reopen-in-container",
   GET_CONTAINERS_VIEW_MODEL:      "get-containers-view-model",
+  GET_WORKSPACE_PROFILES_VIEW_MODEL: "get-workspace-profiles-view-model",
   GET_FOLDERS_VIEW_MODEL:         "get-folders-view-model",
 
   // Replay the most recently fired chord-action (cmd+.,.). Background
@@ -266,6 +274,9 @@ this.VIEW_IDS = new Set([
   "move-to-folder",
   "open-in-container",
   "profiles",
+  "workspace-actions",
+  "workspace-name",
+  "workspace-profiles",
   "workspace-icons",
   "duplicate-prompt",
   "extension-popup",

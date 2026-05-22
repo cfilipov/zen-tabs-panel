@@ -25,7 +25,7 @@ export function selectionLength(context: SelectionContext) {
   if (context.view === "navigation") return context.navigationCount;
   if (context.view === "recently-closed") return context.recentlyClosedCount;
   if (context.view === "move-to-workspace") return context.workspaceCount;
-  if (context.view === "open-in-container") return context.containerCount;
+  if (context.view === "open-in-container" || context.view === "workspace-profiles") return context.containerCount;
   if (context.view === "move-to-folder") return context.folderCount;
   if (context.view === "profiles") return context.profileRows.length;
   if (context.view === "duplicates") return context.duplicateTabCount;
