@@ -1228,6 +1228,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // chrome-side session.
     let chordSession = null;
     let chordKeyIngress = null;
+    let chromeViewTransitions = null;
     function blockReveal(why) {
       try { if (chordSession) chordSession.blockReveal(why); } catch (e) {}
     }
@@ -1451,6 +1452,23 @@ this.zenWorkspaces = class extends ExtensionAPI {
       } catch (e) {}
     }
 
+    function sendWarmRearmMessage(br, payload) {
+      const mm = browserMessageManager(br);
+      if (!mm) return false;
+      sendPopupOptions(br);
+      try {
+        mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
+          inst: payload && payload.inst,
+          readyGen: payload && payload.readyGen,
+          view: payload && Object.prototype.hasOwnProperty.call(payload, "view") ? payload.view : null,
+          params: payload && Object.prototype.hasOwnProperty.call(payload, "params") ? payload.params : null,
+        });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
     function createBrowserElement(w, size, opts) {
       const br = w.document.createXULElement("browser");
       br.id = BROWSER_ID;
@@ -1659,9 +1677,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!overlayController.isOpen()) {
         openOverlayWithView(null);
       }
-      overlayController.pushCurrentNavigation();
-      overlayController.setCurrentView("extension-popup", { popupUrl, extensionId, viewType: "popup" });
-      overlayController.morphTo("extension-popup", { popupUrl, extensionId, viewType: "popup" });
+      chromeViewTransitions.openExtensionPopup({ popupUrl, extensionId, viewType: "popup" });
       return true;
     }
 
@@ -1843,9 +1859,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!overlayController.isOpen()) {
         openOverlayWithView(null);
       }
-      overlayController.pushCurrentNavigation();
-      overlayController.setCurrentView("extension-popup", { popupUrl, extensionId });
-      overlayController.morphTo("extension-popup", { popupUrl, extensionId });
+      chromeViewTransitions.openExtensionPopup({ popupUrl, extensionId });
       return true;
     }
 
@@ -1925,12 +1939,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!overlayController.isOpen()) {
         openOverlayWithView(null);
       }
-      overlayController.pushCurrentNavigation();
-      overlayController.setCurrentView("extension-popup", { popupUrl, extensionId: resolved.id, viewType: null });
       // viewType: null so the hosted browser presents as a popout window
       // (no `webextension-view-type` attribute) — see createBrowserElement
       // for the reasoning. The icon-strip path stays at the default "popup".
-      overlayController.morphTo("extension-popup", { popupUrl, extensionId: resolved.id, viewType: null });
+      chromeViewTransitions.openExtensionPopup({ popupUrl, extensionId: resolved.id, viewType: null });
     }
 
     // Two-condition filter: features must look popup-style AND the args
@@ -2317,23 +2329,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
       // sending: very small views can resize and signal ready in the same
       // turn as this message, and deferred explicit opens need a reveal
       // closure available when that happens.
-      const mm = browserMessageManager(br);
       if (idleHidden && viewName === "actions" && (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions")) {
         try {
           br.setAttribute("src", getPaletteURL(null, params || null));
           scheduleBrowserLoadKicks(w, br);
         } catch (e) {}
       }
-      if (mm) {
-        sendPopupOptions(br);
-        try {
-          mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
-            inst: currentPopupInstance(),
-            readyGen,
-            view: view || null,
-            params: params || null,
-          });
-        } catch (e) {}
+      if (chromeViewTransitions) {
+        chromeViewTransitions.sendWarmRearm(br, {
+          inst: currentPopupInstance(),
+          readyGen,
+          view: view || null,
+          params: params || null,
+        });
       }
       scheduleNativePopupContentResize(viewName);
       releaseHiddenPaletteFocus();
@@ -2614,7 +2622,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const br = w.document.getElementById(BROWSER_ID);
       if (!panel || !br) return;
       const previousView = currentViewName();
-      overlayController.setCurrentView(view || "actions", (!view || view === "actions") ? {} : currentViewParams());
+      if (chromeViewTransitions) chromeViewTransitions.reapplyCurrentViewForResize(view);
+      else overlayController.setCurrentView(view || "actions", (!view || view === "actions") ? {} : currentViewParams());
       panel.dataset.view = currentViewName();
       if (view === "actions" && (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions")) {
         morphToView("actions", {});
@@ -2902,15 +2911,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
         } catch (e) {}
         return;
       }
-      try {
-        sendPopupOptions(br);
-        mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
+      if (chromeViewTransitions) {
+        chromeViewTransitions.sendWarmRearm(br, {
           inst: currentPopupInstance(),
           readyGen,
           view: null,
           params: null,
         });
-      } catch (e) {}
+      }
     }
 
     function destroyOverlay(opts) {
@@ -3352,6 +3360,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       debugTrace: debugChordTrace,
       nowMs: () => Date.now(),
     });
+    chromeViewTransitions = createChromeViewTransitionCoordinator();
 
     function trackChordTerminalAction(payload) {
       chordSession.recordTerminalAction(payload);
@@ -3949,19 +3958,124 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function applyBridgeActivationResult(result, context) {
-      if (!result || typeof result !== "object" || result.kind === "noop") return false;
-      if (result.kind === "terminal") return true;
-      if (result.kind === "open-view") {
-        switchHiddenBridgeView(
-          result.view,
-          result.params || {},
-          context && context.previousView,
-          context && context.previousParams
-        );
-        armRevealTimer();
-        return true;
-      }
+      if (chromeViewTransitions) return chromeViewTransitions.applyActivationResult(result, context);
       return false;
+    }
+
+    function createChromeViewTransitionCoordinator() {
+      function switchHiddenBridgeView(view, params, previousView, previousParams) {
+        overlayController.create(view, params || {});
+        try { if (chordSession) chordSession.retargetActiveBridgeView(view, "switchHiddenBridgeView"); } catch (e) {}
+        if (previousView) {
+          overlayController.setNavigationStack([{ view: previousView, params: previousParams || {} }]);
+        }
+      }
+
+      function applyActivationResult(result, context) {
+        if (!result || typeof result !== "object" || result.kind === "noop") return false;
+        if (result.kind === "terminal") return true;
+        if (result.kind === "open-view") {
+          switchHiddenBridgeView(
+            result.view,
+            result.params || {},
+            context && context.previousView,
+            context && context.previousParams
+          );
+          armRevealTimer();
+          return true;
+        }
+        return false;
+      }
+
+      function reapplyCurrentViewForResize(view) {
+        const nextView = view || "actions";
+        if (nextView === "actions") {
+          overlayController.setCurrentView("actions", {});
+        } else {
+          // Preserve the params chrome already owns for this view. Resize
+          // messages are view-size reports, not a second source of params.
+          overlayController.setCurrentView(nextView);
+        }
+        return currentViewName();
+      }
+
+      function navigateToView(view, parsed) {
+        overlayController.pushCurrentNavigation();
+        const prevView = currentViewName();
+        overlayController.setCurrentView(view, parsed);
+        // Record the nav as the in-flight chord's open-view target so
+        // cmd+.,. replay rebuilds the same sequence. This is only for
+        // chord-opened popups (root timeout / bridge); toolbar-clicked
+        // visible navigation is not itself replayable and must not
+        // poison the previous leaf action.
+        if (hasActiveBridge() || chordSession.hasCurrentReplay()) {
+          trackChordOpenView(view);
+        }
+        // Only swap browsers when crossing between our popup and a
+        // foreign extension's popup. For our-view -> our-view, the
+        // popup runs its cross-fade at the current panel size and calls
+        // resizePanel when it is done.
+        if (view === "extension-popup" || prevView === "extension-popup") {
+          overlayController.morphTo(view, parsed);
+        } else {
+          scheduleNativePopupContentResize(view);
+        }
+      }
+
+      function openExtensionPopup(params) {
+        overlayController.pushCurrentNavigation();
+        overlayController.setCurrentView("extension-popup", params || {});
+        overlayController.morphTo("extension-popup", params || {});
+      }
+
+      function goToActionsFromVisibleSubmenu() {
+        overlayController.resetViewState("actions", {});
+        const w = getWin();
+        const br = w && w.document.getElementById(BROWSER_ID);
+        const mm = browserMessageManager(br);
+        if (mm) {
+          try {
+            mm.sendAsyncMessage(
+              "ZenChord:GoToActions:" + CHORD_GENERATION,
+              {}
+            );
+          } catch (e) {}
+        }
+      }
+
+      function navigateBack() {
+        if (overlayController.navigationLength() === 0) {
+          if (currentViewName() && currentViewName() !== "actions") {
+            const wasInForeign = currentViewName() === "extension-popup";
+            overlayController.setCurrentView("actions", {});
+            if (wasInForeign) {
+              overlayController.morphTo("actions", {});
+              return null;
+            }
+            return { view: "actions", params: {} };
+          }
+          overlayController.destroy();
+          return null;
+        }
+        const prev = overlayController.popNavigation();
+        const wasInForeign = currentViewName() === "extension-popup";
+        overlayController.setCurrentView(prev.view, prev.params || {});
+        if (wasInForeign) {
+          overlayController.morphTo(prev.view, prev.params);
+          return null;
+        }
+        return { view: prev.view, params: prev.params || {} };
+      }
+
+      return {
+        applyActivationResult,
+        reapplyCurrentViewForResize,
+        navigateToView,
+        navigateBack,
+        openExtensionPopup,
+        goToActionsFromVisibleSubmenu,
+        sendWarmRearm: sendWarmRearmMessage,
+      };
     }
 
     function activateVisibleActionIntent(view, expectedRowId, replayChordKey, destroyBeforeAction) {
@@ -4002,14 +4116,6 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return activationOpenView(node.view, {});
       }
       return activationNoop();
-    }
-
-    function switchHiddenBridgeView(view, params, previousView, previousParams) {
-      overlayController.create(view, params || {});
-      try { if (chordSession) chordSession.retargetActiveBridgeView(view, "switchHiddenBridgeView"); } catch (e) {}
-      if (previousView) {
-        overlayController.setNavigationStack([{ view: previousView, params: previousParams || {} }]);
-      }
     }
 
     function activateChromeOwnedRowIntent(view, index, source, switchToTarget, options) {
@@ -4277,18 +4383,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           overlayController.destroy();
           return;
         }
-        overlayController.resetViewState("actions", {});
-        const w0 = getWin();
-        const br0 = w0 && w0.document.getElementById(BROWSER_ID);
-        const mm0 = browserMessageManager(br0);
-        if (mm0) {
-          try {
-            mm0.sendAsyncMessage(
-              "ZenChord:GoToActions:" + CHORD_GENERATION,
-              {}
-            );
-          } catch (e) {}
-        }
+        if (chromeViewTransitions) chromeViewTransitions.goToActionsFromVisibleSubmenu();
         return;
       }
 
@@ -7445,27 +7540,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (!overlayController.isOpen()) return;
           if (!acceptsPopupViewStateMessage(inst, readyGen)) return;
           const parsed = params ? JSON.parse(params) : {};
-          overlayController.pushCurrentNavigation();
-          const prevView = currentViewName();
-          overlayController.setCurrentView(view, parsed);
-          // Record the nav as the in-flight chord's open-view target so
-          // cmd+.,. replay rebuilds the same sequence. This is only for
-          // chord-opened popups (root timeout / bridge); toolbar-clicked
-          // visible navigation is not itself replayable and must not
-          // poison the previous leaf action.
-          if (hasActiveBridge() || chordSession.hasCurrentReplay()) {
-            trackChordOpenView(view);
-          }
-          // Only swap browsers when crossing between our popup and a
-          // foreign extension's popup. For our-view → our-view, we
-          // just update the nav stack here — the popup runs its
-          // cross-fade at the current panel size and calls resizePanel
-          // when it's done. That avoids reflow during the fade.
-          if (view === "extension-popup" || prevView === "extension-popup") {
-            overlayController.morphTo(view, parsed);
-          } else {
-            scheduleNativePopupContentResize(view);
-          }
+          if (chromeViewTransitions) chromeViewTransitions.navigateToView(view, parsed);
         },
 
         async resizePanel(view, height, dynamicSidebarWidth, inst, readyGen) {
@@ -7481,29 +7556,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         async navigateBack() {
           if (!overlayController.isOpen()) return null;
-          if (overlayController.navigationLength() === 0) {
-            if (currentViewName() && currentViewName() !== "actions") {
-              const wasInForeign = currentViewName() === "extension-popup";
-              overlayController.setCurrentView("actions", {});
-              if (wasInForeign) {
-                overlayController.morphTo("actions", {});
-                return null;
-              }
-              return { view: "actions", params: {} };
-            }
-            overlayController.destroy();
-            return null;
-          }
-          const prev = overlayController.popNavigation();
-          const wasInForeign = currentViewName() === "extension-popup";
-          overlayController.setCurrentView(prev.view, prev.params || {});
-          if (wasInForeign) {
-            overlayController.morphTo(prev.view, prev.params);
-            return null;
-          }
-          // For our-view → our-view back nav, don't resize here. The
-          // popup will cross-fade and then call resizePanel.
-          return { view: prev.view, params: prev.params || {} };
+          return chromeViewTransitions ? chromeViewTransitions.navigateBack() : null;
         },
 
         // Enumerate installed extensions with a browser_action popup and
