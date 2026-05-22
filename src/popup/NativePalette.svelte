@@ -479,10 +479,10 @@
     await effects.openExtensionPopupByIndex(index);
   }
 
-  async function setActiveWorkspaceIcon(iconName: string) {
+  async function setActiveWorkspaceIcon(kind: "emoji" | "zen" | "lucide", value: string) {
     markTerminalCommandDispatched();
     revealController.clear();
-    const result = await effects.setActiveWorkspaceIcon(iconName);
+    const result = await effects.setActiveWorkspaceIcon(kind, value);
     if (result?.success) {
       effects.hidePalette();
     } else {

@@ -6,7 +6,7 @@ import type { NavigationHistory, RecentlyClosedRow } from "../runtime/history-cl
 import type { ProfileRow } from "../runtime/profile-client";
 import type { HistoryVisit, TabInfo } from "../runtime/tab-info-client";
 import type { DuplicateGroupRow, TabIndexRow, ViewWindow } from "../runtime/tab-index-client";
-import type { WorkspaceRow } from "../runtime/workspace-client";
+import type { WorkspaceRow, ZenWorkspaceIconRow } from "../runtime/workspace-client";
 import type { NativeListRow } from "../view-loaders/list-loader";
 import type { ActionsMenuData } from "../view-loaders/actions-loader";
 import type { ActionSection } from "../views/actions-model";
@@ -31,6 +31,7 @@ export type NativePaletteState = {
   folderWorkspaces: WorkspaceRow[];
   profileRows: ProfileRow[];
   workspaceIconWorkspaces: WorkspaceRow[];
+  zenWorkspaceIcons: ZenWorkspaceIconRow[];
   duplicateGroups: DuplicateGroupRow[];
   duplicateWorkspaces: WorkspaceRow[];
   tabInfo: TabInfo | null;
@@ -71,6 +72,7 @@ function defaultNativePaletteState(): NativePaletteState {
     folderWorkspaces: [],
     profileRows: [],
     workspaceIconWorkspaces: [],
+    zenWorkspaceIcons: [],
     duplicateGroups: [],
     duplicateWorkspaces: [],
     tabInfo: null,
@@ -148,6 +150,7 @@ export function createNativePaletteState() {
     state.folderWorkspaces = [];
     state.profileRows = [];
     state.workspaceIconWorkspaces = [];
+    state.zenWorkspaceIcons = [];
     state.duplicateGroups = [];
     state.duplicateWorkspaces = [];
     state.tabInfo = null;
@@ -295,13 +298,15 @@ export function createNativePaletteState() {
     state.error = message;
   }
 
-  function commitWorkspaceIcons(result: { workspaces: WorkspaceRow[] }) {
+  function commitWorkspaceIcons(result: { workspaces: WorkspaceRow[]; zenIcons: ZenWorkspaceIconRow[] }) {
     state.workspaceIconWorkspaces = result.workspaces;
+    state.zenWorkspaceIcons = result.zenIcons;
     state.selectedIndex = -1;
   }
 
   function failWorkspaceIcons(message: string) {
     state.workspaceIconWorkspaces = [];
+    state.zenWorkspaceIcons = [];
     state.selectedIndex = -1;
     state.error = message;
   }

@@ -5013,37 +5013,108 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return match ? match[1] : null;
     }
 
+    const ZEN_WORKSPACE_ICON_NAMES = [
+      "airplane.svg", "american-football.svg", "baseball.svg", "basket.svg", "bed.svg", "bell.svg",
+      "bookmark.svg", "book.svg", "briefcase.svg", "brush.svg", "bug.svg", "build.svg", "cafe.svg",
+      "call.svg", "card.svg", "chat.svg", "checkbox.svg", "circle.svg", "cloud.svg", "code.svg",
+      "coins.svg", "construct.svg", "cutlery.svg", "egg.svg", "extension-puzzle.svg", "eye.svg",
+      "fast-food.svg", "fish.svg", "flag.svg", "flame.svg", "flask.svg", "folder.svg",
+      "game-controller.svg", "globe-1.svg", "globe.svg", "grid-2x2.svg", "grid-3x3.svg", "heart.svg",
+      "ice-cream.svg", "image.svg", "inbox.svg", "key.svg", "layers.svg", "leaf.svg", "lightning.svg",
+      "location.svg", "lock-closed.svg", "logo-rss.svg", "logo-usd.svg", "mail.svg", "map.svg",
+      "megaphone.svg", "moon.svg", "music.svg", "navigate.svg", "nuclear.svg", "page.svg",
+      "palette.svg", "paw.svg", "people.svg", "pizza.svg", "planet.svg", "present.svg", "rocket.svg",
+      "school.svg", "shapes.svg", "shirt.svg", "skull.svg", "squares.svg", "square.svg", "star-1.svg",
+      "star.svg", "stats-chart.svg", "sun.svg", "tada.svg", "terminal.svg", "ticket.svg", "time.svg",
+      "trash.svg", "triangle.svg", "video.svg", "volume-high.svg", "wallet.svg", "warning.svg",
+      "water.svg", "weight.svg",
+    ];
+    const ZEN_WORKSPACE_ICON_SET = new Set(ZEN_WORKSPACE_ICON_NAMES);
+
+    function zenWorkspaceIconUrl(iconName) {
+      if (!ZEN_WORKSPACE_ICON_SET.has(String(iconName || ""))) return null;
+      return "chrome://browser/skin/zen-icons/selectable/" + iconName;
+    }
+
+    function zenIconNameFromWorkspaceIcon(icon) {
+      const prefix = "chrome://browser/skin/zen-icons/selectable/";
+      const s = String(icon || "");
+      return s.startsWith(prefix) ? s.slice(prefix.length) : null;
+    }
+
+    function emojiIconFromWorkspaceIcon(icon) {
+      const s = String(icon || "");
+      if (!s || s.endsWith(".svg") || s.startsWith("data:image/") || s.startsWith("chrome://")) return null;
+      return s;
+    }
+
+    function labelFromIconName(iconName) {
+      return String(iconName || "")
+        .replace(/\.svg$/, "")
+        .split("-")
+        .map((part) => part ? part[0].toUpperCase() + part.slice(1) : part)
+        .join(" ");
+    }
+
     function lucideIconUrl(iconName) {
       if (!/^[a-z0-9][a-z0-9-]*$/.test(String(iconName || ""))) return null;
       return context.extension.getURL("lucide-icons/" + iconName + ".svg");
     }
 
-    async function setWorkspaceLucideIcon(workspaceId, iconName) {
+    async function setWorkspaceIconInternal(workspaceId, kind, value) {
       const w = getWin();
       if (!w || !w.gZenWorkspaces) return { success: false, error: "Zen workspaces are unavailable" };
-      const url = lucideIconUrl(iconName);
-      if (!url) return { success: false, error: "Unknown icon" };
-
-      let svg = "";
-      try {
-        const resp = await w.fetch(url);
-        if (!resp || !resp.ok) return { success: false, error: "Icon asset is unavailable" };
-        svg = await resp.text();
-      } catch (e) {
-        return { success: false, error: "Icon asset is unavailable" };
-      }
-      if (!/<svg[\s>]/.test(svg)) return { success: false, error: "Icon asset is invalid" };
-
       const id = workspaceId || w.gZenWorkspaces.activeWorkspace;
       const workspace = w.gZenWorkspaces.getWorkspaceFromId(id);
       if (!workspace) return { success: false, error: "Workspace not found" };
 
+      let nextIcon = "";
+      if (kind === "lucide") {
+        const url = lucideIconUrl(value);
+        if (!url) return { success: false, error: "Unknown icon" };
+        let svg = "";
+        try {
+          const resp = await w.fetch(url);
+          if (!resp || !resp.ok) return { success: false, error: "Icon asset is unavailable" };
+          svg = await resp.text();
+        } catch (e) {
+          return { success: false, error: "Icon asset is unavailable" };
+        }
+        if (!/<svg[\s>]/.test(svg)) return { success: false, error: "Icon asset is invalid" };
+        nextIcon = "data:image/svg+xml," + encodeURIComponent(svg) + "#lucide-" + value + ".svg";
+      } else if (kind === "zen") {
+        const url = zenWorkspaceIconUrl(value);
+        if (!url) return { success: false, error: "Unknown Zen icon" };
+        nextIcon = url;
+      } else if (kind === "emoji") {
+        const emoji = String(value || "").trim();
+        if (!emoji || emoji.length > 16 || emoji.endsWith(".svg")) {
+          return { success: false, error: "Invalid emoji" };
+        }
+        nextIcon = emoji;
+      } else {
+        return { success: false, error: "Unknown icon type" };
+      }
+
       const previousIcon = workspace.icon;
-      workspace.icon = "data:image/svg+xml," + encodeURIComponent(svg) + "#lucide-" + iconName + ".svg";
+      workspace.icon = nextIcon;
       workspaceSvgCache.delete(previousIcon);
       workspaceSvgCache.delete(workspace.icon);
       await w.gZenWorkspaces.saveWorkspace(workspace);
       return { success: true };
+    }
+
+    async function getZenWorkspaceIconRows() {
+      const rows = [];
+      for (const name of ZEN_WORKSPACE_ICON_NAMES) {
+        const url = zenWorkspaceIconUrl(name);
+        rows.push({
+          name,
+          label: labelFromIconName(name),
+          svgContent: await getWorkspaceSvgContent(url),
+        });
+      }
+      return rows;
     }
 
     function getWorkspaceRows(includeIcons) {
@@ -5057,6 +5128,8 @@ this.zenWorkspaces = class extends ExtensionAPI {
         svgContent: includeIcons && ws.icon ? null : "",
         icon: includeIcons ? ws.icon || "" : "",
         lucideIconName: lucideIconNameFromWorkspaceIcon(ws.icon),
+        zenIconName: zenIconNameFromWorkspaceIcon(ws.icon),
+        emojiIcon: emojiIconFromWorkspaceIcon(ws.icon),
         isActive: ws.uuid === activeId,
       }));
     }
@@ -6699,8 +6772,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return model;
         },
 
-        async setActiveWorkspaceIcon(iconName) {
-          return setWorkspaceLucideIcon(null, iconName);
+        async getZenWorkspaceIcons() {
+          return getZenWorkspaceIconRows();
+        },
+
+        async setActiveWorkspaceIcon(kind, value) {
+          return setWorkspaceIconInternal(null, kind, value);
         },
 
         // Move gBrowser.selectedTabs to the given workspace, placed at top

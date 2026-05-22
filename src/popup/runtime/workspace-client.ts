@@ -5,9 +5,17 @@ export type WorkspaceRow = {
   name: string;
   svgContent: string;
   lucideIconName?: string | null;
+  zenIconName?: string | null;
+  emojiIcon?: string | null;
   isActive: boolean;
   tabCount?: number;
   chordKey?: string | null;
+};
+
+export type ZenWorkspaceIconRow = {
+  name: string;
+  label: string;
+  svgContent: string;
 };
 
 export type WorkspacesViewModel = {
@@ -39,8 +47,11 @@ export function createWorkspaceClient(send: Send = sendMessage) {
     getWorkspacesViewModel() {
       return send<WorkspacesViewModel>({ type: "get-workspaces-view-model" });
     },
-    setActiveWorkspaceIcon(iconName: string) {
-      return send<{ success: boolean; error?: string }>({ type: "set-active-workspace-icon", iconName });
+    getZenWorkspaceIcons() {
+      return send<ZenWorkspaceIconRow[]>({ type: "get-zen-workspace-icons" });
+    },
+    setActiveWorkspaceIcon(kind: "emoji" | "zen" | "lucide", value: string) {
+      return send<{ success: boolean; error?: string }>({ type: "set-active-workspace-icon", kind, value });
     },
   };
 }

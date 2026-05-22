@@ -534,10 +534,18 @@
         "name": "setActiveWorkspaceIcon",
         "type": "function",
         "async": true,
-        "description": "Set the active Zen workspace icon to a bundled Lucide SVG",
+        "description": "Set the active Zen workspace icon",
         "parameters": [
-          { "name": "iconName", "type": "string" }
+          { "name": "kind", "type": "string" },
+          { "name": "value", "type": "string" }
         ]
+      },
+      {
+        "name": "getZenWorkspaceIcons",
+        "type": "function",
+        "async": true,
+        "description": "Get Zen's built-in workspace icons with inline SVG content",
+        "parameters": []
       },
       {
         "name": "getWorkspaceTabCounts",

@@ -14,15 +14,27 @@ describe("workspace client", () => {
     expect(sent).toEqual([{ type: "get-workspaces-with-icons" }]);
   });
 
-  it("sets the active workspace icon by Lucide name", async () => {
+  it("requests Zen's built-in workspace icons", async () => {
+    const sent: unknown[] = [];
+    const client = createWorkspaceClient(async <T>(message: unknown) => {
+      sent.push(message);
+      return [] as T;
+    });
+
+    await client.getZenWorkspaceIcons();
+
+    expect(sent).toEqual([{ type: "get-zen-workspace-icons" }]);
+  });
+
+  it("sets the active workspace icon by kind and value", async () => {
     const sent: unknown[] = [];
     const client = createWorkspaceClient(async <T>(message: unknown) => {
       sent.push(message);
       return { success: true } as T;
     });
 
-    await client.setActiveWorkspaceIcon("briefcase");
+    await client.setActiveWorkspaceIcon("lucide", "briefcase");
 
-    expect(sent).toEqual([{ type: "set-active-workspace-icon", iconName: "briefcase" }]);
+    expect(sent).toEqual([{ type: "set-active-workspace-icon", kind: "lucide", value: "briefcase" }]);
   });
 });

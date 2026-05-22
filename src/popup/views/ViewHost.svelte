@@ -52,7 +52,7 @@
     closeTabInfoDuplicate: (row: TabIndexRow) => void;
     closeOtherTabInfoDuplicates: () => void;
     runDuplicatePromptAction: (action: DuplicatePromptAction) => void;
-    setActiveWorkspaceIcon: (iconName: string) => void | Promise<void>;
+    setActiveWorkspaceIcon: (kind: "emoji" | "zen" | "lucide", value: string) => void | Promise<void>;
     drillParentRow: (row: TabIndexRow) => void | Promise<void>;
     loadVisibleRange: (offset: number, limit: number) => void;
     tabSubtitle: (row: TabIndexRow) => string | null;
@@ -173,6 +173,7 @@
     {:else if palette.currentView === "workspace-icons"}
       <WorkspaceIconPicker
         workspaces={palette.workspaceIconWorkspaces}
+        zenIcons={palette.zenWorkspaceIcons}
         onselect={setActiveWorkspaceIcon}
       />
     {:else if palette.currentView === "duplicates"}
