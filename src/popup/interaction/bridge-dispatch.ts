@@ -124,6 +124,7 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
       return { preventDefault: true, stopPropagation: !isLive() };
     },
     visibleKeydownInput(input) {
+      if (dispatchRunning) cancelLiveDispatch();
       state = { mode: "live" };
       options.clearRevealTimer();
       enqueue(input, "visible");
@@ -149,6 +150,7 @@ export function createBridgeDispatchController(options: BridgeDispatchOptions): 
     forceReady(data) {
       const buffered = forceBuffered(data);
       const held = heldKeys();
+      cancelLiveDispatch();
       state = { mode: "live" };
       options.clearRevealTimer();
       liveDispatchQueue.unshift(

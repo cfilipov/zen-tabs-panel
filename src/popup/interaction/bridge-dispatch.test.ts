@@ -119,7 +119,7 @@ describe("bridge dispatch controller", () => {
     expect(events).toEqual(["clear", "key:buffered", "key:held", "bridge-arm"]);
   });
 
-  it("force-ready waits for the active visible dispatch before forced keys", async () => {
+  it("force-ready cancels a stale live dispatch before forced keys", async () => {
     const events: string[] = [];
     let release: () => void = () => {};
     const controller = createBridgeDispatchController({
@@ -142,7 +142,7 @@ describe("bridge dispatch controller", () => {
     controller.forceReady({ buffered: [key("forced")] });
     await flushDispatchQueue();
 
-    expect(events).toEqual(["clear", "key:stale", "clear"]);
+    expect(events).toEqual(["clear", "key:stale", "clear", "key:forced", "bridge-arm"]);
     release();
     await flushDispatchQueue();
 
@@ -178,6 +178,36 @@ describe("bridge dispatch controller", () => {
     await flushDispatchQueue();
 
     expect(events).toEqual(["clear", "key:stale", "clear", "clear", "key:visible", "visible-arm"]);
+  });
+
+  it("visible popup keys preempt a stale live dispatch", async () => {
+    const events: string[] = [];
+    let release: () => void = () => {};
+    const controller = createBridgeDispatchController({
+      dispatchKey: async (input) => {
+        events.push(`key:${input.key}`);
+        if (input.key === "stale") {
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        }
+      },
+      armBridgeRevealTimer: () => events.push("bridge-arm"),
+      armVisibleRevealTimer: () => events.push("visible-arm"),
+      clearRevealTimer: () => events.push("clear"),
+    });
+
+    await controller.drainReply({ buffered: [] });
+    controller.queueOrHold(key("stale"));
+    await Promise.resolve();
+    controller.visibleKeydownInput(key("visible"));
+    await flushDispatchQueue();
+
+    expect(events).toEqual(["clear", "key:stale", "clear", "key:visible", "visible-arm"]);
+    release();
+    await flushDispatchQueue();
+
+    expect(events).toEqual(["clear", "key:stale", "clear", "key:visible", "visible-arm"]);
   });
 
   it("arms reveal only after a single async buffered key finishes", async () => {

@@ -4111,9 +4111,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       };
     }
 
-    function activateVisibleActionIntent(view, expectedRowId, replayChordKey, destroyBeforeAction) {
+    function activateVisibleActionIntent(view, expectedRowId, replayChordKey, destroyBeforeAction, options) {
       const resolved = visibleActionBinding(view, expectedRowId, replayChordKey);
       if (!resolved) return null;
+      const traceOpenView = !options || options.activation == null || options.activation === "trace";
 
       if (resolved.kind === "workspace-switch") {
         const rows = getWorkspaceRows(false);
@@ -4145,7 +4146,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return activationTerminal();
       }
       if (node.kind === "open-view" || node.kind === "prefix") {
-        trackChordOpenView(node.view);
+        if (traceOpenView) trackChordOpenView(node.view);
         return activationOpenView(node.view, {});
       }
       return activationNoop();
@@ -4173,7 +4174,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         : (currentViewParams() || {});
       try {
         if (view === "actions" || prefixBindingForView(view)) {
-          const result = activateVisibleActionIntent(view, expectedRowId, replayChordKey, destroy);
+          const result = activateVisibleActionIntent(view, expectedRowId, replayChordKey, destroy, options);
           if (result !== null) return result;
         }
         if (view === "domains") {
@@ -6233,6 +6234,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             destroyOverlay: true,
             listVersion,
             replayChordKey: typeof chordKey === "string" ? chordKey : null,
+            activation: typeof activation === "string" ? activation : null,
             expectedRowId: typeof expectedRowId === "string" ? expectedRowId : null,
             params: currentViewParams() || {},
           });

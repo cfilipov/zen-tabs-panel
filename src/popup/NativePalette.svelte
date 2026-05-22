@@ -934,11 +934,6 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (!paletteRevealed) {
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
     const input = snapshotKeyEvent(event);
     const result = bridgeDispatch.visibleKeydownInput(input);
     if (result.preventDefault) event.preventDefault();

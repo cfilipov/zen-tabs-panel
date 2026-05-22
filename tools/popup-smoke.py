@@ -297,8 +297,9 @@ def start_smoke() -> str:
   async function forcePopupReady(label) {
     record(label);
     await runInPopup(`(content) => {
-      const payload = { type: "force-ready", data: { buffered: [] } };
+      const payload = { type: "force-ready", data: { buffered: [], visible: true } };
       content.document.dispatchEvent(new content.CustomEvent("ztt:bridge-message", { detail: JSON.stringify(payload) }));
+      content.document.dispatchEvent(new content.CustomEvent("ztt:bridge-message", { detail: JSON.stringify({ type: "palette-revealed" }) }));
       return true;
     }`);
     await sleep(250);
