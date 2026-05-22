@@ -1452,10 +1452,37 @@ this.zenWorkspaces = class extends ExtensionAPI {
       } catch (e) {}
     }
 
+    function stableStringifyForInvariant(value) {
+      if (value == null || typeof value !== "object") return JSON.stringify(value == null ? {} : value);
+      if (Array.isArray(value)) return "[" + value.map(stableStringifyForInvariant).join(",") + "]";
+      const keys = Object.keys(value).sort();
+      return "{" + keys.map((key) => JSON.stringify(key) + ":" + stableStringifyForInvariant(value[key])).join(",") + "}";
+    }
+
+    function traceChromeViewInvariant(why, view, params) {
+      const expectedView = view || "actions";
+      const currentView = currentViewName() || "actions";
+      const expectedParams = params || {};
+      const currentParams = currentViewParams() || {};
+      if (
+        expectedView !== currentView ||
+        stableStringifyForInvariant(expectedParams) !== stableStringifyForInvariant(currentParams)
+      ) {
+        debugChordTrace("chrome-view-invariant-mismatch", {
+          why,
+          expectedView,
+          currentView,
+          expectedParams,
+          currentParams,
+        });
+      }
+    }
+
     function sendWarmRearmMessage(br, payload) {
       const mm = browserMessageManager(br);
       if (!mm) return false;
       sendPopupOptions(br);
+      traceChromeViewInvariant("sendWarmRearm", payload && payload.view, payload && payload.params);
       try {
         mm.sendAsyncMessage("ZenChord:WarmRearm:" + CHORD_GENERATION, {
           inst: payload && payload.inst,
@@ -2622,8 +2649,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const br = w.document.getElementById(BROWSER_ID);
       if (!panel || !br) return;
       const previousView = currentViewName();
-      if (chromeViewTransitions) chromeViewTransitions.reapplyCurrentViewForResize(view);
-      else overlayController.setCurrentView(view || "actions", (!view || view === "actions") ? {} : currentViewParams());
+      chromeViewTransitions.reapplyCurrentViewForResize(view);
       panel.dataset.view = currentViewName();
       if (view === "actions" && (!isOwnPaletteBrowser(br) || paletteURLView(br) !== "actions")) {
         morphToView("actions", {});
@@ -3768,6 +3794,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "navigation",
     ]);
 
+    const CHROME_OWNED_DRILL_BRIDGE_VIEWS = new Set([
+      "domains",
+    ]);
+
     const BACKGROUND_OWNED_BRIDGE_VIEWS = new Set([
       "recently-closed",
     ]);
@@ -3981,6 +4011,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             context && context.previousView,
             context && context.previousParams
           );
+          traceChromeViewInvariant("applyActivationResult", result.view, result.params || {});
           armRevealTimer();
           return true;
         }
@@ -4003,6 +4034,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         overlayController.pushCurrentNavigation();
         const prevView = currentViewName();
         overlayController.setCurrentView(view, parsed);
+        traceChromeViewInvariant("navigateToView", view, parsed);
         // Record the nav as the in-flight chord's open-view target so
         // cmd+.,. replay rebuilds the same sequence. This is only for
         // chord-opened popups (root timeout / bridge); toolbar-clicked
@@ -4025,6 +4057,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       function openExtensionPopup(params) {
         overlayController.pushCurrentNavigation();
         overlayController.setCurrentView("extension-popup", params || {});
+        traceChromeViewInvariant("openExtensionPopup", "extension-popup", params || {});
         overlayController.morphTo("extension-popup", params || {});
       }
 
@@ -4311,7 +4344,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const activeParams = currentViewParams() || {};
       const context = { previousView: activeView, previousParams: activeParams };
 
-      if (activeView === "domains") {
+      if (CHROME_OWNED_DRILL_BRIDGE_VIEWS.has(activeView)) {
         const rowIndex = rowIndexFromDigitKey(keyData);
         if (rowIndex == null) return false;
         return applyBridgeActivationResult(activateChromeOwnedRowIntent(activeView, rowIndex, "shortcut", false, {
