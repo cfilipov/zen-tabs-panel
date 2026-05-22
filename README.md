@@ -7,24 +7,24 @@ Formerly **Zen Tabs Panel**.
 ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more — far more than Zen exposes by default. Everything starts with one leader chord (`⌘.` on macOS, `⌃.` on Windows/Linux), followed by a short sequence of keys. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. The same sequence works whether you see the menu or not: type it quickly and the action fires immediately; pause, and the menu pops up showing every available next key. Common actions become muscle memory while less-used ones stay easy to discover. The palette is keyboard-first but fully mouse-friendly.
 
 <p align="center">
-  <img src="screenshot@2x.png" alt="Main menu" width="900">
+  <img src="screenshot@2x.png?v=dark" alt="Main menu" width="900">
 </p>
 
 <p align="center">
-  <img src="screenshot-actions-page-2@2x.png" alt="Main menu page 2" width="900">
+  <img src="screenshot-actions-page-2@2x.png?v=dark" alt="Main menu page 2" width="900">
 </p>
 
 <p align="center">
-  <img src="screenshot-tabinfo@2x.png" alt="Tab info view" width="600">
+  <img src="screenshot-tabinfo@2x.png?v=dark" alt="Tab info view" width="600">
 </p>
 
 <p align="center">
-  <img src="screenshot-duplicate-prompt@2x.png" alt="Duplicate tab prompt" width="420">
+  <img src="screenshot-duplicate-prompt@2x.png?v=dark" alt="Duplicate tab prompt" width="420">
 </p>
 
 <p align="center">
-  <img src="screenshot-reorder-tabs@2x.png" alt="Reorder tabs menu" width="420">
-  <img src="screenshot-close-select@2x.png" alt="Close and select menu" width="420">
+  <img src="screenshot-reorder-tabs@2x.png?v=dark" alt="Reorder tabs menu" width="420">
+  <img src="screenshot-close-select@2x.png?v=dark" alt="Close and select menu" width="420">
 </p>
 
 ## Install
