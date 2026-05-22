@@ -214,7 +214,13 @@
     isAlive: () => pageAlive,
     getElementById: (id) => document.getElementById(id),
     setTimeout: (fn, ms) => window.setTimeout(fn, ms),
-    resizePanel: (view, height, width) => effects.resizePanel(view, height, width, revealController.inst).catch(() => {}),
+    resizePanel: (view, height, width) => effects.resizePanel(
+      view,
+      height,
+      width,
+      revealController.inst,
+      revealController.readyGen,
+    ).catch(() => {}),
   });
   const visibleActionItems = $derived(actionItemsForPage(renderedActionSections, palette.currentPage));
   const allActionItems = $derived(renderedActionSections.flatMap((section) => section.items));
@@ -320,7 +326,7 @@
   }
 
   function notifyChromeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>) {
-    effects.notifyChromeView(view, params);
+    effects.notifyChromeView(view, params, revealController.inst, revealController.readyGen);
   }
 
   async function finishOpenView(view: ViewId) {

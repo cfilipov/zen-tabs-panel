@@ -697,7 +697,9 @@
         "description": "Navigate the palette to a different view with morph animation",
         "parameters": [
           { "name": "view", "type": "string" },
-          { "name": "params", "type": "string", "optional": true }
+          { "name": "params", "type": "string", "optional": true },
+          { "name": "inst", "type": "any", "optional": true },
+          { "name": "readyGen", "type": "any", "optional": true }
         ]
       },
       {
@@ -709,7 +711,8 @@
           { "name": "view", "type": "string" },
           { "name": "height", "type": "number", "optional": true },
           { "name": "dynamicSidebarWidth", "type": "number", "optional": true },
-          { "name": "inst", "type": "integer", "optional": true }
+          { "name": "inst", "type": "integer", "optional": true },
+          { "name": "readyGen", "type": "any", "optional": true }
         ]
       },
       {

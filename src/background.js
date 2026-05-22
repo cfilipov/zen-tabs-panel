@@ -667,7 +667,12 @@ const SYNC_HANDLERS = Object.freeze({
       console.warn("Ignoring navigate-view with unknown view:", m.view);
       return;
     }
-    return api.navigateToView(m.view, m.params);
+    return api.navigateToView(
+      m.view,
+      m.params,
+      m && typeof m.inst === "number" ? m.inst : null,
+      m && typeof m.readyGen === "number" ? m.readyGen : null
+    );
   },
   [MSG.NAVIGATE_BACK]:   ()  => api.navigateBack(),
   [MSG.RESTART_ZEN]:     ()  => api.restartZen(),
@@ -705,7 +710,13 @@ const SYNC_HANDLERS = Object.freeze({
     }
     return result;
   },
-  [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(m.view, m.height, m.dynamicSidebarWidth, m.inst),
+  [MSG.RESIZE_PANEL]:         (m) => api.resizePanel(
+    m.view,
+    m.height,
+    m.dynamicSidebarWidth,
+    m && typeof m.inst === "number" ? m.inst : null,
+    m && typeof m.readyGen === "number" ? m.readyGen : null
+  ),
   [MSG.BRIDGE_DISPATCH_SETTLED]: (m) => api.bridgeDispatchSettled(m.inst),
 });
 

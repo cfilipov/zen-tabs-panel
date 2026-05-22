@@ -3216,6 +3216,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       chordSession.observeDerivedState(getChordStateSnapshot(), why);
     }
 
+    function acceptsPopupViewStateMessage(inst, readyGen) {
+      if (!matchesPopupInstance(inst)) return false;
+      if (typeof readyGen === "number") return matchesReadinessGeneration(readyGen);
+      return !hasActiveBridge() && !hasPendingReveal();
+    }
+
     function assertVisiblePopupOwnsKeys(why) {
       if (!chordSession || !overlayController.isVisible()) return;
       const chromeArmed = !!(chromeShim && chromeShim.isArmed && chromeShim.isArmed());
@@ -7419,8 +7425,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
           if (br) br.focus();
         },
 
-        async navigateToView(view, params) {
+        async navigateToView(view, params, inst, readyGen) {
           if (!overlayController.isOpen()) return;
+          if (!acceptsPopupViewStateMessage(inst, readyGen)) return;
           const parsed = params ? JSON.parse(params) : {};
           overlayController.pushCurrentNavigation();
           const prevView = currentViewName();
@@ -7445,9 +7452,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
           }
         },
 
-        async resizePanel(view, height, dynamicSidebarWidth, inst) {
+        async resizePanel(view, height, dynamicSidebarWidth, inst, readyGen) {
           if (!overlayController.isOpen()) return;
-          if (!matchesPopupInstance(inst)) return;
+          if (!acceptsPopupViewStateMessage(inst, readyGen)) return;
           resizePanelToView(view, height, dynamicSidebarWidth);
           if (!overlayController.getExplicitRevealView() && isRevealDeferred() && hasPendingReveal() && (!hasBridgeBuffer() || getBridgeBufferLength() === 0)) {
             consumeDeferredReveal("reveal-deferred-clear");

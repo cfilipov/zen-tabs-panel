@@ -12,10 +12,12 @@ describe("view navigation messages", () => {
 
   it("uses navigate-back for actions and navigate-view for subviews", () => {
     expect(chromeNavigationMessage("actions")).toEqual({ type: "navigate-back" });
-    expect(chromeNavigationMessage("domains", { sortAlpha: true })).toEqual({
+    expect(chromeNavigationMessage("domains", { sortAlpha: true }, 4, 9)).toEqual({
       type: "navigate-view",
       view: "domains",
       params: '{"sortAlpha":true}',
+      inst: 4,
+      readyGen: 9,
     });
   });
 });

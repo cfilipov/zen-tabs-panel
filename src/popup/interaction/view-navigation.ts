@@ -11,9 +11,17 @@ export function encodeViewParams(params?: URLSearchParams | Record<string, unkno
 export function chromeNavigationMessage(
   view: ViewId,
   params?: URLSearchParams | Record<string, unknown>,
+  inst?: number | null,
+  readyGen?: number | null,
 ) {
   if (view === "actions") {
     return { type: "navigate-back" };
   }
-  return { type: "navigate-view", view, params: encodeViewParams(params) };
+  return {
+    type: "navigate-view",
+    view,
+    params: encodeViewParams(params),
+    ...(typeof inst === "number" ? { inst } : {}),
+    ...(typeof readyGen === "number" ? { readyGen } : {}),
+  };
 }

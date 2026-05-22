@@ -16,8 +16,13 @@ export function createPaletteEffects() {
     hidePalette() {
       fireMessage({ type: "hide-palette" });
     },
-    notifyChromeView(view: ViewId, params?: URLSearchParams | Record<string, unknown>) {
-      fireMessage(chromeNavigationMessage(view, params));
+    notifyChromeView(
+      view: ViewId,
+      params?: URLSearchParams | Record<string, unknown>,
+      inst?: number | null,
+      readyGen?: number | null,
+    ) {
+      fireMessage(chromeNavigationMessage(view, params, inst, readyGen));
     },
     navigateBack() {
       return sendMessage<{ view: ViewId; params?: Record<string, unknown> } | null>({ type: "navigate-back" });
@@ -106,13 +111,20 @@ export function createPaletteEffects() {
     clearPreview() {
       fireMessage({ type: "clear-preview" });
     },
-    resizePanel(view: ViewId, height: number, dynamicSidebarWidth?: number, inst?: number | null) {
+    resizePanel(
+      view: ViewId,
+      height: number,
+      dynamicSidebarWidth?: number,
+      inst?: number | null,
+      readyGen?: number | null,
+    ) {
       return sendMessage({
         type: "resize-panel",
         view,
         height,
         dynamicSidebarWidth,
         ...(typeof inst === "number" ? { inst } : {}),
+        ...(typeof readyGen === "number" ? { readyGen } : {}),
       });
     },
     popupReady<T>(message: unknown) {
