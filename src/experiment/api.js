@@ -1079,6 +1079,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       context.extension.getURL("experiment/chord-session.js"),
       chordSessionScope
     );
+    const chordKeyIngressScope = {};
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("experiment/chord-key-ingress.js"),
+      chordKeyIngressScope
+    );
     const overlayControllerScope = {};
     Services.scriptloader.loadSubScript(
       context.extension.getURL("experiment/overlay-controller.js"),
@@ -1211,6 +1216,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // Content frame scripts now only forward normalized keys into this one
     // chrome-side session.
     let chordSession = null;
+    let chordKeyIngress = null;
     function blockReveal(why) {
       try { if (chordSession) chordSession.blockReveal(why); } catch (e) {}
     }
@@ -3280,6 +3286,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
         });
       },
     });
+    chordKeyIngress = chordKeyIngressScope.createChordKeyIngress({
+      chordSession,
+      debugTrace: debugChordTrace,
+      nowMs: () => Date.now(),
+    });
 
     function trackChordTerminalAction(payload) {
       chordSession.recordTerminalAction(payload);
@@ -3341,12 +3352,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
     function disarmChordShims(reason) {
       try { if (chromeShim) chromeShim.disarm(reason || "disarm"); } catch (e) {}
       try { Services.mm.broadcastAsyncMessage("ZenChord:Disarm:" + CHORD_GENERATION, { reason: reason || "disarm" }); } catch (e) {}
+      try { if (chordKeyIngress) chordKeyIngress.resetForArm(); } catch (e) {}
     }
 
     function acceptShimKey(keyData, source) {
       if (!chordSession || !keyData || keyData.kind !== "key") return;
       debugChordTrace("shim-key", { source, key: keyData.key, seq: keyData.shimSeq, ts: keyData.shimTs });
-      chordSession.acceptKey({
+      const normalized = {
         kind: "key",
         source,
         key: keyData.key,
@@ -3361,7 +3373,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
         timeStamp: keyData.shimTs,
         preventDefault() {},
         stopPropagation() {},
-      });
+      };
+      if (chordKeyIngress) chordKeyIngress.submit(normalized, source);
+      else chordSession.acceptKey(normalized);
     }
 
     function dispatchChordAction(payload) {
@@ -4190,6 +4204,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         return;
       }
 
+      try { if (chordKeyIngress) chordKeyIngress.resetForArm(); } catch (e) {}
       try { chordSession.arm(); } catch (e) {}
       try { if (chromeShim) chromeShim.arm(); } catch (e) {}
       try { if (chordSession) chordSession.beginArm(now); } catch (e) {}
@@ -4305,16 +4320,23 @@ this.zenWorkspaces = class extends ExtensionAPI {
         ) {
           debugChordTrace("fallback-hidden-chain-key", { key: e.key, code: e.code, target: name });
           try { Object.defineProperty(e, "__zenTabsPanelFallbackHandled", { value: true }); } catch (_) {}
-          try { e.preventDefault(); } catch (_) {}
-          try { e.stopPropagation(); } catch (_) {}
-          forwardKeyToPopup({
+          const fallbackKey = {
+            kind: "key",
             key: e.key,
             code: e.code,
             shiftKey: !!e.shiftKey,
             altKey: !!e.altKey,
             ctrlKey: !!e.ctrlKey,
             metaKey: !!e.metaKey,
-          });
+            isTrusted: !!e.isTrusted,
+            source: "fallback",
+            timeStamp: typeof e.timeStamp === "number" ? e.timeStamp : undefined,
+            target: name === "browser" ? null : e.target,
+            preventDefault: () => { try { e.preventDefault(); } catch (_) {} },
+            stopPropagation: () => { try { e.stopPropagation(); } catch (_) {} },
+          };
+          if (chordKeyIngress) chordKeyIngress.submit(fallbackKey, "fallback");
+          else chordSession.acceptKey(fallbackKey);
           try { e.stopImmediatePropagation(); } catch (_) {}
           return;
         }
@@ -4345,7 +4367,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           hasRootChild: !!(chordKey && CHORD_TREE && CHORD_TREE.children && CHORD_TREE.children[chordKey]),
         });
         try { Object.defineProperty(e, "__zenTabsPanelFallbackHandled", { value: true }); } catch (_) {}
-        chordSession.acceptKey({
+        const fallbackKey = {
           kind: "key",
           key: e.key,
           code: e.code,
@@ -4359,7 +4381,9 @@ this.zenWorkspaces = class extends ExtensionAPI {
           target: name === "browser" ? null : e.target,
           preventDefault: () => { try { e.preventDefault(); } catch (_) {} },
           stopPropagation: () => { try { e.stopPropagation(); } catch (_) {} },
-        });
+        };
+        if (chordKeyIngress) chordKeyIngress.submit(fallbackKey, "fallback");
+        else chordSession.acceptKey(fallbackKey);
         try { e.stopImmediatePropagation(); } catch (_) {}
       };
       w.addEventListener("keydown", fallbackChordKeydown, { capture: true });
