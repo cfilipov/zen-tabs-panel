@@ -2,6 +2,11 @@
 
 Practical notes for live-debugging this Firefox/Zen WebExtension. Companion to `CLAUDE.md` and `ZEN_INTERNALS.md`.
 
+For ownership boundaries and the tests that enforce them, see `AGENTS.md`.
+The current chord architecture relies on named key-ingress, popup-readiness,
+and chrome-view-transition boundaries; debugging should inspect those owners
+first instead of adding parallel state paths.
+
 ## Starting Zen with the remote debugger
 
 ```bash

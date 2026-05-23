@@ -25,6 +25,12 @@ ownership. Keep new features inside these boundaries:
   is the only chord-tree traverser and owns replay traces, bridge state, leader
   timing, reveal deferral/blocking, and state invariants. Do not add a second
   chord matcher in popup, background, or content scripts.
+- **Physical-key ingress owns exactly-once key consumption.**
+  `src/experiment/chord-key-ingress.js` is the boundary every chrome-side
+  keystroke path crosses before it reaches `ChordSession.acceptKey`: chrome
+  shim, content shim, root fallback, and hidden-chain fallback all submit
+  normalized key data through `ingress.submit(keyData, source)`. No path should
+  call `acceptKey` or `forwardKeyToPopup` directly to handle a physical key.
 - **Shims only capture keys.** `src/shared/chord-shim.js` and the chrome/content
   listeners synchronously suppress capturable keydowns and forward normalized
   keys to `ChordSession`. They should stay stateless apart from armed/disarmed
@@ -34,6 +40,19 @@ ownership. Keep new features inside these boundaries:
   stack, and resize diagnostics belong to `src/experiment/overlay-controller.js`.
   `api.js` should provide the chrome/XUL implementation details; do not scatter
   popup-instance or pending-reveal state back into top-level globals.
+- **Popup readiness gating is a named boundary.**
+  `src/experiment/popup-readiness-guard.js` owns
+  `acceptsPopupViewStateMessage(deps, inst, readyGen)`, the authority for
+  whether inbound popup-to-chrome state writes are accepted. Visible mouse
+  navigation may omit `readyGen` only when there is no active bridge and no
+  pending reveal.
+- **Chrome view transitions go through the coordinator.**
+  `createChromeViewTransitionCoordinator` in `src/experiment/api.js` owns every
+  write to `overlayController.setCurrentView` / `resetViewState`, every
+  `chordSession.retargetActiveBridgeView`, every `armRevealTimer`, and every
+  `WarmRearm` send. Enforcement lives in
+  `src/experiment/chrome-view-transition-boundary.test.ts`, which strips the
+  coordinator body and greps the remaining source for forbidden call shapes.
 - **Chrome owns authoritative view models where migrated.** Recents, tab lists,
   domains, workspaces, folders, containers, profiles, duplicates, actions, and
   duplicate-prompt tab rows are driven by chrome-side DTO/model APIs. The popup
@@ -55,6 +74,13 @@ ownership. Keep new features inside these boundaries:
   popup. If the popup still owns a special-case UI view, keep chrome's knowledge
   transitional and explicit. Two independently computed row orders are a bug
   class, not an optimization.
+
+### Boundary Enforcement Pattern
+
+When a new owner boundary is introduced, ship the enforcement test in the same
+commit. The two cheapest patterns are source-grep tests that forbid bypassing a
+coordinator and small pure modules, like `popup-readiness-guard.js`, that can be
+loaded directly in unit tests with injected dependencies.
 
 ## Critical Gotchas
 
