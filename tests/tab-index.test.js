@@ -209,6 +209,55 @@ test("tab index returns active rows and requested DOM-id rows without a full tra
   ]);
 });
 
+test("tab index exposes perf stats with documented shape", () => {
+  let now = 0;
+  const tabs = [
+    fakeTab("tab1", "https://example.com/a", "ws", { active: true }),
+    fakeTab("tab2", "https://example.com/b", "ws"),
+  ];
+  const { index } = makeIndexWithDeps(tabs);
+  index.resetPerfStats();
+  assert.deepEqual(index.getPerfStats(), {
+    rebuildMs: 0,
+    actionsSnapshotMs: 0,
+    parentRowsMs: 0,
+    childrenOfParentMs: 0,
+    getWindowMsByView: {},
+    callCounts: {
+      rebuild: 0,
+      actionsSnapshot: 0,
+      parentRows: 0,
+      childrenOfParent: 0,
+      getWindow: 0,
+    },
+  });
+
+  const measured = createZenTabIndex({
+    getWin: fakeWindow,
+    getAllTabElements: () => tabs,
+    readTabStats: () => ({ focusCount: 0 }),
+    getExtTabId: (tab) => Number(tab.id.replace(/\D/g, "")) || null,
+    unwrapFavicon: (url) => url,
+    readTabValue: () => null,
+    ensureTabUuid: (tab) => `uuid-${tab.id}`,
+    recordInterval() {},
+    nowMs: () => ++now,
+    isDuplicateNavigationUrl,
+  });
+  measured.getWindow("domains", 0, 1, {});
+  measured.getActionsSnapshot();
+  const stats = measured.getPerfStats();
+
+  assert.equal(typeof stats.rebuildMs, "number");
+  assert.equal(typeof stats.actionsSnapshotMs, "number");
+  assert.equal(typeof stats.parentRowsMs, "number");
+  assert.equal(typeof stats.childrenOfParentMs, "number");
+  assert.equal(typeof stats.getWindowMsByView.domains, "number");
+  assert.equal(stats.callCounts.rebuild, 1);
+  assert.equal(stats.callCounts.actionsSnapshot, 1);
+  assert.equal(stats.callCounts.getWindow, 1);
+});
+
 test("tab index windows stay bounded for large tab sets", () => {
   const tabs = Array.from({ length: 3000 }, (_, i) =>
     fakeTab(`tab-${i + 1}`, `https://example.test/${i + 1}`, i % 2 ? "ws-1" : "ws-2", {

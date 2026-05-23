@@ -17,6 +17,87 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
   let incrementalUpdateCount = 0;
   let dirtyFallbackCount = 0;
   let lastRebuildMs = 0;
+  const nowMs = typeof deps.nowMs === "function"
+    ? deps.nowMs
+    : typeof deps.now === "function"
+    ? deps.now
+    : () => {
+        try {
+          const win = deps.getWin && deps.getWin();
+          if (win && win.performance && typeof win.performance.now === "function") {
+            return win.performance.now();
+          }
+        } catch (e) {}
+        return Date.now();
+      };
+  const perfStats = {
+    rebuildMs: 0,
+    actionsSnapshotMs: 0,
+    parentRowsMs: 0,
+    childrenOfParentMs: 0,
+    getWindowMsByView: Object.create(null),
+    callCounts: {
+      rebuild: 0,
+      actionsSnapshot: 0,
+      parentRows: 0,
+      childrenOfParent: 0,
+      getWindow: 0,
+    },
+  };
+
+  function measurePerf(name, fn) {
+    const startMs = nowMs();
+    try {
+      return fn();
+    } finally {
+      const elapsed = Math.max(0, nowMs() - startMs);
+      if (name === "rebuild") {
+        perfStats.rebuildMs = elapsed;
+        perfStats.callCounts.rebuild++;
+      } else if (name === "actionsSnapshot") {
+        perfStats.actionsSnapshotMs = elapsed;
+        perfStats.callCounts.actionsSnapshot++;
+      } else if (name === "parentRows") {
+        perfStats.parentRowsMs = elapsed;
+        perfStats.callCounts.parentRows++;
+      } else if (name === "childrenOfParent") {
+        perfStats.childrenOfParentMs += elapsed;
+        perfStats.callCounts.childrenOfParent++;
+      }
+    }
+  }
+
+  function recordGetWindowPerf(view, elapsed) {
+    const key = view || "all";
+    perfStats.getWindowMsByView[key] = Math.max(0, elapsed);
+    perfStats.callCounts.getWindow++;
+  }
+
+  function clonePerfStats() {
+    return {
+      rebuildMs: perfStats.rebuildMs,
+      actionsSnapshotMs: perfStats.actionsSnapshotMs,
+      parentRowsMs: perfStats.parentRowsMs,
+      childrenOfParentMs: perfStats.childrenOfParentMs,
+      getWindowMsByView: { ...perfStats.getWindowMsByView },
+      callCounts: { ...perfStats.callCounts },
+    };
+  }
+
+  function resetPerfStats() {
+    perfStats.rebuildMs = 0;
+    perfStats.actionsSnapshotMs = 0;
+    perfStats.parentRowsMs = 0;
+    perfStats.childrenOfParentMs = 0;
+    perfStats.getWindowMsByView = Object.create(null);
+    perfStats.callCounts = {
+      rebuild: 0,
+      actionsSnapshot: 0,
+      parentRows: 0,
+      childrenOfParent: 0,
+      getWindow: 0,
+    };
+  }
 
   function markDirty() {
     dirty = true;
@@ -189,15 +270,17 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
   function rebuildIfNeeded() {
     start();
     if (!dirty) return;
-    try { deps.recordInterval(); } catch (e) {}
-    const startMs = deps.now ? deps.now() : Date.now();
-    const win = deps.getWin();
-    const tabToGroupId = splitGroupMap(win);
-    rows = deps.getAllTabElements().map((tab, index) => readRow(tab, index, tabToGroupId));
-    byDomId = new Map(rows.map((row) => [row.domId, row]));
-    dirty = false;
-    rebuildCount++;
-    lastRebuildMs = Math.max(0, (deps.now ? deps.now() : Date.now()) - startMs);
+    measurePerf("rebuild", () => {
+      try { deps.recordInterval(); } catch (e) {}
+      const startMs = nowMs();
+      const win = deps.getWin();
+      const tabToGroupId = splitGroupMap(win);
+      rows = deps.getAllTabElements().map((tab, index) => readRow(tab, index, tabToGroupId));
+      byDomId = new Map(rows.map((row) => [row.domId, row]));
+      dirty = false;
+      rebuildCount++;
+      lastRebuildMs = Math.max(0, nowMs() - startMs);
+    });
   }
 
   function currentTabElements() {
@@ -389,9 +472,11 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
   }
 
   function childrenOfParent(sourceRows, parent) {
-    return sourceRows.filter((row) =>
-      (parent.panelTabUuid && row.panelParentUuid === parent.panelTabUuid) ||
-      (!row.panelParentUuid && row.openerTabDomId === parent.domId)
+    return measurePerf("childrenOfParent", () =>
+      sourceRows.filter((row) =>
+        (parent.panelTabUuid && row.panelParentUuid === parent.panelTabUuid) ||
+        (!row.panelParentUuid && row.openerTabDomId === parent.domId)
+      )
     );
   }
 
@@ -409,17 +494,19 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
   }
 
   function parentRows(sourceRows) {
-    const parentUuids = new Set();
-    const parentDomIds = new Set();
-    for (const row of sourceRows) {
-      if (row.panelParentUuid) parentUuids.add(row.panelParentUuid);
-      else if (row.openerTabDomId) parentDomIds.add(row.openerTabDomId);
-    }
-    return sourceRows.flatMap((row) => {
-      const isParent = (row.panelTabUuid && parentUuids.has(row.panelTabUuid)) || parentDomIds.has(row.domId);
-      if (!isParent) return [];
-      const childCount = childrenOfParent(sourceRows, row).length;
-      return childCount > 0 ? [{ ...row, childCount }] : [];
+    return measurePerf("parentRows", () => {
+      const parentUuids = new Set();
+      const parentDomIds = new Set();
+      for (const row of sourceRows) {
+        if (row.panelParentUuid) parentUuids.add(row.panelParentUuid);
+        else if (row.openerTabDomId) parentDomIds.add(row.openerTabDomId);
+      }
+      return sourceRows.flatMap((row) => {
+        const isParent = (row.panelTabUuid && parentUuids.has(row.panelTabUuid)) || parentDomIds.has(row.domId);
+        if (!isParent) return [];
+        const childCount = childrenOfParent(sourceRows, row).length;
+        return childCount > 0 ? [{ ...row, childCount }] : [];
+      });
     });
   }
 
@@ -577,8 +664,13 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
         incrementalUpdateCount,
         dirtyFallbackCount,
         lastRebuildMs,
+        perf: clonePerfStats(),
       };
     },
+    getPerfStats() {
+      return clonePerfStats();
+    },
+    resetPerfStats,
     getVersion() {
       rebuildIfNeeded();
       return version;
@@ -593,31 +685,36 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       };
     },
     getWindow(view, offset, limit, params) {
-      const viewName = view || "all";
-      const viewRows = rowsForView(viewName, params || {});
-      const start = Math.max(0, Number(offset) || 0);
-      const size = Math.max(0, Math.min(Number(limit) || 50, 200));
-      const faviconRefs = { next: 1, byUrl: new Map(), map: Object.create(null) };
-      const windowRows = viewRows
-        .slice(start, start + size)
-        .map((row) => row.kind === "domain" ? row : compactTabRowForWindow(row, faviconRefs));
-      return {
-        version,
-        view: viewName,
-        offset: start,
-        limit: size,
-        total: viewRows.length,
-        rows: windowRows,
-        favicons: faviconRefs.map,
-        model: {
-          id: viewName,
-          view: viewName,
+      const startMs = nowMs();
+      try {
+        const viewName = view || "all";
+        const viewRows = rowsForView(viewName, params || {});
+        const start = Math.max(0, Number(offset) || 0);
+        const size = Math.max(0, Math.min(Number(limit) || 50, 200));
+        const faviconRefs = { next: 1, byUrl: new Map(), map: Object.create(null) };
+        const windowRows = viewRows
+          .slice(start, start + size)
+          .map((row) => row.kind === "domain" ? row : compactTabRowForWindow(row, faviconRefs));
+        return {
           version,
-          rowIntents: windowRows
-            .map((row, index) => rowIntentForViewRow(viewName, row, start + index))
-            .filter((intent) => !!intent),
-        },
-      };
+          view: viewName,
+          offset: start,
+          limit: size,
+          total: viewRows.length,
+          rows: windowRows,
+          favicons: faviconRefs.map,
+          model: {
+            id: viewName,
+            view: viewName,
+            version,
+            rowIntents: windowRows
+              .map((row, index) => rowIntentForViewRow(viewName, row, start + index))
+              .filter((intent) => !!intent),
+          },
+        };
+      } finally {
+        recordGetWindowPerf(view || "all", nowMs() - startMs);
+      }
     },
     getRowTarget(domId) {
       rebuildIfNeeded();
@@ -662,6 +759,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       return duplicateGroups(params || {});
     },
     getActionsSnapshot() {
+      return measurePerf("actionsSnapshot", () => {
       rebuildIfNeeded();
       const activeTab = rows.find((row) => row.active) || null;
       const activeParentUuid = activeTab?.panelParentUuid || null;
@@ -778,6 +876,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
           "unvisited-oldest": previewRow(oldestDistinct),
         },
       };
+      });
     },
   };
 };

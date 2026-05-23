@@ -3290,12 +3290,16 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const inspector = () => getChordStateSnapshot();
       inspector.__zenTabsPanelGeneration = CHORD_GENERATION;
       w.__ztpChordState = inspector;
+      w.__ztpTabIndexPerf = () => tabIndex.getPerfStats();
+      w.__ztpTabIndexPerfReset = () => tabIndex.resetPerfStats();
       context.callOnClose({
         close() {
           try {
             if (w.__ztpChordState && w.__ztpChordState.__zenTabsPanelGeneration === CHORD_GENERATION) {
               delete w.__ztpChordState;
             }
+            delete w.__ztpTabIndexPerf;
+            delete w.__ztpTabIndexPerfReset;
           } catch (e) {}
         },
       });
