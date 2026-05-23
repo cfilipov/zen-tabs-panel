@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "screenshots:readme": "python3 tools/readme-screenshots.py",
     "smoke": "tools/popup-smoke.py",
-    "smoke:popup": "tools/popup-smoke.py"
+    "smoke:popup": "tools/popup-smoke.py",
+    "smoke:chord": "python3 tools/chord-integration-smoke.py"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

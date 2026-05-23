@@ -1485,11 +1485,35 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return true;
     }
 
+    function recordWarmRearmDebug(payload, sent, rejectReason) {
+      const w = getWin();
+      if (!w || !w.__zenTabsPanelSmokeEnabled) return;
+      let attempted = payload || null;
+      try {
+        attempted = JSON.parse(JSON.stringify(payload || null));
+      } catch (e) {}
+      const record = {
+        at: Date.now(),
+        attemptedPayload: attempted,
+        sent: !!sent,
+        rejectReason: rejectReason || null,
+        currentView: currentViewName() || "actions",
+        currentParams: currentViewParams() || {},
+      };
+      w.__zenTabsPanelLastWarmRearm = record;
+      if (!Array.isArray(w.__zenTabsPanelWarmRearmRecords)) w.__zenTabsPanelWarmRearmRecords = [];
+      w.__zenTabsPanelWarmRearmRecords.push(record);
+    }
+
     function sendWarmRearmMessage(br, payload) {
       const mm = browserMessageManager(br);
-      if (!mm) return false;
+      if (!mm) {
+        recordWarmRearmDebug(payload, false, "no-message-manager");
+        return false;
+      }
       sendPopupOptions(br);
       if (!traceChromeViewInvariant("sendWarmRearm", payload && payload.view, payload && payload.params)) {
+        recordWarmRearmDebug(payload, false, "chrome-view-invariant");
         return false;
       }
       try {
@@ -1499,8 +1523,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
           view: payload && Object.prototype.hasOwnProperty.call(payload, "view") ? payload.view : null,
           params: payload && Object.prototype.hasOwnProperty.call(payload, "params") ? payload.params : null,
         });
+        recordWarmRearmDebug(payload, true, null);
         return true;
       } catch (e) {
+        recordWarmRearmDebug(payload, false, "send-failed");
         return false;
       }
     }

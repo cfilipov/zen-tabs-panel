@@ -248,6 +248,33 @@ python3 tools/firefox-eval.py '(() => {
 python3 tools/firefox-eval.py '(() => JSON.stringify(Services.wm.getMostRecentWindow("navigator:browser").__zttBgProbe, null, 2))()'
 ```
 
+## Chord Integration Smoke
+
+Run the chord state-alignment smoke against a Zen instance started with the
+remote debugger:
+
+```bash
+npm run smoke:chord
+```
+
+This live check drives chord keys through the same generation-tagged IPC path
+used by the content shim, then inspects chrome state and the debug-gated
+WarmRearm record. It is meant to catch the split-state class where chrome's
+`currentViewParams` diverge from the WarmRearm payload sent to the popup, such
+as the historical `domain-tabs` reset-to-`{}` regression. `npm run smoke:popup`
+still covers popup rendering and visible bridge dispatch; `smoke:chord` covers
+chrome state alignment.
+
+Synthetic IPC does not prove that real browser key delivery suppresses default
+input behavior. For the historical focused-input leak class, run:
+
+```bash
+npm run smoke:chord -- --manual-input
+```
+
+The script will pause and ask for a real-keyboard check against a focused
+content `<input>`.
+
 In the 2026-05-14 session, this showed `browser.tabs.query({ currentWindow: true })` returning 466 tabs while `browser.zenWorkspaces.getAllTabs()` returned 1041 tabs, confirming that WebExtension tab queries are not authoritative across workspaces.
 
 You can also drive extension APIs from this background frame-script path. Example: `await cw.browser.zenWorkspaces.showPalette()` opens the palette without manually pressing the toolbar button or keyboard shortcut.
