@@ -12,7 +12,8 @@
     "screenshots:readme": "python3 tools/readme-screenshots.py",
     "smoke": "tools/popup-smoke.py",
     "smoke:popup": "tools/popup-smoke.py",
-    "smoke:chord": "python3 tools/chord-integration-smoke.py"
+    "smoke:chord": "python3 tools/chord-integration-smoke.py",
+    "smoke:perf": "python3 tools/popup-smoke.py --perf --tab-count 3000 --assert-perf --timeout 180"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

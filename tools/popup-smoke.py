@@ -19,6 +19,12 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 FIREFOX_EVAL = ROOT / "tools" / "firefox-eval.py"
+PERF_THRESHOLDS_MS = {
+    "rebuildMs": 50.0,
+    "actionsSnapshotMs": 20.0,
+    "parentRowsMs": 30.0,
+    "getWindowMs": 10.0,
+}
 
 
 def run_eval(js: str) -> str:
@@ -47,13 +53,20 @@ def eval_json(js: str) -> Any:
         raise RuntimeError(f"Expected JSON from firefox-eval, got: {out}") from exc
 
 
-def start_smoke() -> str:
+def start_smoke(tab_count: int = 0, perf: bool = False) -> str:
     js = r"""
 (() => {
   const w = Services.wm.getMostRecentWindow("navigator:browser");
   const runId = "popup-smoke-" + Date.now();
   const resultKey = "__ztpPopupSmoke";
   w[resultKey] = { ok: false, done: false, runId, steps: [], startedAt: Date.now() };
+  const PERF_ENABLED = __PERF_ENABLED__;
+  const TAB_COUNT = __TAB_COUNT__;
+
+  function perfSnapshot() {
+    if (!PERF_ENABLED || typeof w.__ztpTabIndexPerf !== "function") return null;
+    try { return w.__ztpTabIndexPerf(); } catch (e) { return { error: String(e && e.message || e) }; }
+  }
 
   const record = (name, data = {}) => {
     w[resultKey].steps.push({ name, ...data });
@@ -278,6 +291,19 @@ def start_smoke() -> str:
     });
   }
 
+  async function seedTabsIfRequested() {
+    if (!TAB_COUNT || TAB_COUNT <= 0) return;
+    record("seed-tabs-start", { tabCount: TAB_COUNT });
+    await runInBackground(`async (cw) => {
+      const count = ${TAB_COUNT};
+      for (let index = 0; index < count; index += 1) {
+        await cw.browser.tabs.create({ url: "about:blank", active: false });
+      }
+      return count;
+    }`);
+    record("seed-tabs-done", { tabCount: TAB_COUNT });
+  }
+
   async function hidePaletteForNextOpen(label) {
     record(label);
     await runInBackground(`async (cw) => {
@@ -367,6 +393,10 @@ def start_smoke() -> str:
   (async () => {
     try {
       record("hide-palette");
+      if (PERF_ENABLED && typeof w.__ztpTabIndexPerfReset === "function") {
+        try { w.__ztpTabIndexPerfReset(); } catch (e) {}
+      }
+      await seedTabsIfRequested();
       await runInBackground(`async (cw) => {
         await cw.browser.zenWorkspaces.hidePalette();
         return true;
@@ -666,6 +696,7 @@ def start_smoke() -> str:
         message: "popup smoke passed",
         steps: compactSuccessSteps(w[resultKey].steps),
         finalState,
+        finalPerf: perfSnapshot(),
         finishedAt: Date.now()
       };
     } catch (e) {
@@ -679,6 +710,8 @@ def start_smoke() -> str:
   return JSON.stringify({ ok: true, runId, resultKey });
 })()
 """
+    js = js.replace("__PERF_ENABLED__", "true" if perf else "false")
+    js = js.replace("__TAB_COUNT__", str(max(0, int(tab_count or 0))))
     started = eval_json(js)
     if not started.get("ok"):
         raise RuntimeError(f"Could not start smoke: {started}")
@@ -698,13 +731,35 @@ def poll_smoke(timeout: float) -> dict[str, Any]:
     raise RuntimeError(f"Timed out waiting for popup smoke; last state:\n{json.dumps(last, indent=2)}")
 
 
+def assert_perf_thresholds(result: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    stats = result.get("finalPerf") or {}
+    if not stats:
+        return ["missing finalPerf stats"]
+    for key in ("rebuildMs", "actionsSnapshotMs", "parentRowsMs"):
+        value = float(stats.get(key) or 0)
+        limit = PERF_THRESHOLDS_MS[key]
+        if value > limit:
+            failures.append(f"{key} {value:.1f}ms > {limit:.1f}ms")
+    windows = stats.get("getWindowMsByView") or {}
+    limit = PERF_THRESHOLDS_MS["getWindowMs"]
+    for view, value in sorted(windows.items()):
+        measured = float(value or 0)
+        if measured > limit:
+            failures.append(f"getWindow[{view}] {measured:.1f}ms > {limit:.1f}ms")
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the live ErgoZen popup smoke test.")
     parser.add_argument("--timeout", type=float, default=90.0, help="seconds to wait for the smoke to finish")
+    parser.add_argument("--perf", action="store_true", help="capture tab-index perf stats in smoke output")
+    parser.add_argument("--tab-count", type=int, default=0, help="seed this many about:blank tabs before running")
+    parser.add_argument("--assert-perf", action="store_true", help="fail when perf stats exceed documented thresholds")
     args = parser.parse_args()
 
     try:
-        run_id = start_smoke()
+        run_id = start_smoke(tab_count=args.tab_count, perf=args.perf or args.assert_perf)
         result = poll_smoke(args.timeout)
     except Exception as exc:
         print(f"popup smoke failed to run: {exc}", file=sys.stderr)
@@ -713,6 +768,13 @@ def main() -> int:
     print(json.dumps(result, indent=2))
     if not result.get("ok"):
         return 1
+    if args.assert_perf:
+        failures = assert_perf_thresholds(result)
+        if failures:
+            print("perf thresholds failed:", file=sys.stderr)
+            for failure in failures:
+                print(f"  - {failure}", file=sys.stderr)
+            return 1
     if result.get("runId") != run_id:
         print(f"warning: smoke run id changed from {run_id} to {result.get('runId')}", file=sys.stderr)
     return 0

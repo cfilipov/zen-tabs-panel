@@ -275,6 +275,36 @@ npm run smoke:chord -- --manual-input
 The script will pause and ask for a real-keyboard check against a focused
 content `<input>`.
 
+## Popup Perf Smoke
+
+The popup smoke can also capture tab-index timing counters:
+
+```bash
+python3 tools/popup-smoke.py --perf
+```
+
+For a large-session run, seed tabs at runtime instead of committing a brittle
+profile fixture:
+
+```bash
+npm run smoke:perf
+```
+
+`smoke:perf` currently seeds 3000 `about:blank` tabs, captures
+`__ztpTabIndexPerf()` at the end of the run, and checks these initial
+guardrail thresholds:
+
+| Metric | Guardrail |
+| --- | ---: |
+| `rebuildMs` | < 50ms |
+| `actionsSnapshotMs` | < 20ms |
+| `parentRowsMs` | < 30ms |
+| each `getWindowMsByView[*]` | < 10ms |
+
+If runtime tab seeding becomes too slow for routine use, regenerate the same
+state through this seeder first and only then consider committing a documented
+profile fixture.
+
 In the 2026-05-14 session, this showed `browser.tabs.query({ currentWindow: true })` returning 466 tabs while `browser.zenWorkspaces.getAllTabs()` returned 1041 tabs, confirming that WebExtension tab queries are not authoritative across workspaces.
 
 You can also drive extension APIs from this background frame-script path. Example: `await cw.browser.zenWorkspaces.showPalette()` opens the palette without manually pressing the toolbar button or keyboard shortcut.
