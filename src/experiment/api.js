@@ -4821,7 +4821,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         "    __constants.CHORD_PREFIX_TIMEOUT_MS = prefixMs;\n" +
         "  }\n" +
         "});\n" +
-        "addMessageListener('ZenDuplicate:SetIntercept', function(m){\n" +
+        "addMessageListener('ZenDuplicate:SetIntercept:' + __GEN, function(m){\n" +
         "  if (__shutdown) return;\n" +
         "  __duplicateInterceptEnabled = !!(m && m.data && m.data.enabled);\n" +
         "  if (!__duplicateInterceptEnabled) __duplicateUrlCache = Object.create(null);\n" +
@@ -7727,7 +7727,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         async setDuplicateTabIntercept(enabled) {
           duplicateTabInterceptEnabled = !!enabled;
           try {
-            Services.mm.broadcastAsyncMessage("ZenDuplicate:SetIntercept", {
+            Services.mm.broadcastAsyncMessage("ZenDuplicate:SetIntercept:" + CHORD_GENERATION, {
               enabled: duplicateTabInterceptEnabled,
             });
           } catch (e) {}
