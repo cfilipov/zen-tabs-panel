@@ -152,6 +152,13 @@ async function scheduleAutoMove(tabId, delay) {
   }
 }
 
+const autoActionGatekeeper = createAutoActionGatekeeper({
+  getSettingsSnapshot: () => Object.assign({}, settings),
+  cancelAutoMove,
+  executeAutoMove: (tabId, snapshot) => scheduleAutoMove(tabId, Number(snapshot.autoMoveDelay) || 0),
+  executeAutoClose: executeAutoCloseWithSnapshot,
+});
+
 // ---------------------------------------------------------------------------
 // Auto-close sweep — periodic cleanup of stale unpinned tabs
 //
@@ -166,10 +173,8 @@ const THRESHOLD_MS = {
   "1mo": 30 * 24 * 60 * 60 * 1000,
 };
 
-async function autoCloseSweep() {
-  if (!settings.autoCloseEnabled) return;
-
-  const threshold = THRESHOLD_MS[settings.autoCloseThreshold] || THRESHOLD_MS["48h"];
+async function executeAutoCloseWithSnapshot(snapshot) {
+  const threshold = THRESHOLD_MS[snapshot.autoCloseThreshold] || THRESHOLD_MS["48h"];
   const now = Date.now();
 
   const cutoff = now - threshold;
@@ -198,6 +203,10 @@ async function autoCloseSweep() {
   }
 }
 
+async function autoCloseSweep() {
+  return autoActionGatekeeper.evaluateAutoCloseSweep();
+}
+
 // Create the alarm only when auto-close is enabled — when disabled (the
 // default) we want zero idle CPU. The alarm is added/removed in response to
 // settings changes via the storage.onChanged listener above.
@@ -220,11 +229,7 @@ browser.alarms.onAlarm.addListener((alarm) => {
 // ---------------------------------------------------------------------------
 
 browser.tabs.onActivated.addListener((activeInfo) => {
-  if (settings.autoMoveEnabled) {
-    scheduleAutoMove(activeInfo.tabId, settings.autoMoveDelay);
-  } else {
-    cancelAutoMove();
-  }
+  autoActionGatekeeper.evaluateAutoMoveOnActivate(activeInfo.tabId).catch(() => {});
   api.markTabVisitedByExtId(activeInfo.tabId).catch(() => {});
 });
 

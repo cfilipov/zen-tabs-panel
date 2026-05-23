@@ -45,6 +45,7 @@
       "shared/constants.js",
       "shared/navigation-url.js",
       "lib/tab-sort.js",
+      "background/auto-action-gatekeeper.js",
       "background.js"
     ],
     "persistent": true

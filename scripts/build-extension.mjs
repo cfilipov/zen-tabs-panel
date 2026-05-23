@@ -12,6 +12,7 @@ const distRoot = path.join(repoRoot, "dist");
 const extensionEntries = [
   "manifest.json",
   "background.js",
+  "background",
   "experiment",
   "popup",
   "shared",
