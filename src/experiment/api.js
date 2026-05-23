@@ -1094,6 +1094,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
       context.extension.getURL("experiment/popup-readiness-guard.js"),
       popupReadinessGuardScope
     );
+    const workspaceActionCoordinatorScope = {};
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("experiment/workspace-action-coordinator.js"),
+      workspaceActionCoordinatorScope
+    );
     const KEYBINDINGS = chordSupportScope.ZEN_KEYBINDINGS || [];
     const ACTION_SECTIONS = chordSupportScope.ZEN_ACTION_SECTIONS || [];
     const WORKSPACE_DIGIT_CHORDS = chordSupportScope.ZEN_WORKSPACE_DIGIT_CHORDS || [];
@@ -1150,6 +1155,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     const workspacesModel = workspacesModelScope.createZenWorkspacesModel({
       getWorkspaceRows,
       getWorkspaceTabCounts: () => tabIndex.getWorkspaceTabCounts(),
+    });
+    const workspaceActionCoordinator = workspaceActionCoordinatorScope.createWorkspaceActionCoordinator({
+      getWorkspaceRow: (workspaceId) => getWorkspaceRows(false).find((row) => row.uuid === workspaceId) || null,
+      switchWorkspace: switchWorkspaceByIdInternal,
+      moveToWorkspace: moveSelectedTabsToWorkspaceInternal,
     });
     context.callOnClose({
       close() {
@@ -1941,9 +1951,15 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!w?.gZenWorkspaces) return false;
       const list = w.gZenWorkspaces.getWorkspaces();
       const workspace = Array.isArray(list) ? list[rowIndex] : null;
-      if (!workspace?.uuid || workspace.uuid === w.gZenWorkspaces.activeWorkspace) return false;
+      return switchWorkspaceByIdInternal(workspace?.uuid);
+    }
+
+    function switchWorkspaceByIdInternal(workspaceId) {
+      const w = getWin();
+      if (!w?.gZenWorkspaces || !workspaceId || workspaceId === w.gZenWorkspaces.activeWorkspace) return false;
+      if (!getWorkspaceRows(false).some((row) => row.uuid === workspaceId)) return false;
       try {
-        w.gZenWorkspaces.changeWorkspaceWithID(workspace.uuid);
+        w.gZenWorkspaces.changeWorkspaceWithID(workspaceId);
         return true;
       } catch (err) {
         return false;
@@ -4196,7 +4212,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (index < 0 || rows[index].isActive) return activationNoop();
         chordSession.recordTerminalAction({ type: "switch-workspace", index });
         if (destroyBeforeAction) overlayController.destroy();
-        void switchWorkspaceByIndexInternal(index);
+        void workspaceActionCoordinator.executeWorkspaceSwitch({
+          workspaceId: rows[index].uuid,
+          expectedRowId: resolved.workspaceId,
+        });
         return activationTerminal();
       }
 
@@ -4269,7 +4288,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
           recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
           void (async () => {
             if (destroy) overlayController.destroy();
-            await moveSelectedTabsToWorkspaceInternal(row.uuid, !!switchToTarget);
+            await workspaceActionCoordinator.executeWorkspaceMove({
+              workspaceId: row.uuid,
+              expectedRowId: expectedRowId || row.uuid,
+              switchToTarget: !!switchToTarget,
+            });
           })();
           return activationTerminal();
         }
