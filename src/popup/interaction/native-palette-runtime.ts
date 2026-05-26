@@ -1,9 +1,11 @@
 import type { NavigationHistory } from "../runtime/history-client";
+import type { DomainCloseConfirmAction } from "./domain-close-confirm-options";
 import type { DuplicatePromptAction } from "./duplicate-prompt-options";
 import type { InteractionRuntimeHandlers } from "./runtime";
 
 export type NativePaletteRuntimeDeps = {
   runDuplicatePromptAction: (action: DuplicatePromptAction) => Promise<void> | void;
+  runDomainCloseConfirmAction: (action: DomainCloseConfirmAction) => Promise<void> | void;
   getNavigationHistory: () => NavigationHistory | null;
   navigateToHistoryIndex: (index: number) => Promise<void> | void;
   cancel: () => Promise<void> | void;
@@ -39,6 +41,7 @@ function navigateHistoryDelta(deps: NativePaletteRuntimeDeps, delta: 1 | -1) {
 export function createNativePaletteInteractionRuntime(deps: NativePaletteRuntimeDeps): InteractionRuntimeHandlers {
   return {
     runDuplicatePromptAction: deps.runDuplicatePromptAction,
+    runDomainCloseConfirmAction: deps.runDomainCloseConfirmAction,
     navigateHistoryDelta: (delta) => navigateHistoryDelta(deps, delta),
     cancel: deps.cancel,
     back: deps.back,

@@ -85,6 +85,7 @@ const CONCRETE_VIEW_TITLES: Partial<Record<ViewId, string>> = {
   duplicates: "Duplicates",
   "tab-info": "Tab info",
   "duplicate-prompt": "Duplicate tab already open",
+  "domain-close-confirm": "Close domain tabs",
   "move-to-workspace": "Move to workspace",
   "open-in-container": "New container tab",
   "move-to-folder": "Move to folder",
@@ -99,6 +100,7 @@ export type ViewOpenPlan =
   | { kind: "actions" }
   | { kind: "list"; view: NativeListView; params: Record<string, unknown>; domain: string | null }
   | { kind: "prefix"; view: NativePrefixView }
+  | { kind: "domain-close-confirm"; params: Record<string, unknown> }
   | { kind: "loader"; view: LoaderView; loader: ViewLoaderId }
   | { kind: "unsupported"; view: ViewId };
 
@@ -161,6 +163,7 @@ export function resolveViewOpenPlan(
     };
   }
   if (isNativePrefixView(view)) return { kind: "prefix", view };
+  if (view === "domain-close-confirm") return { kind: "domain-close-confirm", params: paramsRecord(params) };
   if (view in VIEW_LOADERS) {
     const loaderView = view as LoaderView;
     return { kind: "loader", view: loaderView, loader: VIEW_LOADERS[loaderView] };

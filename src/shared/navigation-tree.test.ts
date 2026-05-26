@@ -44,6 +44,13 @@ describe("navigation tree", () => {
     expect(missing).toEqual([]);
   });
 
+  it("keeps the page-two new-tab actions on their assigned chords", () => {
+    const byId = new Map(flatten(NAVIGATION_TREE).map((node) => [node.id, node]));
+
+    expect(byId.get("mark-tabs-new")?.chord).toBe("Shift+N");
+    expect(byId.get("open-in-container")?.chord).toBe("Shift+X");
+  });
+
   it("uses the same display format as the legacy badges", () => {
     expect(displayKey("Shift+T")).toBe("⇧T");
     expect(displayKey(",")).toBe(",");

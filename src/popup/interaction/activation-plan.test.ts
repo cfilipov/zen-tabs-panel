@@ -29,6 +29,13 @@ describe("activation plan", () => {
       .toEqual({ kind: "duplicate-prompt", index: 1, source: "shortcut" });
   });
 
+  it("routes domain-close confirmation activation through its popup-owned resolver", () => {
+    expect(activationPlanForSelection("domain-close-confirm", 1))
+      .toEqual({ kind: "domain-close-confirm", index: 1 });
+    expect(activationPlanForShortcut("domain-close-confirm", 2))
+      .toEqual({ kind: "domain-close-confirm", index: 2 });
+  });
+
   it("ignores unsupported views", () => {
     expect(activationPlanForSelection("tab-info", 0)).toEqual({ kind: "none" });
     expect(activationPlanForShortcut("actions", 0)).toEqual({ kind: "none" });

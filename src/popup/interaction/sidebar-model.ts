@@ -55,7 +55,7 @@ function sidebarHints(context: SidebarModelContext): SidebarHintModel[] {
     const available = context.closeSelectionAvailable ?? context.selectedIndex >= 0;
     hints.push({
       id: "close",
-      label: "Close tab",
+      label: context.view === "domains" ? "Close domain" : "Close tab",
       badge: "W",
       hidden: !available,
     });

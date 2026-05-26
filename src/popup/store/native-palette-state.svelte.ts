@@ -43,6 +43,11 @@ export type NativePaletteState = {
   duplicatePromptDomId: string | null;
   duplicatePromptGroup: DuplicateGroupRow | null;
   duplicatePromptWorkspaces: WorkspaceRow[];
+  domainCloseDomain: string;
+  domainCloseWorkspaceId: string;
+  domainCloseCount: number;
+  domainCloseUnpinnedCount: number;
+  domainClosePinnedCount: number;
   domainsSortAlpha: boolean;
   tabsByAgeNewestFirst: boolean;
   sidebarWorkspaces: WorkspaceRow[];
@@ -85,6 +90,11 @@ function defaultNativePaletteState(): NativePaletteState {
     duplicatePromptDomId: null,
     duplicatePromptGroup: null,
     duplicatePromptWorkspaces: [],
+    domainCloseDomain: "",
+    domainCloseWorkspaceId: "all",
+    domainCloseCount: 0,
+    domainCloseUnpinnedCount: 0,
+    domainClosePinnedCount: 0,
     domainsSortAlpha: false,
     tabsByAgeNewestFirst: false,
     sidebarWorkspaces: [],
@@ -164,6 +174,11 @@ export function createNativePaletteState() {
     state.duplicatePromptDomId = null;
     state.duplicatePromptGroup = null;
     state.duplicatePromptWorkspaces = [];
+    state.domainCloseDomain = "";
+    state.domainCloseWorkspaceId = "all";
+    state.domainCloseCount = 0;
+    state.domainCloseUnpinnedCount = 0;
+    state.domainClosePinnedCount = 0;
     state.sidebarWorkspaces = [];
     state.selectedIndex = -1;
     state.error = null;
@@ -183,6 +198,20 @@ export function createNativePaletteState() {
 
   function enterDomainList(domain: string | null) {
     state.currentDomain = domain;
+  }
+
+  function enterDomainCloseConfirm(params: Record<string, unknown>) {
+    state.domainCloseDomain = typeof params.domain === "string" ? params.domain : "";
+    state.domainCloseWorkspaceId = typeof params.workspaceId === "string" ? params.workspaceId : "all";
+    state.domainCloseCount = typeof params.count === "number" ? params.count : Number(params.count) || 0;
+    state.domainCloseUnpinnedCount = typeof params.unpinnedCount === "number"
+      ? params.unpinnedCount
+      : Number(params.unpinnedCount) || 0;
+    state.domainClosePinnedCount = typeof params.pinnedCount === "number"
+      ? params.pinnedCount
+      : Number(params.pinnedCount) || 0;
+    state.selectedIndex = 0;
+    state.error = null;
   }
 
   function applyActionsMenuData(data: ActionsMenuData) {
@@ -415,6 +444,7 @@ export function createNativePaletteState() {
     enterActionsView,
     enterPrefixView,
     enterDomainList,
+    enterDomainCloseConfirm,
     applyActionsMenuData,
     commitSidebarWorkspaces,
     clearSidebarWorkspaces,

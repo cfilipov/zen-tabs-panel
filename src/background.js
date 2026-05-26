@@ -350,6 +350,12 @@ async function unloadActiveTab() {
   }
 }
 
+async function markActionTargetsNew() {
+  const targetIds = await api.getActionTargetExtIds();
+  if (!Array.isArray(targetIds) || targetIds.length === 0) return;
+  await Promise.all(targetIds.map((tabId) => api.markTabNewByExtId(tabId).catch(() => false)));
+}
+
 // Each entry takes the about-to-close set's DOM ids and picks a
 // successor that's NOT in that set — used so multi-close from the
 // sidebar doesn't try to "go to next vertical" and land on the next
@@ -601,6 +607,7 @@ const ACTIONS = Object.freeze({
   [MSG.OPEN_ADDONS]:                      ()  => api.openAddons(),
   [MSG.OPEN_FIREFOX_VIEW]:                ()  => api.openFirefoxView(),
   [MSG.COPY_URL]:                         ()  => api.copyCurrentUrl(),
+  [MSG.MARK_TABS_NEW]:                    ()  => markActionTargetsNew(),
   [MSG.UNVISITED_NEWEST]:                 ()  => api.activateUnvisitedNewest(),
   [MSG.UNVISITED_OLDEST]:                 ()  => api.activateUnvisitedOldest(),
   [MSG.MOVE_TAB_TO_FOLDER]:               (m) => api.moveTabToFolder(m.folderId, !!m.switchToTarget),
@@ -654,6 +661,11 @@ const QUERIES = Object.freeze({
   [MSG.GET_CONTAINERS_VIEW_MODEL]:     ()  => api.getContainersViewModel(),
   [MSG.GET_WORKSPACE_PROFILES_VIEW_MODEL]: () => api.getWorkspaceProfilesViewModel(),
   [MSG.GET_FOLDERS_VIEW_MODEL]:        ()  => api.getFoldersViewModel(),
+  [MSG.CLOSE_TABS_FOR_DOMAIN]:         (m) => api.closeTabsForDomain(
+    m.domain || "",
+    m.workspaceId || "all",
+    !!m.includePinned
+  ),
   [MSG.CHECK_COMPANION_MOD]:           ()  => api.getCompanionMods(),
   [MSG.INSTALL_COMPANION_MOD]:         (m) => api.installCompanionMod(m.modId),
   [MSG.REMOVE_COMPANION_MOD]:          (m) => api.removeCompanionMod(m.modId),

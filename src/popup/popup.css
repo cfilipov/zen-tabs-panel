@@ -433,6 +433,24 @@ html, body {
   padding: 0 12px 4px;
 }
 
+.domain-close-summary {
+  padding: 12px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--ztt-text);
+}
+
+.domain-close-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.domain-close-subtitle {
+  font-size: 11px;
+  color: var(--ztt-text-muted);
+}
+
 .duplicate-prompt-group {
   padding-bottom: 2px;
   contain: layout paint;

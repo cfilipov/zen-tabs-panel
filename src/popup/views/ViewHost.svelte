@@ -2,6 +2,7 @@
   import { fade } from "svelte/transition";
   import ActionsMenu from "./ActionsMenu.svelte";
   import ContainerList from "./ContainerList.svelte";
+  import DomainCloseConfirm from "./DomainCloseConfirm.svelte";
   import DomainList from "./DomainList.svelte";
   import DuplicateGroups from "./DuplicateGroups.svelte";
   import DuplicatePrompt from "./DuplicatePrompt.svelte";
@@ -16,6 +17,7 @@
   import WorkspaceNameEditor from "./WorkspaceNameEditor.svelte";
   import WorkspaceList from "./WorkspaceList.svelte";
   import type { ActionMenuItem, ActionSection } from "./actions-model";
+  import type { DomainCloseConfirmAction } from "../interaction/domain-close-confirm-options";
   import type { DuplicatePromptAction } from "../interaction/duplicate-prompt-options";
   import type { HistoryVisit, TabInfo } from "../runtime/tab-info-client";
   import type { DomainIndexRow, DuplicateGroupRow, TabIndexRow } from "../runtime/tab-index-client";
@@ -50,10 +52,12 @@
     closeDuplicateTab: (row: TabIndexRow) => void;
     closeDuplicatePromptTab: (row: TabIndexRow) => void;
     closeTabRow: (row: TabIndexRow) => void;
+    closeDomainRow: (row: DomainIndexRow) => void | Promise<void>;
     previewTab: (row: TabIndexRow) => void;
     closeTabInfoDuplicate: (row: TabIndexRow) => void;
     closeOtherTabInfoDuplicates: () => void;
     runDuplicatePromptAction: (action: DuplicatePromptAction) => void;
+    runDomainCloseConfirmAction: (action: DomainCloseConfirmAction) => void;
     setActiveWorkspaceIcon: (kind: "emoji" | "zen" | "lucide", value: string) => void | Promise<void>;
     setActiveWorkspaceName: (name: string) => void | Promise<void>;
     drillParentRow: (row: TabIndexRow) => void | Promise<void>;
@@ -90,10 +94,12 @@
     closeDuplicateTab,
     closeDuplicatePromptTab,
     closeTabRow,
+    closeDomainRow,
     previewTab,
     closeTabInfoDuplicate,
     closeOtherTabInfoDuplicates,
     runDuplicatePromptAction,
+    runDomainCloseConfirmAction,
     setActiveWorkspaceIcon,
     setActiveWorkspaceName,
     drillParentRow,
@@ -113,6 +119,7 @@
     if (palette.currentView === "profiles") return palette.profileRows.length > 0;
     if (palette.currentView === "workspace-icons") return palette.workspaceIconWorkspaces.length > 0;
     if (palette.currentView === "workspace-name") return !loading;
+    if (palette.currentView === "domain-close-confirm") return !!palette.domainCloseDomain;
     if (palette.currentView === "duplicates") return palette.duplicateGroups.length > 0;
     if (palette.currentView === "tab-info") return !!tabInfo;
     if (palette.currentView === "duplicate-prompt") return !!palette.duplicatePromptUrl;
@@ -248,7 +255,17 @@
         {skipAnimations}
         {selectedDomain}
         onactivate={activateRenderedRow}
+        onclose={closeDomainRow}
         onrange={loadVisibleRange}
+      />
+    {:else if palette.currentView === "domain-close-confirm"}
+      <DomainCloseConfirm
+        domain={palette.domainCloseDomain}
+        count={palette.domainCloseCount}
+        unpinnedCount={palette.domainCloseUnpinnedCount}
+        pinnedCount={palette.domainClosePinnedCount}
+        selectedIndex={palette.selectedIndex}
+        onactivate={runDomainCloseConfirmAction}
       />
     {/if}
   </div>

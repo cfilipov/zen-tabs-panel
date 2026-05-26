@@ -6,6 +6,7 @@ function context(overrides: Partial<CloseSelectionContext> = {}): CloseSelection
     view: "last-visited",
     hasSelectedDuplicateTab: false,
     hasSelectedDuplicatePromptTab: false,
+    hasSelectedDomainRow: false,
     hasSelectedTabRow: false,
     ...overrides,
   };
@@ -22,6 +23,11 @@ describe("close selection plan", () => {
   it("routes regular tab rows to the native tab close path", () => {
     expect(closeSelectionPlan(context({ view: "last-visited", hasSelectedTabRow: true })))
       .toEqual({ kind: "native-tab-row" });
+  });
+
+  it("routes domain rows to the confirmation submenu", () => {
+    expect(closeSelectionPlan(context({ view: "domains", hasSelectedDomainRow: true })))
+      .toEqual({ kind: "domain-row" });
   });
 
   it("ignores empty selections", () => {

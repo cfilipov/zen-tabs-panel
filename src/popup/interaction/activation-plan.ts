@@ -11,6 +11,7 @@ export type ActivationPlan =
   | { kind: "prefix-selection"; index: number }
   | { kind: "chrome-model-row"; index: number; source: ActivationSource; switchToTarget: boolean }
   | { kind: "duplicate-prompt"; index: number; source: ActivationSource }
+  | { kind: "domain-close-confirm"; index: number }
   | { kind: "none" };
 
 function activationPlanForIndex(
@@ -24,6 +25,9 @@ function activationPlanForIndex(
   }
   if (view === "duplicate-prompt") {
     return { kind: "duplicate-prompt", index, source };
+  }
+  if (view === "domain-close-confirm") {
+    return { kind: "domain-close-confirm", index };
   }
   return { kind: "none" };
 }

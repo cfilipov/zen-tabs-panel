@@ -34,6 +34,8 @@ describe("interaction interpreter", () => {
       .toEqual({ kind: "close-selection" });
     expect(interpretStructuralInput({ kind: "key", key: "w" }, { view: "duplicates" }))
       .toEqual({ kind: "close-selection" });
+    expect(interpretStructuralInput({ kind: "key", key: "w" }, { view: "domains" }))
+      .toEqual({ kind: "close-selection" });
     expect(interpretStructuralInput({ kind: "key", key: "W", shiftKey: true }, { view: "child-tabs" }))
       .toEqual({ kind: "close-all" });
     expect(interpretStructuralInput({ kind: "key", key: "o" }, { view: "recently-closed" }))
@@ -79,5 +81,22 @@ describe("interaction interpreter", () => {
     )).toEqual({ kind: "close-selection" });
     expect(interpretStructuralInput({ kind: "key", key: "c" }, { view: "duplicate-prompt" }))
       .toEqual({ kind: "duplicate-prompt-action", action: "hide-palette" });
+  });
+
+  it("routes domain-close confirmation hotkeys through the confirm view", () => {
+    expect(interpretStructuralInput({ kind: "key", key: "w" }, { view: "domain-close-confirm" }))
+      .toEqual({ kind: "domain-close-confirm-action", action: "close-unpinned" });
+    expect(interpretStructuralInput(
+      { kind: "key", key: "W", shiftKey: true },
+      { view: "domain-close-confirm", domainClosePinnedCount: 2 },
+    ))
+      .toEqual({ kind: "domain-close-confirm-action", action: "close-including-pinned" });
+    expect(interpretStructuralInput(
+      { kind: "key", key: "W", shiftKey: true },
+      { view: "domain-close-confirm", domainClosePinnedCount: 0 },
+    ))
+      .toEqual({ kind: "none" });
+    expect(interpretStructuralInput({ kind: "key", key: "c" }, { view: "domain-close-confirm" }))
+      .toEqual({ kind: "domain-close-confirm-action", action: "cancel" });
   });
 });

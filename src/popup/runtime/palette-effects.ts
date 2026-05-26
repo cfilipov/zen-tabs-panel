@@ -102,6 +102,14 @@ export function createPaletteEffects() {
     closeTabAndWait(domId: string) {
       return sendMessage({ type: "close-tab", domId });
     },
+    closeTabsForDomain(domain: string, workspaceId = "all", includePinned = false) {
+      return sendMessage<{ closed: number; skippedPinned: number; skippedEssential: number }>({
+        type: "close-tabs-for-domain",
+        domain,
+        workspaceId,
+        includePinned,
+      });
+    },
     runDuplicatePromptAction(action: DuplicatePromptAction) {
       fireMessage({ type: action });
     },

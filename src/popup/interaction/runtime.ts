@@ -1,4 +1,5 @@
 import type { DuplicatePromptAction } from "./duplicate-prompt-options";
+import type { DomainCloseConfirmAction } from "./domain-close-confirm-options";
 import type { InteractionCommand } from "./interpreter";
 
 // Generic command dispatcher. The palette-specific runtime factory lives in
@@ -8,6 +9,7 @@ type MaybePromise<T> = T | Promise<T>;
 
 export type InteractionRuntimeHandlers = {
   runDuplicatePromptAction: (action: DuplicatePromptAction) => MaybePromise<void>;
+  runDomainCloseConfirmAction: (action: DomainCloseConfirmAction) => MaybePromise<void>;
   navigateHistoryDelta: (delta: 1 | -1) => MaybePromise<void>;
   cancel: () => MaybePromise<void>;
   back: () => MaybePromise<void>;
@@ -37,6 +39,9 @@ export async function applyInteractionCommand(
   switch (command.kind) {
     case "duplicate-prompt-action":
       await runtime.runDuplicatePromptAction(command.action);
+      return;
+    case "domain-close-confirm-action":
+      await runtime.runDomainCloseConfirmAction(command.action);
       return;
     case "navigate-history-delta":
       await runtime.navigateHistoryDelta(command.delta);

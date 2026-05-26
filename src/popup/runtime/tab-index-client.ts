@@ -45,6 +45,8 @@ export type DomainIndexRow = {
   kind: "domain";
   domain: string;
   count: number;
+  closeableUnpinnedCount?: number;
+  closeablePinnedCount?: number;
 };
 
 export type DuplicateGroupRow = {

@@ -1,4 +1,5 @@
 import type { ViewId } from "../../shared/types";
+import { domainCloseConfirmActionForHotkey, type DomainCloseConfirmAction } from "./domain-close-confirm-options";
 import { duplicatePromptActionForHotkey, type DuplicatePromptAction } from "./duplicate-prompt-options";
 import type { InteractionInput } from "./inputs";
 import {
@@ -14,11 +15,13 @@ export type InteractionContext = {
   view: ViewId;
   selectedIndex?: number;
   duplicatePromptActionCount?: number;
+  domainClosePinnedCount?: number;
 };
 
 export type InteractionCommand =
   | { kind: "none" }
   | { kind: "duplicate-prompt-action"; action: DuplicatePromptAction }
+  | { kind: "domain-close-confirm-action"; action: DomainCloseConfirmAction }
   | { kind: "navigate-history-delta"; delta: 1 | -1 }
   | { kind: "cancel" }
   | { kind: "back" }
@@ -150,6 +153,12 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
     id: "close",
     resolve: (input, context) => {
       if (!plainKey(input) || upperKey(input) !== "W") return noCommand;
+      if (context.view === "domain-close-confirm") {
+        const action = domainCloseConfirmActionForHotkey(input.key, !!input.shiftKey, {
+          pinnedCount: context.domainClosePinnedCount,
+        });
+        return action ? { kind: "domain-close-confirm-action", action } : noCommand;
+      }
       if (context.view === "duplicate-prompt") {
         const actionCount = context.duplicatePromptActionCount ?? 0;
         return !input.shiftKey && (context.selectedIndex ?? -1) >= actionCount ? { kind: "close-selection" } : noCommand;
@@ -165,6 +174,16 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
       if (!plainKey(input) || input.shiftKey || context.view !== "duplicate-prompt") return noCommand;
       const action = duplicatePromptActionForHotkey(upperKey(input));
       return action ? { kind: "duplicate-prompt-action", action } : noCommand;
+    },
+  },
+  {
+    id: "domain-close-confirm-action",
+    resolve: (input, context) => {
+      if (!plainKey(input) || context.view !== "domain-close-confirm") return noCommand;
+      const action = domainCloseConfirmActionForHotkey(input.key, !!input.shiftKey, {
+        pinnedCount: context.domainClosePinnedCount,
+      });
+      return action ? { kind: "domain-close-confirm-action", action } : noCommand;
     },
   },
   {

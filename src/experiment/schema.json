@@ -214,6 +214,17 @@
         ]
       },
       {
+        "name": "closeTabsForDomain",
+        "type": "function",
+        "async": true,
+        "description": "Close tabs matching a domain and optional workspace. Essentials are always skipped.",
+        "parameters": [
+          { "name": "domain", "type": "string" },
+          { "name": "workspaceId", "type": "string" },
+          { "name": "includePinned", "type": "boolean" }
+        ]
+      },
+      {
         "name": "getAllTabs",
         "type": "function",
         "async": true,

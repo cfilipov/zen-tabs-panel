@@ -15,6 +15,7 @@ export type SelectionContext = {
   duplicateTabCount: number;
   duplicatePromptCount: number;
   duplicatePromptActionCount: number;
+  domainCloseConfirmCount: number;
   rowCount: number;
   isPrefixView: boolean;
 };
@@ -31,6 +32,7 @@ export function selectionLength(context: SelectionContext) {
   if (context.view === "duplicates") return context.duplicateTabCount;
   if (context.view === "tab-info") return 0;
   if (context.view === "duplicate-prompt") return context.duplicatePromptCount;
+  if (context.view === "domain-close-confirm") return context.domainCloseConfirmCount;
   return context.rowCount;
 }
 
@@ -41,6 +43,7 @@ export function isSelectableIndex(context: SelectionContext, index: number) {
   if (context.view === "duplicates") return index >= 0 && index < context.duplicateTabCount;
   if (context.view === "tab-info") return false;
   if (context.view === "duplicate-prompt") return index >= 0 && index < context.duplicatePromptCount;
+  if (context.view === "domain-close-confirm") return index >= 0 && index < context.domainCloseConfirmCount;
   return index >= 0;
 }
 

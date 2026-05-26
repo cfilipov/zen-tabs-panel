@@ -10,10 +10,11 @@
     skipAnimations?: boolean;
     selectedDomain?: string | null;
     onactivate?: (index: number) => void;
+    onclose?: (row: DomainIndexRow) => void;
     onrange?: (offset: number, limit: number) => void;
   };
 
-  let { rows, total, offset = 0, skipAnimations = false, selectedDomain = null, onactivate, onrange }: Props = $props();
+  let { rows, total, offset = 0, skipAnimations = false, selectedDomain = null, onactivate, onclose, onrange }: Props = $props();
 </script>
 
 {#if total === 0}
@@ -27,6 +28,7 @@
         badge={offset + index < 9 ? String(offset + index + 1) : null}
         {selectedDomain}
         onactivate={onactivate}
+        onclose={onclose}
       />
     {/snippet}
   </VirtualList>

@@ -22,6 +22,7 @@ function context(overrides: Partial<SelectionContext> = {}): SelectionContext {
     duplicateTabCount: 0,
     duplicatePromptCount: 4,
     duplicatePromptActionCount: 4,
+    domainCloseConfirmCount: 3,
     rowCount: 0,
     isPrefixView: false,
     ...overrides,
@@ -44,6 +45,7 @@ describe("selection transitions", () => {
     expect(selectionLength(context({ view: "last-visited", rowCount: 80 }))).toBe(80);
     expect(selectionLength(context({ view: "duplicates", duplicateTabCount: 3 }))).toBe(3);
     expect(selectionLength(context({ view: "duplicate-prompt", duplicatePromptCount: 6 }))).toBe(6);
+    expect(selectionLength(context({ view: "domain-close-confirm", domainCloseConfirmCount: 2 }))).toBe(2);
   });
 
   it("skips current profiles and returns no selection when none are launchable", () => {

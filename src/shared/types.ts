@@ -13,6 +13,7 @@ export type ViewId =
   | "tab-info"
   | "domains"
   | "domain-tabs"
+  | "domain-close-confirm"
   | "tabs-by-age"
   | "most-visited"
   | "move-to-workspace"

@@ -88,13 +88,13 @@ This means two `about:config` flags must be enabled to install it.
 - **Sibling tabs** - list all tabs that share the same parent as the current tab
 - **Parent tabs** - list tabs that have spawned children, with child counts and drill-down into each parent's children
 - **Tab history** - back/forward history of the current tab with B/F shortcuts for immediate back/forward
-- **New tabs** - list tabs opened in the background you haven't looked at
+- **New tabs** - list tabs opened in the background you haven't looked at, and mark the current or selected tabs as new again
 - **Newest/oldest unvisited** - jump directly to the newest or oldest background tab you have not visited yet
 - **Tabs by last visited** - all tabs sorted by recency. Hovering or arrow-keying through any tab list highlights and scrolls to the tab in the sidebar.
 - **Tab info** - detailed view of the current tab: age, memory/CPU usage, visit history (grouped by date, collapsible), and duplicate tab detection with close buttons
 - **Duplicates** - view all duplicate tabs across all workspaces, grouped by URL, with workspace indicators, tab age, hover preview, and close buttons. Duplicate tabs are marked with an amber "D" badge in the sidebar; unvisited tabs use a matching blue "N" badge.
 - **Duplicate tab prompt** - optionally intercepts attempts to open a URL that is already open elsewhere, with choices to switch to the existing tab, open anyway, open and close the other duplicate tabs, or cancel. The switch option previews and scrolls to the existing tab.
-- **Domains** - browse tabs grouped by domain with drill-down
+- **Domains** - browse tabs grouped by domain with drill-down, plus a confirmed close flow for closing a domain's unpinned tabs or all non-Essential tabs
 - **Tabs by age** - list all tabs by age with age badges and close buttons for cleaning up old tabs
 - **Most visited** - list tabs sorted by browser history visit count, most visited first
 - **Move to workspace** - move tabs to another workspace without switching away, addressing a common Zen user request. An optional switch-on-move action takes you to the destination workspace when you want it.
@@ -225,7 +225,8 @@ Page 2 contains browser, page, profile, and workspace utilities:
 | `⇧P` | Reset pinned tab |
 | `⇧C` | Re-pin tab |
 | `⇧E` | Add to Essentials |
-| `⇧N` | New container tab |
+| `⇧N` | Mark as new |
+| `⇧X` | New container tab |
 
 **Profiles**:
 

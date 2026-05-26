@@ -84,7 +84,8 @@ export const NAVIGATION_TREE = [
   { id: "toggle-fullscreen",  kind: "action", chord: "Shift+F", label: "Full screen",       icon: "svg:maximize",         page: 2 },
 
   // Page 2 — Tab actions
-  { id: "open-in-container",  kind: "open-view", chord: "Shift+N", view: "open-in-container", label: "New container tab", icon: "svg:layers", page: 2 },
+  { id: "mark-tabs-new",      kind: "action",    chord: "Shift+N", label: "Mark as new",      icon: "svg:circle-dot", page: 2 },
+  { id: "open-in-container",  kind: "open-view", chord: "Shift+X", view: "open-in-container", label: "New container tab", icon: "svg:layers", page: 2 },
 
   // Page 2 — All tabs
   { id: "unvisited-newest",   kind: "action", chord: "G",       label: "Newest unvisited", icon: "svg:circle-dot", page: 2, needsUnvisited: true },
@@ -214,6 +215,7 @@ const ALL_VIEW_IDS = [
   "tab-info",
   "domains",
   "domain-tabs",
+  "domain-close-confirm",
   "tabs-by-age",
   "most-visited",
   "move-to-workspace",

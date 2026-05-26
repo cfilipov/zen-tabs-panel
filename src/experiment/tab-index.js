@@ -515,10 +515,20 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     for (const row of filteredRows("all", params)) {
       const domain = row.domain;
       if (!domain) continue;
-      counts.set(domain, (counts.get(domain) || 0) + 1);
+      const count = counts.get(domain) || {
+        count: 0,
+        closeableUnpinnedCount: 0,
+        closeablePinnedCount: 0,
+      };
+      count.count += 1;
+      if (!row.essential) {
+        if (row.pinned) count.closeablePinnedCount += 1;
+        else count.closeableUnpinnedCount += 1;
+      }
+      counts.set(domain, count);
     }
     return [...counts.entries()]
-      .map(([domain, count]) => ({ kind: "domain", domain, count }))
+      .map(([domain, count]) => ({ kind: "domain", domain, ...count }))
       .sort(params?.sortAlpha
         ? (a, b) => a.domain.localeCompare(b.domain)
         : (a, b) => b.count - a.count || a.domain.localeCompare(b.domain));
@@ -540,10 +550,20 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     const counts = new Map();
     for (const row of basicDisplayRows(params)) {
       if (!row.domain) continue;
-      counts.set(row.domain, (counts.get(row.domain) || 0) + 1);
+      const count = counts.get(row.domain) || {
+        count: 0,
+        closeableUnpinnedCount: 0,
+        closeablePinnedCount: 0,
+      };
+      count.count += 1;
+      if (!row.essential) {
+        if (row.pinned) count.closeablePinnedCount += 1;
+        else count.closeableUnpinnedCount += 1;
+      }
+      counts.set(row.domain, count);
     }
     return [...counts.entries()]
-      .map(([domain, count]) => ({ kind: "domain", domain, count }))
+      .map(([domain, count]) => ({ kind: "domain", domain, ...count }))
       .sort(params?.sortAlpha
         ? (a, b) => a.domain.localeCompare(b.domain)
         : (a, b) => b.count - a.count || a.domain.localeCompare(b.domain));

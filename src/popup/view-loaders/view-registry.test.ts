@@ -44,6 +44,10 @@ describe("view registry", () => {
     expect(resolveViewOpenPlan("split-view")).toEqual({ kind: "prefix", view: "split-view" });
     expect(resolveViewOpenPlan("workspace-name")).toEqual({ kind: "loader", view: "workspace-name", loader: "workspace-name" });
     expect(resolveViewOpenPlan("workspace-profiles")).toEqual({ kind: "loader", view: "workspace-profiles", loader: "workspace-profiles" });
+    expect(resolveViewOpenPlan("domain-close-confirm", { domain: "example.test", count: 4 })).toEqual({
+      kind: "domain-close-confirm",
+      params: { domain: "example.test", count: 4 },
+    });
     expect(resolveViewOpenPlan("tab-info")).toEqual({ kind: "loader", view: "tab-info", loader: "tab-info" });
     expect(resolveViewOpenPlan("extension-popup")).toEqual({ kind: "unsupported", view: "extension-popup" });
   });
@@ -51,6 +55,7 @@ describe("view registry", () => {
   it("resolves display titles without view components owning labels", () => {
     expect(resolveViewTitle("domains")).toBe("Domains");
     expect(resolveViewTitle("domain-tabs", { currentDomain: "example.test" })).toBe("example.test");
+    expect(resolveViewTitle("domain-close-confirm")).toBe("Close domain tabs");
     expect(resolveViewTitle("navigation")).toBe("Tab history");
     expect(resolveViewTitle("reorder-tabs", { actionLabel: "Reorder tabs" })).toBe("Reorder tabs");
     expect(resolveViewTitle("extension-popup")).toBe("");

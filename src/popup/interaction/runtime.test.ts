@@ -8,6 +8,7 @@ function createRuntime(calls: string[]): InteractionRuntimeHandlers {
   };
   return {
     runDuplicatePromptAction: (action) => record(`dup:${action}`),
+    runDomainCloseConfirmAction: (action) => record(`domain-close:${action}`),
     navigateHistoryDelta: (delta) => record(`history:${delta}`),
     cancel: () => record("cancel"),
     back: () => record("back"),
@@ -40,6 +41,7 @@ function createNativeRuntime(
   };
   return createNativePaletteInteractionRuntime({
     runDuplicatePromptAction: (action) => record(`dup:${action}`),
+    runDomainCloseConfirmAction: (action) => record(`domain-close:${action}`),
     getNavigationHistory: () => null,
     navigateToHistoryIndex: (index) => record(`history-index:${index}`),
     cancel: () => record("cancel"),
@@ -76,6 +78,7 @@ describe("interaction runtime", () => {
     await applyInteractionCommand({ kind: "activate-selection-and-switch" }, runtime);
     await applyInteractionCommand({ kind: "activate-row", index: 2 }, runtime);
     await applyInteractionCommand({ kind: "activate-row-and-switch", index: 3 }, runtime);
+    await applyInteractionCommand({ kind: "domain-close-confirm-action", action: "close-unpinned" }, runtime);
     await applyInteractionCommand({ kind: "filter-workspace-index", index: 4 }, runtime);
     await applyInteractionCommand({ kind: "open-extension-index", index: 1 }, runtime);
     await applyInteractionCommand({ kind: "none" }, runtime);
@@ -87,6 +90,7 @@ describe("interaction runtime", () => {
       "activate-selection-switch",
       "activate-row:2",
       "activate-row-switch:3",
+      "domain-close:close-unpinned",
       "filter-workspace:4",
       "extension:1",
     ]);

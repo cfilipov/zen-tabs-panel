@@ -17,6 +17,7 @@ function selection(overrides: Partial<SelectionContext> = {}): SelectionContext 
     duplicateTabCount: 0,
     duplicatePromptCount: 0,
     duplicatePromptActionCount: 0,
+    domainCloseConfirmCount: 0,
     rowCount: 0,
     isPrefixView: false,
     ...overrides,

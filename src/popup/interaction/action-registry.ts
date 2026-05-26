@@ -39,6 +39,7 @@ export const ACTION_EFFECTS = {
   "take-screenshot": true,
   "toggle-pip": true,
   "toggle-fullscreen": true,
+  "mark-tabs-new": true,
   "unvisited-newest": true,
   "unvisited-oldest": true,
   "toggle-devtools": true,

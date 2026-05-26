@@ -1015,6 +1015,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "tab-info":           { width: 600, height: 604 },
       domains:              { width: 720, height: 604 },
       "domain-tabs":        { width: 720, height: 604 },
+      "domain-close-confirm": { width: 420, height: 604 },
       "tabs-by-age":        { width: 720, height: 604 },
       "most-visited":       { width: 720, height: 604 },
       "reorder-tabs":       { width: 600, height: 604 },
@@ -1043,6 +1044,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "workspace-actions",
       "workspace-name",
       "workspace-profiles",
+      "domain-close-confirm",
       "duplicate-prompt",
     ]);
 
@@ -1093,6 +1095,11 @@ this.zenWorkspaces = class extends ExtensionAPI {
     Services.scriptloader.loadSubScript(
       context.extension.getURL("experiment/popup-readiness-guard.js"),
       popupReadinessGuardScope
+    );
+    const domainCloseScope = {};
+    Services.scriptloader.loadSubScript(
+      context.extension.getURL("experiment/domain-close.js"),
+      domainCloseScope
     );
     const workspaceActionCoordinatorScope = {};
     Services.scriptloader.loadSubScript(
@@ -6899,6 +6906,32 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
           w.gBrowser.removeTab(tab);
           return true;
+        },
+
+        async closeTabsForDomain(domain, workspaceId, includePinned) {
+          const w = getWin();
+          if (!w || !w.gBrowser || !domain) {
+            return { closed: 0, skippedPinned: 0, skippedEssential: 0 };
+          }
+
+          const result = domainCloseScope.selectTabsForDomainClose(getAllTabElements(), {
+            domain,
+            workspaceId: workspaceId || "all",
+            includePinned: !!includePinned,
+            domainOf: (tab) => sortDomainOf(tab?.linkedBrowser?.currentURI?.spec || ""),
+          });
+          let closed = 0;
+          for (const tab of result.tabs) {
+            try {
+              w.gBrowser.removeTab(tab);
+              closed += 1;
+            } catch (e) {}
+          }
+          return {
+            closed,
+            skippedPinned: result.skippedPinned,
+            skippedEssential: result.skippedEssential,
+          };
         },
 
         // Get ALL tabs across ALL workspaces.

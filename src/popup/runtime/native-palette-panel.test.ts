@@ -17,6 +17,7 @@ async function flushPanelResize() {
 describe("native palette panel controller", () => {
   it("classifies compact fit-content views", () => {
     expect(usesFitContentHeight("profiles")).toBe(true);
+    expect(usesFitContentHeight("domain-close-confirm")).toBe(true);
     expect(usesFitContentHeight("split-view")).toBe(true);
     expect(usesFitContentHeight("actions")).toBe(false);
     expect(usesFitContentHeight("last-visited")).toBe(false);

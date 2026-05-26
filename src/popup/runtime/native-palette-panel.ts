@@ -11,6 +11,7 @@ export function usesFitContentHeight(view: ViewId) {
     view === "workspace-name" ||
     view === "workspace-profiles" ||
     view === "profiles" ||
+    view === "domain-close-confirm" ||
     view === "duplicate-prompt";
 }
 

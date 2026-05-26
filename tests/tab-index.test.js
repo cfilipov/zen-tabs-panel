@@ -348,6 +348,24 @@ test("domain windows use lightweight tab reads for large tab sets", () => {
   assert.equal(calls.readTabValue, 0);
 });
 
+test("domain windows include closeable pinned and unpinned counts", () => {
+  const tabs = [
+    fakeTab("tab-1", "https://example.test/a", "ws-1"),
+    fakeTab("tab-2", "https://example.test/b", "ws-1", { pinned: true }),
+    fakeTab("tab-3", "https://example.test/c", "ws-1", { "zen-essential": true, pinned: true }),
+    fakeTab("tab-4", "https://other.test/a", "ws-1", { pinned: true }),
+  ];
+  const index = makeIndex(tabs);
+
+  assert.deepEqual(index.getWindow("domains", 0, 10, {}).rows[0], {
+    kind: "domain",
+    domain: "example.test",
+    count: 3,
+    closeableUnpinnedCount: 1,
+    closeablePinnedCount: 1,
+  });
+});
+
 test("tab index updates changed tab rows incrementally after the first build", () => {
   const tabs = [
     fakeTab("tab-1", "https://one.test", "ws-1", { title: "One", lastAccessed: 10 }),

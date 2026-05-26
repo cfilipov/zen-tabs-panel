@@ -24,6 +24,7 @@
   } from "./interaction/interpreter";
   import { invalidChordMessage, isInvalidChordFeedbackInput } from "./interaction/invalid-chord";
   import { chordFromKey } from "./interaction/inputs";
+  import { domainCloseConfirmOptionsForCounts, type DomainCloseConfirmAction } from "./interaction/domain-close-confirm-options";
   import { DUPLICATE_PROMPT_ACTIONS, type DuplicatePromptAction } from "./interaction/duplicate-prompt-options";
   import { createNativePaletteInteractionRuntime } from "./interaction/native-palette-runtime";
   import { previewPlan } from "./interaction/preview-plan";
@@ -260,6 +261,10 @@
     DUPLICATE_PROMPT_ACTIONS.length,
   ));
   const selectedDomain = $derived(selectedDomainRow?.domain ?? null);
+  const domainCloseConfirmOptions = $derived(domainCloseConfirmOptionsForCounts(
+    palette.domainCloseUnpinnedCount,
+    palette.domainClosePinnedCount,
+  ));
   const navigationEntries = $derived(palette.navigationHistory?.entries ?? []);
   const activeWorkspaceId = $derived(palette.sidebarWorkspaces.find((workspace) => workspace.isActive)?.uuid ?? null);
   const sidebarModel = $derived(buildSidebarModel({
@@ -279,6 +284,7 @@
   const dynamicSidebarWidth = $derived(!sidebarHidden && !isWorkspaceFilterView(palette.currentView));
   const interactionRuntime = createNativePaletteInteractionRuntime({
     runDuplicatePromptAction,
+    runDomainCloseConfirmAction,
     getNavigationHistory: () => palette.navigationHistory,
     navigateToHistoryIndex,
     cancel: effects.hidePalette,
@@ -356,6 +362,10 @@
     } else if (plan.kind === "prefix") {
       paletteStore.enterPrefixView(plan.view);
       await paletteLoaders.loadActionsData();
+    } else if (plan.kind === "domain-close-confirm") {
+      paletteStore.setLoading(false);
+      paletteStore.setCurrentView("domain-close-confirm");
+      paletteStore.enterDomainCloseConfirm(plan.params);
     } else if (plan.kind === "loader") {
       await paletteLoaders.loadRegisteredView(plan.loader, params);
     } else {
@@ -537,6 +547,7 @@
       view: palette.currentView,
       hasSelectedDuplicateTab: !!selectedDuplicateTabRow,
       hasSelectedDuplicatePromptTab: !!selectedDuplicatePromptTabRow,
+      hasSelectedDomainRow: !!selectedDomainRow,
       hasSelectedTabRow: !!selectedTabRow,
     });
     if (plan.kind === "duplicate-tab" && selectedDuplicateTabRow) {
@@ -545,6 +556,10 @@
     }
     if (plan.kind === "duplicate-prompt-tab" && selectedDuplicatePromptTabRow) {
       closeDuplicatePromptTab(selectedDuplicatePromptTabRow);
+      return;
+    }
+    if (plan.kind === "domain-row" && selectedDomainRow) {
+      closeDomainRow(selectedDomainRow);
       return;
     }
     if (plan.kind !== "native-tab-row") return;
@@ -564,6 +579,29 @@
       domId: row.domId,
     });
     paletteStore.replaceListWindow(result.rows, result.total, result.selectedIndex);
+  }
+
+  async function closeDomainRow(row: DomainIndexRow) {
+    await openNativeView("domain-close-confirm", {
+      domain: row.domain,
+      workspaceId: palette.workspaceFilter || "all",
+      count: row.count,
+      unpinnedCount: row.closeableUnpinnedCount || 0,
+      pinnedCount: row.closeablePinnedCount || 0,
+    }, true);
+  }
+
+  async function runDomainCloseConfirmAction(action: DomainCloseConfirmAction) {
+    if (action === "cancel") {
+      await goBack();
+      return;
+    }
+    const domain = palette.domainCloseDomain;
+    if (!domain) return;
+    const includePinned = action === "close-including-pinned";
+    await effects.closeTabsForDomain(domain, palette.domainCloseWorkspaceId || "all", includePinned);
+    const previous = await effects.navigateBack().catch(() => null);
+    await openNativeView("domains", previous?.view === "domains" ? previous.params || {} : {}, !previous);
   }
 
   async function closeAllRowsInView() {
@@ -732,6 +770,7 @@
       duplicateTabCount: duplicateTabs.length,
       duplicatePromptCount: DUPLICATE_PROMPT_ACTIONS.length + duplicatePromptTabs.length,
       duplicatePromptActionCount: DUPLICATE_PROMPT_ACTIONS.length,
+      domainCloseConfirmCount: domainCloseConfirmOptions.length,
       rowCount: isNativeListView(palette.currentView) ? palette.total : palette.rows.length,
       isPrefixView: isNativePrefixView(palette.currentView),
     };
@@ -780,6 +819,9 @@
         resolveDuplicatePromptActivation(duplicatePromptActivationContext(), plan.index, plan.source),
         plan.source,
       );
+    } else if (plan.kind === "domain-close-confirm") {
+      const option = domainCloseConfirmOptions[plan.index];
+      if (option) await runDomainCloseConfirmAction(option.action);
     }
   }
 
@@ -916,6 +958,7 @@
       view: palette.currentView,
       selectedIndex: palette.selectedIndex,
       duplicatePromptActionCount: DUPLICATE_PROMPT_ACTIONS.length,
+      domainClosePinnedCount: palette.domainClosePinnedCount,
     });
     if (command.kind === "none") {
       if (isInvalidChordFeedbackInput(input)) {
@@ -1117,10 +1160,12 @@
     {closeDuplicateTab}
     {closeDuplicatePromptTab}
     {closeTabRow}
+    {closeDomainRow}
     {previewTab}
     {closeTabInfoDuplicate}
     {closeOtherTabInfoDuplicates}
     {runDuplicatePromptAction}
+    {runDomainCloseConfirmAction}
     {setActiveWorkspaceIcon}
     {setActiveWorkspaceName}
     {drillParentRow}

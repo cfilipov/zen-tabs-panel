@@ -99,12 +99,22 @@ describe("sidebar model", () => {
   });
 
   it("keeps workspace-filter views visible even without hints", () => {
-    expect(buildSidebarModel({
+    const emptyDomains = buildSidebarModel({
       view: "domains",
       selectedIndex: -1,
       domainsSortAlpha: false,
       tabsByAgeNewestFirst: false,
-    }).hidden).toBe(false);
+    });
+    const selectedDomains = buildSidebarModel({
+      view: "domains",
+      selectedIndex: 0,
+      domainsSortAlpha: false,
+      tabsByAgeNewestFirst: false,
+    });
+
+    expect(emptyDomains.hidden).toBe(false);
+    expect(emptyDomains.hints).toMatchObject([{ id: "close", label: "Close domain", hidden: true }]);
+    expect(selectedDomains.hints).toMatchObject([{ id: "close", label: "Close domain", hidden: false }]);
 
     expect(buildSidebarModel({
       view: "tab-info",
