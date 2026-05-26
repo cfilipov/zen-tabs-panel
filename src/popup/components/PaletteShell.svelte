@@ -144,6 +144,9 @@
           onclick={() => onPage?.(page)}
         ></button>
       {/each}
+      <span class="page-indicator-hint" aria-hidden="true">
+        Next page <kbd class="page-indicator-hint-key">Space</kbd>
+      </span>
     {/if}
   </div>
 </div>

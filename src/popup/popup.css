@@ -311,11 +311,14 @@ html, body {
 
 /* iOS-style page indicator dots, only shown on the actions menu */
 #page-indicator {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 6px;
-  padding: 6px 0 8px;
+  min-height: 34px;
+  padding: 9px 0 14px;
+  box-sizing: border-box;
   user-select: none;
   background: light-dark(rgb(244, 244, 244), rgb(31, 31, 31));
 }
@@ -343,6 +346,32 @@ html, body {
 .page-dot.active {
   background: color-mix(in srgb, var(--ztt-badge-text), AccentColor 20%);
   transform: scale(1.15);
+}
+
+.page-indicator-hint {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ztt-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.page-indicator-hint-key {
+  font: inherit;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--ztt-badge-text), AccentColor 12%);
+  background: color-mix(in srgb, var(--ztt-badge-bg), AccentColor 5%);
+  padding: 2px 7px;
+  border-radius: 4px;
+  line-height: 14px;
+  letter-spacing: 0.03em;
 }
 
 /* List items */
