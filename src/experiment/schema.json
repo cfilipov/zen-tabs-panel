@@ -1046,6 +1046,15 @@
         ]
       },
       {
+        "name": "setDuplicateLinkPreview",
+        "type": "function",
+        "async": true,
+        "description": "Toggle sidebar scroll/highlight preview when hovering a link whose URL is already open.",
+        "parameters": [
+          { "name": "enabled", "type": "boolean" }
+        ]
+      },
+      {
         "name": "setChordDelay",
         "type": "function",
         "async": true,

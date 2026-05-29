@@ -117,8 +117,8 @@ This means a few `about:config` flags must be enabled to install it.
 - **Extension popup hosting** - extension toolbar popups can appear in ErgoZen's centered overlay, including badge indicators on the extension icons in the main menu
 - **Profiles** - list and launch Zen profiles from the palette
 - **Page and browser tools** - reload, hard reload, duplicate tab, reader mode, mute, fullscreen, picture-in-picture, page source/info, screenshots, downloads, add-ons, Firefox View, developer tools, browser toolbox, reset and re-pin tabs, and add tabs to Essentials on page 2 of the palette
-- **Duplicate link status** - hovered links that are already open get called out in Zen's bottom status bar before you click them.
-- **Context menus** - right-click selected tabs to copy all selected URLs, or right-click a link to open it directly in a workspace or Zen folder.
+- **Duplicate link status** - hovered links that are already open get called out in Zen's bottom status bar with a duplicate count before you click them, and can optionally scroll to/highlight the existing tab until hover ends.
+- **Context menus** - right-click selected tabs to copy all selected URLs, or right-click a link to switch to an existing duplicate tab, open it directly in a workspace, or open it in a Zen folder.
 - **Repeat last chord** - replay the most recent leaf action with `⌘.` then `.`
 - **Settings**
 
@@ -371,6 +371,7 @@ If you don't press a follow-up key, the main menu opens after the timeout. Press
 - Skip palette animations
 - Dim the page behind the palette
 - Prompt before opening duplicate tabs
+- Highlight existing duplicate tabs when hovering duplicate links
 - Chord delay
 
 **Companion Zen Mods** - optional browser chrome tweaks installable from the settings page:

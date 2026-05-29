@@ -47,6 +47,7 @@ async function loadSettings() {
   pushSkipAnimationsSetting();
   pushDimBackdropSetting();
   pushDuplicateInterceptSetting();
+  pushDuplicateLinkPreviewSetting();
   pushChordDelaySetting();
 }
 
@@ -70,6 +71,10 @@ function pushDuplicateInterceptSetting() {
   api.setDuplicateTabIntercept(!!settings.duplicateTabIntercept).catch(() => {});
 }
 
+function pushDuplicateLinkPreviewSetting() {
+  api.setDuplicateLinkPreview(!!settings.duplicateLinkPreview).catch(() => {});
+}
+
 function pushChordDelaySetting() {
   const rootMs = Number(settings.chordDelayMs);
   const prefixMs = Number(settings.chordPrefixDelayMs);
@@ -90,6 +95,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
   let skipAnimationsTouched = false;
   let dimBackdropTouched = false;
   let dupInterceptTouched = false;
+  let dupLinkPreviewTouched = false;
   let chordDelayTouched = false;
   for (const key of Object.keys(changes)) {
     if (key in STORAGE_DEFAULTS) {
@@ -100,6 +106,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
       if (key === "skipOverlayAnimations") skipAnimationsTouched = true;
       if (key === "dimBackdrop") dimBackdropTouched = true;
       if (key === "duplicateTabIntercept") dupInterceptTouched = true;
+      if (key === "duplicateLinkPreview") dupLinkPreviewTouched = true;
       if (key === "chordDelayMs" || key === "chordPrefixDelayMs") chordDelayTouched = true;
     }
   }
@@ -109,6 +116,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
   if (skipAnimationsTouched) pushSkipAnimationsSetting();
   if (dimBackdropTouched) pushDimBackdropSetting();
   if (dupInterceptTouched) pushDuplicateInterceptSetting();
+  if (dupLinkPreviewTouched) pushDuplicateLinkPreviewSetting();
   if (chordDelayTouched) pushChordDelaySetting();
 });
 

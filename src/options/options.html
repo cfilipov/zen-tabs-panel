@@ -80,10 +80,14 @@
 
     <section>
       <h2>Duplicate tab prompt</h2>
-      <p class="description">When you click a link (in a new tab or the current tab) that points to a URL already open in another tab, intercept the navigation and show a prompt: <em>Switch to existing tab</em>, <em>Open anyway</em>, or <em>Cancel</em>. The orange status-bar pill that indicates a duplicate destination on hover is always on.</p>
+      <p class="description">When you click a link (in a new tab or the current tab) that points to a URL already open in another tab, intercept the navigation and show a prompt: <em>Switch to existing tab</em>, <em>Open anyway</em>, or <em>Cancel</em>. The orange status-bar pill and duplicate count on hover are always on.</p>
       <label class="toggle-row">
         <input type="checkbox" id="duplicateTabIntercept">
         <span>Prompt before opening duplicate tabs</span>
+      </label>
+      <label class="toggle-row">
+        <input type="checkbox" id="duplicateLinkPreview">
+        <span>Highlight existing duplicate tab on link hover</span>
       </label>
     </section>
 

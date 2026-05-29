@@ -248,6 +248,9 @@ this.STORAGE_DEFAULTS = Object.freeze({
   // prompt. The orange URL pill always shows on hover regardless;
   // this flag only gates the interactive intercept.
   duplicateTabIntercept: true,
+  // When hovering a link whose URL is already open elsewhere, scroll the
+  // sidebar to the first duplicate tab and highlight it until hover ends.
+  duplicateLinkPreview: true,
 });
 
 // Whitelist of view names accepted by the navigate-view message. Mirrors

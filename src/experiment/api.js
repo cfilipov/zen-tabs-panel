@@ -5114,6 +5114,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // trimmed, protocol stripped on some surfaces), not the raw URL we
     // need for an open-tab match.
     let origSetOverLink = null;
+    let duplicateLinkPreviewed = false;
     function installDuplicateLinkIndicator() {
       const w = getWin();
       if (!w?.document || !w.XULBrowserWindow) return;
@@ -5123,21 +5124,48 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (!style) {
         style = w.document.createElement("style");
         style.id = "zen-tabs-panel-duplicate-link-css";
-        // Inherit Zen's natural label shape/radius — only swap the
-        // background and text color. A solid orange + dark text keeps
-        // the pill visually consistent with the non-duplicate state
-        // while making "already open" instantly recognizable.
-        style.textContent = `
+        w.document.documentElement.appendChild(style);
+      }
+      // Always refresh contents so CSS changes take effect on the next
+      // install/reload even if a previous chrome style node survived.
+      // Inherit Zen's natural label shape/radius — only swap the
+      // background and text color. A solid orange + dark text keeps
+      // the pill visually consistent with the non-duplicate state
+      // while making "already open" instantly recognizable.
+      style.textContent = `
           #statuspanel[ztt-duplicate-link="true"] #statuspanel-label {
             background-color: #f59e0b !important;
             color: black !important;
             border-color: #d97706 !important;
           }
+          #statuspanel #zen-tabs-panel-duplicate-link-count {
+            margin-inline-start: 4px !important;
+            padding: 2px 8px !important;
+            border-radius: 999px !important;
+            border: 1px solid #d97706 !important;
+            background-color: #f59e0b !important;
+            color: black !important;
+            font: inherit !important;
+          }
+          #statuspanel #zen-tabs-panel-duplicate-link-count[hidden="true"] {
+            display: none !important;
+          }
         `;
-        w.document.documentElement.appendChild(style);
-      }
 
       const statusPanel = w.document.getElementById("statuspanel");
+      let countLabel = w.document.getElementById("zen-tabs-panel-duplicate-link-count");
+      if (statusPanel && !countLabel) {
+        countLabel = w.document.createXULElement("label");
+        countLabel.id = "zen-tabs-panel-duplicate-link-count";
+        countLabel.setAttribute("crop", "end");
+        countLabel.setAttribute("value", "");
+        countLabel.setAttribute("hidden", "true");
+        statusPanel.appendChild(countLabel);
+      }
+      if (countLabel) {
+        countLabel.setAttribute("value", "");
+        countLabel.setAttribute("hidden", "true");
+      }
       const xbw = w.XULBrowserWindow;
       origSetOverLink = xbw.setOverLink.bind(xbw);
       function normalizeOverLinkUrl(url) {
@@ -5154,10 +5182,33 @@ this.zenWorkspaces = class extends ExtensionAPI {
       xbw.setOverLink = function (url, hosted) {
         try {
           const normalizedUrl = normalizeOverLinkUrl(url);
-          const isDup = !!(normalizedUrl && /^https?:/.test(normalizedUrl) && urlMatchesAnyOpenTab(normalizedUrl, w.gBrowser?.selectedTab || null));
+          const duplicateTabs = normalizedUrl && /^https?:/.test(normalizedUrl)
+            ? duplicateTabsForUrl(normalizedUrl, w.gBrowser?.selectedTab || null)
+            : [];
+          const isDup = duplicateTabs.length > 0;
           if (statusPanel) {
-            if (isDup) statusPanel.setAttribute("ztt-duplicate-link", "true");
-            else statusPanel.removeAttribute("ztt-duplicate-link");
+            if (isDup) {
+              statusPanel.setAttribute("ztt-duplicate-link", "true");
+              const label = w.document.getElementById("zen-tabs-panel-duplicate-link-count");
+              if (label) {
+                label.setAttribute("value", "Duplicates: " + duplicateTabs.length);
+                label.removeAttribute("hidden");
+              }
+            } else {
+              statusPanel.removeAttribute("ztt-duplicate-link");
+              const label = w.document.getElementById("zen-tabs-panel-duplicate-link-count");
+              if (label) {
+                label.setAttribute("value", "");
+                label.setAttribute("hidden", "true");
+              }
+            }
+          }
+          if (isDup && duplicateLinkPreviewEnabled) {
+            applyPreview(duplicateTabs[0]);
+            duplicateLinkPreviewed = true;
+          } else {
+            if (duplicateLinkPreviewed) clearPreviewState();
+            duplicateLinkPreviewed = false;
           }
         } catch (e) {}
         return origSetOverLink(url, hosted);
@@ -5171,10 +5222,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
         }
       } catch (e) {}
       origSetOverLink = null;
+      duplicateLinkPreviewed = false;
       const style = w?.document?.getElementById("zen-tabs-panel-duplicate-link-css");
       if (style) style.remove();
       const statusPanel = w?.document?.getElementById("statuspanel");
       if (statusPanel) statusPanel.removeAttribute("ztt-duplicate-link");
+      w?.document?.getElementById("zen-tabs-panel-duplicate-link-count")?.remove();
+      clearPreviewState();
     }
 
     // -----------------------------------------------------------------------
@@ -5194,6 +5248,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     let origOpenLinkIn = null;
     let pendingDuplicate = null; // { url, where, params }
     let duplicateTabInterceptEnabled = true;
+    let duplicateLinkPreviewEnabled = true;
     const approvedDuplicateNavigations = [];
     const DUPLICATE_APPROVAL_TTL_MS = 5000;
     const recentContentLinkNavigations = [];
@@ -5285,15 +5340,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return !!chordSupportScope.isDuplicateNavigationUrl(candidateUrl, openTabUrl);
     }
 
-    function urlMatchesAnyOpenTab(url, excludeTab) {
+    function duplicateTabsForUrl(url, excludeTab) {
       const w = getWin();
-      if (!w?.gBrowser) return null;
+      const matches = [];
+      if (!w?.gBrowser) return matches;
       for (const tab of w.gBrowser.tabs) {
         if (tab === excludeTab) continue;
         const u = tab.linkedBrowser?.currentURI?.spec || "";
-        if (duplicateNavigationUrlsMatch(url, u)) return tab;
+        if (duplicateNavigationUrlsMatch(url, u)) matches.push(tab);
       }
-      return null;
+      return matches;
+    }
+
+    function urlMatchesAnyOpenTab(url, excludeTab) {
+      return duplicateTabsForUrl(url, excludeTab)[0] || null;
     }
 
     function closeDuplicateTabsForUrlInternal(url, excludeTab) {
@@ -5590,6 +5650,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
     const NATIVE_LINK_WORKSPACE_MENU_ID = "zen-tabs-panel-open-link-in-workspace";
     const NATIVE_LINK_FOLDER_MENU_ID = "zen-tabs-panel-open-link-in-folder";
+    const NATIVE_LINK_SWITCH_DUPLICATE_MENU_ID = "zen-tabs-panel-switch-link-to-existing-tab";
 
     function safeMenuLabel(value, fallback) {
       const label = typeof value === "string" ? value.trim() : "";
@@ -5628,17 +5689,38 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const doc = w?.document;
       const workspaceMenu = doc?.getElementById(NATIVE_LINK_WORKSPACE_MENU_ID);
       const folderMenu = doc?.getElementById(NATIVE_LINK_FOLDER_MENU_ID);
+      const switchDuplicateItem = doc?.getElementById(NATIVE_LINK_SWITCH_DUPLICATE_MENU_ID);
       const workspacePopup = workspaceMenu?.querySelector("menupopup");
       const folderPopup = folderMenu?.querySelector("menupopup");
-      if (!w || !workspaceMenu || !folderMenu || !workspacePopup || !folderPopup) return;
+      if (!w || !workspaceMenu || !folderMenu || !switchDuplicateItem || !workspacePopup || !folderPopup) return;
 
       const url = currentContextLinkUrl(w);
       const visible = isOpenableExternalLinkUrl(url);
+      const duplicates = visible ? duplicateTabsForUrl(url, w.gBrowser?.selectedTab || null) : [];
       workspaceMenu.hidden = !visible;
       folderMenu.hidden = !visible;
+      switchDuplicateItem.hidden = duplicates.length === 0;
       clearMenuPopup(workspacePopup);
       clearMenuPopup(folderPopup);
+      try {
+        if (switchDuplicateItem.__zenTabsPanelSwitchDuplicateHandler) {
+          switchDuplicateItem.removeEventListener("command", switchDuplicateItem.__zenTabsPanelSwitchDuplicateHandler);
+          switchDuplicateItem.__zenTabsPanelSwitchDuplicateHandler = null;
+        }
+      } catch (e) {}
+      switchDuplicateItem.removeAttribute("disabled");
       if (!visible) return;
+      if (duplicates.length > 0) {
+        switchDuplicateItem.setAttribute(
+          "label",
+          duplicates.length === 1 ? "Switch to Existing Tab" : `Switch to Existing Tab (${duplicates.length})`
+        );
+        switchDuplicateItem.__zenTabsPanelSwitchDuplicateHandler = () => {
+          const tab = duplicateTabsForUrl(url, w.gBrowser?.selectedTab || null)[0];
+          if (tab) void activateNativeTab(tab);
+        };
+        switchDuplicateItem.addEventListener("command", switchDuplicateItem.__zenTabsPanelSwitchDuplicateHandler);
+      }
 
       const workspaces = getWorkspaceRows(false);
       const folders = getFolderRows();
@@ -5696,7 +5778,13 @@ this.zenWorkspaces = class extends ExtensionAPI {
       folderMenu.hidden = true;
       folderMenu.appendChild(doc.createXULElement("menupopup"));
 
+      const switchDuplicateItem = doc.createXULElement("menuitem");
+      switchDuplicateItem.id = NATIVE_LINK_SWITCH_DUPLICATE_MENU_ID;
+      switchDuplicateItem.setAttribute("label", "Switch to Existing Tab");
+      switchDuplicateItem.hidden = true;
+
       const insertBefore = doc.getElementById("context-sep-open") || doc.getElementById("context-bookmarklink");
+      contextMenu.insertBefore(switchDuplicateItem, insertBefore || null);
       contextMenu.insertBefore(workspaceMenu, insertBefore || null);
       contextMenu.insertBefore(folderMenu, insertBefore || null);
 
@@ -5720,6 +5808,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       } catch (e) {}
       doc?.getElementById(NATIVE_LINK_WORKSPACE_MENU_ID)?.remove();
       doc?.getElementById(NATIVE_LINK_FOLDER_MENU_ID)?.remove();
+      doc?.getElementById(NATIVE_LINK_SWITCH_DUPLICATE_MENU_ID)?.remove();
     }
 
     function getProfileRows() {
@@ -7819,6 +7908,14 @@ this.zenWorkspaces = class extends ExtensionAPI {
               enabled: duplicateTabInterceptEnabled,
             });
           } catch (e) {}
+        },
+
+        async setDuplicateLinkPreview(enabled) {
+          duplicateLinkPreviewEnabled = !!enabled;
+          if (!duplicateLinkPreviewEnabled && duplicateLinkPreviewed) {
+            clearPreviewState();
+            duplicateLinkPreviewed = false;
+          }
         },
 
         // Back-compat setter for older backgrounds: apply one delay to all

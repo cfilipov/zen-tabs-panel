@@ -10,6 +10,7 @@ const els = {
   skipOverlayAnimations: document.getElementById("skipOverlayAnimations"),
   dimBackdrop: document.getElementById("dimBackdrop"),
   duplicateTabIntercept: document.getElementById("duplicateTabIntercept"),
+  duplicateLinkPreview: document.getElementById("duplicateLinkPreview"),
   chordDelayMs: document.getElementById("chordDelayMs"),
   chordPrefixDelayMs: document.getElementById("chordPrefixDelayMs"),
   status: document.getElementById("status"),
@@ -27,6 +28,7 @@ async function loadSettings() {
   els.skipOverlayAnimations.checked = settings.skipOverlayAnimations;
   els.dimBackdrop.checked = settings.dimBackdrop;
   els.duplicateTabIntercept.checked = settings.duplicateTabIntercept;
+  els.duplicateLinkPreview.checked = settings.duplicateLinkPreview;
   els.chordDelayMs.value = String(settings.chordDelayMs);
   els.chordPrefixDelayMs.value = String(settings.chordPrefixDelayMs);
 }
@@ -79,6 +81,7 @@ async function saveSettings() {
     skipOverlayAnimations: els.skipOverlayAnimations.checked,
     dimBackdrop: els.dimBackdrop.checked,
     duplicateTabIntercept: els.duplicateTabIntercept.checked,
+    duplicateLinkPreview: els.duplicateLinkPreview.checked,
     chordDelayMs: Math.max(0, Number(els.chordDelayMs.value) || 0),
     chordPrefixDelayMs: Math.max(0, Number(els.chordPrefixDelayMs.value) || 0),
   });
