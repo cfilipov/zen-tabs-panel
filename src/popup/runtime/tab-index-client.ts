@@ -169,7 +169,7 @@ type ZenWorkspacesApi = {
   getActiveRow(): Promise<TabIndexRow | null>;
   getRowsByDomIds(domIdsJson?: string): Promise<TabIndexRow[]>;
   getWorkspaceTabCounts(): Promise<Record<string, number>>;
-  getActionsViewModel?(recentlyClosedCount?: number): Promise<ActionsViewModel>;
+  getActionsViewModel?(recentlyClosedCount?: number, commandPaletteLeaderBadge?: string): Promise<ActionsViewModel>;
   getDuplicateGroupsViewModel?(workspaceFilter?: string): Promise<DuplicateGroupsViewModel>;
   getDuplicatePromptViewModel?(url: string, domId?: string | null): Promise<DuplicatePromptViewModel>;
 };

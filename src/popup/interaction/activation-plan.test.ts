@@ -3,6 +3,7 @@ import {
   activationPlanForRenderedRow,
   activationPlanForSelection,
   activationPlanForShortcut,
+  shouldWaitForVisibleShortcutModel,
 } from "./activation-plan";
 
 describe("activation plan", () => {
@@ -41,5 +42,13 @@ describe("activation plan", () => {
   it("ignores unsupported views", () => {
     expect(activationPlanForSelection("tab-info", 0)).toEqual({ kind: "none" });
     expect(activationPlanForShortcut("actions", 0)).toEqual({ kind: "none" });
+  });
+
+  it("waits for visible action shortcut models before judging chord keys invalid", () => {
+    expect(shouldWaitForVisibleShortcutModel("actions", "/", 0)).toBe(true);
+    expect(shouldWaitForVisibleShortcutModel("actions", "P", 10)).toBe(false);
+    expect(shouldWaitForVisibleShortcutModel("reorder-tabs", "D", 0)).toBe(true);
+    expect(shouldWaitForVisibleShortcutModel("command-palette", "/", 0)).toBe(false);
+    expect(shouldWaitForVisibleShortcutModel("actions", null, 0)).toBe(false);
   });
 });

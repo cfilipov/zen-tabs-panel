@@ -96,9 +96,9 @@ loaded directly in unit tests with injected dependencies.
 
 ## Keybindings and the chord engine
 
-### The mental model — one chord tree, one leader (plus backups), three timing windows
+### The mental model — one chord tree, one leader (plus an alternate), three timing windows
 
-The chord chain is `<leader>, <key>, <key>, …` where `<leader>` is any of four configurable shortcuts declared in `src/manifest.json` under `commands` (defaults: `cmd+.`, `cmd+option+.`, plus two unset slots). All four do the same thing — they're alternates so the user can pick whichever modifier isn't eaten by the focused page. Customize them in `about:addons` → Manage Extension Shortcuts.
+The chord chain is `<leader>, <key>, <key>, …` where `<leader>` is either of the configurable `open-palette` shortcuts declared in `src/manifest.json` under `commands` (defaults: `cmd+.` and the `cmd+option+.` alternate). Both do the same thing — they're alternates so the user can pick whichever modifier isn't eaten by the focused page. Customize them in `about:addons` → Manage Extension Shortcuts. The command palette also has its own configurable `open-command-palette` shortcut, defaulting to `cmd+shift+p`, which opens fuzzy command search directly without arming a chord session.
 
 Everything after the leader flows from the navigation tree defined once in `src/shared/navigation-tree.ts`; `scripts/generate-keybindings.mjs` emits `dist/shared/keybindings.js` for the chrome-scope session. The same sequence of keys does the same thing whether the user types it fast (no UI), slowly enough that the menu fades in (with UI), or with a key mid-fade-in (the bridge case):
 

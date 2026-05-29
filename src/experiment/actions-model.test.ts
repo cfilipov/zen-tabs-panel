@@ -28,7 +28,7 @@ function createModel() {
   });
 }
 
-function commandModel() {
+function commandModel(input: Record<string, unknown> = {}) {
   return createModel().getViewModel({
     workspaces: [],
     snapshot: {},
@@ -36,6 +36,7 @@ function commandModel() {
     recentlyClosedCount: 0,
     navHistory: null,
     selectedDomIds: [],
+    ...input,
   });
 }
 
@@ -98,6 +99,16 @@ describe("actions model command palette items", () => {
       label: "Previous",
       chordPathBadge: "⌘. P",
       badge: "⌘. P",
+    });
+  });
+
+  it("uses the configured leader badge when provided by the background", () => {
+    const items = commandModel({ commandPaletteLeaderBadge: "⌘⌥." }).commandPaletteItems;
+    const domainSort = items.find((item: { id: string }) => item.id === "sort-tabs-domain-alpha");
+
+    expect(domainSort).toMatchObject({
+      chordPathBadge: "⌘⌥. O D",
+      badge: "⌘⌥. O D",
     });
   });
 

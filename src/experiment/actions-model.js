@@ -12,7 +12,7 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
   const displayKey = typeof deps.displayKey === "function"
     ? deps.displayKey
     : (chord) => chord == null ? "" : String(chord).replace(/^Shift\+/, "⇧");
-  const commandPaletteLeaderBadge = typeof deps.commandPaletteLeaderBadge === "string"
+  const defaultCommandPaletteLeaderBadge = typeof deps.commandPaletteLeaderBadge === "string"
     ? deps.commandPaletteLeaderBadge
     : "⌘.";
 
@@ -42,12 +42,12 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
     };
   }
 
-  function commandPaletteItemFromNode(node, disabledIds, parent) {
+  function commandPaletteItemFromNode(node, disabledIds, parent, leaderBadge) {
     const isPrefixChild = !!parent;
     const navPath = isPrefixChild
       ? [parent.chord, node.chord].filter(Boolean).map(displayKey).filter(Boolean).join(" ")
       : displayKey(node.chord);
-    const chordPath = [commandPaletteLeaderBadge, navPath].filter(Boolean).join(" ");
+    const chordPath = [leaderBadge, navPath].filter(Boolean).join(" ");
     const label = isPrefixChild ? `${parent.label}: ${node.label}` : node.label;
     const searchText = isPrefixChild
       ? `${parent.label} ${node.label} ${parent.id} ${node.id}`
@@ -61,20 +61,20 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
     };
   }
 
-  function buildCommandPaletteItems(disabledIds) {
+  function buildCommandPaletteItems(disabledIds, leaderBadge) {
     const out = [];
     for (const node of navigationTree) {
       if (!node) continue;
       if (node.kind === "prefix") {
         for (const child of node.children || []) {
           if (child && (child.kind === "action" || child.kind === "open-view")) {
-            out.push(commandPaletteItemFromNode(child, disabledIds, node));
+            out.push(commandPaletteItemFromNode(child, disabledIds, node, leaderBadge));
           }
         }
         continue;
       }
       if (node.kind === "action" || node.kind === "open-view") {
-        out.push(commandPaletteItemFromNode(node, disabledIds, null));
+        out.push(commandPaletteItemFromNode(node, disabledIds, null, leaderBadge));
       }
     }
     return out;
@@ -246,7 +246,10 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
       previewsById
     );
     const prefixItemsByView = buildPrefixItemsByView(disabledIds);
-    const commandPaletteItems = buildCommandPaletteItems(disabledIds);
+    const commandPaletteLeaderBadge = typeof input.commandPaletteLeaderBadge === "string"
+      ? input.commandPaletteLeaderBadge
+      : defaultCommandPaletteLeaderBadge;
+    const commandPaletteItems = buildCommandPaletteItems(disabledIds, commandPaletteLeaderBadge);
 
     return {
       version: snapshot.version || Date.now(),

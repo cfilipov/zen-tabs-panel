@@ -58,3 +58,12 @@ export function activationPlanForRenderedRow(
 ): ActivationPlan {
   return activationPlanForIndex(view, index, "selection", switchToTarget);
 }
+
+export function shouldWaitForVisibleShortcutModel(
+  view: ViewId,
+  chordKey: string | null,
+  visibleShortcutCount: number,
+) {
+  if (!chordKey || visibleShortcutCount > 0) return false;
+  return view === "actions" || isNativePrefixView(view);
+}

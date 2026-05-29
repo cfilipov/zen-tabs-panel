@@ -6,6 +6,7 @@
     activationPlanForRenderedRow,
     activationPlanForSelection,
     activationPlanForShortcut,
+    shouldWaitForVisibleShortcutModel,
     type ActivationPlan,
   } from "./interaction/activation-plan";
   import { nextActionsPage } from "./interaction/actions-navigation";
@@ -139,6 +140,7 @@
   let invalidChordHint = $state<string | null>(null);
   let commandQuery = $state("");
   let commandSelectionByKeyboard = $state(false);
+  let actionsDataPromise: Promise<void> | null = null;
   let invalidChordHintTimer: number | null = null;
   let paletteRevealed = false;
   const terminalCommandBlocker = createTerminalCommandBlocker();
@@ -340,6 +342,19 @@
     effects.notifyChromeView(view, params, revealController.inst, revealController.readyGen);
   }
 
+  function loadActionsData() {
+    const pending = paletteLoaders.loadActionsData()
+      .finally(() => {
+        if (actionsDataPromise === pending) actionsDataPromise = null;
+      });
+    actionsDataPromise = pending;
+    return pending;
+  }
+
+  async function waitForActionsData() {
+    await (actionsDataPromise ?? loadActionsData());
+  }
+
   async function finishOpenView(view: ViewId) {
     await requestPanelResize(view, { force: true });
     if (usesFitContentHeight(view)) {
@@ -360,7 +375,7 @@
 
     if (plan.kind === "actions") {
       resetToActions();
-      await paletteLoaders.loadActionsData();
+      await loadActionsData();
     } else if (plan.kind === "command-palette") {
       await enterCommandPalette();
     } else if (plan.kind === "list") {
@@ -368,7 +383,7 @@
       await paletteLoaders.loadListView(plan.view, 0, 80, true, { ...plan.params, ...viewParams(plan.view) });
     } else if (plan.kind === "prefix") {
       paletteStore.enterPrefixView(plan.view);
-      await paletteLoaders.loadActionsData();
+      await loadActionsData();
     } else if (plan.kind === "domain-close-confirm") {
       paletteStore.setLoading(false);
       paletteStore.setCurrentView("domain-close-confirm");
@@ -739,7 +754,7 @@
     paletteStore.setCurrentView("command-palette");
     paletteStore.setLoading(false);
     paletteStore.setError(null);
-    await paletteLoaders.loadActionsData();
+    await loadActionsData();
     const nextItems = filterCommands(palette.commandPaletteItems, commandQuery);
     paletteStore.selectIndex(nextItems.length > 0 ? 0 : -1);
   }
@@ -756,7 +771,7 @@
       return;
     }
     resetToActions();
-    await paletteLoaders.loadActionsData();
+    await loadActionsData();
     await requestPanelResize("actions");
   }
 
@@ -979,12 +994,21 @@
     }
     const keyInput = { kind: "key" as const, ...input };
     const chordKey = chordFromKey(keyInput);
-    const visibleShortcutItems = palette.currentView === "actions"
+    let visibleShortcutItems = palette.currentView === "actions"
       ? allActionItems
       : isNativePrefixView(palette.currentView)
       ? prefixItems
       : [];
-    const item = visibleShortcutItems.find((candidate) => !!chordKey && candidate.hotkey === chordKey);
+    let item = visibleShortcutItems.find((candidate) => !!chordKey && candidate.hotkey === chordKey);
+    if (!item && shouldWaitForVisibleShortcutModel(palette.currentView, chordKey, visibleShortcutItems.length)) {
+      await waitForActionsData();
+      visibleShortcutItems = palette.currentView === "actions"
+        ? allActionItems
+        : isNativePrefixView(palette.currentView)
+        ? prefixItems
+        : [];
+      item = visibleShortcutItems.find((candidate) => !!chordKey && candidate.hotkey === chordKey);
+    }
     if (item) {
       clearInvalidChordHint();
       await activateVisibleActionItem(item, "shortcut");
@@ -1088,7 +1112,7 @@
   onMount(() => {
     const params = new URLSearchParams(location.search);
     const initialView = params.get("view") as ViewId | null;
-    const initialViewReady = initialView ? openNativeView(initialView, params) : paletteLoaders.loadActionsData();
+    const initialViewReady = initialView ? openNativeView(initialView, params) : loadActionsData();
 
     window.addEventListener("keydown", handleKeydown);
     pageAlive = true;

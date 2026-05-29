@@ -7062,7 +7062,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return getDuplicatePromptViewModelInternal(url, domId);
         },
 
-        async getActionsViewModel(recentlyClosedCount) {
+        async getActionsViewModel(recentlyClosedCount, commandPaletteLeaderBadge) {
           const [workspaces, extensions] = await Promise.all([
             getWorkspacesWithIconContent(),
             (async () => {
@@ -7075,6 +7075,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
             snapshot: getActionsSnapshotInternal(),
             extensions,
             recentlyClosedCount: Number(recentlyClosedCount) || 0,
+            commandPaletteLeaderBadge,
             navHistory: getFilteredNavigationHistory(),
             selectedDomIds: getSelectedTabDomIdsInternal(),
           });

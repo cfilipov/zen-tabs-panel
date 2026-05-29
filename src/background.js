@@ -617,6 +617,37 @@ const ACTIONS = Object.freeze({
   [MSG.LAUNCH_PROFILE]:                   (m) => api.launchProfile(m.name),
 });
 
+function displayCommandShortcut(shortcut) {
+  if (!shortcut || typeof shortcut !== "string") return "";
+  const aliases = {
+    Command: "⌘",
+    CommandOrControl: "Cmd/Ctrl",
+    MacCtrl: "⌃",
+    Ctrl: "⌃",
+    Control: "⌃",
+    Alt: "⌥",
+    Option: "⌥",
+    Shift: "⇧",
+    Period: ".",
+    Comma: ",",
+    Space: "Space",
+  };
+  return shortcut
+    .split("+")
+    .map((part) => {
+      const key = part.trim();
+      return aliases[key] || key;
+    })
+    .join("");
+}
+
+async function getCommandPaletteLeaderBadge() {
+  const commands = await browser.commands.getAll().catch(() => []);
+  const leader = commands.find((cmd) => cmd && cmd.name === "open-palette" && cmd.shortcut)
+    || commands.find((cmd) => cmd && cmd.name === "open-palette-2" && cmd.shortcut);
+  return displayCommandShortcut(leader && leader.shortcut) || "Leader";
+}
+
 // Reply-style queries — listener returns the promise so the popup awaits
 // the result. Must NOT include a hide-palette prelude (hiding the palette
 // destroys the caller's content browser before it can read the response).
@@ -653,8 +684,11 @@ const QUERIES = Object.freeze({
   [MSG.TAB_INDEX_GET_ROWS_BY_DOM_IDS]: (m) => api.getRowsByDomIds(JSON.stringify(m.domIds || [])),
   [MSG.TAB_INDEX_GET_WORKSPACE_COUNTS]: () => api.getWorkspaceTabCounts(),
   [MSG.TAB_INDEX_GET_ACTIONS_MODEL]:    async () => {
-    const recentlyClosed = await getRecentlyClosed().catch(() => []);
-    return api.getActionsViewModel(recentlyClosed.length);
+    const [recentlyClosed, commandPaletteLeaderBadge] = await Promise.all([
+      getRecentlyClosed().catch(() => []),
+      getCommandPaletteLeaderBadge(),
+    ]);
+    return api.getActionsViewModel(recentlyClosed.length, commandPaletteLeaderBadge);
   },
   [MSG.TAB_INDEX_GET_DUPLICATE_GROUPS_MODEL]: (m) => api.getDuplicateGroupsViewModel(m.workspaceFilter || "all"),
   [MSG.TAB_INDEX_GET_DUPLICATE_PROMPT_MODEL]: (m) => api.getDuplicatePromptViewModel(m.url || "", m.domId || null),
@@ -814,11 +848,10 @@ async function handleChordResult(result) {
   }
 }
 
-// Configurable chord-leader shortcuts. The manifest declares four
-// open-palette commands; each one is a separate Firefox-keyset entry
-// that can be customized independently in about:addons. All call the
-// same armChord — they're alternates, so users can pick whichever
-// modifier is least likely to be eaten by the focused page. Defaults:
+// Configurable chord-leader shortcuts. The manifest declares a primary
+// open-palette command and one alternate; each one is a separate
+// Firefox-keyset entry that can be customized independently in
+// about:addons. Both call the same armChord. Defaults:
 //   open-palette    cmd+.
 //   open-palette-2  cmd+option+. (alternate)
 // The command palette has its own direct shortcut so it can open into

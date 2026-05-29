@@ -344,7 +344,8 @@
         "async": true,
         "description": "Get the chrome-owned root actions view model",
         "parameters": [
-          { "name": "recentlyClosedCount", "type": "integer", "optional": true }
+          { "name": "recentlyClosedCount", "type": "integer", "optional": true },
+          { "name": "commandPaletteLeaderBadge", "type": "string", "optional": true }
         ]
       },
       {
