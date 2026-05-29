@@ -12,6 +12,7 @@ function context(overrides: Partial<SelectionContext> = {}): SelectionContext {
     view: "actions",
     selectedIndex: -1,
     actionCount: 4,
+    commandCount: 0,
     prefixCount: 0,
     navigationCount: 0,
     recentlyClosedCount: 0,
@@ -38,6 +39,7 @@ describe("selection transitions", () => {
 
   it("uses the correct item count for each view family", () => {
     expect(selectionLength(context({ view: "actions", actionCount: 7 }))).toBe(7);
+    expect(selectionLength(context({ view: "command-palette", commandCount: 8 }))).toBe(8);
     expect(selectionLength(context({ view: "reorder-tabs", isPrefixView: true, prefixCount: 5 }))).toBe(5);
     expect(selectionLength(context({ view: "navigation", navigationCount: 2 }))).toBe(2);
     expect(selectionLength(context({ view: "move-to-folder", folderCount: 9 }))).toBe(9);

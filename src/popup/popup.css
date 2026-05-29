@@ -196,6 +196,36 @@ html, body {
   min-width: 0;
 }
 
+.command-palette-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.command-palette-input {
+  width: calc(100% - 24px);
+  height: 38px;
+  box-sizing: border-box;
+  margin: 10px 12px 6px;
+  border: 1px solid var(--ztt-border);
+  border-radius: 6px;
+  background: var(--ztt-bg-elevated);
+  color: var(--ztt-text);
+  padding: 0 12px;
+  font: inherit;
+  outline: none;
+}
+
+.command-palette-list {
+  padding-top: 2px;
+}
+
+.command-palette-view:not(.keyboard-selection) .list-item.selected {
+  background: var(--ztt-bg-hover);
+  box-shadow: none;
+}
+
 /* Actions menu pager: each page renders as a full-width scroll-snap pane.
    Trackpad/touch swipes use native scrolling, while keyboard/page-dot jumps
    scroll the same container to the requested page. */
@@ -688,6 +718,13 @@ html, body {
 .item-badge.badge-wide {
   min-width: 32px;
   padding-inline: 8px;
+}
+
+.item-badge-sequence {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .item-badge-placeholder {

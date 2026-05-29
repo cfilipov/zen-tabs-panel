@@ -18,6 +18,7 @@
     type InvalidChordFeedback,
   } from "./chord-bridge";
   import { closeSelectionPlan } from "./interaction/close-plan";
+  import { filterCommands } from "./interaction/command-palette-filter";
   import {
     interpretStructuralInput,
     type InteractionCommand,
@@ -104,6 +105,7 @@
   import { isDomainRow, isTabRow } from "./view-loaders/list-row";
   import { formatDuration } from "./views/format";
   import {
+    actionSelectionItemsForView,
     actionItemsForPage,
     applyActionSelection,
     type ActionMenuItem,
@@ -135,6 +137,8 @@
   let skipAnimations = $state(new URLSearchParams(location.search).get("skipAnimations") === "1");
   let suppressViewTransition = $state(true);
   let invalidChordHint = $state<string | null>(null);
+  let commandQuery = $state("");
+  let commandSelectionByKeyboard = $state(false);
   let invalidChordHintTimer: number | null = null;
   let paletteRevealed = false;
   const terminalCommandBlocker = createTerminalCommandBlocker();
@@ -225,6 +229,7 @@
   });
   const visibleActionItems = $derived(actionItemsForPage(renderedActionSections, palette.currentPage));
   const allActionItems = $derived(renderedActionSections.flatMap((section) => section.items));
+  const visibleCommandItems = $derived(filterCommands(palette.commandPaletteItems, commandQuery));
   const prefixItems = $derived(isNativePrefixView(palette.currentView) ? palette.actionPrefixItemsByView[palette.currentView] ?? [] : []);
   const title = $derived(resolveViewTitle(palette.currentView, {
     currentDomain: palette.currentDomain,
@@ -336,7 +341,7 @@
   }
 
   async function finishOpenView(view: ViewId) {
-    await requestPanelResize(view);
+    await requestPanelResize(view, { force: true });
     if (usesFitContentHeight(view)) {
       window.setTimeout(() => {
         if (pageAlive && palette.currentView === view) void requestPanelResize(view);
@@ -356,6 +361,8 @@
     if (plan.kind === "actions") {
       resetToActions();
       await paletteLoaders.loadActionsData();
+    } else if (plan.kind === "command-palette") {
+      await enterCommandPalette();
     } else if (plan.kind === "list") {
       paletteStore.enterDomainList(plan.domain);
       await paletteLoaders.loadListView(plan.view, 0, 80, true, { ...plan.params, ...viewParams(plan.view) });
@@ -463,6 +470,8 @@
     if (item.disabled) return;
     const items = palette.currentView === "actions"
       ? allActionItems
+      : palette.currentView === "command-palette"
+      ? visibleCommandItems
       : isNativePrefixView(palette.currentView)
       ? prefixItems
       : [];
@@ -710,7 +719,29 @@
 
   function resetToActions() {
     clearPreview();
+    commandQuery = "";
+    commandSelectionByKeyboard = false;
     paletteStore.enterActionsView();
+  }
+
+  function setCommandQuery(query: string) {
+    commandQuery = query;
+    commandSelectionByKeyboard = false;
+    const nextItems = filterCommands(palette.commandPaletteItems, query);
+    paletteStore.selectIndex(nextItems.length > 0 ? 0 : -1);
+    clearPreview();
+  }
+
+  async function enterCommandPalette() {
+    clearPreview();
+    commandQuery = "";
+    commandSelectionByKeyboard = false;
+    paletteStore.setCurrentView("command-palette");
+    paletteStore.setLoading(false);
+    paletteStore.setError(null);
+    await paletteLoaders.loadActionsData();
+    const nextItems = filterCommands(palette.commandPaletteItems, commandQuery);
+    paletteStore.selectIndex(nextItems.length > 0 ? 0 : -1);
   }
 
   async function goBack() {
@@ -730,6 +761,7 @@
   }
 
   function moveSelection(delta: 1 | -1) {
+    if (palette.currentView === "command-palette") commandSelectionByKeyboard = true;
     paletteStore.selectIndex(nextSelectionIndex(selectionContext(), delta));
     if (shouldScrollListSelection()) {
       ensureListIndexLoaded(palette.selectedIndex);
@@ -760,6 +792,7 @@
       view: palette.currentView,
       selectedIndex: palette.selectedIndex,
       actionCount: visibleActionItems.length,
+      commandCount: visibleCommandItems.length,
       prefixCount: prefixItems.length,
       navigationCount: navigationEntries.length,
       recentlyClosedCount: palette.recentlyClosedRows.length,
@@ -804,7 +837,11 @@
 
   async function applyActivationPlan(plan: ActivationPlan) {
     if (plan.kind === "action-selection") {
-      const item = visibleActionItems[plan.index];
+      const item = actionSelectionItemsForView(
+        palette.currentView,
+        visibleActionItems,
+        visibleCommandItems,
+      )[plan.index];
       if (item) await activateVisibleActionItem(item, "selection");
     } else if (plan.kind === "prefix-selection") {
       const item = prefixItems[plan.index];
@@ -942,12 +979,12 @@
     }
     const keyInput = { kind: "key" as const, ...input };
     const chordKey = chordFromKey(keyInput);
-    const visibleCommandItems = palette.currentView === "actions"
+    const visibleShortcutItems = palette.currentView === "actions"
       ? allActionItems
       : isNativePrefixView(palette.currentView)
       ? prefixItems
       : [];
-    const item = visibleCommandItems.find((candidate) => !!chordKey && candidate.hotkey === chordKey);
+    const item = visibleShortcutItems.find((candidate) => !!chordKey && candidate.hotkey === chordKey);
     if (item) {
       clearInvalidChordHint();
       await activateVisibleActionItem(item, "shortcut");
@@ -1139,6 +1176,9 @@
     error={palette.error}
     actionSections={actionSectionsForRender}
     prefixItems={prefixItemsForRender}
+    commandItems={visibleCommandItems}
+    commandQuery={commandQuery}
+    commandSelectionByKeyboard={commandSelectionByKeyboard}
     {tabRows}
     {domainRows}
     tabInfo={palette.tabInfo}
@@ -1149,6 +1189,7 @@
     {selectedDomain}
     {activeWorkspaceId}
     {activateAction}
+    {setCommandQuery}
     openExtensionPopup={openExtensionByIndex}
     {previewTabLike}
     {clearPreview}

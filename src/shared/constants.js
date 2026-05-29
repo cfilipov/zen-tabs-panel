@@ -255,6 +255,7 @@ this.STORAGE_DEFAULTS = Object.freeze({
 // popup handles but uses the default size.
 this.VIEW_IDS = new Set([
   "actions",
+  "command-palette",
   "child-tabs",
   "sibling-tabs",
   "parent-tabs",

@@ -40,7 +40,7 @@
     </span>
   </span>
   <span class="item-right">
-    <Badge value={item.badge} />
+    <Badge value={item.chordPathBadge ?? item.badge} />
     <span class="item-arrow">{item.isView ? "›" : ""}</span>
   </span>
 </button>

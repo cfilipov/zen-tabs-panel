@@ -1,4 +1,5 @@
 import type { ACTION_SECTIONS } from "../../shared/action-sections";
+import type { ViewId } from "../../shared/types";
 import type { ActionPreview } from "../runtime/tab-index-client";
 
 export type ActionSectionId = (typeof ACTION_SECTIONS)[number]["id"];
@@ -16,6 +17,8 @@ export type ActionMenuItem = {
   iconHtml?: string | null;
   hotkey: string;
   badge: string;
+  chordPathBadge?: string;
+  searchText?: string;
   isView: boolean;
   page: number;
   disabled?: boolean;
@@ -38,6 +41,14 @@ export function actionItemsForPage(sections: readonly ActionSection[], page: num
   return sections
     .filter((section) => section.page === page)
     .flatMap((section) => section.items);
+}
+
+export function actionSelectionItemsForView(
+  view: ViewId,
+  visibleActionItems: readonly ActionMenuItem[],
+  visibleCommandItems: readonly ActionMenuItem[],
+): readonly ActionMenuItem[] {
+  return view === "command-palette" ? visibleCommandItems : visibleActionItems;
 }
 
 export function applyActionSelection(

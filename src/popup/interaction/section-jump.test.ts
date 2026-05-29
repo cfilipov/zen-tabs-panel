@@ -7,6 +7,7 @@ function selection(overrides: Partial<SelectionContext> = {}): SelectionContext 
     view: "actions",
     selectedIndex: 0,
     actionCount: 0,
+    commandCount: 0,
     prefixCount: 0,
     navigationCount: 0,
     recentlyClosedCount: 0,

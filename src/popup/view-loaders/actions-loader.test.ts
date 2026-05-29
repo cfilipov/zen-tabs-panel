@@ -33,6 +33,16 @@ describe("actions loader", () => {
               page: 1,
             }],
           },
+          commandPaletteItems: [{
+            id: "sort-tabs-domain-alpha",
+            kind: "action",
+            label: "Reorder tabs: Domain",
+            hotkey: "D",
+            badge: "⌘. O D",
+            chordPathBadge: "⌘. O D",
+            isView: false,
+            page: 1,
+          }],
           workspaces: [],
           extensions: [],
           selectedIndex: -1,
@@ -42,6 +52,7 @@ describe("actions loader", () => {
 
     expect(data.sections?.[0]?.items[0]?.id).toBe("go-to-previous-tab");
     expect(data.prefixItemsByView?.["reorder-tabs"]?.[0]?.id).toBe("sort-tabs-domain-alpha");
+    expect(data.commandPaletteItems?.[0]?.chordPathBadge).toBe("⌘. O D");
     expect(data.workspaces).toEqual([]);
     expect(data.extensions).toEqual([]);
   });
@@ -51,6 +62,7 @@ describe("actions loader", () => {
 
     expect(data.sections).toEqual([]);
     expect(data.prefixItemsByView).toEqual({});
+    expect(data.commandPaletteItems).toEqual([]);
     expect(data.workspaces).toEqual([]);
     expect(data.extensions).toEqual([]);
   });

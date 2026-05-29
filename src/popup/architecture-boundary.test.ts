@@ -170,4 +170,18 @@ describe("popup architecture boundary", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it("keeps the command palette from parsing generated keybindings in the popup", () => {
+    const files = [
+      join(popupRoot, "views", "CommandPalette.svelte"),
+      join(popupRoot, "interaction", "command-palette-filter.ts"),
+    ];
+    const offenders = matchingOffenders(files, [
+      /\bZEN_KEYBINDINGS\b/,
+      /shared\/keybindings/,
+      /keybindings\.js/,
+    ]);
+
+    expect(offenders).toEqual([]);
+  });
 });

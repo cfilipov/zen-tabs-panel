@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  actionSelectionItemsForView,
   actionItemsForPage,
   applyActionSelection,
   type ActionSection,
@@ -38,5 +39,17 @@ describe("actions menu model", () => {
 
     expect(selected[0].items[0].selected).toBe(false);
     expect(selected[0].items[1].selected).toBe(true);
+  });
+
+  it("uses filtered command-palette rows as the Enter activation source", () => {
+    const rootItems = [
+      { id: "open-options", kind: "action" as const, label: "Settings", hotkey: ",", badge: ",", isView: false, page: 1 },
+    ];
+    const commandItems = [
+      { id: "move-tab-to-start", kind: "action" as const, label: "Move to start", hotkey: "S", badge: "S", isView: false, page: 1 },
+    ];
+
+    expect(actionSelectionItemsForView("actions", rootItems, commandItems)[0].id).toBe("open-options");
+    expect(actionSelectionItemsForView("command-palette", rootItems, commandItems)[0].id).toBe("move-tab-to-start");
   });
 });

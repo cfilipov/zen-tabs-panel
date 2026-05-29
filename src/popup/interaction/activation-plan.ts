@@ -38,6 +38,7 @@ export function activationPlanForSelection(
   switchToTarget = false,
 ): ActivationPlan {
   if (view === "actions") return { kind: "action-selection", index: selectedIndex };
+  if (view === "command-palette") return { kind: "action-selection", index: selectedIndex };
   if (isNativePrefixView(view)) return { kind: "prefix-selection", index: selectedIndex };
   return activationPlanForIndex(view, selectedIndex, "selection", switchToTarget);
 }

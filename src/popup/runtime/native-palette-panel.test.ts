@@ -53,6 +53,27 @@ describe("native palette panel controller", () => {
     expect(resizePanel).toHaveBeenCalledTimes(1);
   });
 
+  it("can force an explicit view-open resize even when the measurement key matches", async () => {
+    const resizePanel = vi.fn();
+    const controller = createNativePalettePanelController({
+      tick: async () => {},
+      getCurrentView: () => "command-palette",
+      isAlive: () => true,
+      getElementById: () => null,
+      setTimeout: immediateTimeout,
+      resizePanel,
+    });
+
+    controller.handlePaletteHeightChange(604);
+    await flushPanelResize();
+    await controller.requestPanelResize("command-palette");
+    await controller.requestPanelResize("command-palette", { force: true });
+
+    expect(resizePanel).toHaveBeenCalledTimes(2);
+    expect(resizePanel).toHaveBeenNthCalledWith(1, "command-palette", 604, 0);
+    expect(resizePanel).toHaveBeenNthCalledWith(2, "command-palette", 604, 0);
+  });
+
   it("uses natural content height for compact views", async () => {
     const resizePanel = vi.fn();
     const controller = createNativePalettePanelController({

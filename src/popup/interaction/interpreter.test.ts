@@ -62,6 +62,21 @@ describe("interaction interpreter", () => {
       .toEqual({ kind: "open-extension-index", index: 1 });
   });
 
+  it("leaves command-palette text input keys to the focused input", () => {
+    expect(interpretStructuralInput({ kind: "key", key: "s" }, { view: "command-palette" }))
+      .toEqual({ kind: "none" });
+    expect(interpretStructuralInput({ kind: "key", key: "Backspace" }, { view: "command-palette" }))
+      .toEqual({ kind: "none" });
+    expect(interpretStructuralInput({ kind: "key", key: "ArrowDown" }, { view: "command-palette" }))
+      .toEqual({ kind: "move-selection", delta: 1 });
+    expect(interpretStructuralInput({ kind: "key", key: "ArrowUp" }, { view: "command-palette" }))
+      .toEqual({ kind: "move-selection", delta: -1 });
+    expect(interpretStructuralInput({ kind: "key", key: "Enter" }, { view: "command-palette" }))
+      .toEqual({ kind: "activate-selection" });
+    expect(interpretStructuralInput({ kind: "key", key: "Escape" }, { view: "command-palette" }))
+      .toEqual({ kind: "cancel" });
+  });
+
   it("keeps special view hotkeys in the interpreter instead of components", () => {
     expect(interpretStructuralInput({ kind: "key", key: "b" }, { view: "navigation" }))
       .toEqual({ kind: "navigate-history-delta", delta: -1 });

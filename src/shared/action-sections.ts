@@ -19,5 +19,5 @@ export const ACTION_SECTIONS = [
   { id: "developer", label: "Developer", page: 2, column: true, actionIds: ["toggle-devtools", "toggle-browser-toolbox"] },
   { id: "browser", label: "Browser", page: 2, column: true, stack: true, actionIds: ["open-downloads", "open-addons", "open-firefox-view"] },
   { id: "page-tools", label: "Page tools", page: 2, column: true, actionIds: ["view-page-source", "view-page-info", "take-screenshot", "copy-url", "copy-url-markdown"] },
-  { id: "other", label: "Other", page: 2, column: true, stack: true, actionIds: ["replay-last-chord", "open-options"] },
+  { id: "other", label: "Other", page: 2, column: true, stack: true, actionIds: ["command-palette", "replay-last-chord", "open-options"] },
 ] as const;

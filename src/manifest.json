@@ -64,13 +64,13 @@
       "suggested_key": {
         "default": "Command+Alt+Period"
       },
-      "description": "Open palette / arm chord (backup 1)"
+      "description": "Open palette / arm chord (alternate)"
     },
-    "open-palette-3": {
-      "description": "Open palette / arm chord (backup 2)"
-    },
-    "open-palette-4": {
-      "description": "Open palette / arm chord (backup 3)"
+    "open-command-palette": {
+      "suggested_key": {
+        "default": "Command+Shift+P"
+      },
+      "description": "Open command palette"
     }
   },
   "options_ui": {

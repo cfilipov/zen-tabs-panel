@@ -9,6 +9,8 @@ describe("activation plan", () => {
   it("routes action and prefix selections to local item activation", () => {
     expect(activationPlanForSelection("actions", 2))
       .toEqual({ kind: "action-selection", index: 2 });
+    expect(activationPlanForSelection("command-palette", 1))
+      .toEqual({ kind: "action-selection", index: 1 });
     expect(activationPlanForSelection("reorder-tabs", 1))
       .toEqual({ kind: "prefix-selection", index: 1 });
   });

@@ -5,6 +5,7 @@ export type SelectionContext = {
   view: ViewId;
   selectedIndex: number;
   actionCount: number;
+  commandCount: number;
   prefixCount: number;
   navigationCount: number;
   recentlyClosedCount: number;
@@ -22,6 +23,7 @@ export type SelectionContext = {
 
 export function selectionLength(context: SelectionContext) {
   if (context.view === "actions") return context.actionCount;
+  if (context.view === "command-palette") return context.commandCount;
   if (context.isPrefixView) return context.prefixCount;
   if (context.view === "navigation") return context.navigationCount;
   if (context.view === "recently-closed") return context.recentlyClosedCount;

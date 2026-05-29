@@ -147,6 +147,7 @@ export type ActionsViewModel = {
   view: "actions";
   sections: ActionSection[];
   prefixItemsByView: Partial<Record<ViewId, ActionSection["items"]>>;
+  commandPaletteItems?: ActionSection["items"];
   workspaces: WorkspaceRow[];
   extensions: ExtensionRow[];
   selectedIndex: number;

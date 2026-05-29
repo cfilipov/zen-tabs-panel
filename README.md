@@ -1,10 +1,10 @@
 # ErgoZen
 
-A command palette for [Zen Browser](https://zen-browser.app/). Discoverable chord shortcuts for tabs, workspaces, splits, and more - drive it from the keyboard or the mouse.
+A command palette for [Zen Browser](https://zen-browser.app/). Discoverable chord shortcuts and fuzzy command search for tabs, workspaces, splits, and more - drive it from the keyboard or the mouse.
 
 Formerly **Zen Tabs Panel**.
 
-ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more - far more than Zen exposes by default. Everything starts with one leader chord (`⌘.` on macOS, `⌃.` on Windows/Linux), followed by a short sequence of keys. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. The same sequence works whether you see the menu or not: type it quickly and the action fires immediately; pause, and the menu pops up showing every available next key. Common actions become muscle memory while less-used ones stay easy to discover. The palette is keyboard-first but fully mouse-friendly.
+ErgoZen surfaces dozens of actions across tabs, workspaces, splits, and more - far more than Zen exposes by default. Everything starts with one leader chord (`⌘.` on macOS, `⌃.` on Windows/Linux), followed by a short sequence of keys. For example, `⌘.` then `R` opens recent tabs; `⌘.` then `R` then `2` switches to the second most recent tab. The same sequence works whether you see the menu or not: type it quickly and the action fires immediately; pause, and the menu pops up showing every available next key. You can also open the searchable command palette with `⌘⇧P` or `⌘.` then `/` and fuzzy-search ErgoZen commands by name. Common actions become muscle memory while less-used ones stay easy to discover. The palette is keyboard-first but fully mouse-friendly.
 
 <p align="center">
   <img src="screenshot@2x.png?v=dark" alt="Main menu" width="900">
@@ -76,13 +76,14 @@ The extension will persist across browser restarts.
 
 This extension uses a Firefox **Experiment API** to access Zen's internal browser APIs (workspace switching, cross-workspace tab management, chrome DOM manipulation). Experiment APIs are a privileged extension mechanism that aren't allowed on the public Firefox Add-ons site (AMO), so the extension can't be distributed through normal channels.
 
-This means two `about:config` flags must be enabled to install it.
+This means a few `about:config` flags must be enabled to install it.
 
 ## Features
 
 **Command palette** (`⌘.` / `⌘⌥.` on macOS, `⌃.` on Windows/Linux, or toolbar icon) - a Zen-styled floating panel with:
 
 - **Tree-style tabs, no tree** - all the navigation benefits of tree-style tabs (parent, children, siblings) surfaced as palette menu items rather than a sidebar tree. Relationships persist across Zen restarts.
+- **Fuzzy command search** - open with `⌘⇧P` or `⌘.` then `/` to search ErgoZen's own commands by name. Results show the full chord sequence, including flattened submenu actions like `Reorder tabs: Domain (A-Z)`, so search becomes an onboarding ramp to the chord system.
 - **Navigate section** - directional actions for Previous, Parent, Above, and Below on the first page, with Back and Forward on the second page. Rows that target a tab show a live preview with the target favicon/title; hovering or arrow-keying highlights and scrolls to the target in the sidebar.
 - **Child tabs** - list all tabs spawned from the current tab
 - **Sibling tabs** - list all tabs that share the same parent as the current tab
@@ -125,7 +126,15 @@ This means two `about:config` flags must be enabled to install it.
 
 **Keyboard shortcuts** (configurable via `about:addons` › Manage Extension Shortcuts):
 
-Press `⌘.` to arm the palette/chord engine on macOS, or `⌃.` on Windows/Linux. `⌘⌥.` is registered as a backup macOS leader, and two additional leader slots are available but unset by default. All four commands do the same thing and can be changed in `about:addons` > Manage Extension Shortcuts. From the palette, use single-key shortcuts to navigate:
+Press `⌘.` to arm the palette/chord engine on macOS, or `⌃.` on Windows/Linux. `⌘⌥.` is registered as an alternate macOS leader. `⌘⇧P` opens the fuzzy command palette directly. These commands can be changed in `about:addons` > Manage Extension Shortcuts:
+
+| Add-on shortcut | Default | What it does |
+|---|---|---|
+| Open palette / arm chord | `⌘.` on macOS, `⌃.` on Windows/Linux | Arms the chord engine; pause to show the main palette |
+| Open palette / arm chord (alternate) | `⌘⌥.` on macOS | Same as the main leader, useful if the focused page eats the primary shortcut |
+| Open command palette | `⌘⇧P` on macOS | Opens fuzzy command search directly |
+
+From the palette, use single-key shortcuts to navigate:
 
 The main menu groups actions into columns. Page 1 contains core tab navigation and organization:
 
@@ -265,6 +274,7 @@ Page 2 contains browser, page, profile, and workspace utilities:
 | Panel key | Action |
 |---|---|
 | `.` | Repeat last chord action |
+| `/` | Command palette |
 | `,` | Settings |
 
 Submenus use their own single-key rows:
@@ -328,7 +338,7 @@ Submenus use their own single-key rows:
 | `Enter` | Select the highlighted icon |
 | `⌃1` / `⌃2` / `⌃3` | Switch Emoji / Zen / Lucide icon pages |
 
-**Chord shortcuts** - the same keys work as leader-key chords. Press a leader (`⌘.`, `⌘⌥.`, `⌃.`, or any configured backup) followed by a panel key within the chord timeout to fire the action without the menu appearing:
+**Chord shortcuts** - the same keys work as leader-key chords. Press a leader (`⌘.`, `⌘⌥.`, `⌃.`, or your configured leader shortcut) followed by a panel key within the chord timeout to fire the action without the menu appearing:
 
 - `⌘. P` / `T` - jump to previous tab / parent tab, no menu shown
 - `⌘. [` / `]` - back / forward in the current tab's history (like the browser back/forward buttons)
@@ -345,9 +355,11 @@ Submenus use their own single-key rows:
 - `⌘. Y` - copy current URL as Markdown link
 - `⌘. Z` - restore the most recently closed tab
 - `⌘. 1` … `9`, `0` - switch directly to workspace 1–10
-- `⌘. S` / `E` / `⇧M` / `L` / `U` / `,` - move to start/end, move to folder, scroll to current, unload, settings
+- `⌘. S` / `E` / `⇧M` / `L` / `U` / `/` / `,` - move to start/end, move to folder, scroll to current, unload, command palette, settings
 
 If you don't press a follow-up key, the main menu opens after the timeout. Pressing any unrecognized key or Escape during the chord window cancels silently. Toolbar clicks bypass the chord and open the menu immediately.
+
+**Fuzzy command palette** - press `⌘⇧P` or `⌘.` then `/` to search ErgoZen commands by name. Type to filter, use ArrowUp/ArrowDown to move the selection, Enter to run the selected command, and Escape to close. Results include both top-level commands and flattened submenu commands, and each row shows the full chord sequence that would trigger it.
 
 **Workspace filtering** - In tab list views, a sidebar shows workspace icons. Press `⇧1`–`⇧9` to filter the list by the 1st–9th workspace, or `0` to toggle between "all workspaces" and the current one. Tab/Shift-Tab moves focus between the list and the sidebar.
 

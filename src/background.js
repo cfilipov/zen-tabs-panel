@@ -820,13 +820,17 @@ async function handleChordResult(result) {
 // same armChord — they're alternates, so users can pick whichever
 // modifier is least likely to be eaten by the focused page. Defaults:
 //   open-palette    cmd+.
-//   open-palette-2  cmd+option+.
-//   open-palette-3  (unset)
-//   open-palette-4  (unset)
+//   open-palette-2  cmd+option+. (alternate)
+// The command palette has its own direct shortcut so it can open into
+// text-input mode without arming a chord session.
 // armChord arms ChordSession plus the chrome/content capture shims. Content
 // keys are suppressed in-process by the shim and forwarded to chrome for
 // traversal.
 browser.commands.onCommand.addListener((command) => {
+  if (command === "open-command-palette") {
+    api.showPalette({ view: "command-palette" }).catch(() => {});
+    return;
+  }
   if (command.startsWith("open-palette")) {
     api.armChord().catch(() => {});
   }

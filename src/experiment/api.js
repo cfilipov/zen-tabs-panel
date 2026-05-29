@@ -1004,6 +1004,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     // compact menu views below are allowed to shrink to measured content.
     const VIEW_SIZES = {
       actions:              { width: 960, height: 604 },
+      "command-palette":    { width: 600, height: 604 },
       "child-tabs":         { width: 720, height: 604 },
       "sibling-tabs":       { width: 720, height: 604 },
       "parent-tabs":        { width: 720, height: 604 },
@@ -3986,7 +3987,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
     }
 
     function visibleActionBinding(view, expectedRowId, replayChordKey) {
-      if (view === "actions") {
+      if (view === "actions" || view === "command-palette") {
         if (expectedRowId && String(expectedRowId).startsWith("workspace-switch:")) {
           return { kind: "workspace-switch", workspaceId: String(expectedRowId).slice("workspace-switch:".length) };
         }
@@ -4273,7 +4274,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         ? options.params
         : (currentViewParams() || {});
       try {
-        if (view === "actions" || prefixBindingForView(view)) {
+        if (view === "actions" || view === "command-palette" || prefixBindingForView(view)) {
           const result = activateVisibleActionIntent(view, expectedRowId, replayChordKey, destroy, options);
           if (result !== null) return result;
         }

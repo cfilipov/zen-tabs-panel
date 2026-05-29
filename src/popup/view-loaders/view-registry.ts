@@ -37,6 +37,7 @@ const tabViews = new Set<ViewId>(nativeTabViews);
 const prefixViews = new Set<ViewId>(prefixViewIds);
 
 const chromeModelIntentViewIds = [
+  "command-palette",
   "navigation",
   "recently-closed",
   "child-tabs",
@@ -75,11 +76,12 @@ export const VIEW_LOADERS = {
 
 export type LoaderView = keyof typeof VIEW_LOADERS;
 export type ViewLoaderId = (typeof VIEW_LOADERS)[LoaderView];
-type PlannedNavigationView = NativeListView | NativePrefixView | LoaderView;
+type PlannedNavigationView = "command-palette" | NativeListView | NativePrefixView | LoaderView;
 const _viewCoverage: Record<Exclude<NavigationViewId, PlannedNavigationView>, never> = {};
 void _viewCoverage;
 
 const CONCRETE_VIEW_TITLES: Partial<Record<ViewId, string>> = {
+  "command-palette": "Command palette",
   navigation: "Tab history",
   "recently-closed": "Recently closed",
   duplicates: "Duplicates",
@@ -98,6 +100,7 @@ const CONCRETE_VIEW_TITLES: Partial<Record<ViewId, string>> = {
 
 export type ViewOpenPlan =
   | { kind: "actions" }
+  | { kind: "command-palette" }
   | { kind: "list"; view: NativeListView; params: Record<string, unknown>; domain: string | null }
   | { kind: "prefix"; view: NativePrefixView }
   | { kind: "domain-close-confirm"; params: Record<string, unknown> }
@@ -154,6 +157,7 @@ export function resolveViewOpenPlan(
   params?: URLSearchParams | Record<string, unknown>,
 ): ViewOpenPlan {
   if (view === "actions") return { kind: "actions" };
+  if (view === "command-palette") return { kind: "command-palette" };
   if (isNativeListView(view)) {
     return {
       kind: "list",

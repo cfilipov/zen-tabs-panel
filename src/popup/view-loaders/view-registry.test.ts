@@ -22,6 +22,7 @@ describe("view registry", () => {
 
   it("centralizes chrome-owned intent view classification", () => {
     expect(isChromeModelIntentView("last-visited")).toBe(true);
+    expect(isChromeModelIntentView("command-palette")).toBe(true);
     expect(isChromeModelIntentView("move-to-workspace")).toBe(true);
     expect(isChromeModelIntentView("workspace-profiles")).toBe(true);
     expect(isChromeModelIntentView("duplicate-prompt")).toBe(false);
@@ -41,6 +42,7 @@ describe("view registry", () => {
 
   it("plans actions, prefixes, concrete loaders, and unsupported foreign popups", () => {
     expect(resolveViewOpenPlan("actions")).toEqual({ kind: "actions" });
+    expect(resolveViewOpenPlan("command-palette")).toEqual({ kind: "command-palette" });
     expect(resolveViewOpenPlan("split-view")).toEqual({ kind: "prefix", view: "split-view" });
     expect(resolveViewOpenPlan("workspace-name")).toEqual({ kind: "loader", view: "workspace-name", loader: "workspace-name" });
     expect(resolveViewOpenPlan("workspace-profiles")).toEqual({ kind: "loader", view: "workspace-profiles", loader: "workspace-profiles" });
@@ -57,6 +59,7 @@ describe("view registry", () => {
     expect(resolveViewTitle("domain-tabs", { currentDomain: "example.test" })).toBe("example.test");
     expect(resolveViewTitle("domain-close-confirm")).toBe("Close domain tabs");
     expect(resolveViewTitle("navigation")).toBe("Tab history");
+    expect(resolveViewTitle("command-palette")).toBe("Command palette");
     expect(resolveViewTitle("reorder-tabs", { actionLabel: "Reorder tabs" })).toBe("Reorder tabs");
     expect(resolveViewTitle("extension-popup")).toBe("");
   });

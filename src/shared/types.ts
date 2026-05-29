@@ -2,6 +2,7 @@ export type Chord = string;
 
 export type ViewId =
   | "actions"
+  | "command-palette"
   | "child-tabs"
   | "sibling-tabs"
   | "parent-tabs"

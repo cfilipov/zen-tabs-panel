@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fade } from "svelte/transition";
   import ActionsMenu from "./ActionsMenu.svelte";
+  import CommandPalette from "./CommandPalette.svelte";
   import ContainerList from "./ContainerList.svelte";
   import DomainCloseConfirm from "./DomainCloseConfirm.svelte";
   import DomainList from "./DomainList.svelte";
@@ -31,6 +32,9 @@
     error: string | null;
     actionSections: ActionSection[];
     prefixItems: ActionMenuItem[];
+    commandItems: ActionMenuItem[];
+    commandQuery: string;
+    commandSelectionByKeyboard: boolean;
     tabRows: TabIndexRow[];
     domainRows: DomainIndexRow[];
     tabInfo: TabInfo | null;
@@ -41,6 +45,7 @@
     selectedDomain: string | null;
     activeWorkspaceId: string | null;
     activateAction: (item: ActionMenuItem) => void | Promise<void>;
+    setCommandQuery: (query: string) => void;
     openExtensionPopup: (index: number) => void | Promise<void>;
     previewTabLike: (row: { domId: string }) => void;
     clearPreview: () => void;
@@ -73,6 +78,9 @@
     error,
     actionSections,
     prefixItems,
+    commandItems,
+    commandQuery,
+    commandSelectionByKeyboard,
     tabRows,
     domainRows,
     tabInfo,
@@ -83,6 +91,7 @@
     selectedDomain,
     activeWorkspaceId,
     activateAction,
+    setCommandQuery,
     openExtensionPopup,
     previewTabLike,
     clearPreview,
@@ -110,6 +119,7 @@
 
   function hasRenderableRows() {
     if (isNativeTabView(palette.currentView)) return tabRows.length > 0;
+    if (palette.currentView === "command-palette") return commandItems.length > 0;
     if (palette.currentView === "domains") return domainRows.length > 0;
     if (palette.currentView === "navigation") return (palette.navigationHistory?.entries.length ?? 0) > 0;
     if (palette.currentView === "recently-closed") return palette.recentlyClosedRows.length > 0;
@@ -143,6 +153,15 @@
         onpreview={(domId) => previewTabLike({ domId })}
         onclearpreview={clearPreview}
         onpage={setActionsPage}
+      />
+    {:else if palette.currentView === "command-palette"}
+      <CommandPalette
+        query={commandQuery}
+        items={commandItems}
+        selectedIndex={palette.selectedIndex}
+        selectionByKeyboard={commandSelectionByKeyboard}
+        onquery={setCommandQuery}
+        onactivate={activateAction}
       />
     {:else if isNativePrefixView(palette.currentView)}
       <PrefixMenu view={palette.currentView} items={prefixItems} onactivate={activateAction} />

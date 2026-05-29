@@ -24,6 +24,10 @@ export type NativePalettePanelControllerDeps = {
   resizePanel: (view: ViewId, height: number, dynamicSidebarWidth?: number) => MaybePromise<unknown>;
 };
 
+type ResizeOptions = {
+  force?: boolean;
+};
+
 export function createNativePalettePanelController(deps: NativePalettePanelControllerDeps) {
   let paletteHeight = 0;
   let dynamicSidebarWidth = 0;
@@ -40,7 +44,7 @@ export function createNativePalettePanelController(deps: NativePalettePanelContr
     });
   }
 
-  async function requestPanelResize(view: ViewId = deps.getCurrentView()) {
+  async function requestPanelResize(view: ViewId = deps.getCurrentView(), options: ResizeOptions = {}) {
     const requestId = ++resizeRequestId;
     const resizeView = view;
     await deps.tick();
@@ -73,7 +77,7 @@ export function createNativePalettePanelController(deps: NativePalettePanelContr
       sidebarWidthSettleRequests -= 1;
     }
     const resizeKey = `${resizeView}:${height}:${dynamicSidebarWidth}`;
-    if (resizeKey === lastResizeKey) return;
+    if (!options.force && resizeKey === lastResizeKey) return;
     lastResizeKey = resizeKey;
     lastResizeView = resizeView;
     lastResizeHeight = height;

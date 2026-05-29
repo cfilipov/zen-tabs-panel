@@ -12,6 +12,9 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
   const displayKey = typeof deps.displayKey === "function"
     ? deps.displayKey
     : (chord) => chord == null ? "" : String(chord).replace(/^Shift\+/, "⇧");
+  const commandPaletteLeaderBadge = typeof deps.commandPaletteLeaderBadge === "string"
+    ? deps.commandPaletteLeaderBadge
+    : "⌘.";
 
   function flatten(nodes) {
     const out = [];
@@ -37,6 +40,44 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
       page,
       disabled: disabledIds.has(node.id),
     };
+  }
+
+  function commandPaletteItemFromNode(node, disabledIds, parent) {
+    const isPrefixChild = !!parent;
+    const navPath = isPrefixChild
+      ? [parent.chord, node.chord].filter(Boolean).map(displayKey).filter(Boolean).join(" ")
+      : displayKey(node.chord);
+    const chordPath = [commandPaletteLeaderBadge, navPath].filter(Boolean).join(" ");
+    const label = isPrefixChild ? `${parent.label}: ${node.label}` : node.label;
+    const searchText = isPrefixChild
+      ? `${parent.label} ${node.label} ${parent.id} ${node.id}`
+      : `${node.label} ${node.id}`;
+    return {
+      ...itemFromNode(node, 1, disabledIds),
+      label,
+      searchText,
+      chordPathBadge: chordPath,
+      badge: chordPath,
+    };
+  }
+
+  function buildCommandPaletteItems(disabledIds) {
+    const out = [];
+    for (const node of navigationTree) {
+      if (!node) continue;
+      if (node.kind === "prefix") {
+        for (const child of node.children || []) {
+          if (child && (child.kind === "action" || child.kind === "open-view")) {
+            out.push(commandPaletteItemFromNode(child, disabledIds, node));
+          }
+        }
+        continue;
+      }
+      if (node.kind === "action" || node.kind === "open-view") {
+        out.push(commandPaletteItemFromNode(node, disabledIds, null));
+      }
+    }
+    return out;
   }
 
   function historyPreview(entry) {
@@ -205,12 +246,14 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
       previewsById
     );
     const prefixItemsByView = buildPrefixItemsByView(disabledIds);
+    const commandPaletteItems = buildCommandPaletteItems(disabledIds);
 
     return {
       version: snapshot.version || Date.now(),
       view: "actions",
       sections,
       prefixItemsByView,
+      commandPaletteItems,
       workspaces,
       extensions: input.extensions || [],
       selectedIndex: -1,

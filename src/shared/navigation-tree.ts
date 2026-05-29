@@ -29,6 +29,8 @@ const TAB_LIST_CAPABILITIES = ["closeSelection", "workspaceFilter"] as const;
 const SORTABLE_TAB_LIST_CAPABILITIES = ["closeSelection", "sort", "workspaceFilter"] as const;
 
 export const NAVIGATION_TREE = [
+  { id: "command-palette", kind: "open-view", chord: "/", view: "command-palette", label: "Command palette", icon: "svg:search", page: 2 },
+
   // Tab navigation
   { id: "go-to-previous-tab", kind: "action", chord: "P", label: "Previous", icon: "svg:arrow-left-right" },
   { id: "go-to-parent-tab",   kind: "action", chord: "T", label: "Parent",   icon: "svg:move-up", needsParent: true },
@@ -204,6 +206,7 @@ export type NavigationViewId = Extract<NavigationTerminalNode, { kind: "open-vie
 
 const ALL_VIEW_IDS = [
   "actions",
+  "command-palette",
   "child-tabs",
   "sibling-tabs",
   "parent-tabs",

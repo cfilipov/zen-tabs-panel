@@ -79,6 +79,14 @@ function shiftedDigitCodeIndex(input: Extract<InteractionInput, { kind: "key" }>
   return index >= 0 && index < 9 ? index : null;
 }
 
+function commandPaletteKeyCommand(input: Extract<InteractionInput, { kind: "key" }>): InteractionCommand {
+  if (input.key === "Escape") return { kind: "cancel" };
+  if (input.key === "ArrowDown") return { kind: "move-selection", delta: 1 };
+  if (input.key === "ArrowUp") return { kind: "move-selection", delta: -1 };
+  if (input.key === "Enter") return { kind: "activate-selection" };
+  return noCommand;
+}
+
 const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
   {
     id: "cancel",
@@ -258,6 +266,7 @@ export function interpretStructuralKey(
   context: InteractionContext,
 ): InteractionCommand {
   if (input.kind !== "key") return { kind: "none" };
+  if (context.view === "command-palette") return commandPaletteKeyCommand(input);
   for (const resolver of structuralKeyResolvers) {
     const command = resolver.resolve(input, context);
     if (command.kind !== "none") return command;
