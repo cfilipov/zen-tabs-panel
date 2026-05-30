@@ -476,6 +476,9 @@
       ? palette.offset + index
       : index;
     const stableRowId = expectedRowId ?? stableRowIdForActivation(stableRowIdentityContext(), index, source);
+    const params = isNativeListView(palette.currentView)
+      ? viewParams(palette.currentView)
+      : undefined;
     const result = await effects.activateCurrentViewRow(
       chromeIndex,
       source,
@@ -484,6 +487,7 @@
       chordKey,
       "trace",
       stableRowId,
+      params,
     );
     if (result?.kind === "open-view") {
       await openNativeView(result.view, result.params || {}, true);

@@ -52,6 +52,24 @@ describe("navigation tree", () => {
     expect(byId.get("move-to-parent")?.chord).toBe("Shift+Q");
   });
 
+  it("keeps close-and-select paired actions adjacent", () => {
+    const menu = NAVIGATION_TREE.find((node) => node.id === "close-and-select");
+    expect(menu?.kind).toBe("prefix");
+    if (!menu || menu.kind !== "prefix") return;
+
+    expect(menu.children.map((child) => [child.id, child.chord, child.label])).toEqual([
+      ["close-and-select-previous", "P", "Previous"],
+      ["close-and-select-parent", "T", "Parent"],
+      ["close-and-select-prev-sibling", "Shift+C", "Previous sibling"],
+      ["close-and-select-next-sibling", "C", "Next sibling"],
+      ["close-and-select-prev-vertical", "J", "Above"],
+      ["close-and-select-next-vertical", "K", "Below"],
+      ["close-and-select-unvisited-newest", "G", "Newest unvisited"],
+      ["close-and-select-unvisited-oldest", "Shift+G", "Oldest unvisited"],
+      ["close-and-select-default", "W", "Default"],
+    ]);
+  });
+
   it("uses the same display format as the legacy badges", () => {
     expect(displayKey("Shift+T")).toBe("⇧T");
     expect(displayKey(",")).toBe(",");

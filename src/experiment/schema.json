@@ -56,7 +56,8 @@
           { "name": "listVersion", "type": "integer", "optional": true },
           { "name": "chordKey", "type": "string", "optional": true },
           { "name": "activation", "type": "string", "optional": true },
-          { "name": "expectedRowId", "type": "string", "optional": true }
+          { "name": "expectedRowId", "type": "string", "optional": true },
+          { "name": "paramsJson", "type": "string", "optional": true }
         ]
       },
       {

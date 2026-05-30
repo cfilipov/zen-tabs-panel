@@ -41,6 +41,7 @@ export function createPaletteEffects() {
       chordKey?: string | null,
       activation = "trace",
       expectedRowId?: string | null,
+      params?: Record<string, unknown>,
     ) {
       return sendMessage<ActivateViewRowResult>({
         type: "activate-current-view-row",
@@ -50,6 +51,7 @@ export function createPaletteEffects() {
         ...(typeof listVersion === "number" && listVersion > 0 ? { listVersion } : {}),
         ...(chordKey ? { chordKey, activation } : {}),
         ...(expectedRowId ? { expectedRowId } : {}),
+        ...(params ? { params } : {}),
       });
     },
     bridgeDispatchSettled(inst: number | null) {

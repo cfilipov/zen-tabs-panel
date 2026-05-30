@@ -40,6 +40,16 @@ describe("chrome view transition boundary", () => {
     expect(coordinator).toMatch(/switchHiddenBridgeView\(\s*result\.view,\s*result\.params \|\| \{\}/);
   });
 
+  it("uses current list params when activating chrome-owned tab rows", () => {
+    const activation = functionBody("activateChromeOwnedRowIntent");
+    const apiMethod = functionBody("activateCurrentViewRow");
+
+    expect(activation).toMatch(/const viewParams = params \|\| \{\}/);
+    expect(activation).not.toMatch(/view === "domain-tabs" \? params : \{\}/);
+    expect(apiMethod).toMatch(/paramsJson/);
+    expect(apiMethod).toMatch(/JSON\.parse\(paramsJson\)/);
+  });
+
   it("keeps WarmRearm sends behind the coordinator helper", () => {
     const sends = [...apiSource.matchAll(/sendAsyncMessage\("ZenChord:WarmRearm:/g)];
     const helper = functionBody("sendWarmRearmMessage");

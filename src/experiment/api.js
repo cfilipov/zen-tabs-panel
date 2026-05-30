@@ -4468,7 +4468,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
         if (CHROME_OWNED_TAB_BRIDGE_VIEWS.has(view)) {
           tabIndex.start();
           if (expectedListVersion != null && tabIndex.getVersion() !== expectedListVersion) return activationNoop();
-          const viewParams = view === "domain-tabs" ? params : {};
+          const viewParams = params || {};
           const win = tabIndex.getWindow(view, rowIndex, 1, viewParams);
           const row = win && Array.isArray(win.rows) ? win.rows[0] : null;
           if (!row || !row.domId) return activationNoop();
@@ -6524,16 +6524,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
           return activateNativeTab(tab);
         },
 
-        async activateCurrentViewRow(index, source, switchToTarget, listVersion, chordKey, activation, expectedRowId) {
+        async activateCurrentViewRow(index, source, switchToTarget, listVersion, chordKey, activation, expectedRowId, paramsJson) {
           const view = currentViewName() || getActiveBridgeView();
           if (!view) return activationNoop();
+          let params = currentViewParams() || {};
+          if (typeof paramsJson === "string" && paramsJson) {
+            try { params = JSON.parse(paramsJson); } catch (e) {}
+          }
           return activateChromeOwnedRowIntent(view, index, source || "selection", !!switchToTarget, {
             destroyOverlay: true,
             listVersion,
             replayChordKey: typeof chordKey === "string" ? chordKey : null,
             activation: typeof activation === "string" ? activation : null,
             expectedRowId: typeof expectedRowId === "string" ? expectedRowId : null,
-            params: currentViewParams() || {},
+            params,
           });
         },
 

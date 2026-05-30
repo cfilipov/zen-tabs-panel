@@ -767,6 +767,7 @@ const SYNC_HANDLERS = Object.freeze({
       m.chordKey || "",
       m.activation || null,
       m.expectedRowId || "",
+      m.params && typeof m.params === "object" ? JSON.stringify(m.params) : "",
     );
     if (result && typeof result === "object" && result.kind === "open-view") {
       return result;

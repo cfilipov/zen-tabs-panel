@@ -108,7 +108,7 @@ This means a few `about:config` flags must be enabled to install it.
 - **Reorder tabs** - submenu with sort options: by recent, by domain (alphabetical or popularity), by age, most visited, inactive at bottom, group duplicates
 - **Scroll to current tab** - scroll the sidebar to center the active tab
 - **Unload tab** - discard from memory
-- **Close & select** - close the current tab and explicitly choose which tab to focus next: default (whatever `⌘W` would do, with the predicted successor previewed live), previous (last-active), parent, next/previous sibling, next/previous tab in the vertical bar, or newest/oldest unvisited tab. Each row shows the actual target tab's favicon and title; hover or arrow-key to highlight it in the sidebar; rows with no available target are disabled.
+- **Close & select** - close the current tab and explicitly choose which tab to focus next: previous (last-active), parent, previous/next sibling, above/below in the vertical sidebar, newest/oldest unvisited tab, or default (whatever `⌘W` would do, with the predicted successor previewed live). Each row shows the actual target tab's favicon and title; hover or arrow-key to highlight it in the sidebar; rows with no available target are disabled.
 - **Pin/unpin tab** - toggle pinned state of the active tab (refuses to act on Essentials)
 - **Copy URL as Markdown** - copies the active tab as `[Title](URL)` to the clipboard
 - **Restore closed tab** - reopens the most recently closed tab in this window via SessionStore
@@ -300,15 +300,15 @@ Submenus use their own single-key rows:
 
 | Panel key | Action |
 |---|---|
-| `W` | Default close target |
 | `P` | Previous tab |
 | `T` | Parent tab |
-| `C` | Next sibling |
 | `⇧C` | Previous sibling |
-| `N` | Next in sidebar |
-| `⇧N` | Previous in sidebar |
+| `C` | Next sibling |
+| `J` | Above |
+| `K` | Below |
 | `G` | Newest unvisited |
 | `⇧G` | Oldest unvisited |
+| `W` | Default close target |
 
 **Split** (`\`):
 
@@ -351,7 +351,7 @@ Submenus use their own single-key rows:
 - `⌘. D` - open the Duplicates view directly, skipping the main menu
 - `⌘. O R` - sort tabs by recent newest (any of the reorder mnemonics work after `O`: `R`/`⇧R`, `D`/`⇧D`, `A`/`⇧A`, `I`, `V`, `G`)
 - `⌘. W W` - close current tab, browser picks next (`⌘W` equivalent)
-- `⌘. W P` / `T` / `C` / `⇧C` / `N` / `⇧N` / `G` / `⇧G` - close current tab and jump to previous / parent / sibling / sidebar neighbor / unvisited tab. Pause after `W` to see a menu of all options with live previews of the target tab in each row.
+- `⌘. W P` / `T` / `⇧C` / `C` / `J` / `K` / `G` / `⇧G` - close current tab and jump to previous / parent / sibling / sidebar neighbor / unvisited tab. Pause after `W` to see a menu of all options with live previews of the target tab in each row.
 - `⌘. ⇧K I` / `N` / `P` - change the active workspace icon, name, or container profile
 - `⌘. ⇧K C` / `D` / `U` / `⇧U` - create, delete, unload, or unload all other spaces
 - `⌘. \ N` / `\` / `U` / `H` / `V` - split view: new, toggle horizontal/vertical, unsplit, horizontal (top/bottom), vertical (side-by-side). Pause after `\` for the menu.
