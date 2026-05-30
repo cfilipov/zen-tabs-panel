@@ -44,6 +44,10 @@
     selectedRowDomId: string | null;
     selectedDomain: string | null;
     activeWorkspaceId: string | null;
+    searchActive: boolean;
+    searchQuery: string;
+    setListSearchQuery: (query: string) => void | Promise<void>;
+    dismissListSearch: () => void | Promise<void>;
     activateAction: (item: ActionMenuItem) => void | Promise<void>;
     setCommandQuery: (query: string) => void;
     openExtensionPopup: (index: number) => void | Promise<void>;
@@ -90,6 +94,10 @@
     selectedRowDomId,
     selectedDomain,
     activeWorkspaceId,
+    searchActive,
+    searchQuery,
+    setListSearchQuery,
+    dismissListSearch,
     activateAction,
     setCommandQuery,
     openExtensionPopup,
@@ -258,6 +266,10 @@
         selectedDomId={selectedRowDomId}
         workspaces={palette.sidebarWorkspaces}
         {activeWorkspaceId}
+        {searchActive}
+        {searchQuery}
+        onsearchquery={setListSearchQuery}
+        onsearchdismiss={dismissListSearch}
         onactivate={activateRenderedRow}
         ondrillchildren={drillParentRow}
         onclose={closeTabRow}

@@ -17,6 +17,10 @@ export function isSortableView(view: ViewId) {
   return hasViewCapability(view, "sort");
 }
 
+export function isSearchableView(view: ViewId | undefined) {
+  return hasViewCapability(view, "search");
+}
+
 export function canDrillSelectionInView(view: ViewId) {
   return hasViewCapability(view, "drillSelection");
 }

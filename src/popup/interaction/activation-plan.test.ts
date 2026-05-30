@@ -21,6 +21,8 @@ describe("activation plan", () => {
       .toEqual({ kind: "chrome-model-row", index: 3, source: "selection", switchToTarget: false });
     expect(activationPlanForShortcut("move-to-workspace", 4, true))
       .toEqual({ kind: "chrome-model-row", index: 4, source: "shortcut", switchToTarget: true });
+    expect(activationPlanForSelection("move-to-parent", 2))
+      .toEqual({ kind: "chrome-model-row", index: 2, source: "selection", switchToTarget: false });
     expect(activationPlanForRenderedRow("navigation", 5))
       .toEqual({ kind: "chrome-model-row", index: 5, source: "selection", switchToTarget: false });
   });

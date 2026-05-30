@@ -4,6 +4,7 @@ import {
   canDrillSelectionInView,
   canRestoreInView,
   isCloseableView,
+  isSearchableView,
   isSortableView,
   isWorkspaceFilterView,
 } from "./view-capabilities";
@@ -24,6 +25,9 @@ describe("view capabilities", () => {
     expect(canRestoreInView("recently-closed")).toBe(true);
     expect(canDrillSelectionInView("parent-tabs")).toBe(true);
     expect(isSortableView("tabs-by-age")).toBe(true);
+    expect(isSearchableView("last-visited")).toBe(true);
+    expect(isSearchableView("move-to-parent")).toBe(true);
+    expect(isSearchableView("domains")).toBe(false);
   });
 
   it("keeps workspace filter capability shared by sidebar and shortcuts", () => {

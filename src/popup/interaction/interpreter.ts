@@ -7,6 +7,7 @@ import {
   canDrillSelectionInView,
   canRestoreInView,
   isCloseableView,
+  isSearchableView,
   isSortableView,
   isWorkspaceFilterView,
 } from "./view-capabilities";
@@ -17,6 +18,7 @@ export type InteractionContext = {
   duplicatePromptActionCount?: number;
   domainClosePinnedCount?: number;
   tabInfoDuplicateCount?: number;
+  searchActive?: boolean;
 };
 
 export type InteractionCommand =
@@ -39,6 +41,8 @@ export type InteractionCommand =
   | { kind: "close-tab-info-others" }
   | { kind: "restore-selection-keep-open" }
   | { kind: "drill-selection" }
+  | { kind: "open-search" }
+  | { kind: "dismiss-search" }
   | { kind: "toggle-sort" }
   | { kind: "toggle-workspace-filter" }
   | { kind: "filter-workspace-index"; index: number }
@@ -98,6 +102,7 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
     id: "back",
     resolve: (input, context) => {
       if (input.key !== "Backspace") return noCommand;
+      if (context.searchActive && isSearchableView(context.view)) return { kind: "dismiss-search" };
       if (context.view === "duplicate-prompt") return { kind: "cancel" };
       return context.view === "actions" ? { kind: "cancel" } : { kind: "back" };
     },
@@ -208,6 +213,13 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
     resolve: (input, context) => commandWhen(
       plainKey(input) && !input.shiftKey && upperKey(input) === "O" && canRestoreInView(context.view),
       { kind: "restore-selection-keep-open" },
+    ),
+  },
+  {
+    id: "search",
+    resolve: (input, context) => commandWhen(
+      plainKey(input) && !input.shiftKey && upperKey(input) === "S" && isSearchableView(context.view),
+      { kind: "open-search" },
     ),
   },
   {

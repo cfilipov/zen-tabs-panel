@@ -42,6 +42,12 @@ describe("interaction interpreter", () => {
       .toEqual({ kind: "restore-selection-keep-open" });
     expect(interpretStructuralInput({ kind: "key", key: "S" }, { view: "domains" }))
       .toEqual({ kind: "toggle-sort" });
+    expect(interpretStructuralInput({ kind: "key", key: "s" }, { view: "last-visited" }))
+      .toEqual({ kind: "open-search" });
+    expect(interpretStructuralInput({ kind: "key", key: "s" }, { view: "tabs-by-age" }))
+      .toEqual({ kind: "open-search" });
+    expect(interpretStructuralInput({ kind: "key", key: "Backspace" }, { view: "last-visited", searchActive: true }))
+      .toEqual({ kind: "dismiss-search" });
     expect(interpretStructuralInput({ kind: "key", key: "ArrowRight" }, { view: "parent-tabs" }))
       .toEqual({ kind: "drill-selection" });
   });

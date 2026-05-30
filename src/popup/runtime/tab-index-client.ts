@@ -13,6 +13,7 @@ export type TabIndexView =
   | "domain-tabs"
   | "tabs-by-age"
   | "most-visited"
+  | "move-to-parent"
   | "domains"
   | "all";
 

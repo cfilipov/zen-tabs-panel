@@ -4,6 +4,7 @@ import {
   canDrillSelectionInView,
   canRestoreInView,
   isCloseableView,
+  isSearchableView,
   isWorkspaceFilterView,
 } from "./view-capabilities";
 
@@ -29,18 +30,20 @@ export type SidebarModel = {
   hints: SidebarHintModel[];
   hintsOnly: boolean;
   sortLabel: string | null;
+  searchAvailable: boolean;
 };
 
 export function buildSidebarModel(context: SidebarModelContext): SidebarModel {
   const hintsOnly = context.view === "recently-closed";
   const sortLabel = sidebarSortLabel(context);
+  const searchAvailable = isSearchableView(context.view);
   const hints = sidebarHints(context);
   const visibleHints = hints.filter((hint) => !hint.hidden);
   const hidden = hintsOnly
     ? context.selectedIndex < 0
-    : !isWorkspaceFilterView(context.view) && visibleHints.length === 0 && !sortLabel;
+    : !isWorkspaceFilterView(context.view) && visibleHints.length === 0 && !sortLabel && !searchAvailable;
 
-  return { hidden, hints, hintsOnly, sortLabel };
+  return { hidden, hints, hintsOnly, sortLabel, searchAvailable };
 }
 
 function sidebarSortLabel(context: SidebarModelContext) {

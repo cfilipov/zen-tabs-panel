@@ -14,7 +14,7 @@ export const ACTION_SECTIONS = [
   { id: "workspaces", label: "Workspaces", page: 1, column: true, scrollable: true, actionIds: ["go-to-prev-workspace", "go-to-next-workspace"] },
   { id: "navigate", label: "Navigate", page: 2, navigateGrid: true, actionIds: ["go-back-in-tab", "go-forward-in-tab", "unvisited-newest", "unvisited-oldest"] },
   { id: "this-page", label: "This page", page: 2, column: true, actionIds: ["reload-tab", "reload-skip-cache", "duplicate-tab", "toggle-reader-mode", "toggle-mute", "toggle-fullscreen", "toggle-pip"] },
-  { id: "tab", label: "Tab", page: 2, column: true, actionIds: ["mark-tabs-new", "reset-pinned-tab", "replace-pinned-url", "add-to-essentials", "open-in-container"] },
+  { id: "tab", label: "Tab", page: 2, column: true, actionIds: ["mark-tabs-new", "reset-pinned-tab", "replace-pinned-url", "add-to-essentials", "open-in-container", "move-to-parent"] },
   { id: "profiles", label: "Profiles", page: 2, column: true, stack: true, actionIds: ["profiles", "workspace-actions"] },
   { id: "developer", label: "Developer", page: 2, column: true, actionIds: ["toggle-devtools", "toggle-browser-toolbox"] },
   { id: "browser", label: "Browser", page: 2, column: true, stack: true, actionIds: ["open-downloads", "open-addons", "open-firefox-view"] },

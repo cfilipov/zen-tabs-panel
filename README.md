@@ -92,6 +92,7 @@ This means a few `about:config` flags must be enabled to install it.
 - **New tabs** - list tabs opened in the background you haven't looked at, and mark the current or selected tabs as new again
 - **Newest/oldest unvisited** - jump directly to the newest or oldest background tab you have not visited yet
 - **Tabs by last visited** - all tabs sorted by recency. Hovering or arrow-keying through any tab list highlights and scrolls to the tab in the sidebar.
+- **Searchable tab lists** - press `S` in tab-list views to focus a search field and filter by tab title, URL, or domain. Backspace on an empty search field dismisses it.
 - **Tab info** - detailed view of the current tab: age, memory/CPU usage, visit history (grouped by date, collapsible), and duplicate tab detection with close buttons
 - **Duplicates** - view all duplicate tabs across all workspaces, grouped by URL, with workspace indicators, tab age, hover preview, and close buttons. Duplicate tabs are marked with an amber "D" badge in the sidebar; unvisited tabs use a matching blue "N" badge.
 - **Duplicate tab prompt** - optionally intercepts attempts to open a URL that is already open elsewhere, with choices to switch to the existing tab, open anyway, open and close the other duplicate tabs, or cancel. The switch option previews and scrolls to the existing tab.
@@ -100,7 +101,8 @@ This means a few `about:config` flags must be enabled to install it.
 - **Most visited** - list tabs sorted by browser history visit count, most visited first
 - **Move to workspace** - move tabs to another workspace without switching away, addressing a common Zen user request. An optional switch-on-move action takes you to the destination workspace when you want it.
 - **Move to folder** - move tabs to a Zen folder without switching workspaces by default, with an optional switch-on-move action when you do want to follow them.
-- **Multiselected tab actions** - many tab actions act on every selected tab, including moving to a workspace or folder, closing, unloading, copying URLs, and other cleanup flows.
+- **Move to parent** - move the current tab, or every selected tab, under an existing parent tab without moving workspaces. The picker excludes the selected tabs and their descendants to avoid loops.
+- **Multiselected tab actions** - many tab actions act on every selected tab, including moving to a workspace, folder, or parent, closing, unloading, copying URLs, and other cleanup flows.
 - **New container tab** - reopen the active tab in a Firefox container
 - **Move tab to start / end of tab bar**
 - **Reorder tabs** - submenu with sort options: by recent, by domain (alphabetical or popularity), by age, most visited, inactive at bottom, group duplicates
@@ -236,6 +238,7 @@ Page 2 contains browser, page, profile, and workspace utilities:
 | `⇧E` | Add/remove from Essentials |
 | `⇧N` | Mark as new |
 | `⇧X` | New container tab |
+| `⇧Q` | Move to parent |
 
 **Profiles**:
 
@@ -362,7 +365,7 @@ If you don't press a follow-up key, the main menu opens after the timeout. Press
 
 **Fuzzy command palette** - press `⌘⇧P` or `⌘.` then `/` to search ErgoZen commands by name. Type to filter, use ArrowUp/ArrowDown to move the selection, Enter to run the selected command, and Escape to close. Results include both top-level commands and flattened submenu commands, and each row shows the full chord sequence that would trigger it.
 
-**Workspace filtering** - In tab list views, a sidebar shows workspace icons. Press `⇧1`–`⇧9` to filter the list by the 1st–9th workspace, or `0` to toggle between "all workspaces" and the current one. Tab/Shift-Tab moves focus between the list and the sidebar.
+**Workspace filtering and tab-list search** - In tab list views, a sidebar shows workspace icons. Press `⇧1`–`⇧9` to filter the list by the 1st–9th workspace, or `0` to toggle between "all workspaces" and the current one. Press `S` to search tabs by title, URL, or domain; for example, `⌘. R S` opens Recents with search focused. Backspace on an empty search field dismisses search.
 
 **Settings** (accessible from the palette or `about:addons` › Extensions › ErgoZen › Preferences):
 

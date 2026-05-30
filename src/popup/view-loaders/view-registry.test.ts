@@ -15,6 +15,7 @@ describe("view registry", () => {
     expect(isNativeListView("last-visited")).toBe(true);
     expect(isNativeTabView("domains")).toBe(false);
     expect(isNativeTabView("last-visited")).toBe(true);
+    expect(isNativeTabView("move-to-parent")).toBe(true);
     expect(isNativePrefixView("reorder-tabs")).toBe(true);
     expect(isNativePrefixView("workspace-actions")).toBe(true);
     expect(LIST_VIEW_TITLES["last-visited"]).toBe("Recent");
@@ -24,6 +25,7 @@ describe("view registry", () => {
     expect(isChromeModelIntentView("last-visited")).toBe(true);
     expect(isChromeModelIntentView("command-palette")).toBe(true);
     expect(isChromeModelIntentView("move-to-workspace")).toBe(true);
+    expect(isChromeModelIntentView("move-to-parent")).toBe(true);
     expect(isChromeModelIntentView("workspace-profiles")).toBe(true);
     expect(isChromeModelIntentView("duplicate-prompt")).toBe(false);
     expect(isChromeModelIntentView("actions")).toBe(false);
@@ -59,6 +61,7 @@ describe("view registry", () => {
     expect(resolveViewTitle("domain-tabs", { currentDomain: "example.test" })).toBe("example.test");
     expect(resolveViewTitle("domain-close-confirm")).toBe("Close domain tabs");
     expect(resolveViewTitle("navigation")).toBe("Tab history");
+    expect(resolveViewTitle("move-to-parent")).toBe("Move to parent");
     expect(resolveViewTitle("command-palette")).toBe("Command palette");
     expect(resolveViewTitle("reorder-tabs", { actionLabel: "Reorder tabs" })).toBe("Reorder tabs");
     expect(resolveViewTitle("extension-popup")).toBe("");

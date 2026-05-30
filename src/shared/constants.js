@@ -277,6 +277,7 @@ this.VIEW_IDS = new Set([
   "reorder-tabs",
   "split-view",
   "move-to-workspace",
+  "move-to-parent",
   "close-and-select",
   "move-to-folder",
   "open-in-container",

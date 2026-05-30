@@ -23,6 +23,8 @@ export type NativePaletteRuntimeDeps = {
   closeTabInfoOthers: () => Promise<void> | void;
   restoreSelectionKeepOpen: () => Promise<void> | void;
   drillSelection: () => Promise<void> | void;
+  openSearch: () => Promise<void> | void;
+  dismissSearch: () => Promise<void> | void;
   toggleSort: () => Promise<void> | void;
   toggleWorkspaceFilter: () => Promise<void> | void;
   filterWorkspaceIndex: (index: number) => Promise<void> | void;
@@ -59,6 +61,8 @@ export function createNativePaletteInteractionRuntime(deps: NativePaletteRuntime
     closeTabInfoOthers: deps.closeTabInfoOthers,
     restoreSelectionKeepOpen: deps.restoreSelectionKeepOpen,
     drillSelection: deps.drillSelection,
+    openSearch: deps.openSearch,
+    dismissSearch: deps.dismissSearch,
     toggleSort: deps.toggleSort,
     toggleWorkspaceFilter: deps.toggleWorkspaceFilter,
     filterWorkspaceIndex: deps.filterWorkspaceIndex,

@@ -108,7 +108,7 @@ function makeRichIndex(tabs) {
   });
 }
 
-function makeIndexWithStoredValues(tabs, valuesByTabId, statsByTabId = {}) {
+function makeIndexWithStoredValues(tabs, valuesByTabId, statsByTabId = {}, extraDeps = {}) {
   return createZenTabIndex({
     getWin: fakeWindow,
     getAllTabElements: () => tabs,
@@ -121,6 +121,7 @@ function makeIndexWithStoredValues(tabs, valuesByTabId, statsByTabId = {}) {
     },
     ensureTabUuid: (tab) => valuesByTabId[tab.id]?.panelTabUuid || `uuid-${tab.id}`,
     recordInterval() {},
+    ...extraDeps,
   });
 }
 
@@ -503,6 +504,69 @@ test("tab index uses persisted parent UUIDs when openerTab is gone after restart
   assert.equal(snapshot.parentTabCount, 1);
   assert.equal(snapshot.siblingTabCount, 1);
   assert.equal(snapshot.previews["go-to-parent-tab"].title, "Parent");
+});
+
+test("move-to-parent candidates exclude selected targets and descendants", () => {
+  const tabs = [
+    fakeTab("tab-1", "https://alpha.test", "ws-1", { title: "Alpha parent" }),
+    fakeTab("tab-2", "https://target.test", "ws-1", { title: "Target", active: true }),
+    fakeTab("tab-3", "https://child.test", "ws-1", { title: "Child" }),
+    fakeTab("tab-4", "https://grandchild.test", "ws-1", { title: "Grandchild" }),
+    fakeTab("tab-5", "https://other.test", "ws-2", { title: "Other workspace" }),
+  ];
+  const index = makeIndexWithStoredValues(
+    tabs,
+    {
+      "tab-1": { panelTabUuid: "alpha-uuid" },
+      "tab-2": { panelTabUuid: "target-uuid" },
+      "tab-3": { panelTabUuid: "child-uuid", panelParentUuid: "target-uuid" },
+      "tab-4": { panelTabUuid: "grandchild-uuid", panelParentUuid: "child-uuid" },
+      "tab-5": { panelTabUuid: "other-uuid" },
+    },
+    {},
+    { getActionTargetDomIds: () => ["tab-2"] }
+  );
+
+  const win = index.getWindow("move-to-parent", 0, 20, {});
+
+  assert.deepEqual(win.rows.map((row) => row.domId), ["tab-1", "tab-5"]);
+  assert.deepEqual(win.model.rowIntents, [
+    { rowId: "tab-1", index: 0, chordKey: "1", action: "move-tabs-to-parent" },
+    { rowId: "tab-5", index: 1, chordKey: "2", action: "move-tabs-to-parent" },
+  ]);
+});
+
+test("tab list search filters title url and domain before windowing", () => {
+  const index = makeIndex([
+    fakeTab("tab-1", "https://alpha.test/docs", "ws-1", { title: "Reference" }),
+    fakeTab("tab-2", "https://beta.test/app", "ws-1", { title: "Beta" }),
+    fakeTab("tab-3", "https://gamma.test/app", "ws-1", { title: "Alpha notes" }),
+  ]);
+
+  assert.deepEqual(index.getWindow("last-visited", 0, 20, { searchQuery: "alpha" }).rows.map((row) => row.domId), [
+    "tab-1",
+    "tab-3",
+  ]);
+  assert.deepEqual(index.getWindow("last-visited", 0, 20, { searchQuery: "beta.test" }).rows.map((row) => row.domId), [
+    "tab-2",
+  ]);
+});
+
+test("move-to-parent combines workspace filter with search", () => {
+  const tabs = [
+    fakeTab("tab-1", "https://alpha.test/a", "ws-1", { title: "Alpha one" }),
+    fakeTab("tab-2", "https://target.test", "ws-1", { active: true }),
+    fakeTab("tab-3", "https://alpha.test/b", "ws-2", { title: "Alpha two" }),
+    fakeTab("tab-4", "https://beta.test/c", "ws-1", { title: "Beta" }),
+  ];
+  const index = makeIndexWithStoredValues(tabs, {}, {}, { getActionTargetDomIds: () => ["tab-2"] });
+
+  const win = index.getWindow("move-to-parent", 0, 20, {
+    workspaceId: "ws-1",
+    searchQuery: "alpha",
+  });
+
+  assert.deepEqual(win.rows.map((row) => row.domId), ["tab-1"]);
 });
 
 test("tab index carries persisted focus stats into most-visited rows", () => {

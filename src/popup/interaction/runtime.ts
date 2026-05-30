@@ -26,6 +26,8 @@ export type InteractionRuntimeHandlers = {
   closeTabInfoOthers: () => MaybePromise<void>;
   restoreSelectionKeepOpen: () => MaybePromise<void>;
   drillSelection: () => MaybePromise<void>;
+  openSearch: () => MaybePromise<void>;
+  dismissSearch: () => MaybePromise<void>;
   toggleSort: () => MaybePromise<void>;
   toggleWorkspaceFilter: () => MaybePromise<void>;
   filterWorkspaceIndex: (index: number) => MaybePromise<void>;
@@ -91,6 +93,12 @@ export async function applyInteractionCommand(
       return;
     case "drill-selection":
       await runtime.drillSelection();
+      return;
+    case "open-search":
+      await runtime.openSearch();
+      return;
+    case "dismiss-search":
+      await runtime.dismissSearch();
       return;
     case "toggle-sort":
       await runtime.toggleSort();

@@ -52,6 +52,8 @@ export type NativePaletteState = {
   tabsByAgeNewestFirst: boolean;
   sidebarWorkspaces: WorkspaceRow[];
   workspaceFilter: string;
+  listSearchActive: boolean;
+  listSearchQuery: string;
   actionsWorkspaces: WorkspaceRow[];
   actionExtensions: ExtensionRow[];
   actionSections: ActionSection[];
@@ -100,6 +102,8 @@ function defaultNativePaletteState(): NativePaletteState {
     tabsByAgeNewestFirst: false,
     sidebarWorkspaces: [],
     workspaceFilter: "all",
+    listSearchActive: false,
+    listSearchQuery: "",
     actionsWorkspaces: [],
     actionExtensions: [],
     actionSections: [],
@@ -134,6 +138,15 @@ export function createNativePaletteState() {
 
   function setWorkspaceFilter(filter: string) {
     state.workspaceFilter = filter;
+  }
+
+  function setListSearchActive(active: boolean) {
+    state.listSearchActive = active;
+    if (!active) state.listSearchQuery = "";
+  }
+
+  function setListSearchQuery(query: string) {
+    state.listSearchQuery = query;
   }
 
   function setCurrentDomain(domain: string | null) {
@@ -182,6 +195,8 @@ export function createNativePaletteState() {
     state.domainCloseUnpinnedCount = 0;
     state.domainClosePinnedCount = 0;
     state.sidebarWorkspaces = [];
+    state.listSearchActive = false;
+    state.listSearchQuery = "";
     state.selectedIndex = -1;
     state.error = null;
   }
@@ -440,6 +455,8 @@ export function createNativePaletteState() {
     selectIndex,
     selectActionsPage,
     setWorkspaceFilter,
+    setListSearchActive,
+    setListSearchQuery,
     setCurrentDomain,
     setSortState,
     resetToActions,

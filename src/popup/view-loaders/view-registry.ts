@@ -9,6 +9,7 @@ const nativeTabViews = [
   "unvisited-tabs",
   "tabs-by-age",
   "most-visited",
+  "move-to-parent",
   "domain-tabs",
 ] as const satisfies readonly ViewId[];
 
@@ -25,6 +26,7 @@ export const LIST_VIEW_TITLES: Record<NativeListView, string> = {
   "unvisited-tabs": "New tabs",
   "tabs-by-age": "Tabs by age",
   "most-visited": "Most visited",
+  "move-to-parent": "Move to parent",
   "domain-tabs": "",
   "child-tabs": "Children",
   "sibling-tabs": "Siblings",
@@ -48,6 +50,7 @@ const chromeModelIntentViewIds = [
   "domain-tabs",
   "tabs-by-age",
   "most-visited",
+  "move-to-parent",
   "domains",
   "duplicates",
   "move-to-workspace",

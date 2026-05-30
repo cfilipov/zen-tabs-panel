@@ -69,6 +69,7 @@
   import {
     canDrillSelectionInView,
     canRestoreInView,
+    isSearchableView,
     isWorkspaceFilterView,
   } from "./interaction/view-capabilities";
   import { createContainerClient } from "./runtime/container-client";
@@ -283,6 +284,7 @@
   }));
   const sidebarHintsOnly = $derived(sidebarModel.hintsOnly);
   const sidebarSortLabel = $derived(sidebarModel.sortLabel);
+  const sidebarSearchAvailable = $derived(sidebarModel.searchAvailable);
   const sidebarHints = $derived<SidebarHint[]>(sidebarModel.hints.map((hint) => ({
     ...hint,
     onclick: sidebarHintAction(hint.id),
@@ -309,6 +311,8 @@
     closeTabInfoOthers: closeOtherTabInfoDuplicates,
     restoreSelectionKeepOpen: restoreSelectedRecentlyClosed,
     drillSelection: drillSelectedParent,
+    openSearch: openListSearch,
+    dismissSearch: dismissListSearch,
     toggleSort: toggleCurrentSort,
     toggleWorkspaceFilter,
     filterWorkspaceIndex: filterWorkspaceByIndex,
@@ -373,6 +377,7 @@
     clearTerminalCommandDispatched();
     if (notifyChrome) notifyChromeView(view, params);
     const plan = resolveViewOpenPlan(view, params);
+    const previousView = palette.currentView;
 
     if (plan.kind === "actions") {
       resetToActions();
@@ -380,6 +385,9 @@
     } else if (plan.kind === "command-palette") {
       await enterCommandPalette();
     } else if (plan.kind === "list") {
+      if (previousView !== plan.view && !("searchQuery" in plan.params)) {
+        paletteStore.setListSearchActive(false);
+      }
       paletteStore.enterDomainList(plan.domain);
       await paletteLoaders.loadListView(plan.view, 0, 80, true, { ...plan.params, ...viewParams(plan.view) });
     } else if (plan.kind === "prefix") {
@@ -675,6 +683,26 @@
 
   async function setWorkspaceFilter(nextFilter: string) {
     paletteStore.setWorkspaceFilter(normalizeWorkspaceFilter(nextFilter));
+    await reloadWorkspaceFilteredView();
+  }
+
+  async function openListSearch() {
+    if (!isSearchableView(palette.currentView)) return;
+    paletteStore.setListSearchActive(true);
+    paletteRevealed = true;
+    effects.revealPalette(revealController.inst);
+    await tick();
+  }
+
+  async function dismissListSearch() {
+    if (!isSearchableView(palette.currentView)) return;
+    paletteStore.setListSearchActive(false);
+    await reloadWorkspaceFilteredView();
+  }
+
+  async function setListSearchQuery(query: string) {
+    if (!isSearchableView(palette.currentView)) return;
+    paletteStore.setListSearchQuery(query);
     await reloadWorkspaceFilteredView();
   }
 
@@ -1022,6 +1050,7 @@
       duplicatePromptActionCount: DUPLICATE_PROMPT_ACTIONS.length,
       domainClosePinnedCount: palette.domainClosePinnedCount,
       tabInfoDuplicateCount: palette.tabInfoDuplicates.length,
+      searchActive: palette.listSearchActive && palette.listSearchQuery.length === 0,
     });
     if (command.kind === "none") {
       if (isInvalidChordFeedbackInput(input)) {
@@ -1182,6 +1211,8 @@
   {sidebarHints}
   {sidebarHintsOnly}
   {sidebarSortLabel}
+  {sidebarSearchAvailable}
+  sidebarSearchActive={palette.listSearchActive}
   sidebarWorkspaces={palette.sidebarWorkspaces}
   workspaceFilter={palette.workspaceFilter}
   {activeWorkspaceId}
@@ -1191,6 +1222,7 @@
   {fitContentHeight}
   {dynamicSidebarWidth}
   onSidebarSort={toggleCurrentSort}
+  onSidebarSearch={openListSearch}
   onWorkspaceFilter={setWorkspaceFilter}
   onPage={setActionsPage}
   onheightchange={handlePaletteHeightChange}
@@ -1214,6 +1246,10 @@
     {selectedRowDomId}
     {selectedDomain}
     {activeWorkspaceId}
+    searchActive={palette.listSearchActive}
+    searchQuery={palette.listSearchQuery}
+    setListSearchQuery={setListSearchQuery}
+    dismissListSearch={dismissListSearch}
     {activateAction}
     {setCommandQuery}
     openExtensionPopup={openExtensionByIndex}

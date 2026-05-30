@@ -15,11 +15,14 @@
     hints?: SidebarHint[];
     hintsOnly?: boolean;
     sortLabel?: string | null;
+    searchAvailable?: boolean;
+    searchActive?: boolean;
     workspaces?: WorkspaceRow[];
     workspaceFilter?: string;
     activeWorkspaceId?: string | null;
     element?: HTMLDivElement;
     onSort?: () => void;
+    onSearch?: () => void;
     onWorkspaceFilter?: (workspaceId: string) => void;
   };
 
@@ -28,11 +31,14 @@
     hints = [],
     hintsOnly = false,
     sortLabel = null,
+    searchAvailable = false,
+    searchActive = false,
     workspaces = [],
     workspaceFilter = "all",
     activeWorkspaceId = null,
     element = $bindable(),
     onSort,
+    onSearch,
     onWorkspaceFilter,
   }: Props = $props();
 
@@ -66,6 +72,13 @@
     {#if sortLabel}
       <button type="button" class="sidebar-sort" onclick={() => onSort?.()}>
         <span class="sidebar-ws-name">{sortLabel}</span>
+        <Badge value={searchAvailable ? null : "S"} />
+      </button>
+    {/if}
+
+    {#if searchAvailable}
+      <button type="button" class="sidebar-sort" class:active={searchActive} onclick={() => onSearch?.()}>
+        <span class="sidebar-ws-name">Search</span>
         <Badge value="S" />
       </button>
     {/if}

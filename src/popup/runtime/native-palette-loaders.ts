@@ -64,6 +64,7 @@ export function createNativePaletteLoaders(deps: NativePaletteLoaderDeps) {
       currentDomain: palette.currentDomain,
       domainsSortAlpha: palette.domainsSortAlpha,
       tabsByAgeNewestFirst: palette.tabsByAgeNewestFirst,
+      searchQuery: palette.listSearchQuery,
     });
   }
 

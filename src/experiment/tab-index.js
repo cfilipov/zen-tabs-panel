@@ -123,6 +123,24 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     return row && !isNewTabUrl(row.url);
   }
 
+  function normalizedSearchQuery(params) {
+    const query = String(params?.searchQuery || "").trim().toLowerCase();
+    return query || "";
+  }
+
+  function applySearchFilter(sourceRows, params) {
+    const query = normalizedSearchQuery(params);
+    if (!query) return sourceRows;
+    return sourceRows.filter((row) => {
+      const text = [
+        row.title || "",
+        row.url || "",
+        row.domain || "",
+      ].join("\n").toLowerCase();
+      return text.includes(query);
+    });
+  }
+
   function duplicateUrlMatches(candidateUrl, openTabUrl) {
     if (!candidateUrl || !openTabUrl) return false;
     if (candidateUrl === openTabUrl) return true;
@@ -442,6 +460,9 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
     if (view === "parent-tabs") {
       out = parentRows(out);
     }
+    if (view === "move-to-parent") {
+      out = moveToParentRows(out, params);
+    }
     if (view === "unvisited-tabs") {
       out = out.filter((row) => row.unread);
     }
@@ -456,6 +477,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
         return true;
       });
     }
+    out = applySearchFilter(out, params);
     if (view === "last-visited" || view === "domain-tabs" || view === "unvisited-tabs") {
       out = [...out].sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
     } else if (view === "tabs-by-age") {
@@ -491,6 +513,67 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       if (!row.panelParentUuid && hasDomOpener && row.openerTabDomId === active.openerTabDomId) return true;
       return false;
     });
+  }
+
+  function targetDomIdsForMoveToParent(params) {
+    if (Array.isArray(params?.targetDomIds)) {
+      return params.targetDomIds.filter((id) => typeof id === "string" && id);
+    }
+    if (Array.isArray(params?.excludeDomIds)) {
+      return params.excludeDomIds.filter((id) => typeof id === "string" && id);
+    }
+    try {
+      const domIds = deps.getActionTargetDomIds && deps.getActionTargetDomIds();
+      if (Array.isArray(domIds)) return domIds.filter((id) => typeof id === "string" && id);
+    } catch (e) {}
+    const active = rows.find((row) => row.active);
+    return active ? [active.domId] : [];
+  }
+
+  function parentOfRow(row, uuidToRow, domIdToRow) {
+    if (!row) return null;
+    if (row.panelParentUuid) return uuidToRow.get(row.panelParentUuid) || null;
+    if (row.openerTabDomId) return domIdToRow.get(row.openerTabDomId) || null;
+    return null;
+  }
+
+  function moveToParentRows(sourceRows, params) {
+    const targetDomIds = new Set(targetDomIdsForMoveToParent(params));
+    if (targetDomIds.size === 0) return sourceRows;
+
+    const allDisplayRows = rows.filter(isDisplayTabRow);
+    const uuidToRow = new Map();
+    const domIdToRow = new Map();
+    for (const row of allDisplayRows) {
+      if (row.panelTabUuid) uuidToRow.set(row.panelTabUuid, row);
+      domIdToRow.set(row.domId, row);
+    }
+
+    const targetUuids = new Set();
+    for (const domId of targetDomIds) {
+      const row = domIdToRow.get(domId);
+      if (row?.panelTabUuid) targetUuids.add(row.panelTabUuid);
+    }
+
+    function isDescendantOfTarget(row) {
+      if (row.panelParentUuid && targetUuids.has(row.panelParentUuid)) return true;
+      if (row.openerTabDomId && targetDomIds.has(row.openerTabDomId)) return true;
+
+      const seen = new Set();
+      let parent = parentOfRow(row, uuidToRow, domIdToRow);
+      while (parent && !seen.has(parent.domId)) {
+        if (targetDomIds.has(parent.domId)) return true;
+        if (parent.panelTabUuid && targetUuids.has(parent.panelTabUuid)) return true;
+        seen.add(parent.domId);
+        parent = parentOfRow(parent, uuidToRow, domIdToRow);
+      }
+      return false;
+    }
+
+    return sourceRows.filter((row) =>
+      !targetDomIds.has(row.domId) &&
+      !isDescendantOfTarget(row)
+    );
   }
 
   function parentRows(sourceRows) {
@@ -571,7 +654,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
 
   function fastDomainTabRows(params) {
     const domain = params?.domain || "";
-    return basicDisplayRows(params)
+    return applySearchFilter(basicDisplayRows(params), params)
       .filter((row) => row.domain === domain)
       .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
   }
@@ -627,7 +710,7 @@ this.createZenTabIndex = function createZenTabIndex(deps) {
       rowId: row?.domId || null,
       index: absoluteIndex,
       chordKey,
-      action: "activate-tab",
+      action: view === "move-to-parent" ? "move-tabs-to-parent" : "activate-tab",
     };
   }
 

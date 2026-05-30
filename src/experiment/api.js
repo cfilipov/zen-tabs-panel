@@ -679,14 +679,19 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return null;
     }
 
-    // Resolve a tab's parent: prefer runtime openerTab (live, no scan needed),
-    // fall back to the persisted panelParentUuid lookup (survives restart).
+    // Resolve a tab's parent: prefer the persisted panelParentUuid because
+    // the palette can re-parent tabs without moving them across workspaces.
+    // Fall back to runtime openerTab for browser-native relationships that
+    // predate our stored metadata.
     function resolveParentTab(tab) {
       if (!tab) return null;
-      try { if (tab.openerTab) return tab.openerTab; } catch (e) {}
       const parentUuid = readTabValue(tab, "panelParentUuid");
-      if (!parentUuid) return null;
-      return findTabByUuid(parentUuid);
+      if (parentUuid) {
+        const parent = findTabByUuid(parentUuid);
+        if (parent) return parent;
+      }
+      try { if (tab.openerTab) return tab.openerTab; } catch (e) {}
+      return null;
     }
 
     // Resolve all sibling tabs (including self) for a tab. Sibling = same parent.
@@ -1039,6 +1044,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "most-visited":       { width: 720, height: 604 },
       "reorder-tabs":       { width: 600, height: 604 },
       "move-to-workspace":  { width: 360, height: 604 },
+      "move-to-parent":     { width: 720, height: 604 },
       "close-and-select":   { width: 600, height: 604 },
       "move-to-folder":     { width: 360, height: 604 },
       "split-view":         { width: 360, height: 604 },
@@ -1154,6 +1160,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       readTabValue,
       readTabStats,
       ensureTabUuid,
+      getActionTargetDomIds: getSelectedTabDomIdsInternal,
       recordInterval,
       isDuplicateNavigationUrl: chordSupportScope.isDuplicateNavigationUrl,
     });
@@ -3829,6 +3836,7 @@ this.zenWorkspaces = class extends ExtensionAPI {
       "domain-tabs",
       "tabs-by-age",
       "most-visited",
+      "move-to-parent",
       "duplicates",
     ]);
 
@@ -4358,6 +4366,20 @@ this.zenWorkspaces = class extends ExtensionAPI {
           void (async () => {
             if (destroy) overlayController.destroy();
             await moveTabToFolderInternal(row.id, !!switchToTarget);
+          })();
+          return activationTerminal();
+        }
+        if (view === "move-to-parent") {
+          tabIndex.start();
+          const row = expectedRowId
+            ? tabIndex.getRowTarget(expectedRowId)
+            : (tabIndex.getWindow("move-to-parent", rowIndex, 1, params)?.rows || [])[0];
+          if (!row || !row.domId) return activationNoop();
+          if (expectedRowId && row.domId !== expectedRowId) return activationNoop();
+          recordModelRowIntentReplay(view, replayChordKey, switchToTarget, params);
+          void (async () => {
+            if (destroy) overlayController.destroy();
+            await moveSelectedTabsToParentInternal(row.domId);
           })();
           return activationTerminal();
         }
@@ -6378,6 +6400,44 @@ this.zenWorkspaces = class extends ExtensionAPI {
       if (switchToTarget && targetTab) {
         await activateNativeTab(targetTab);
       }
+      return true;
+    }
+
+    function tabIsDescendantOfAny(parentCandidate, targets, targetUuids) {
+      if (!parentCandidate) return false;
+      const targetSet = new Set(targets);
+      if (targetSet.has(parentCandidate)) return true;
+      const seen = new Set();
+      let tab = parentCandidate;
+      while (tab && !seen.has(tab)) {
+        if (targetSet.has(tab)) return true;
+        const parentUuid = readTabValue(tab, "panelParentUuid");
+        if (parentUuid && targetUuids.has(parentUuid)) return true;
+        seen.add(tab);
+        tab = resolveParentTab(tab);
+      }
+      return false;
+    }
+
+    async function moveSelectedTabsToParentInternal(parentDomId) {
+      const parentTab = findTabByDomId(parentDomId);
+      if (!parentTab) return false;
+      const tabs = getActionTargetTabs().filter((tab) =>
+        tab &&
+        tab !== parentTab &&
+        !tab.hasAttribute("zen-essential")
+      );
+      if (tabs.length === 0) return false;
+
+      const targetUuids = new Set(tabs.map((tab) => ensureTabUuid(tab)).filter(Boolean));
+      if (tabIsDescendantOfAny(parentTab, tabs, targetUuids)) return false;
+
+      const parentUuid = ensureTabUuid(parentTab);
+      for (const tab of tabs) {
+        writeTabValue(tab, "panelParentUuid", parentUuid);
+        try { tab.openerTab = parentTab; } catch (e) {}
+      }
+      try { tabIndex.markDirty(); } catch (e) {}
       return true;
     }
 

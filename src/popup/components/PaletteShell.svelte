@@ -23,6 +23,8 @@
     sidebarHints?: SidebarHint[];
     sidebarHintsOnly?: boolean;
     sidebarSortLabel?: string | null;
+    sidebarSearchAvailable?: boolean;
+    sidebarSearchActive?: boolean;
     sidebarWorkspaces?: WorkspaceRow[];
     workspaceFilter?: string;
     activeWorkspaceId?: string | null;
@@ -32,6 +34,7 @@
     fitContentHeight?: boolean;
     dynamicSidebarWidth?: boolean;
     onSidebarSort?: () => void;
+    onSidebarSearch?: () => void;
     onWorkspaceFilter?: (workspaceId: string) => void;
     onPage?: (page: number) => void;
     onheightchange?: (height: number, dynamicSidebarWidth?: number) => void;
@@ -49,6 +52,8 @@
     sidebarHints = [],
     sidebarHintsOnly = false,
     sidebarSortLabel = null,
+    sidebarSearchAvailable = false,
+    sidebarSearchActive = false,
     sidebarWorkspaces = [],
     workspaceFilter = "all",
     activeWorkspaceId = null,
@@ -58,6 +63,7 @@
     fitContentHeight = false,
     dynamicSidebarWidth = false,
     onSidebarSort,
+    onSidebarSearch,
     onWorkspaceFilter,
     onPage,
     onheightchange,
@@ -124,11 +130,14 @@
       hints={sidebarHints}
       hintsOnly={sidebarHintsOnly}
       sortLabel={sidebarSortLabel}
+      searchAvailable={sidebarSearchAvailable}
+      searchActive={sidebarSearchActive}
       workspaces={sidebarWorkspaces}
       {workspaceFilter}
       {activeWorkspaceId}
       bind:element={sidebarElement}
       onSort={onSidebarSort}
+      onSearch={onSidebarSearch}
       {onWorkspaceFilter}
     />
   </div>

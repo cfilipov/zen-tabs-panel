@@ -18,6 +18,7 @@ export type ViewId =
   | "tabs-by-age"
   | "most-visited"
   | "move-to-workspace"
+  | "move-to-parent"
   | "open-in-container"
   | "profiles"
   | "workspace-icons"
@@ -50,6 +51,7 @@ export type ViewCapabilityId =
   | "closeAll"
   | "restoreSelection"
   | "sort"
+  | "search"
   | "drillSelection"
   | "workspaceFilter";
 

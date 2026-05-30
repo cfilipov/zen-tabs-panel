@@ -49,6 +49,7 @@ describe("navigation tree", () => {
 
     expect(byId.get("mark-tabs-new")?.chord).toBe("Shift+N");
     expect(byId.get("open-in-container")?.chord).toBe("Shift+X");
+    expect(byId.get("move-to-parent")?.chord).toBe("Shift+Q");
   });
 
   it("uses the same display format as the legacy badges", () => {

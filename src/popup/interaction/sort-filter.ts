@@ -36,6 +36,7 @@ export function listViewParams(
   options: SortState & {
     workspaceFilter: string;
     currentDomain: string | null;
+    searchQuery?: string;
   },
 ) {
   const params: Record<string, unknown> = {};
@@ -43,6 +44,7 @@ export function listViewParams(
   if (view === "domain-tabs" && options.currentDomain) params.domain = options.currentDomain;
   if (view === "domains") params.sortAlpha = options.domainsSortAlpha;
   if (view === "tabs-by-age") params.newestFirst = options.tabsByAgeNewestFirst;
+  if (options.searchQuery) params.searchQuery = options.searchQuery;
   return params;
 }
 
@@ -74,6 +76,7 @@ export function workspaceReloadKind(view: ViewId) {
     view === "unvisited-tabs" ||
     view === "tabs-by-age" ||
     view === "most-visited" ||
+    view === "move-to-parent" ||
     view === "domain-tabs" ||
     view === "domains"
   ) {

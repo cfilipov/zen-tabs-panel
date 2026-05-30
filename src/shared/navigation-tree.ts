@@ -25,8 +25,8 @@
 
 import type { NavNode, ViewCapabilityId, ViewId } from "./types";
 
-const TAB_LIST_CAPABILITIES = ["closeSelection", "workspaceFilter"] as const;
-const SORTABLE_TAB_LIST_CAPABILITIES = ["closeSelection", "sort", "workspaceFilter"] as const;
+const TAB_LIST_CAPABILITIES = ["closeSelection", "search", "workspaceFilter"] as const;
+const SORTABLE_TAB_LIST_CAPABILITIES = ["closeSelection", "search", "sort", "workspaceFilter"] as const;
 
 export const NAVIGATION_TREE = [
   { id: "command-palette", kind: "open-view", chord: "/", view: "command-palette", label: "Command palette", icon: "svg:search", page: 2 },
@@ -40,9 +40,9 @@ export const NAVIGATION_TREE = [
   { id: "go-to-next-vertical-tab", kind: "action", chord: "K", label: "Below",    icon: "svg:arrow-down" },
 
   // Browse views
-  { id: "child-tabs",      kind: "open-view", chord: "C",       view: "child-tabs",      label: "Children",        icon: "svg:move-down",     needsChildren: true, viewCapabilities: ["closeSelection", "closeAll", "workspaceFilter"] },
+  { id: "child-tabs",      kind: "open-view", chord: "C",       view: "child-tabs",      label: "Children",        icon: "svg:move-down",     needsChildren: true, viewCapabilities: ["closeSelection", "closeAll", "search", "workspaceFilter"] },
   { id: "sibling-tabs",    kind: "open-view", chord: "B",       view: "sibling-tabs",    label: "Siblings",        icon: "svg:git-branch",    needsSiblings: true, viewCapabilities: TAB_LIST_CAPABILITIES },
-  { id: "parent-tabs",     kind: "open-view", chord: "Shift+T", view: "parent-tabs",     label: "Parent tabs",     icon: "svg:parent-node",   needsParentTabs: true, viewCapabilities: ["closeSelection", "drillSelection", "workspaceFilter"] },
+  { id: "parent-tabs",     kind: "open-view", chord: "Shift+T", view: "parent-tabs",     label: "Parent tabs",     icon: "svg:parent-node",   needsParentTabs: true, viewCapabilities: ["closeSelection", "drillSelection", "search", "workspaceFilter"] },
   { id: "navigation",      kind: "open-view", chord: "H",       view: "navigation",      label: "Tab history",     icon: "svg:history",       needsHistory: true },
   { id: "unvisited-tabs",  kind: "open-view", chord: "N",       view: "unvisited-tabs",  label: "New tabs",        icon: "svg:circle-dot",    needsUnvisited: true, viewCapabilities: TAB_LIST_CAPABILITIES },
   { id: "last-visited",    kind: "open-view", chord: "R",       view: "last-visited",    label: "Recent",          icon: "svg:clock", viewCapabilities: TAB_LIST_CAPABILITIES },
@@ -88,6 +88,7 @@ export const NAVIGATION_TREE = [
   // Page 2 — Tab actions
   { id: "mark-tabs-new",      kind: "action",    chord: "Shift+N", label: "Mark as new",      icon: "svg:circle-dot", page: 2 },
   { id: "open-in-container",  kind: "open-view", chord: "Shift+X", view: "open-in-container", label: "New container tab", icon: "svg:layers", page: 2 },
+  { id: "move-to-parent",     kind: "open-view", chord: "Shift+Q", view: "move-to-parent",    label: "Move to parent",   icon: "svg:parent-node", page: 2, viewCapabilities: ["search", "workspaceFilter"] },
 
   // Page 2 — All tabs
   { id: "unvisited-newest",   kind: "action", chord: "G",       label: "Newest unvisited", icon: "svg:circle-dot", page: 2, needsUnvisited: true },
@@ -223,6 +224,7 @@ const ALL_VIEW_IDS = [
   "tabs-by-age",
   "most-visited",
   "move-to-workspace",
+  "move-to-parent",
   "open-in-container",
   "profiles",
   "workspace-icons",

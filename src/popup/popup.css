@@ -579,6 +579,29 @@ html, body {
   display: none;
 }
 
+.tab-list-search-wrap {
+  padding: 6px 6px 4px;
+}
+
+.tab-list-search {
+  width: 100%;
+  height: 34px;
+  box-sizing: border-box;
+  border: 1px solid var(--ztt-border);
+  border-radius: 6px;
+  background: var(--ztt-bg);
+  color: var(--ztt-text);
+  font: inherit;
+  font-size: 14px;
+  padding: 0 10px;
+  outline: none;
+}
+
+.tab-list-search:focus {
+  border-color: AccentColor;
+  box-shadow: 0 0 0 2px var(--ztt-keyboard-ring);
+}
+
 /* Icon */
 .item-icon {
   width: 20px;
@@ -1821,6 +1844,11 @@ html, body {
 
 .sidebar-sort:hover {
   background: var(--ztt-bg-hover);
+}
+
+.sidebar-sort.active {
+  background: var(--ztt-bg-hover);
+  color: var(--ztt-text);
 }
 
 /* "w Close tab" hint — only visible while a row is selected. */
