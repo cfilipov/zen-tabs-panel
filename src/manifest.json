@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "ErgoZen",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Command palette for Zen Browser. Discoverable chord shortcuts for tabs, workspaces, splits, and more.",
   "author": "c13v",
   "browser_specific_settings": {
