@@ -27,12 +27,16 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
 
   const nodeById = new Map(flatten(navigationTree).map((node) => [node.id, node]));
 
-  function itemFromNode(node, page, disabledIds) {
+  function labelForNode(node, labelOverridesById) {
+    return labelOverridesById?.[node.id] || node.label;
+  }
+
+  function itemFromNode(node, page, disabledIds, labelOverridesById) {
     return {
       id: node.id,
       kind: node.kind,
       view: node.kind === "open-view" || node.kind === "prefix" ? node.view : undefined,
-      label: node.label,
+      label: labelForNode(node, labelOverridesById),
       icon: node.icon,
       hotkey: node.chord,
       badge: displayKey(node.chord),
@@ -42,18 +46,20 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
     };
   }
 
-  function commandPaletteItemFromNode(node, disabledIds, parent, leaderBadge) {
+  function commandPaletteItemFromNode(node, disabledIds, parent, leaderBadge, labelOverridesById) {
     const isPrefixChild = !!parent;
     const navPath = isPrefixChild
       ? [parent.chord, node.chord].filter(Boolean).map(displayKey).filter(Boolean).join(" ")
       : displayKey(node.chord);
     const chordPath = [leaderBadge, navPath].filter(Boolean).join(" ");
-    const label = isPrefixChild ? `${parent.label}: ${node.label}` : node.label;
+    const nodeLabel = labelForNode(node, labelOverridesById);
+    const parentLabel = parent ? labelForNode(parent, labelOverridesById) : "";
+    const label = isPrefixChild ? `${parentLabel}: ${nodeLabel}` : nodeLabel;
     const searchText = isPrefixChild
-      ? `${parent.label} ${node.label} ${parent.id} ${node.id}`
-      : `${node.label} ${node.id}`;
+      ? `${parentLabel} ${nodeLabel} ${parent.id} ${node.id}`
+      : `${nodeLabel} ${node.id}`;
     return {
-      ...itemFromNode(node, 1, disabledIds),
+      ...itemFromNode(node, 1, disabledIds, labelOverridesById),
       label,
       searchText,
       chordPathBadge: chordPath,
@@ -61,20 +67,20 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
     };
   }
 
-  function buildCommandPaletteItems(disabledIds, leaderBadge) {
+  function buildCommandPaletteItems(disabledIds, leaderBadge, labelOverridesById) {
     const out = [];
     for (const node of navigationTree) {
       if (!node) continue;
       if (node.kind === "prefix") {
         for (const child of node.children || []) {
           if (child && (child.kind === "action" || child.kind === "open-view")) {
-            out.push(commandPaletteItemFromNode(child, disabledIds, node, leaderBadge));
+            out.push(commandPaletteItemFromNode(child, disabledIds, node, leaderBadge, labelOverridesById));
           }
         }
         continue;
       }
       if (node.kind === "action" || node.kind === "open-view") {
-        out.push(commandPaletteItemFromNode(node, disabledIds, null, leaderBadge));
+        out.push(commandPaletteItemFromNode(node, disabledIds, null, leaderBadge, labelOverridesById));
       }
     }
     return out;
@@ -125,7 +131,7 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
     return unavailable;
   }
 
-  function buildBaseSections(disabledIds) {
+  function buildBaseSections(disabledIds, labelOverridesById) {
     return SECTION_DEFS.map((section) => ({
       id: section.id,
       label: section.label,
@@ -137,17 +143,17 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
       items: section.actionIds.map((id) => {
         const node = nodeById.get(id);
         if (!node) throw new Error("Missing navigation node: " + id);
-        return itemFromNode(node, section.page, disabledIds);
+        return itemFromNode(node, section.page, disabledIds, labelOverridesById);
       }),
     }));
   }
 
-  function buildPrefixItemsByView(disabledIds) {
+  function buildPrefixItemsByView(disabledIds, labelOverridesById) {
     const itemsByView = Object.create(null);
     for (const node of navigationTree) {
       if (!node || node.kind !== "prefix" || !node.view) continue;
       itemsByView[node.view] = (node.children || []).map((child) =>
-        itemFromNode(child, 1, disabledIds)
+        itemFromNode(child, 1, disabledIds, labelOverridesById)
       );
     }
     return itemsByView;
@@ -238,18 +244,21 @@ this.createZenActionsModel = function createZenActionsModel(deps) {
 
     const workspaceTabCounts = snapshot.workspaceTabCounts || {};
     const iconHtmlById = workspaceNavigationIconMap(workspaces);
+    const labelOverridesById = {
+      ...(snapshot.currentTabIsEssential ? { "add-to-essentials": "Remove from essentials" } : {}),
+    };
     const sections = applyActionMetadata(
-      appendWorkspaceSwitchItems(buildBaseSections(disabledIds), workspaces, workspaceTabCounts),
+      appendWorkspaceSwitchItems(buildBaseSections(disabledIds, labelOverridesById), workspaces, workspaceTabCounts),
       counts,
       disabledIds,
       iconHtmlById,
       previewsById
     );
-    const prefixItemsByView = buildPrefixItemsByView(disabledIds);
+    const prefixItemsByView = buildPrefixItemsByView(disabledIds, labelOverridesById);
     const commandPaletteLeaderBadge = typeof input.commandPaletteLeaderBadge === "string"
       ? input.commandPaletteLeaderBadge
       : defaultCommandPaletteLeaderBadge;
-    const commandPaletteItems = buildCommandPaletteItems(disabledIds, commandPaletteLeaderBadge);
+    const commandPaletteItems = buildCommandPaletteItems(disabledIds, commandPaletteLeaderBadge, labelOverridesById);
 
     return {
       version: snapshot.version || Date.now(),

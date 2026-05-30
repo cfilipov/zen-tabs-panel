@@ -118,4 +118,19 @@ describe("actions model command palette items", () => {
 
     expect(recentlyClosed).toMatchObject({ disabled: true });
   });
+
+  it("labels the essentials action as remove when the current tab is already essential", () => {
+    const model = commandModel({ snapshot: { currentTabIsEssential: true } });
+    const actionRow = model.sections
+      .flatMap((section: { items: Array<{ id: string }> }) => section.items)
+      .find((item: { id: string }) => item.id === "add-to-essentials");
+    const commandRow = model.commandPaletteItems
+      .find((item: { id: string }) => item.id === "add-to-essentials");
+
+    expect(actionRow).toMatchObject({ label: "Remove from essentials" });
+    expect(commandRow).toMatchObject({
+      label: "Remove from essentials",
+      searchText: "Remove from essentials add-to-essentials",
+    });
+  });
 });

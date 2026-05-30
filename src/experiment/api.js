@@ -3922,10 +3922,12 @@ this.zenWorkspaces = class extends ExtensionAPI {
       const snapshot = tabIndex.getActionsSnapshot();
       const w = getWin();
       const browser = w?.gBrowser?.selectedBrowser;
+      const tab = w?.gBrowser?.selectedTab;
       const url = browser?.currentURI?.spec || "";
       return {
         ...snapshot,
         currentTabCanReaderMode: !!(browser?.isArticle || url.startsWith("about:reader")),
+        currentTabIsEssential: !!tab?.hasAttribute?.("zen-essential"),
       };
     }
 
@@ -6827,10 +6829,30 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         async addToEssentials() {
           const w = getWin();
-          const cmd = w?.document.getElementById("cmd_contextZenAddToEssentials");
-          if (!cmd) return false;
-          try { cmd.doCommand(); return true; }
-          catch (e) { return false; }
+          const manager = w?.gZenPinnedTabManager;
+          if (!manager?.addToEssentials || !manager?.removeEssentials) return false;
+          const targets = getActionTargetTabs().filter(Boolean);
+          if (targets.length === 0) return false;
+
+          const activeIsEssential = !!w?.gBrowser?.selectedTab?.hasAttribute?.("zen-essential");
+          if (!activeIsEssential) {
+            const tabs = targets.filter((tab) =>
+              tab && !tab.hasAttribute("zen-essential") && manager.canEssentialBeAdded?.(tab) !== false
+            );
+            if (tabs.length === 0) return false;
+            try { return !!manager.addToEssentials(tabs); }
+            catch (e) { return false; }
+          }
+
+          let changed = false;
+          for (const tab of targets) {
+            if (!tab?.hasAttribute?.("zen-essential")) continue;
+            try {
+              manager.removeEssentials(tab, true);
+              changed = true;
+            } catch (e) {}
+          }
+          return changed;
         },
 
         async takeScreenshot() {

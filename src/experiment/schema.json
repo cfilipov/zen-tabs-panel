@@ -801,7 +801,7 @@
         "name": "addToEssentials",
         "type": "function",
         "async": true,
-        "description": "Add the active tab to Zen Essentials",
+        "description": "Add or remove the active tab from Zen Essentials",
         "parameters": []
       },
       {
