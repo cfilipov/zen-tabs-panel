@@ -52,6 +52,18 @@ export function normalizeWorkspaceFilter(nextFilter: string) {
   return nextFilter || "all";
 }
 
+export function workspaceFilterFromListOpenParams(params: Record<string, unknown>) {
+  if (!Object.prototype.hasOwnProperty.call(params, "workspaceId")) return null;
+  const workspaceId = params.workspaceId;
+  return typeof workspaceId === "string" ? normalizeWorkspaceFilter(workspaceId) : "all";
+}
+
+export function shouldResetWorkspaceFilterForListOpen(
+  params: Record<string, unknown>,
+) {
+  return workspaceFilterFromListOpenParams(params) === null;
+}
+
 export function toggleWorkspaceFilterValue(currentFilter: string, activeWorkspaceId: string | null) {
   return currentFilter === "all" ? activeWorkspaceId || "all" : "all";
 }

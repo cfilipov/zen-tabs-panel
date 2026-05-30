@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   listViewParams,
   normalizeWorkspaceFilter,
+  shouldResetWorkspaceFilterForListOpen,
   toggleSortForView,
   toggleWorkspaceFilterValue,
+  workspaceFilterFromListOpenParams,
   workspaceFilterByIndex,
   workspaceReloadKind,
 } from "./sort-filter";
@@ -54,6 +56,15 @@ describe("sort and workspace filter transitions", () => {
     expect(workspaceFilterByIndex("all", [{ uuid: "ws-1" }], 0)).toBe("ws-1");
     expect(workspaceFilterByIndex("ws-1", [{ uuid: "ws-1" }], 0)).toBe("all");
     expect(workspaceFilterByIndex("all", [], 0)).toBeNull();
+  });
+
+  it("defaults list opens to all workspaces unless workspaceId is explicit", () => {
+    expect(workspaceFilterFromListOpenParams({})).toBeNull();
+    expect(workspaceFilterFromListOpenParams({ workspaceId: "ws-1" })).toBe("ws-1");
+    expect(workspaceFilterFromListOpenParams({ workspaceId: "" })).toBe("all");
+    expect(workspaceFilterFromListOpenParams({ workspaceId: 4 })).toBe("all");
+    expect(shouldResetWorkspaceFilterForListOpen({})).toBe(true);
+    expect(shouldResetWorkspaceFilterForListOpen({ workspaceId: "ws-1" })).toBe(false);
   });
 
   it("maps workspace-filter reload targets", () => {

@@ -54,8 +54,10 @@
   } from "./interaction/row-state";
   import {
     normalizeWorkspaceFilter,
+    shouldResetWorkspaceFilterForListOpen,
     toggleSortForView,
     toggleWorkspaceFilterValue,
+    workspaceFilterFromListOpenParams,
     workspaceFilterByIndex,
     workspaceReloadKind,
   } from "./interaction/sort-filter";
@@ -385,11 +387,17 @@
     } else if (plan.kind === "command-palette") {
       await enterCommandPalette();
     } else if (plan.kind === "list") {
+      const explicitWorkspaceFilter = workspaceFilterFromListOpenParams(plan.params);
+      if (explicitWorkspaceFilter !== null) {
+        paletteStore.setWorkspaceFilter(explicitWorkspaceFilter);
+      } else if (shouldResetWorkspaceFilterForListOpen(plan.params)) {
+        paletteStore.setWorkspaceFilter("all");
+      }
       if (previousView !== plan.view && !("searchQuery" in plan.params)) {
         paletteStore.setListSearchActive(false);
       }
       paletteStore.enterDomainList(plan.domain);
-      await paletteLoaders.loadListView(plan.view, 0, 80, true, { ...plan.params, ...viewParams(plan.view) });
+      await paletteLoaders.loadListView(plan.view, 0, 80, true, { ...viewParams(plan.view), ...plan.params });
     } else if (plan.kind === "prefix") {
       paletteStore.enterPrefixView(plan.view);
       await loadActionsData();
