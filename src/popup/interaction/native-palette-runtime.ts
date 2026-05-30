@@ -20,6 +20,7 @@ export type NativePaletteRuntimeDeps = {
   jumpSection: (delta: 1 | -1) => Promise<void> | void;
   closeSelection: () => Promise<void> | void;
   closeAll: () => Promise<void> | void;
+  closeTabInfoOthers: () => Promise<void> | void;
   restoreSelectionKeepOpen: () => Promise<void> | void;
   drillSelection: () => Promise<void> | void;
   toggleSort: () => Promise<void> | void;
@@ -55,6 +56,7 @@ export function createNativePaletteInteractionRuntime(deps: NativePaletteRuntime
     jumpSection: deps.jumpSection,
     closeSelection: deps.closeSelection,
     closeAll: deps.closeAll,
+    closeTabInfoOthers: deps.closeTabInfoOthers,
     restoreSelectionKeepOpen: deps.restoreSelectionKeepOpen,
     drillSelection: deps.drillSelection,
     toggleSort: deps.toggleSort,

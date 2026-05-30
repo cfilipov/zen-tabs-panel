@@ -170,10 +170,17 @@
         "parameters": []
       },
       {
+        "name": "splitToggleHV",
+        "type": "function",
+        "async": true,
+        "description": "Toggle the current split between horizontal and vertical; creates a vertical split if none is active",
+        "parameters": []
+      },
+      {
         "name": "splitClose",
         "type": "function",
         "async": true,
-        "description": "Close the current split view (no-op if no split active)",
+        "description": "Unsplit the current split view (no-op if no split active)",
         "parameters": []
       },
       {
@@ -900,6 +907,15 @@
         "parameters": [
           { "name": "folderId", "type": "string" },
           { "name": "switchToTarget", "type": "boolean", "optional": true }
+        ]
+      },
+      {
+        "name": "moveTabNextToCurrent",
+        "type": "function",
+        "async": true,
+        "description": "Move the given WebExtension tab immediately after the active tab",
+        "parameters": [
+          { "name": "tabId", "type": "integer" }
         ]
       },
       {

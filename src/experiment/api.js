@@ -370,6 +370,24 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return moveSortedNativeTabs(rows.map((row) => row.tab));
     }
 
+    function currentSplitGroup() {
+      const w = getWin();
+      const splitter = w?.gZenViewSplitter;
+      const activeTab = w?.gBrowser?.selectedTab;
+      if (!splitter || !activeTab || !Array.isArray(splitter._data)) return null;
+      const currentIndex = Number.isInteger(splitter.currentView) ? splitter.currentView : -1;
+      const currentGroup = currentIndex >= 0 ? splitter._data[currentIndex] : null;
+      if (currentGroup?.tabs?.includes?.(activeTab)) return currentGroup;
+      return splitter._data.find((group) => group?.tabs?.includes?.(activeTab)) || null;
+    }
+
+    function splitGroupIsHorizontal(group) {
+      if (!group) return false;
+      if (group.gridType === "hsep") return true;
+      if (group.gridType === "vsep") return false;
+      return group.layoutTree?.direction === "column";
+    }
+
     function getReorderTabUrlsInternal() {
       return Array.from(new Set(sortableTabRows().map((row) => row.url).filter(Boolean)));
     }
@@ -6363,6 +6381,29 @@ this.zenWorkspaces = class extends ExtensionAPI {
       return true;
     }
 
+    async function moveTabNextToCurrentInternal(tabId) {
+      const w = getWin();
+      const gBrowser = w?.gBrowser;
+      const target = getNativeTabByExtId(Number(tabId));
+      const current = gBrowser?.selectedTab;
+      if (!gBrowser || !target || !current || target === current) return false;
+      try {
+        if (typeof gBrowser.moveTabsAfter === "function") {
+          gBrowser.moveTabsAfter([target], current);
+          return true;
+        }
+        if (typeof gBrowser.moveTabTo === "function") {
+          const targetBeforeCurrent = target._tPos < current._tPos;
+          const tabIndex = current._tPos + (targetBeforeCurrent ? 0 : 1);
+          gBrowser.moveTabTo(target, { tabIndex, isUserTriggered: true });
+          return true;
+        }
+      } catch (e) {
+        return false;
+      }
+      return false;
+    }
+
     installChordStateInspector();
     installChromeShim();
     installContentShimFrameScript();
@@ -6688,6 +6729,27 @@ this.zenWorkspaces = class extends ExtensionAPI {
           catch (e) { return false; }
         },
 
+        async splitToggleHV() {
+          const w = getWin();
+          const splitter = w?.gZenViewSplitter;
+          if (!splitter) return false;
+          try {
+            const group = currentSplitGroup();
+            if (!group) {
+              splitter.toggleShortcut("vsep");
+              return true;
+            }
+            const nextGridType = splitGroupIsHorizontal(group) ? "vsep" : "hsep";
+            const tabs = Array.isArray(group.tabs) ? group.tabs : [];
+            if (tabs.length >= 2 && typeof splitter.splitTabs === "function") {
+              splitter.splitTabs(tabs, nextGridType);
+            } else {
+              splitter.toggleShortcut(nextGridType);
+            }
+            return true;
+          } catch (e) { return false; }
+        },
+
         async splitClose() {
           const w = getWin();
           if (!w?.gZenViewSplitter) return false;
@@ -6965,6 +7027,10 @@ this.zenWorkspaces = class extends ExtensionAPI {
 
         async moveTabToFolder(folderId, switchToTarget) {
           return moveTabToFolderInternal(folderId, switchToTarget);
+        },
+
+        async moveTabNextToCurrent(tabId) {
+          return moveTabNextToCurrentInternal(tabId);
         },
 
         async getContainersViewModel() {

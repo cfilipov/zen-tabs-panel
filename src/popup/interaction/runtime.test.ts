@@ -22,6 +22,7 @@ function createRuntime(calls: string[]): InteractionRuntimeHandlers {
     jumpSection: (delta) => record(`section:${delta}`),
     closeSelection: () => record("close-selection"),
     closeAll: () => record("close-all"),
+    closeTabInfoOthers: () => record("close-tab-info-others"),
     restoreSelectionKeepOpen: () => record("restore"),
     drillSelection: () => record("drill"),
     toggleSort: () => record("sort"),
@@ -56,6 +57,7 @@ function createNativeRuntime(
     jumpSection: (delta) => record(`section:${delta}`),
     closeSelection: () => record("close-selection"),
     closeAll: () => record("close-all"),
+    closeTabInfoOthers: () => record("close-tab-info-others"),
     restoreSelectionKeepOpen: () => record("restore"),
     drillSelection: () => record("drill"),
     toggleSort: () => record("sort"),
@@ -79,6 +81,7 @@ describe("interaction runtime", () => {
     await applyInteractionCommand({ kind: "activate-row", index: 2 }, runtime);
     await applyInteractionCommand({ kind: "activate-row-and-switch", index: 3 }, runtime);
     await applyInteractionCommand({ kind: "domain-close-confirm-action", action: "close-unpinned" }, runtime);
+    await applyInteractionCommand({ kind: "close-tab-info-others" }, runtime);
     await applyInteractionCommand({ kind: "filter-workspace-index", index: 4 }, runtime);
     await applyInteractionCommand({ kind: "open-extension-index", index: 1 }, runtime);
     await applyInteractionCommand({ kind: "none" }, runtime);
@@ -91,6 +94,7 @@ describe("interaction runtime", () => {
       "activate-row:2",
       "activate-row-switch:3",
       "domain-close:close-unpinned",
+      "close-tab-info-others",
       "filter-workspace:4",
       "extension:1",
     ]);

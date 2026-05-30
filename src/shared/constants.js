@@ -102,6 +102,7 @@ this.MSG = Object.freeze({
 
   // Split view
   SPLIT_NEW:                      "split-new",
+  SPLIT_TOGGLE_HV:                "split-toggle-hv",
   SPLIT_CLOSE:                    "split-close",
   SPLIT_HORIZONTAL:               "split-horizontal",
   SPLIT_VERTICAL:                 "split-vertical",

@@ -434,7 +434,10 @@ async function runSortAction(actionId) {
       );
     });
   }
-  await api.sortTabs(actionId, JSON.stringify(visitCounts));
+  const sorted = await api.sortTabs(actionId, JSON.stringify(visitCounts));
+  if (sorted) {
+    await api.scrollCurrentTabIntoView();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -560,6 +563,7 @@ const ACTIONS = Object.freeze({
   [MSG.COPY_URL_MARKDOWN]:                ()  => api.copyCurrentUrlMarkdown(),
   [MSG.RESTORE_LAST_CLOSED_TAB]:          ()  => api.restoreLastClosedTab(),
   [MSG.SPLIT_NEW]:                        ()  => api.splitNew(),
+  [MSG.SPLIT_TOGGLE_HV]:                  ()  => api.splitToggleHV(),
   [MSG.SPLIT_CLOSE]:                      ()  => api.splitClose(),
   [MSG.SPLIT_HORIZONTAL]:                 ()  => api.splitHorizontal(),
   [MSG.SPLIT_VERTICAL]:                   ()  => api.splitVertical(),
@@ -1037,18 +1041,44 @@ browser.menus.create({
   visible: false,
 });
 
-browser.menus.onShown.addListener(async (info) => {
+browser.menus.create({
+  id: "move-tab-next-to-current",
+  title: "Move Tab Next to Current",
+  contexts: ["tab"],
+  visible: false,
+});
+
+browser.menus.onShown.addListener(async (info, tab) => {
   if (!info.contexts.includes("tab")) return;
   const urls = await api.getSelectedTabUrls();
+  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+  const contextTabId = typeof info.tabId === "number"
+    ? info.tabId
+    : typeof tab?.id === "number"
+    ? tab.id
+    : null;
   browser.menus.update("copy-selected-urls", { visible: urls.length > 1 });
+  browser.menus.update("move-tab-next-to-current", {
+    visible: contextTabId != null && activeTab?.id !== contextTabId,
+  });
   browser.menus.refresh();
 });
 
-browser.menus.onClicked.addListener(async (info) => {
-  if (info.menuItemId !== "copy-selected-urls") return;
-  const urls = await api.getSelectedTabUrls();
-  if (urls.length > 0) {
-    navigator.clipboard.writeText(urls.join("\n"));
+browser.menus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === "copy-selected-urls") {
+    const urls = await api.getSelectedTabUrls();
+    if (urls.length > 0) {
+      navigator.clipboard.writeText(urls.join("\n"));
+    }
+    return;
+  }
+  const contextTabId = typeof info.tabId === "number"
+    ? info.tabId
+    : typeof tab?.id === "number"
+    ? tab.id
+    : null;
+  if (info.menuItemId === "move-tab-next-to-current" && contextTabId != null) {
+    await api.moveTabNextToCurrent(contextTabId);
   }
 });
 

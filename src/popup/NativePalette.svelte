@@ -306,6 +306,7 @@
     jumpSection,
     closeSelection: closeSelectedTabRow,
     closeAll: closeAllRowsInView,
+    closeTabInfoOthers: closeOtherTabInfoDuplicates,
     restoreSelectionKeepOpen: restoreSelectedRecentlyClosed,
     drillSelection: drillSelectedParent,
     toggleSort: toggleCurrentSort,
@@ -1020,6 +1021,7 @@
       selectedIndex: palette.selectedIndex,
       duplicatePromptActionCount: DUPLICATE_PROMPT_ACTIONS.length,
       domainClosePinnedCount: palette.domainClosePinnedCount,
+      tabInfoDuplicateCount: palette.tabInfoDuplicates.length,
     });
     if (command.kind === "none") {
       if (isInvalidChordFeedbackInput(input)) {

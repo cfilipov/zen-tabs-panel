@@ -50,6 +50,7 @@ export const ACTION_EFFECTS = {
   "copy-url": true,
   "replay-last-chord": true,
   "split-new": true,
+  "split-toggle-hv": true,
   "split-close": true,
   "split-horizontal": true,
   "split-vertical": true,

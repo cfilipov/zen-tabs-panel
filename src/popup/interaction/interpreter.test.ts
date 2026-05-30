@@ -96,6 +96,10 @@ describe("interaction interpreter", () => {
     )).toEqual({ kind: "close-selection" });
     expect(interpretStructuralInput({ kind: "key", key: "c" }, { view: "duplicate-prompt" }))
       .toEqual({ kind: "duplicate-prompt-action", action: "hide-palette" });
+    expect(interpretStructuralInput({ kind: "key", key: "w" }, { view: "tab-info", tabInfoDuplicateCount: 2 }))
+      .toEqual({ kind: "close-tab-info-others" });
+    expect(interpretStructuralInput({ kind: "key", key: "w" }, { view: "tab-info", tabInfoDuplicateCount: 1 }))
+      .toEqual({ kind: "none" });
   });
 
   it("routes domain-close confirmation hotkeys through the confirm view", () => {

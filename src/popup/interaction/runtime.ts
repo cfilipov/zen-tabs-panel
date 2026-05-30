@@ -23,6 +23,7 @@ export type InteractionRuntimeHandlers = {
   jumpSection: (delta: 1 | -1) => MaybePromise<void>;
   closeSelection: () => MaybePromise<void>;
   closeAll: () => MaybePromise<void>;
+  closeTabInfoOthers: () => MaybePromise<void>;
   restoreSelectionKeepOpen: () => MaybePromise<void>;
   drillSelection: () => MaybePromise<void>;
   toggleSort: () => MaybePromise<void>;
@@ -81,6 +82,9 @@ export async function applyInteractionCommand(
       return;
     case "close-all":
       await runtime.closeAll();
+      return;
+    case "close-tab-info-others":
+      await runtime.closeTabInfoOthers();
       return;
     case "restore-selection-keep-open":
       await runtime.restoreSelectionKeepOpen();

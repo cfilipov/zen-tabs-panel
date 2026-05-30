@@ -16,6 +16,7 @@ export type InteractionContext = {
   selectedIndex?: number;
   duplicatePromptActionCount?: number;
   domainClosePinnedCount?: number;
+  tabInfoDuplicateCount?: number;
 };
 
 export type InteractionCommand =
@@ -35,6 +36,7 @@ export type InteractionCommand =
   | { kind: "cycle-page"; delta: 1 | -1 }
   | { kind: "close-selection" }
   | { kind: "close-all" }
+  | { kind: "close-tab-info-others" }
   | { kind: "restore-selection-keep-open" }
   | { kind: "drill-selection" }
   | { kind: "toggle-sort" }
@@ -183,6 +185,13 @@ const structuralKeyResolvers: readonly StructuralKeyResolver[] = [
       const action = duplicatePromptActionForHotkey(upperKey(input));
       return action ? { kind: "duplicate-prompt-action", action } : noCommand;
     },
+  },
+  {
+    id: "tab-info-close-others",
+    resolve: (input, context) => commandWhen(
+      plainKey(input) && !input.shiftKey && context.view === "tab-info" && upperKey(input) === "W" && (context.tabInfoDuplicateCount ?? 0) > 1,
+      { kind: "close-tab-info-others" },
+    ),
   },
   {
     id: "domain-close-confirm-action",

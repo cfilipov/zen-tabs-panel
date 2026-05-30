@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Badge from "../components/Badge.svelte";
   import { iconHtml } from "../components/icons";
   import type { HistoryVisit, TabInfo } from "../runtime/tab-info-client";
   import type { TabIndexRow } from "../runtime/tab-index-client";
@@ -182,7 +183,10 @@
     <div class="info-section info-duplicates-section">
       <div class="info-section-header">
         <span class="info-section-title">Duplicate tabs ({duplicates.length})</span>
-        <button type="button" class="info-close-others" onclick={() => oncloseothers?.()}>Close others</button>
+        <button type="button" class="info-close-others" onclick={() => oncloseothers?.()}>
+          <span>Close others</span>
+          <Badge value="W" />
+        </button>
       </div>
       <div class="info-duplicates-grid">
         {#each duplicates as duplicate, index (duplicate.domId)}

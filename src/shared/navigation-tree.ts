@@ -148,10 +148,11 @@ export const NAVIGATION_TREE = [
     label: "Split",
     icon: "svg:columns",
     children: [
-      { id: "split-new",        kind: "action", chord: "N", label: "New split",   icon: "svg:plus" },
-      { id: "split-close",      kind: "action", chord: "C", label: "Close split", icon: "svg:x-circle" },
-      { id: "split-horizontal", kind: "action", chord: "H", label: "Horizontal",  icon: "svg:rows" },
-      { id: "split-vertical",   kind: "action", chord: "V", label: "Vertical",    icon: "svg:columns" },
+      { id: "split-new",        kind: "action", chord: "N",  label: "New split",  icon: "svg:plus" },
+      { id: "split-toggle-hv",  kind: "action", chord: "\\", label: "Toggle H/V", icon: "svg:rotate-ccw" },
+      { id: "split-close",      kind: "action", chord: "U",  label: "Unsplit",    icon: "svg:x-circle" },
+      { id: "split-horizontal", kind: "action", chord: "H",  label: "Horizontal", icon: "svg:rows" },
+      { id: "split-vertical",   kind: "action", chord: "V",  label: "Vertical",   icon: "svg:columns" },
     ],
   },
 

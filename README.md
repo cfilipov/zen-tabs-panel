@@ -113,12 +113,12 @@ This means a few `about:config` flags must be enabled to install it.
 - **Next/Previous workspace** - cycle through workspaces with wraparound
 - **Workspace tools** - submenu for changing the active workspace icon, changing its name, editing its theme, setting its container profile, creating/deleting spaces, and unloading one space or all other spaces
 - **Workspace icon picker** - searchable emoji, Zen built-in icon, and Lucide icon picker with keyboard navigation; selections persist across Zen restarts
-- **Split** - submenu for Zen's split view: New, Close, Horizontal (top/bottom panes), Vertical (side-by-side panes)
+- **Split** - submenu for Zen's split view: New, toggle horizontal/vertical, Unsplit, Horizontal (top/bottom panes), Vertical (side-by-side panes)
 - **Extension popup hosting** - extension toolbar popups can appear in ErgoZen's centered overlay, including badge indicators on the extension icons in the main menu
 - **Profiles** - list and launch Zen profiles from the palette
 - **Page and browser tools** - reload, hard reload, duplicate tab, reader mode, mute, fullscreen, picture-in-picture, page source/info, screenshots, downloads, add-ons, Firefox View, developer tools, browser toolbox, reset and re-pin tabs, and add/remove tabs from Essentials on page 2 of the palette
 - **Duplicate link status** - hovered links that are already open get called out in Zen's bottom status bar with a duplicate count before you click them, and can optionally scroll to/highlight the existing tab until hover ends.
-- **Context menus** - right-click selected tabs to copy all selected URLs, or right-click a link to switch to an existing duplicate tab, open it directly in a workspace, or open it in a Zen folder.
+- **Context menus** - right-click selected tabs to copy all selected URLs or move a tab next to the current one, or right-click a link to switch to an existing duplicate tab, open it directly in a workspace, or open it in a Zen folder.
 - **Repeat last chord** - replay the most recent leaf action with `⌘.` then `.`
 - **Settings**
 
@@ -312,7 +312,8 @@ Submenus use their own single-key rows:
 | Panel key | Action |
 |---|---|
 | `N` | New split |
-| `C` | Close split |
+| `\` | Toggle horizontal/vertical |
+| `U` | Unsplit |
 | `H` | Horizontal split |
 | `V` | Vertical split |
 
@@ -350,7 +351,7 @@ Submenus use their own single-key rows:
 - `⌘. W P` / `T` / `C` / `⇧C` / `N` / `⇧N` / `G` / `⇧G` - close current tab and jump to previous / parent / sibling / sidebar neighbor / unvisited tab. Pause after `W` to see a menu of all options with live previews of the target tab in each row.
 - `⌘. ⇧K I` / `N` / `P` - change the active workspace icon, name, or container profile
 - `⌘. ⇧K C` / `D` / `U` / `⇧U` - create, delete, unload, or unload all other spaces
-- `⌘. \ N` / `C` / `H` / `V` - split view: new, close, horizontal (top/bottom), vertical (side-by-side). Pause after `\` for the menu.
+- `⌘. \ N` / `\` / `U` / `H` / `V` - split view: new, toggle horizontal/vertical, unsplit, horizontal (top/bottom), vertical (side-by-side). Pause after `\` for the menu.
 - `⌘. F` - toggle pin on current tab
 - `⌘. Y` - copy current URL as Markdown link
 - `⌘. Z` - restore the most recently closed tab
